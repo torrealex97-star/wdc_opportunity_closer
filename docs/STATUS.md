@@ -1,5 +1,16 @@
 # Estado
 
+## Dos barridos idénticos: no fue caché; el 429 de Himalayas no lo provocamos (sesión 182) — 2026-11-13
+
+- **No hay caché en el motor**: `grep` de `caches`, `cacheTtl`, `Cache-Control` y `cacheEverything` en `worker.js` → **cero coincidencias**. Cada `POST /api/collect` abre su propio `run-<uuid>` en `collection_runs`; no existe camino de «devuelve la última pasada».
+- **`fetched` es salida del extractor en vivo**, no de la base: `setState(..., { fetched: candidates.length })` tras llamar al extractor.
+- **La prueba de que el segundo barrido sí fue a la red**: en `raw_items`, el primer run (18:44:54) escribió **488** filas de evidencia entre 18:44 y 18:46; el segundo (18:47:41) escribió **7** a las 18:49. Solo pueden salir de un fetch real: si hubiera caché o replay, el segundo habría escrito 0.
+- **Lo que sí hubo es dedupe, y es de escritura**: `ingestBatch` compara `external_id|content_hash` contra `raw_items` de esa fuente y no reinserta la evidencia ya conocida (solo refresca vigencia cuando está por vencer). Por eso los totales coinciden: **2.279 candidatos y 275 filtrados en origen son los mismos porque las fuentes devolvieron el mismo inventario en 3 minutos**, no porque se sirviera una copia.
+- **Himalayas: 429 por IP, no por nuestra cadencia.** 4 peticiones secuenciales por pasada, sin paralelismo y sin reintento (`fetchText` acepta `retry`, y este extractor no lo usa), entre 1 y 4 pasadas al día. El mismo endpoint **con el mismo `User-Agent` del motor devuelve 200 desde esta máquina** (probado hoy con `closer` y `sales closer`), así que no es la firma ni el volumen: es el IP de salida. Los Workers comparten el pool de egress de Cloudflare y Himalayas limita por IP de llamante.
+- **Histórico en `collection_runs` (12 pasadas)**: 429 el 11-13 a las 18:44 y 18:47; **completó a las 19:52** con 17 ofertas. Después falló el 11-14 (×3), el 11-15 06:48 y el 11-16 06:47, y completó el 11-15 18:57. Es decir: intermitente en ambos sentidos, sin relación con los despliegues y se cura solo.
+- **Lo que no se rompió**: la fuente caída se declara (`status: failed` + `warning: ningún término respondió (closer: HTTP 429)`) y el resto de las 35 completó. La regla «una fuente caída no esconde lo bueno» se cumplió.
+- **Mejora posible, no aplicada**: `fetchText` ya sabe reintentar respetando `Retry-After`; Himalayas se llama con `retry: 0`, así que **un solo 429 tira el término entero**. Un reintento por término cabría de sobra en el presupuesto (109 de 966 subrequests usados). No se toca sin medir el coste.
+
 ## Efecto medido de la ampliación sobre lo ya recogido (sesión 181) — 2026-11-13
 
 - **Cómo se midió**: `SELECT` de solo lectura a la D1 real (`raw_items`, `catalog_entries` join `job_postings`), y sobre esos textos se reejecuta `classifyRole` con el vocabulario de hoy y con el de antes (misma copia del motor con las cuatro palabras de la sesión 177 quitadas y `bdr` devuelto a `sdr`). Ventana de texto la misma que `familyOf`: título + ubicación + 800 caracteres de cuerpo. **No se recogió, escribió ni publicó nada.**
