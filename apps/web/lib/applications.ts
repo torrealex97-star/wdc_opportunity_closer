@@ -8,19 +8,16 @@ import { getProfile, type Profile } from './students';
 // de la empresa y envía ELLA. La app solo anota en qué punto está (borrador → abierta → enviada por ella → descartada).
 // No hay ninguna ruta que envíe correos, rellene formularios ni contacte con la empresa.
 // `responded`, `interview`, `offer` y `rejected` los declara la alumna cuando la empresa contesta (hoy nada lo detecta solo).
-export const STATUSES = ['draft', 'opened', 'applied', 'discarded', 'responded', 'interview', 'offer', 'rejected'] as const;
-export const OUTCOMES = ['responded', 'interview', 'offer', 'rejected'] as const;
-export const SENT = ['applied', ...OUTCOMES] as const;
-export type AppStatus = (typeof STATUSES)[number];
+// Los estados y las transiciones viven en `applicationStages.ts` (sin dependencias de servidor) para
+// que el tablero del navegador y la validación del servidor usen la MISMA tabla.
+export { STATUSES, OUTCOMES, SENT } from './applicationStages';
+import { OUTCOMES as OUTCOME_STATUSES, STATUSES as ALL_STATUSES, canMove, type AppStatus } from './applicationStages';
+export type { AppStatus } from './applicationStages';
+const STATUSES = ALL_STATUSES;
+const OUTCOMES = OUTCOME_STATUSES;
 export type Application = { id: string; offer_ref: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; cover_message: string | null; notes: string | null; created_at: string; updated_at: string; applied_at: string | null };
 const COLS = 'id,offer_ref,offer_title,offer_company,offer_url,status,cover_message,notes,created_at,updated_at,applied_at';
 
-// Transiciones permitidas (la alumna decide; el servidor solo evita saltos incoherentes).
-const NEXT: Record<AppStatus, AppStatus[]> = {
-  draft: ['opened', 'applied', 'discarded'], opened: ['draft', 'applied', 'discarded'], applied: ['responded', 'interview', 'offer', 'rejected', 'discarded'], discarded: ['draft'],
-  responded: ['interview', 'offer', 'rejected', 'discarded'], interview: ['offer', 'rejected', 'discarded'], offer: ['discarded'], rejected: ['discarded'],
-};
-export const canMove = (from: AppStatus, to: AppStatus) => from === to || NEXT[from].includes(to);
 
 // Borrador DETERMINISTA (sin IA): solo usa datos que ella ha escrito; lo que falta se omite, nunca se inventa.
 export function buildCoverMessage(student: Pick<Profile, 'full_name'> | null, app: Partial<AppProfile> | null, opp: { title: string; company: string | null }): string {

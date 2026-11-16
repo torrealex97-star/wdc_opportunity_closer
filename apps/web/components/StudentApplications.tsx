@@ -1,22 +1,11 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, ExternalLink, LoaderCircle, Save } from 'lucide-react';
+import { LoaderCircle, Save } from 'lucide-react';
 
 // Formulario base + candidaturas ASISTIDAS de la alumna. Ella revisa, copia y envía; la app nunca envía ni rellena nada.
 type Opts = { work_authorization: Record<string, string>; levels: Record<string, string>; contracts: Record<string, string>; answers: Record<string, string> };
 type AppProfile = { contact_email: string | null; phone: string | null; linkedin_url: string | null; cv_url: string | null; country_residence: string | null; work_authorization: string | null; language_levels: Record<string, string>; years_sales: number | null; years_high_ticket: number | null; sales_experience: string | null; tools: string[]; available_from: string | null; hours_per_week: number | null; contract_preferences: string[]; salary_expectation: string | null; notice_period: string | null; pitch: string | null; motivation: string | null; answers: Record<string, string>; autofill_consent_at: string | null };
 type Form = { contact_email: string; phone: string; linkedin_url: string; cv_url: string; country_residence: string; work_authorization: string; language_levels: Record<string, string>; years_sales: string; years_high_ticket: string; sales_experience: string; tools: string; available_from: string; hours_per_week: string; contract_preferences: string[]; salary_expectation: string; notice_period: string; pitch: string; motivation: string; answers: Record<string, string>; autofill_consent: boolean };
-export type Application = { id: string; offer_ref: string; offer_title: string; offer_company: string | null; offer_url: string; status: 'draft' | 'opened' | 'applied' | 'discarded' | 'responded' | 'interview' | 'offer' | 'rejected'; cover_message: string | null; notes: string | null; applied_at: string | null };
-type Copy = { key: string; label: string; value: string };
-const STATUS: Record<Application['status'], string> = { draft: 'Borrador', opened: 'Anuncio abierto', applied: 'Enviada por ti', discarded: 'Descartada', responded: 'La empresa ha respondido', interview: 'Entrevista', offer: 'Oferta recibida', rejected: 'Respuesta negativa' };
-// Estados «enviada» y sus siguientes pasos, que anota ELLA cuando la empresa contesta (la app no recibe esos correos).
-const SENT_STATES: Application['status'][] = ['applied', 'responded', 'interview', 'offer', 'rejected'];
-const OUTCOME_BUTTONS: { to: Application['status']; label: string; from: Application['status'][]; note: string }[] = [
-  { to: 'responded', label: 'La empresa ha respondido', from: ['applied'], note: 'Anotada la respuesta de la empresa.' },
-  { to: 'interview', label: 'Me han citado a entrevista', from: ['applied', 'responded'], note: 'Anotada la entrevista.' },
-  { to: 'offer', label: 'Me han hecho una oferta', from: ['applied', 'responded', 'interview'], note: 'Anotada la oferta. ¡Enhorabuena!' },
-  { to: 'rejected', label: 'Me han dicho que no', from: ['applied', 'responded', 'interview'], note: 'Anotada la respuesta negativa.' },
-];
 const LANGS: Array<[string, string]> = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['fr', 'Francés'], ['de', 'Alemán'], ['it', 'Italiano'], ['ca', 'Catalán']];
 const EMPTY: Form = { contact_email: '', phone: '', linkedin_url: '', cv_url: '', country_residence: '', work_authorization: '', language_levels: {}, years_sales: '', years_high_ticket: '', sales_experience: '', tools: '', available_from: '', hours_per_week: '', contract_preferences: [], salary_expectation: '', notice_period: '', pitch: '', motivation: '', answers: {}, autofill_consent: false };
 
@@ -27,7 +16,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 const toForm = (p: AppProfile | null): Form => !p ? EMPTY : { contact_email: p.contact_email ?? '', phone: p.phone ?? '', linkedin_url: p.linkedin_url ?? '', cv_url: p.cv_url ?? '', country_residence: p.country_residence ?? '', work_authorization: p.work_authorization ?? '', language_levels: p.language_levels ?? {}, years_sales: p.years_sales?.toString() ?? '', years_high_ticket: p.years_high_ticket?.toString() ?? '', sales_experience: p.sales_experience ?? '', tools: (p.tools ?? []).join(', '), available_from: p.available_from ?? '', hours_per_week: p.hours_per_week?.toString() ?? '', contract_preferences: p.contract_preferences ?? [], salary_expectation: p.salary_expectation ?? '', notice_period: p.notice_period ?? '', pitch: p.pitch ?? '', motivation: p.motivation ?? '', answers: p.answers ?? {}, autofill_consent: Boolean(p.autofill_consent_at) };
-const copyText = async (text: string) => { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } };
 
 export function ApplicationForm({ onLost, onSaved }: { onLost: () => void; onSaved: () => void }) {
   const [f, setF] = useState<Form>(EMPTY); const [opts, setOpts] = useState<Opts | null>(null);
@@ -70,37 +58,4 @@ export function ApplicationForm({ onLost, onSaved }: { onLost: () => void; onSav
       {error && <div className="alert error" role="alert"><span>{error}</span></div>}{notice && <div className="auth-note" role="status">{notice}</div>}
       <button className="primary" disabled={busy || !baseConsent}>{busy ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} Guardar formulario</button>
     </form></details>;
-}
-
-export function Applications({ refreshKey, onLost }: { refreshKey: number; onLost: () => void }) {
-  const [apps, setApps] = useState<Application[] | null>(null); const [copy, setCopy] = useState<Copy[]>([]); const [error, setError] = useState(''); const [note, setNote] = useState('');
-  const [msgs, setMsgs] = useState<Record<string, string>>({});
-  const load = useCallback(() => { api<{ applications: Application[]; copy: Copy[] }>('applications').then(d => { setApps(d.applications); setCopy(d.copy); setMsgs(Object.fromEntries(d.applications.map(a => [a.id, a.cover_message ?? '']))); setError(''); }).catch((e: Error & { status?: number }) => { if (e.status === 401 || e.status === 403) onLost(); setError(e.message); }); }, [onLost]);
-  useEffect(load, [load, refreshKey]);
-  async function patch(id: string, body: Record<string, unknown>, ok: string) { setNote(''); setError(''); try { await api('applications', { method: 'PATCH', body: JSON.stringify({ id, ...body }) }); setNote(ok); load(); } catch (e) { setError((e as Error).message); load(); } }
-  async function remove(id: string) { if (!window.confirm('¿Borrar esta candidatura y su mensaje?')) return; try { await api(`applications?id=${id}`, { method: 'DELETE' }); load(); } catch (e) { setError((e as Error).message); } }
-  const copyIt = async (text: string, what: string) => setNote(await copyText(text) ? `${what} copiado.` : 'No se pudo copiar: selecciona el texto y cópialo a mano.');
-  if (error && !apps) return <div className="alert error" role="alert"><span>{error}</span> <button onClick={load}>Reintentar</button></div>;
-  if (!apps) return <p className="muted"><LoaderCircle size={14} className="spin" /> Cargando tus candidaturas…</p>;
-  return <section aria-label="Mis candidaturas" data-testid="applications"><span className="eyebrow">MIS CANDIDATURAS</span>
-    <p className="card-meta">Aquí preparas cada candidatura: revisa el mensaje, copia tus datos, abre el anuncio y envíala tú en la web de la empresa. La app solo apunta en qué punto está.</p>
-    {error && <div className="alert error" role="alert"><span>{error}</span></div>}{note && <div className="auth-note" role="status">{note}</div>}
-    {!apps.length ? <p className="card-meta">Todavía no has preparado ninguna. Pulsa «Preparar candidatura» en una oferta de arriba.</p> :
-      <ol style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 12 }}>{apps.map(a => <li key={a.id} className="search-panel" data-testid="application">
-        <strong>{a.offer_title}</strong>{a.offer_company ? ` · ${a.offer_company}` : ''} <span className={SENT_STATES.includes(a.status) && a.status !== 'rejected' ? 'status ok' : 'status'} style={{ marginLeft: 6 }}>{STATUS[a.status]}</span>
-        <label htmlFor={`msg-${a.id}`}>Mensaje (revísalo y cámbialo)<textarea id={`msg-${a.id}`} rows={7} maxLength={3000} value={msgs[a.id] ?? ''} onChange={e => setMsgs({ ...msgs, [a.id]: e.target.value })} /></label>
-        <div className="admin-toolbar" style={{ flexWrap: 'wrap' }}>
-          <button onClick={() => void patch(a.id, { cover_message: msgs[a.id] }, 'Mensaje guardado.')}><Save size={14} /> Guardar mensaje</button>
-          <button onClick={() => void copyIt(msgs[a.id] ?? '', 'Mensaje')}><Copy size={14} /> Copiar mensaje</button>
-          <a href={a.offer_url} target="_blank" rel="noopener noreferrer" onClick={() => { if (a.status === 'draft') void patch(a.id, { status: 'opened' }, 'Anuncio abierto.'); }}><ExternalLink size={14} /> Abrir el anuncio</a>
-          {!SENT_STATES.includes(a.status) && a.status !== 'discarded' && <button className="primary" onClick={() => void patch(a.id, { status: 'applied' }, 'Anotada como enviada por ti.')}>Ya la he enviado</button>}
-          {a.status === 'discarded' ? <button onClick={() => void patch(a.id, { status: 'draft' }, 'Recuperada.')}>Recuperar</button> : !SENT_STATES.includes(a.status) && <button onClick={() => void patch(a.id, { status: 'discarded' }, 'Descartada.')}>Descartar</button>}
-          {OUTCOME_BUTTONS.filter(button => button.from.includes(a.status)).map(button => <button key={button.to} data-testid={`outcome-${button.to}`} onClick={() => void patch(a.id, { status: button.to }, button.note)}>{button.label}</button>)}
-          <button onClick={() => void remove(a.id)}>Borrar</button>
-        </div>
-      </li>)}</ol>}
-    {!!apps.length && <details className="search-panel"><summary><strong>Datos para copiar en los formularios</strong></summary>
-      {!copy.length ? <p className="card-meta">Rellena tu formulario base para ver aquí tus datos listos para copiar.</p> :
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 6 }}>{copy.map(c => <li key={c.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', justifyContent: 'space-between' }}><span style={{ minWidth: 0, overflowWrap: 'anywhere' }}><span className="card-meta" style={{ margin: 0 }}>{c.label}: </span>{c.value.length > 120 ? `${c.value.slice(0, 120)}…` : c.value}</span><button onClick={() => void copyIt(c.value, c.label)} aria-label={`Copiar ${c.label}`}><Copy size={14} /></button></li>)}</ul>}</details>}
-  </section>;
 }

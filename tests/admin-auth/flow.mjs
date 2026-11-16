@@ -298,6 +298,10 @@ await step('candidaturas asistidas: formulario base, borrador, copia, seguimient
   // Sin sesión
   for (const [path, method] of [['/api/student/application-profile', 'GET'], ['/api/student/applications', 'GET'], ['/api/student/applications', 'POST']]) assert.equal((await call(path, { method, cookies: false })).status, 401);
   assert.equal((await call('/api/student/applications', { ...A, method: 'POST', headers: { ...A.headers, origin: 'https://evil.test' }, body: { offer_id: OK } })).status, 403);
+  // Asistente de respuestas: misma puerta que el resto (sesión, origen) y se declara apagado sin clave.
+  assert.equal((await call('/api/student/answer-assistant', { method: 'POST', cookies: false, body: { questions: '¿Por qué?' } })).status, 401);
+  assert.equal((await call('/api/student/answer-assistant', { ...A, method: 'POST', headers: { ...A.headers, origin: 'https://evil.test' }, body: { questions: '¿Por qué?' } })).status, 403);
+  assert.equal((await call('/api/student/answer-assistant', { ...A, method: 'POST', body: { questions: '¿Por qué?' } })).status, 503, 'sin GROQ_API_KEY la función se declara apagada');
   // Sin consentimiento base no se guarda el formulario ni se prepara nada
   assert.equal((await call('/api/student/application-profile', { ...A, method: 'PUT', body: { contact_email: 'bea@ejemplo.com' } })).status, 422);
   assert.equal((await call('/api/student/applications', { ...A, method: 'POST', body: { offer_id: OK } })).status, 422);

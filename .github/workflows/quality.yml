@@ -45,6 +45,7 @@ jobs:
       - run: npm ci
       - run: node tests/handoff.mjs && npm run handoff
       - run: node tests/design.mjs && npm run design
+      - run: node --experimental-strip-types tests/answer-assistant.mjs
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:web
