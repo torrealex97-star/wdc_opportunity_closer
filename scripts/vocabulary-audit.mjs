@@ -203,7 +203,7 @@ export function exportSnapshot() {
   return snapshot;
 }
 
-function loadSnapshot({ refresh = false, maxAgeHours = 12 } = {}) {
+export function loadSnapshot({ refresh = false, maxAgeHours = 12 } = {}) {
   if (!refresh && existsSync(SNAPSHOT)) {
     const ageHours = (Date.now() - statSync(SNAPSHOT).mtimeMs) / 3600000;
     if (ageHours <= maxAgeHours) return { snapshot: JSON.parse(readFileSync(SNAPSHOT, 'utf8')), cached: true };

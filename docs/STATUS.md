@@ -1,5 +1,15 @@
 # Estado
 
+## El descarte, por motivos (sesión 184) — 2026-11-16
+
+- **«sin perfil comercial reconocible» era un solo número** y no decía dónde se caía el embudo. Ahora `countFiltered` guarda el motivo: `mando`, `no_comercial`, `sin_palabra_de_rol`, `familia_extra` (familia comercial fuera del perfil de ingesta: hoy solo `account_executive`), `sin_url` (fuente sin enlace) y, en la superficie, `idioma`, `mercado` y `sin_texto` (anuncio sin cuerpo con el que juzgar el idioma).
+- **Se guarda**: cada fuente del run escribe `filtered_by_reason` en `collection_runs.sources` (lo mismo que ya se veía como `filtered`) y el run añade `discards` con el total. El total de siempre (`filtered`) sigue cuadrando con la suma de motivos: se comprueba en `tests/engine/discards.mjs`.
+- **No cambia qué entra**: el motivo lo decide `familyOf` igual que antes; `mando`/`no_comercial`/`sin_palabra_de_rol` solo etiquetan lo que ya se descartaba. Único ajuste de comportamiento: `sourceFreelancer` y `sourceJobgether` mantienen su exigencia de enlace y ahora la cuentan como `sin_url`.
+- **Medición sobre lo ya recogido** (`npm run funnel:audit`, solo lectura, comparte la instantánea de `vocab:audit`): de 10.064 filas recogidas (7.336 títulos) caen por rol **4.347** `familia_extra` (43,2 %), **2.096** `sin_palabra_de_rol` (20,8 %), **1.287** `mando` (12,8 %) y **1.067** `no_comercial` (10,6 %) → quedan 1.267. De esos, el idioma se lleva **795** (62,7 %) y **90** no tienen texto; quedan 382, y el mercado España se lleva **179** (46,9 %). **Pasan 203 de 10.064 (2,0 %)**; con `--market any`, 382. En el catálogo, las mismas proporciones (202 de 9.987).
+- **Pruebas**: `tests/engine/discards.mjs` (registrado en `tests/admin-auth/run.sh`): motivos de rol, que `mando` ya dentro del perfil se pueda medir sin tocar la regla, los motivos de superficie, y que el contador por fuente cuadre con el total y se reinicie por ejecución. `terms`, `sources`, `roles`, `status`, `provenance`, `location`, `latam`, `subrequests`, `catalog` en PASS; `orphan-refs` PASS.
+- **Pendiente de publicar**: el motor no está desplegado; los motivos empezarán a guardarse en el siguiente run después del deploy. Hasta entonces la medición sale de `funnel:audit`.
+- **Límite**: el embudo de `funnel:audit` aplica mercado e idioma como la vista de alumna (mercado España, sin bilingües por defecto) pero no la frescura ni el filtro editorial: es «dónde se cae», no «qué ve hoy la alumna».
+
 ## Arnés de auditoría del vocabulario (sesión 183) — 2026-11-16
 
 - **`scripts/vocabulary-audit.mjs`** (`npm run vocab:audit`): dado un cambio de keywords, reejecuta `classifyRole` sobre los títulos ya guardados y saca antes/después — títulos, cambios de familia, `null → perfil` (recuperados), `perfil → null` (regresiones) y qué fichas **revisadas** cambian de filtro.

@@ -149,10 +149,19 @@ function planRun(sources, lastSources, day, envBudget, ceiling = PLATFORM_SUBREQ
 // pueden divergir. Lo descartado se cuenta y se publica en el estado del run (`filtered`), para
 // que «leídas» no se lea como «no había nada».
 const PROFILE_FAMILIES = new Set(['closer', 'setter', 'cold_caller', 'sdr']);
-const extractFiltered = new Map();
+// Motivos del descarte (2026-11-16). Antes era un solo contador —«sin perfil comercial
+// reconocible»— y no decía DÓNDE se cae el embudo. Esto solo DIAGNOSTICA: qué entra lo sigue
+// decidiendo la familia de `classifyRole`, exactamente igual que antes.
+const extractFiltered = new Map(); // code → Map(motivo → n)
 const resetExtractFiltered = () => extractFiltered.clear();
-const filteredOf = code => extractFiltered.get(code) || 0;
-const countFiltered = code => extractFiltered.set(code, filteredOf(code) + 1);
+const reasonsOf = code => extractFiltered.get(code) || new Map();
+const filteredOf = code => [...reasonsOf(code).values()].reduce((total, n) => total + n, 0);
+const filteredByReasonOf = code => Object.fromEntries([...reasonsOf(code)].sort((a, b) => b[1] - a[1]));
+function countFiltered(code, reason = 'sin_palabra_de_rol') {
+  if (!extractFiltered.has(code)) extractFiltered.set(code, new Map());
+  const map = extractFiltered.get(code);
+  map.set(reason, (map.get(reason) || 0) + 1);
+}
 // Aviso propio de la fuente para el run (p. ej. «cortada por tiempo» o «presupuesto agotado»). Va
 // aparte de `filtered` porque no es «lo descarté» sino «no llegué a mirarlo»: se declara en el
 // estado de la fuente, no se convierte en un vacío que parezca que no había nada.
@@ -165,6 +174,27 @@ function familyOf(payload) {
   return classifyRole({ title: payload.title }, text);
 }
 const isProfileCandidate = payload => PROFILE_FAMILIES.has(familyOf(payload));
+// Mando: dirige personas. Se mira en el TÍTULO y solo cuando no hay familia, así que no cambia
+// ninguna clasificación; el informe cuenta aparte lo que ya está dentro con pinta de mando.
+const LEADERSHIP_WORDS = /\b(manager|management|head of|director|directora|jefe|jefa|supervisor|supervisora|team lead|lead|responsable|gerente|coordinador|coordinadora)\b/;
+// Ruido que no es venta: lo que el catálogo no debe ingerir aunque el anuncio mencione «comercial».
+const NON_SALES_WORDS = /\b(engineer|engineering|ingenier|developer|desarrollador|desarrolladora|analyst|analista|support|soporte|designer|diseñador|diseñadora|architect|arquitect|recruiter|reclutador|profesor|teacher|enfermer|nurse|driver|conductor|warehouse|camarero|cocinero|operario)\b/;
+
+const leadershipTitle = payload => LEADERSHIP_WORDS.test(fold(payload?.title ?? ''));
+
+// Por qué NO entra un candidato. `null` = entra. Los motivos siguen el orden real del embudo:
+// url → rol (familia) → y después idioma y mercado, que viven en la superficie (exclusionReason).
+function discardReason(payload) {
+  const family = familyOf(payload);
+  if (family && PROFILE_FAMILIES.has(family)) return null;
+  // account_executive es venta real, pero no la familia que se ingiere: llega por el barrido por
+  // categoría. Se cuenta aparte para no confundirlo con «no es comercial».
+  if (family) return 'familia_extra';
+  const title = fold(payload.title ?? '');
+  if (LEADERSHIP_WORDS.test(title)) return 'mando';
+  if (NON_SALES_WORDS.test(title)) return 'no_comercial';
+  return 'sin_palabra_de_rol';
+}
 
 // Fuentes públicas de España verificadas (JobToday slugs canónicos verificados 2026-10-09;
 // ATS de la watchlist WDC; sin claves ni scraping autenticado).
@@ -475,7 +505,8 @@ async function sourceHimalayas(source = {}) {
           location: pick(j, 'locationRestrictions', 'location'), url: pick(j, 'applicationLink', 'jobUrl', 'guid'),
           posted_at: pick(j, 'publishedDate', 'pubDate'), raw: { ...j, search_term: term },
         };
-        if (!isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+        const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
         all.push({ external_id: external, payload });
       }
     } catch (error) { errors.push(`${term}: ${String(error.message || error).slice(0, 80)}`); }
@@ -542,7 +573,10 @@ function addFreehireRow(row, term, source, seen, all) {
   };
   // Solo las búsquedas por término filtran por rol: el barrido por categoría conserva su
   // comportamiento amplio (es el que descubre roles fuera del vocabulario de closer).
-  if (term && !isProfileCandidate(payload)) { countFiltered(source.code); return; }
+  if (term) {
+    const discard = discardReason(payload);
+    if (discard) { countFiltered(source.code, discard); return; }
+  }
   all.push({ external_id: external.slice(-120), payload });
 }
 
@@ -751,7 +785,9 @@ async function sourceFreelancer(source = {}) {
           posted_at: p.time_submitted ? new Date(Number(p.time_submitted) * 1000).toISOString() : null,
           raw: { ...p, search_term: term, engagement: 'freelance' },
         };
-        if (!payload.url || !isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+        if (!payload.url) { countFiltered(source.code, 'sin_url'); continue; }
+        const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
         all.push({ external_id: external, payload });
       }
     } catch (error) { errors.push(`${term}: ${String(error.message || error).slice(0, 80)}`); }
@@ -789,7 +825,9 @@ async function sourceJobgether(source = {}) {
       posted_at: j.postedAt ? new Date(j.postedAt).toISOString() : null,
       raw: j,
     };
-    if (!payload.url || !isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+    if (!payload.url) { countFiltered(source.code, 'sin_url'); continue; }
+    const discard = discardReason(payload);
+    if (discard) { countFiltered(source.code, discard); continue; }
     out.push({ external_id: String(j.id ?? j.url), payload });
   }
   return out.slice(0, MAX_ITEMS_PER_SOURCE);
@@ -812,7 +850,9 @@ async function sourceRemotive(source = {}) {
       posted_at: j.publication_date ? new Date(j.publication_date).toISOString() : null,
       raw: j,
     };
-    if (!isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+    if (!payload.url) { countFiltered(source.code, 'sin_url'); continue; }
+    const discard = discardReason(payload);
+    if (discard) { countFiltered(source.code, discard); continue; }
     out.push({ external_id: String(j.id ?? j.url), payload });
   }
   return out.slice(0, MAX_ITEMS_PER_SOURCE);
@@ -832,7 +872,9 @@ async function sourceJobicy(source = {}) {
       posted_at: j.pubDate ? new Date(j.pubDate).toISOString() : null,
       raw: j,
     };
-    if (!isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+    if (!payload.url) { countFiltered(source.code, 'sin_url'); continue; }
+    const discard = discardReason(payload);
+    if (discard) { countFiltered(source.code, discard); continue; }
     out.push({ external_id: String(j.id ?? j.url), payload });
   }
   return out.slice(0, MAX_ITEMS_PER_SOURCE);
@@ -850,7 +892,8 @@ async function sourceWorkingNomads(source = {}) {
       posted_at: j.pub_date ? new Date(j.pub_date).toISOString() : null,
       raw: j,
     };
-    if (!isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+    const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
     out.push({ external_id: String(j.url).slice(-120), payload });
   }
   return out.slice(0, MAX_ITEMS_PER_SOURCE);
@@ -890,7 +933,8 @@ async function sourceJobspresso(source) {
       posted_at: field('pubDate') ? new Date(field('pubDate')).toISOString() : null,
       raw: { title, link, description: field('description').slice(0, 2000) },
     };
-    if (!isProfileCandidate(payload)) { countFiltered(source.code); continue; }
+    const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
     out.push({ external_id: link, payload });
   }
   return out.slice(0, MAX_ITEMS_PER_SOURCE);
@@ -899,7 +943,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, resetExtractFiltered, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -2275,7 +2319,7 @@ async function runCollection(env, force = false) {
       }
       // `note` es lo que la fuente declara que NO llegó a mirar (corte por tiempo o por su propio
       // tope de peticiones): va en el estado del run para que una cifra baja no se lea como «no había».
-      setState(source.code, { status: 'completed', fetched: candidates.length, accepted: candidates.length, filtered: filteredOf(source.code), ...(noteOf(source.code) ? { note: noteOf(source.code) } : {}) });
+      setState(source.code, { status: 'completed', fetched: candidates.length, accepted: candidates.length, filtered: filteredOf(source.code), filtered_by_reason: filteredByReasonOf(source.code), ...(noteOf(source.code) ? { note: noteOf(source.code) } : {}) });
     } catch (error) {
       setState(source.code, { status: 'failed', warning: String(error.message || error).slice(0, 300) });
     }
@@ -2289,7 +2333,11 @@ async function runCollection(env, force = false) {
   // si un slug cambió, el operador lo ve renamed/gone antes de que el extractor falle.
   // `resumed` deja en la respuesta qué fuentes abrieron esta pasada, para que el recurso se vea sin
   // leer la tabla. `budget` es el presupuesto real de subrequests que quedó para fetch.
-  return { run_id: runId, budget, resumed, sources: states, writes: charged,
+  const discards = states.reduce((totals, state) => {
+    for (const [reason, n] of Object.entries(state.filtered_by_reason ?? {})) totals[reason] = (totals[reason] ?? 0) + n;
+    return totals;
+  }, {});
+  return { run_id: runId, budget, resumed, sources: states, writes: charged, discards,
     // Presupuesto de subrequests con el que corrió la pasada y qué fuentes no entraron (declarado,
     // no convertido en un vacío): es lo que se compara entre plan gratuito y de pago.
     subrequests: { ...subLimits, spent, deferred: states.filter(s => s.status === 'deferred').map(s => s.code) },
@@ -11572,6 +11620,35 @@ function classifyRole(p, text) {
 // exposición). approved y published son ambos estados revisados por el operador.
 // handleFunnel la pide en false: es el diagnóstico HUNT del operador (recuento
 // del embudo que guía ampliar/retirar fuentes); expone agregados, no contenido.
+// Criterio de mercado en un solo sitio: si el diagnóstico del embudo lo copiara, los números del
+// panel y la búsqueda podrían divergir sin que nadie lo notara.
+// Menos de esto no es «texto que podamos leer»: 40 caracteres es un titular, no un anuncio.
+const MIN_BODY_CHARS = 40;
+
+function marketRejects(p, market) {
+  if (market === 'ES') return Boolean(foreignCountry(p) || nonSpain(p) || !spainSignal(p));
+  if (market === 'any') return false;
+  // Mercados sin cobertura propia del motor: se exponen solo los que traen país explícito.
+  const hay = fold(`${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`);
+  const hinted = marketHinted(market, p, hay);
+  return !hinted && !(market === 'LATAM' && !explicitSpain(p));
+}
+
+// Dónde se cae una oferta del embudo, en el orden real del pipeline: rol (ingesta) → idioma →
+// mercado. Devuelve `null` si pasaría. Reutiliza los MISMOS predicados que la vista.
+function exclusionReason(payload, { market = 'ES', includeBilingual = false } = {}) {
+  if (!payload?.url) return 'sin_url';
+  const role = discardReason(payload);
+  if (role) return role;
+  const description = descriptionOf(payload);
+  // Sin texto no se puede juzgar el idioma: decirlo «idioma» sería culpabilizar al vocabulario de
+  // un problema de extracción, así que se cuenta aparte.
+  if (String(description ?? '').trim().length < MIN_BODY_CHARS) return 'sin_texto';
+  if (!spanishBodyGate(description, includeBilingual).ok) return 'idioma';
+  if (marketRejects(payload, market)) return 'mercado';
+  return null;
+}
+
 async function studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles, editorialOnly = true }) {
   const db = env.DB;
 
@@ -11609,14 +11686,7 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
     // en el contrato y se ignoraba: con el catálogo cloud sin AE publicados no se notaba,
     // y la primera activación de 109 AE los habría servido en la vista por defecto.
     if (EXTRA_ROLES.has(derivedRole) && !includeExtraRoles && role !== derivedRole) continue;
-    if (market === 'ES') {
-      if (foreignCountry(p) || nonSpain(p) || !spainSignal(p)) continue;
-    } else if (market !== 'any') {
-      // Mercados sin cobertura propia del motor: se exponen solo los que traen país explícito.
-      const hay = fold(`${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`);
-      const hinted = marketHinted(market, p, hay);
-      if (!hinted && !(market === 'LATAM' && !explicitSpain(p))) continue;
-    }
+    if (marketRejects(p, market)) continue;
     // El regex de lexemas va sin acentos: se evalúa sobre el texto plegado (fold),
     // nunca sobre el original — 'formación' sin plegar no matchea 'formacion'.
     const language = spanishBodyGate(description, includeBilingual);
