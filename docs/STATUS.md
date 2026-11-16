@@ -1,5 +1,13 @@
 # Estado
 
+## ADR/BDR solo en el título: medición seca (sesión 186) — 2026-11-16
+
+- Probado sin cambiar el motor: copia temporal del worker con `BODY_AMBIGUOUS_KEYWORDS = {closer, adr, bdr}` (lo mismo que se hizo con `closer`) y comparación de la familia de cada fila recogida.
+- **Cambian 6 filas de 10.064 (0,06 %), 5 títulos distintos**, todas desde `setter`: 3 → `null`, 2 → `account_executive`, 1 → `sdr`. **Ninguna pasa hoy el embudo de España + castellano**, así que el efecto visible es cero.
+- **Todo el efecto es de `bdr`; `adr` no cambia ni una fila.** En lo recogido, `adr` aparece en **1** título (`Account Development Representative (ADR)`, que ya entra por la forma larga) y en **0** cuerpos; `bdr` aparece en 46 filas de título y 69 de cuerpo (setter 37, sdr 15, AE 13, null 3, closer 1).
+- **Las 6 que cambiarían no son un lote de falsos positivos**: 2 filas (la misma oferta) sí lo son —`Senior Marketing Operations Specialist`, cuyo cuerpo dice «Marketing, BDRs and Sales»—; 3 son movimientos neutros (`Líder de Revenue Operations & Growth` y `Sales Coordinator Internship` → AE, `B2B Outreach & Growth Manager` → sdr, que sigue en perfil); y **1 es una pérdida real**: `Enterprise Business Development`, cuyo cuerpo dice «Enterprise Business Development - BDR» y se quedaría sin familia.
+- **Conclusión**: no compensa como caza de falsos positivos — 2 filas falsas contra 1 pérdida demostrable y 3 neutras. Con ventana de 4.000 caracteres el total sube a 12 filas (9 → `null`), pero el saldo de aciertos/errores no cambia de signo. Si se hiciera, tendría que ir con «no perder cuando el cuerpo dice *Business Development … BDR*».
+
 ## ¿Cuánto mando se cuela como setter/closer? (medición seca, sesión 185) — 2026-11-16
 
 - Medido con el motor actual sobre lo ya recogido (instantánea de `.local/vocab-audit/snapshot.json`, 10.064 filas / 7.336 títulos), **sin cambiar el vocabulario ni el filtro**.
