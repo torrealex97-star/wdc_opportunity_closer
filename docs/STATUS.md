@@ -1,5 +1,15 @@
 # Estado
 
+## Efecto medido de la ampliación sobre lo ya recogido (sesión 181) — 2026-11-13
+
+- **Cómo se midió**: `SELECT` de solo lectura a la D1 real (`raw_items`, `catalog_entries` join `job_postings`), y sobre esos textos se reejecuta `classifyRole` con el vocabulario de hoy y con el de antes (misma copia del motor con las cuatro palabras de la sesión 177 quitadas y `bdr` devuelto a `sdr`). Ventana de texto la misma que `familyOf`: título + ubicación + 800 caracteres de cuerpo. **No se recogió, escribió ni publicó nada.**
+- **Cuántos títulos hay**: **147 títulos únicos** con `BDR`/`ADR`, `business developer` o `business development representative` entre **447 únicos** de las filas que el `LIKE` trajo (655 filas); en el catálogo, **146 títulos únicos** en 195 filas.
+- **Cuántos se caían por «sin perfil comercial reconocible»**: **79 de 147 (54 %)**. Los otros ya tenían familia: 40 como **sdr**, 18 como **account_executive**, 7 **cold_caller**, 2 setter, 1 closer. Ahora: **113 setter y 34 closer**, ninguno sin familia.
+- **Efecto sobre lo que ve la alumna**: de esas 195 filas del catálogo, **solo 4 están revisadas** (approved/published) y las 4 cambian de filtro: **3 pasan de sdr a setter** y **1 de account_executive a closer**. Ninguna de las 99 filas que antes eran `null` está publicada (62 retiradas, 37 borradores), así que **el cambio no resucita nada visible**: corrige a qué filtro responde lo ya revisado y deja listas 37 fichas para revisión.
+- **En España**: 76 de los 146 títulos del catálogo; ahora 49 setter y 27 closer.
+- **Fuentes de donde salen los que antes eran `null`**: freehire 52, freehire-latam 9, arbeitnow 7, greenhouse-feverup 5, freehire-closer 5, jobicy-marketing 4, jobspresso 3, getonbrd 3…
+- **Límite del cálculo**: es un contrafactual sobre el texto guardado con la ventana de 800 caracteres; si el cuerpo real fuera más largo, alguna clasificación podría moverse. Los títulos que hoy siguen sin familia en España: **0**.
+
 ## Limpieza del vocabulario: una lista, ninguna palabra inventada (sesión 180) — 2026-11-13
 
 - **Palabra de más, fuera**: `appointment development representative` la había inventado yo en la sesión 177. No es un título real —el ADR es *account* development rep y el puesto de agenda ya está como `appointment setter`— así que se retira. **38 casos siguen**, porque el caso de test pasa a fijar lo contrario: `Sales Development Representative` → **sdr**.
