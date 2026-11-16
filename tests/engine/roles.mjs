@@ -51,6 +51,18 @@ assert.equal(role('SDR'), 'sdr');
 assert.equal(role('Comercial Madrid'), 'account_executive');
 assert.equal(role('Business Development Representative Madrid'), 'setter');
 
+// ---- «Admisiones» es el vertical, no el puesto (2026-11-13) ----
+// Visto en producción buscando «closer en España»: un setter y un ejecutivo comercial salían
+// etiquetados CLOSER solo porque el título decía «Admisiones», que se evaluaba primero.
+assert.equal(role('Sales Setter B2C – Admisiones & Desarrollo Comercial'), 'setter');
+assert.equal(role('ASESOR ADMISIONES - EJECUTIVO COMERCIAL'), 'account_executive');
+// El vertical sigue decidiendo cuando el título no nombra otra familia: es el mercado de WDC.
+assert.equal(role('Asesor de Admisiones'), 'closer');
+assert.equal(role('Asesor de Admisiones - Formación'), 'closer');
+assert.equal(role('Admisiones'), 'closer');
+assert.equal(role('Asesor Comercial Educativo'), 'closer', 'la fórmula completa sigue siendo cierre');
+assert.equal(role('Closer de Ventas / Admisiones'), 'closer');
+
 // ---- Lo que no debe entrar por estas palabras nuevas ----
 assert.equal(role('Customer Success Manager'), null);
 assert.equal(role('Customer Success Specialist'), null);
@@ -62,4 +74,4 @@ assert.equal(role('Key Account Manager'), 'account_executive', 'cuentas sí; «m
 assert.equal(classifyRole({ title: 'Gestor de cuentas' }, 'buscamos business developer para cerrar ventas high ticket'), 'closer');
 assert.equal(classifyRole({ title: 'Gestor de cuentas' }, 'equipo de bdr y adr para agendar demos'), 'setter');
 
-console.log('PASS  categorías de rol (31 casos)');
+console.log('PASS  categorías de rol (38 casos)');

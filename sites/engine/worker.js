@@ -899,7 +899,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, resetExtractFiltered, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, resetExtractFiltered, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -11495,6 +11495,14 @@ function explicitSpain(p) {
   const hay = fold(`${p.title ?? ''} ${p.location ?? ''}`);
   return ES_EXPLICIT.some(k => hintInText(hay, fold(k))) || placeInSpain(p.location) || nonSpain(p);
 }
+// País explícito distinto de España. El filtro de mercado España se decidía con ES_HINTS sobre
+// TODO el anuncio y una lista de países ajenos que no incluía Colombia ni Brasil: FreeHire LATAM
+// publica «REMOTO · COLOMBIA» y el cuerpo dice «remoto», así que la vacante salía en «closer en
+// España». Aquí manda la ubicación: si dice un país, ese país es el mercado.
+function foreignCountry(p) {
+  const country = countryOfLocation(p.location);
+  return country && country !== 'España' ? country : null;
+}
 function spainSignal(p) { return ES_HINTS.some(k => `${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`.toLowerCase().includes(k)) || placeInSpain(p.location); }
 function nonSpain(p) { return NON_ES_HINTS.some(k => `${p.title ?? ''} ${p.location ?? ''}`.toLowerCase().includes(k)); }
 
@@ -11523,6 +11531,11 @@ function hasWord(text, keyword) {
 // cuenta (es donde vive el nombre del puesto) y en el cuerpo siguen contando las fórmulas
 // inequívocas: «closer de ventas», «sales closer», «high ticket closer», «closer remoto»…
 const BODY_AMBIGUOUS_KEYWORDS = new Set(['closer']);
+// «Admisiones» a secas es el VERTICAL, no el puesto: describe a qué se dedica la empresa. Se evalúa
+// solo cuando el título no nombra ninguna familia. Sin esto, «Sales Setter B2C – Admisiones &
+// Desarrollo Comercial» salía closer (la familia se evalúa primero) y «Asesor Admisiones –
+// Ejecutivo Comercial» también, que es justo lo que la alumna ve como «esto no es un closer».
+const WEAK_TITLE_KEYWORDS = new Set(['admisiones']);
 function classifyRole(p, text) {
   // Determinista y con la misma prioridad que presentation.py: primero el título de toda
   // la vida, después la evidencia en el texto de la oferta; nunca se inventa familia.
@@ -11531,6 +11544,10 @@ function classifyRole(p, text) {
   // clasificarse como setter solo por el orden de evaluación.
   const title = fold(p.title ?? '');
   const body = String(text ?? '');
+  // Primero las palabras de rol; el vertical solo decide si el título no dice nada más.
+  for (const role of ROLE_EVAL_ORDER) {
+    if (ROLE_KEYWORDS[role].some(k => !WEAK_TITLE_KEYWORDS.has(k) && hasWord(title, k))) return role;
+  }
   for (const role of ROLE_EVAL_ORDER) {
     if (ROLE_KEYWORDS[role].some(k => hasWord(title, k))) return role;
   }
@@ -11588,7 +11605,7 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
     // y la primera activación de 109 AE los habría servido en la vista por defecto.
     if (EXTRA_ROLES.has(derivedRole) && !includeExtraRoles && role !== derivedRole) continue;
     if (market === 'ES') {
-      if (nonSpain(p) || !spainSignal(p)) continue;
+      if (foreignCountry(p) || nonSpain(p) || !spainSignal(p)) continue;
     } else if (market !== 'any') {
       // Mercados sin cobertura propia del motor: se exponen solo los que traen país explícito.
       const hay = fold(`${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`);

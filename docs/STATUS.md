@@ -1,5 +1,14 @@
 # Estado
 
+## «Closer en España» dejaba de ser España y el vertical decidía el rol (sesión 178) — 2026-11-13
+
+- **Medido en producción antes de tocar nada** (`POST /api/backend/opportunities/search`, `role=closer, market=ES, days=10`): **38 tarjetas**, de las que **4 eran de país ajeno** (3 Colombia, 1 Brasil) y **3 llevaban el rol equivocado** (`Sales Setter B2C – Admisiones…` y `ASESOR ADMISIONES - EJECUTIVO COMERCIAL` etiquetados Closer).
+- **Causa 1 — mercado por palabras sueltas**: el filtro España se decidía con `spainSignal`, que mira el anuncio entero, y `ES_HINTS` incluye `remoto`; `NON_ES_HINTS` no lista Colombia ni Brasil. Una vacante remota colombiana decía «remoto» y pasaba. Ahora manda la **ubicación**: `foreignCountry(p)` resuelve el país con `countryOfLocation` y, si es un país explícito distinto de España, la oferta se queda fuera del mercado ES. Sin país reconocible no se excluye (no se inventa mercado).
+- **Causa 2 — el vertical decidía el rol**: `admisiones` (palabra de sector, no de puesto) estaba en closer y closer se evalúa primero, así que cualquier título con «Admisiones» salía Closer aunque dijera «Setter» o «Ejecutivo Comercial». Ahora `admisiones` es **débil**: solo decide si el título no nombra ninguna familia. `Asesor de Admisiones`, `Asesor Comercial Educativo` y `Admisiones` a secas **siguen siendo closer** (es el mercado de WDC); `Sales Setter B2C – Admisiones & Desarrollo Comercial` → setter y `ASESOR ADMISIONES - EJECUTIVO COMERCIAL` → account_executive (familia extra: fuera de la lista por defecto).
+- **Verificado en el servicio real tras desplegar** (motor `6b6c40cf`, misma consulta): **34 tarjetas, 0 de país ajeno, 0 con rol distinto de closer**; las 34 restantes son España/remoto (Madrid, Barcelona, Málaga, Granada, Valladolid, Zaragoza, Galicia, Cataluña, Andalucía, Murcia, A Coruña…).
+- **Probado**: `tests/engine/roles.mjs` 38 casos (setter con «Admisiones», ejecutivo con «Admisiones», y los cuatro que deben seguir en closer) y `tests/engine/location.mjs` 32 casos (`foreignCountry` con Colombia, Brasil, «REMOTO · BRASIL», Bogotá, lista JSON, remoto sin país, Granada). `roles`, `location`, `latam`, `terms`, `subrequests`, `catalog`, `sources`, `status` y `provenance` en PASS.
+- **Sigue abierto (decisión del dueño)**: `Business Developer – Ciberseguridad (Perfil Hunter Puro)` sigue etiquetado Closer en España — es la keyword que se añadió en la sesión 177 por medición. Para sacarlo del perfil de cierre hay que mover `business developer` a `account_executive`; no se cambia sin orden porque contradice esa medición.
+
 ## Business Developer cierra; ADR/BDR agendan (sesión 177) — 2026-11-13
 
 - **`business developer` → closer**: en formación y SaaS es un puesto de cierre (llamada, propuesta, firma), no de desarrollo de negocio puro. Se escribe distinto de «business development manager» a propósito: `hasWord` exige palabra completa, así que el mando no cae en closer.

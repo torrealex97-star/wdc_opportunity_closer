@@ -13,7 +13,7 @@ const workerPath = fileURLToPath(new URL('../../sites/engine/worker.js', import.
 const stage = join(mkdtempSync(join(tmpdir(), 'wdc-engine-location-')), 'worker.mjs');
 copyFileSync(workerPath, stage);
 const { __test } = await import(pathToFileURL(stage).href);
-const { locationLabel, countryOfLocation, modalityOf } = __test;
+const { locationLabel, countryOfLocation, modalityOf, foreignCountry } = __test;
 
 // El código ISO suelto es el caso más repetido en la base (1.405 filas con 'es').
 assert.equal(locationLabel('es'), 'España');
@@ -52,6 +52,18 @@ assert.equal(countryOfLocation('Bogotá', { conCiudades: false }), null);
 assert.equal(countryOfLocation('Valencia'), 'España');
 assert.equal(countryOfLocation('Madrid, Comunidad de Madrid, España'), 'España');
 
+// Mercado España: el PAÍS de la ubicación manda sobre «remoto» en el cuerpo del anuncio.
+// Medido en producción 2026-11-13: buscando «closer en España» salían tarjetas «REMOTO ·
+// COLOMBIA» y «· BRASIL» porque ES_HINTS incluye 'remoto' y NON_ES_HINTS no lista esos países.
+assert.equal(foreignCountry({ location: 'Colombia' }), 'Colombia');
+assert.equal(foreignCountry({ location: 'REMOTO · BRASIL' }), 'Brasil');
+assert.equal(foreignCountry({ location: 'Bogotá' }), 'Colombia');
+assert.equal(foreignCountry({ location: '["Colombia","Mexico"]' }), 'Colombia');
+assert.equal(foreignCountry({ location: 'Remote' }), null, 'remoto sin país no es un país ajeno');
+assert.equal(foreignCountry({ location: 'Granada' }), null, 'Granada es España');
+assert.equal(foreignCountry({ location: 'Madrid, España' }), null);
+assert.equal(foreignCountry({ location: null }), null, 'sin ubicación no se inventa un mercado');
+
 // Modalidad: lo que dice el anuncio, y si no lo dice, se declara.
 assert.equal(modalityOf('Buscamos comercial para nuestra oficina'), 'Modalidad no indicada');
 assert.equal(modalityOf('Puesto presencial en nuestra sede de Madrid'), 'Presencial');
@@ -61,4 +73,4 @@ assert.equal(modalityOf('Buscamos closer', 'Remoto'), 'Remoto');
 // Una ubicación concreta no convierte el puesto en presencial: el anuncio no lo dice.
 assert.equal(modalityOf('Buscamos closer', 'Madrid, España'), 'Modalidad no indicada');
 
-console.log('PASS  ubicación legible y modalidad declarada (24 casos)');
+console.log('PASS  ubicación legible, país ajeno y modalidad declarada (32 casos)');
