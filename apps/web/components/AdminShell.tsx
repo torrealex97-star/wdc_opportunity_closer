@@ -221,23 +221,45 @@ function UsersTab({ me, onSessionLost }: { me: Me; onSessionLost: () => void }) 
   </section>;
 }
 
-const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode; eyebrow: string; title: string; lead: string }> = [
-  { id: 'summary', label: 'Resumen', icon: <LayoutDashboard size={18} />, eyebrow: 'TU OBJETIVO', title: 'Cómo vamos.', lead: 'Cuántas ofertas de closer en España ven ya las alumnas y qué toca hacer para llegar a 20.' },
-  { id: 'quick', label: 'Revisión rápida', icon: <ListChecks size={18} />, eyebrow: 'MUCHAS OFERTAS, POCOS CLICS', title: 'Revisa en bloque.', lead: 'Filtra por perfil, verifica la vigencia y aprueba varias a la vez. Todo se puede deshacer.' },
-  { id: 'external', label: 'Fuentes externas', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
-  { id: 'apify', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
-  { id: 'review', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
-  { id: 'catalog', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
-  { id: 'sources', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente y de las conexiones del sistema.' },
-  { id: 'apis', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
-  { id: 'students', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
-  { id: 'users', label: 'Usuarios', icon: <Users size={18} />, eyebrow: 'QUIÉN ENTRA', title: 'Equipo con acceso.', lead: 'Solo las personas de esta lista pueden entrar al panel.' },
+// Las secciones se agrupan por el momento del trabajo —mirar, trabajar ofertas, sistema, equipo—:
+// diez destinos en una lista plana obligaban a leerlos todos cada vez. El grupo es solo orden, no
+// permisos: las diez siguen a un clic.
+type Group = 'Empezar' | 'Ofertas' | 'Sistema' | 'Equipo';
+const GROUPS: Group[] = ['Empezar', 'Ofertas', 'Sistema', 'Equipo'];
+
+const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode; eyebrow: string; title: string; lead: string }> = [
+  { id: 'summary', group: 'Empezar', label: 'Resumen', icon: <LayoutDashboard size={18} />, eyebrow: 'TU OBJETIVO', title: 'Cómo vamos.', lead: 'Cuántas ofertas de closer en España ven ya las alumnas y qué toca hacer para llegar a 20.' },
+  { id: 'quick', group: 'Ofertas', label: 'Revisión rápida', icon: <ListChecks size={18} />, eyebrow: 'MUCHAS OFERTAS, POCOS CLICS', title: 'Revisa en bloque.', lead: 'Filtra por perfil, verifica la vigencia y aprueba varias a la vez. Todo se puede deshacer.' },
+  { id: 'external', group: 'Ofertas', label: 'Fuentes externas', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
+  { id: 'apify', group: 'Ofertas', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
+  { id: 'review', group: 'Ofertas', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
+  { id: 'catalog', group: 'Ofertas', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
+  { id: 'sources', group: 'Sistema', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente y de las conexiones del sistema.' },
+  { id: 'apis', group: 'Sistema', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
+  { id: 'students', group: 'Equipo', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
+  { id: 'users', group: 'Equipo', label: 'Usuarios', icon: <Users size={18} />, eyebrow: 'QUIÉN ENTRA', title: 'Equipo con acceso.', lead: 'Solo las personas de esta lista pueden entrar al panel.' },
 ];
 
 export default function AdminShell() {
   const [state, setState] = useState<'checking' | 'out' | 'in' | 'unconfigured'>('checking');
   const [me, setMe] = useState<Me | null>(null);
   const [tab, setTab] = useState<Tab>('summary');
+  // La sección vive en el hash (#quick, #sources…): recargar, guardar el enlace o volver atrás
+  // devuelve al operador al mismo sitio en vez de a Resumen.
+  useEffect(() => {
+    const read = () => {
+      const wanted = window.location.hash.replace('#', '');
+      const found = TABS.find(t => t.id === wanted);
+      if (found) setTab(found.id);
+    };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, []);
+  const go = useCallback((id: Tab) => {
+    setTab(id);
+    if (typeof window !== 'undefined') history.replaceState(null, '', `#${id}`);
+  }, []);
   useEffect(() => {
     fetch('/api/admin/session').then(r => r.json()).then((s: { configured?: boolean; authenticated?: boolean; email?: string; role?: Me['role'] }) => {
       if (s.authenticated && s.email && s.role) { setMe({ email: s.email, role: s.role }); setState('in'); } else setState(s.configured ? 'out' : 'unconfigured');
@@ -250,27 +272,31 @@ export default function AdminShell() {
   if (state === 'unconfigured') return <div className="auth-wrap"><div className="auth-card"><Brand /><h1>Acceso sin configurar</h1><p>Faltan las variables de Supabase (URL, clave pública y service role) en el servidor de este despliegue.</p></div></div>;
   if (state === 'out' || !me) return <Login onLogin={m => { setMe(m); setState('in'); }} />;
   const current = TABS.find(t => t.id === tab)!;
-  return <div className="shell">
+  return <div className="shell" data-surface="admin" data-tab={tab}>
     <aside className="sidebar">
       <Brand />
       <div className="workspace-label">PANEL DE ADMINISTRACIÓN</div>
-      <nav aria-label="Secciones del panel">{TABS.map(t => <button key={t.id} className={t.id === tab ? 'nav active' : 'nav'} aria-current={t.id === tab ? 'page' : undefined} onClick={() => setTab(t.id)}>{t.icon} {t.label}</button>)}</nav>
+      <nav aria-label="Secciones del panel">{GROUPS.map(group => <div className="nav-group" key={group}>
+        <p className="nav-group-label">{group}</p>
+        {TABS.filter(t => t.group === group).map(t => <button key={t.id} className={t.id === tab ? 'nav active' : 'nav'} aria-current={t.id === tab ? 'page' : undefined} title={t.lead} onClick={() => go(t.id)}>{t.icon} {t.label}</button>)}
+      </div>)}</nav>
       <div className="sidebar-note"><span className="eyebrow">DE LA PREPARACIÓN<br />A LA OPORTUNIDAD</span><p>El siguiente paso profesional empieza con una buena selección.</p></div>
       <div className="local-user"><span className="avatar-sm" aria-hidden="true">{me.email.slice(0, 2).toUpperCase()}</span><div><strong>{me.email}</strong><small>{me.role === 'owner' ? 'Propietario' : 'Administrador'}</small></div>
         <button onClick={logout}><LogOut size={14} /> Salir</button></div>
     </aside>
     <div className="main-shell">
       <header className="topbar"><div>Women Digital Closer <ChevronRight size={14} /> <strong>{current.label}</strong></div>
-        <a className="local-badge" href="/" target="_blank" rel="noopener noreferrer"><BriefcaseBusiness size={14} /> Ver la app de alumnas</a></header>
+        <label className="admin-jump">Sección<select value={tab} onChange={e => go(e.target.value as Tab)}>{GROUPS.map(group => <optgroup label={group} key={group}>{TABS.filter(t => t.group === group).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
+        <a className="local-badge" href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver la app de alumnas" title="Ver la app de alumnas"><BriefcaseBusiness size={14} /> Ver la app</a></header>
       <main>
         <div className="page-heading"><div><span className="eyebrow">{current.eyebrow}</span><h1>{current.title}</h1><p>{current.lead}</p></div></div>
         {/* El aviso del motor vive aquí, no dentro de una pestaña: si el motor se pausa o deja de responder,
             el operador lo ve en cualquiera de ellas sin ir a buscarlo a «Fuentes». */}
-        <EngineAlertBanner go={() => setTab('sources')} />
-        {tab === 'summary' && <SummaryTab go={setTab} onSessionLost={lost} />}
+        <EngineAlertBanner go={() => go('sources')} />
+        {tab === 'summary' && <SummaryTab go={go} onSessionLost={lost} />}
         {tab === 'quick' && <QuickReview onSessionLost={lost} />}
         {tab === 'external' && <ExternalTab owner={me.role === 'owner'} onSessionLost={lost} />}
-        {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => setTab('apis')} />}
+        {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}
         {tab === 'review' && <CloudAdminPanel onSessionLost={lost} />}
         {tab === 'catalog' && <CatalogTab onSessionLost={lost} />}
         {tab === 'sources' && <SourcesTab onSessionLost={lost} />}

@@ -1,5 +1,15 @@
 # Estado
 
+## Panel de administración: todo a la vista (sesión 188) — 2026-11-16
+
+- **Navegación agrupada**: las diez secciones siguen siendo las mismas y a un clic, pero ordenadas por momento del trabajo —`Empezar` (Resumen), `Ofertas` (Revisión rápida, Fuentes externas, Búsqueda automática, Revisión una a una, Probar ofertas), `Sistema` (Fuentes, APIs), `Equipo` (Alumnas, Usuarios)—. Antes era una lista plana de diez.
+- **Sección en la URL** (`#quick`, `#sources`…): recargar, guardar el enlace o volver atrás devuelve al operador al mismo sitio en vez de a Resumen; `hashchange` mantiene el estado si cambia la URL.
+- **Selector de sección en móvil**: la barra lateral pasa a scroll horizontal; ahora hay un `<select>` con las diez agrupadas en la cabecera, así ninguna queda escondida.
+- **Legibilidad y estado**: sección activa con barra terracota + fondo (`aria-current` además del color), tablas a 13 px con cabecera pegajosa (`position:sticky`) y hover de fila, cifras de `stat-strip` a 20 px, `status` a 12 px, tarjetas con más aire y `main` limitado a 1240 px. Todo con tokens; sin hex nuevos.
+- **Móvil**: se retiró la miga del topbar (la sección ya se lee en el título) y el enlace a la app de alumnas queda como «Ver la app» (con `aria-label` completo), para que todo quepa en una fila. La navegación sigue siendo una franja desplazable: el panel no puede crecer a lo alto en móvil.
+- **Verificado**: `npm run design` OK; `npm run typecheck` y `npm run build` en verde; **`tests/admin-auth/ui.mjs` 13/13 en PASS** contra `next start` con Supabase y motor simulados (incluye su comprobación de ancho a 390 px); comprobación focalizada adicional en Chrome real: cuatro grupos con sus etiquetas, diez botones, `#quick` sobrevive a un recargado, **0 px de scroll horizontal a 390 px** y selector móvil visible. Capturas en `.local/admin-1280.png` y `.local/admin-390.png` (no versionadas).
+- **Límites**: es el panel hospedado (`AdminShell`, el que se sirve con `CAREER_ENGINE_URL`); el panel local (`Workspace`) comparte hoja de estilos y no se rediseñó. No se añadieron secciones, datos ni controles nuevos.
+
 ## El «hueco ampliado» de la vista de alumna, medido (sesión 187) — 2026-11-16
 
 - **Qué es**: `StudentOpportunities.tsx` pide la búsqueda estrecha y, si vuelven **menos de 10** ofertas y hay algún filtro (perfil o mercado), pide una **segunda búsqueda sin rol y con bilingües** y la enseña en el bloque «hueco ampliado», hasta completar 20 tarjetas. El motor **no** amplía nada por su cuenta: el relleno es del cliente.
