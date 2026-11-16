@@ -23,15 +23,61 @@ const CLOSER_TERMS = [
   'asesor comercial remoto', 'agente comercial remoto', 'ejecutivo comercial remoto',
   'ventas remotas', 'closing sales', 'televentas remoto',
 ];
-// Términos de esta ejecución: ventana fija por día (determinista y comprobable) que avanza
-// `perRun` posiciones cada día, así en CLOSER_TERMS.length / perRun días se cubren todos sin
-// repetir y sin depender de estado guardado.
-function pickTerms(perRun, when = new Date()) {
-  const total = CLOSER_TERMS.length;
-  const size = Math.max(1, Math.min(perRun || 3, total));
+// Términos de búsqueda de SDR y de cold caller. No estaban en el banco y por eso FreeHire España
+// devolvía 1.506 account executive y 3 sdr en España (sesión 190): lo que no se pide no se recoge.
+// Son términos de BÚSQUEDA, no de clasificación: el vocabulario del motor no cambia.
+const SDR_TERMS = ['sdr', 'bdr', 'prospeccion'];
+const COLD_TERMS = ['teleoperador', 'cold caller', 'call center'];
+const SEARCH_BANKS = { closer: CLOSER_TERMS, sdr: SDR_TERMS, cold_caller: COLD_TERMS };
+// Cupo por familia: cada pasada con 2+ huecos reserva uno de sdr y uno de cold caller; el resto, cierre.
+// Con un solo hueco la familia rota por día, para que ninguna se quede sin turno.
+const TERM_QUOTA = { closer: 2, sdr: 1, cold_caller: 1 };
+const QUOTA_ORDER = ['closer', 'sdr', 'cold_caller'];
+
+// Reparto determinista por día (comprobable y sin estado guardado): devuelve [{ term, family }].
+// Las familias se intercalan para que, si el presupuesto de subrequests corta a media fuente, no se
+// quede siempre fuera la misma. Dentro de cada familia la ventana avanza `cupo` posiciones al día.
+function termPlan(perRun, when = new Date()) {
   const day = Math.floor(Date.parse(`${when.toISOString().slice(0, 10)}T00:00:00Z`) / 86400000);
-  const start = (day * size) % total;
-  return Array.from({ length: size }, (_, i) => CLOSER_TERMS[(start + i) % total]);
+  const total = QUOTA_ORDER.reduce((n, family) => n + SEARCH_BANKS[family].length, 0);
+  const size = Math.max(1, Math.min(perRun || 3, total));
+  const quota = { closer: 0, sdr: 0, cold_caller: 0 };
+  if (size === 1) quota[QUOTA_ORDER[day % QUOTA_ORDER.length]] = 1;
+  else {
+    quota.sdr = 1;
+    quota.cold_caller = 1;
+    quota.closer = size - 2;
+    // Un banco vacío no se inventa: su hueco va a cierre.
+    for (const family of ['sdr', 'cold_caller']) if (!SEARCH_BANKS[family].length) { quota.closer += quota[family]; quota[family] = 0; }
+  }
+  const picked = { closer: 0, sdr: 0, cold_caller: 0 };
+  const slots = [];
+  while (slots.length < size) {
+    for (const family of QUOTA_ORDER) {
+      if (slots.length >= size || picked[family] >= quota[family]) continue;
+      const bank = SEARCH_BANKS[family];
+      const index = (day * Math.max(1, quota[family]) + picked[family]) % bank.length;
+      slots.push({ term: bank[index], family });
+      picked[family] += 1;
+    }
+  }
+  return slots;
+}
+
+// Lo que piden los extractores: solo los términos, en el orden del plan.
+function pickTerms(perRun, when = new Date()) {
+  return termPlan(perRun, when).map(slot => slot.term);
+}
+
+// Rotación declarada en el run: qué términos y cuántos por familia se pidieron, para poder medir su
+// rendimiento en la pasada siguiente sin adivinar. `null` para fuentes que no buscan por término.
+function declaredTerms(source, when = new Date()) {
+  if (!source?.terms) return null;
+  const slots = termPlan(source.termsPerRun || 3, when);
+  return {
+    terms: slots.map(slot => slot.term),
+    by_family: slots.reduce((acc, slot) => { acc[slot.family] = (acc[slot.family] ?? 0) + 1; return acc; }, {}),
+  };
 }
 // Peticiones que costará una fuente: el Worker tiene un tope de subrequests POR INVOCACIÓN y,
 // cuando se agota, las últimas fuentes fallaban con «Too many subrequests». Se cuenta antes
@@ -943,7 +989,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -2282,6 +2328,9 @@ async function runCollection(env, force = false) {
   // en una pasada; con el plan gratuito se aplazan las que no entran y la siguiente abre por ellas.
   const subLimits = subrequestLimits(env);
   const { budget, ordered, resumed } = planRun(SOURCES, last?.sources, day, subLimits.max, subLimits.ceiling);
+  // Día de la pasada fijado una vez: la rotación de términos que se declara abajo es la MISMA que
+  // piden los extractores, aunque la invocación cruce la medianoche.
+  const termDay = new Date(`${day}T00:00:00Z`);
   let spent = 0;
   // Filas escritas por esta pasada para el registro de cuota: los lotes de ingesta y, si tocó,
   // la reconstrucción de tablas de la forma barata.
@@ -2293,6 +2342,10 @@ async function runCollection(env, force = false) {
       continue;
     }
     spent += cost;
+    // Rotación declarada ANTES de ejecutar: se ve qué términos se pidieron (y cuántos por familia)
+    // aunque la fuente acabe caída, que es lo que permite medir su rendimiento en la pasada siguiente.
+    const declared = declaredTerms(source, termDay);
+    if (declared) setState(source.code, { terms: declared });
     try {
       setState(source.code, { status: 'running' });
       // Ingest diferenciada (optimización D1 2026-10-14 + refresco condicional):

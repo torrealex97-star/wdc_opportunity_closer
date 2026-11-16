@@ -1,5 +1,15 @@
 # Estado
 
+## Banco de términos por familia: sdr y cold caller ya se piden (sesión 191) — 2026-11-16
+
+- **El banco de búsqueda tenía solo términos de cierre** (21, todos de closer y variantes). Ahora son tres familias: `closer` (los 21 de siempre), `sdr` (`sdr`, `bdr`, `prospeccion`) y `cold_caller` (`teleoperador`, `cold caller`, `call center`). Los términos van sin acento por la convención del repo (las APIs pliegan acentos; `prospeccion` en el banco, `prospección` en la calle).
+- **Cupo por familia**: cada pasada con 2+ huecos reserva **uno de sdr y uno de cold caller**; el resto, cierre. Con un solo hueco la familia rota por día, así que ninguna se queda sin turno. Las familias se intercalan (`closer, sdr, cold, closer…`) para que un corte de presupuesto a media fuente no se lleve siempre la misma, y el plan es determinista por día: mismo día, mismos términos.
+- **La rotación queda declarada en el run**: `collection_runs.sources[code].terms = { terms: [...], by_family: { closer, sdr, cold_caller } }`, escrito **antes** de ejecutar la fuente (también si acaba caída). Cada candidato ya llevaba `raw.search_term`, así que la próxima pasada se puede leer término a término: peticiones por término, candidatos vistos, `filtered_by_reason` y tarjetas que llegan a la vista.
+- **Sin tocar el vocabulario de clasificación ni el presupuesto**: el número de peticiones por fuente no cambia (`fetchCost` sigue contando `termsPerRun`); solo cambia qué términos se piden. El test fija que `BDR` sigue en `setter` (ADR-007), `SDR` en `sdr` y `teleoperador` en `cold_caller`.
+- **Tests**: `tests/engine/terms.mjs` **12/12** con dos pasos nuevos (reparto por familia en 30 días × 4 tamaños, determinismo, sin repetidos, cobertura de los 27 términos en 60 días, `declaredTerms` igual a lo que se pide y `null` para fuentes sin términos) y la rotación antigua reescrita a la nueva regla. En verde además: `bucket`, `discards`, `roles`, `latam`, `catalog`, `sources`, `subrequests`.
+- **Coste asumido, dicho claro**: con 4 términos por pasada, la cobertura de cierre pasa de ~4 a ~6 días (era 21/6 por día, ahora 4 de cierre por pasada); sdr y cold se recorren en 3 días.
+- **Límites**: no se ha disparado ninguna pasada real, así que el rendimiento de los seis términos nuevos está **sin medir** — se mide en la siguiente pasada con `terms` + `raw.search_term`. Si una fuente devuelve seco con `sdr` (es un acrónimo muy corto para algunos buscadores), el arreglo es cambiar el término, no el conector.
+
 ## SDR y Cold Caller: de dónde saldrían más, medido en seco (sesión 190) — 2026-11-16
 
 Solo lectura, sin tocar vocabulario, fuentes ni recogida: `scripts/role-audit.mjs` (`npm run role:audit`) recorre los 10.138 anuncios ya recogidos en D1 (7.371 títulos únicos) con el clasificador real del motor.

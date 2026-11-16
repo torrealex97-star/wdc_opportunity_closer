@@ -57,17 +57,54 @@ step('el filtro del origen se queda con las familias del perfil y usa el clasifi
   assert.deepEqual([...t.PROFILE_FAMILIES].sort(), ['closer', 'cold_caller', 'sdr', 'setter']);
 });
 
-step('la rotación cubre todos los términos sin repetir y cambia cada día', () => {
-  const seen = new Set();
+step('la rotación reparte por familia: cada pasada con 2+ huecos lleva sdr y cold caller', () => {
   const day = n => new Date(Date.UTC(2026, 9, 20 + n));
-  for (let i = 0; i < 20; i++) for (const term of t.pickTerms(3, day(i))) seen.add(term);
-  assert.equal(seen.size, t.CLOSER_TERMS.length, 'en 20 días se usan todos');
-  // Mismo día = mismos términos (determinista); día siguiente = ventana distinta.
-  assert.deepEqual(t.pickTerms(3, day(0)), t.pickTerms(3, day(0)));
-  assert.notDeepEqual(t.pickTerms(3, day(0)), t.pickTerms(3, day(1)));
-  assert.equal(t.pickTerms(3, day(0)).length, 3);
+  const total = ['closer', 'sdr', 'cold_caller'].reduce((n, f) => n + t.SEARCH_BANKS[f].length, 0);
+  for (let i = 0; i < 30; i++) {
+    for (const size of [2, 3, 4, 6]) {
+      const plan = t.termPlan(size, day(i));
+      assert.equal(plan.length, size, `día ${i}: el plan tiene ${size} huecos`);
+      const families = new Set(plan.map(slot => slot.family));
+      assert.ok(families.has('sdr'), `día ${i} tamaño ${size}: la pasada no pide ningún sdr`);
+      assert.ok(families.has('cold_caller'), `día ${i} tamaño ${size}: la pasada no pide ningún cold caller`);
+      assert.equal(new Set(plan.map(slot => slot.term)).size, size, 'sin repetir término dentro de la pasada');
+    }
+  }
+  // Con un solo hueco la familia rota por día: ninguna se queda sin turno.
+  assert.equal(new Set([0, 1, 2, 3].map(i => t.termPlan(1, day(i))[0].family)).size, 3);
+  // Mismo día = mismo plan (determinista); día siguiente = plan distinto.
+  assert.deepEqual(t.termPlan(4, day(0)), t.termPlan(4, day(0)));
+  assert.notDeepEqual(t.termPlan(4, day(0)), t.termPlan(4, day(1)));
+  // Ningún término del banco se queda sin turno.
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) for (const slot of t.termPlan(4, day(i))) seen.add(slot.term);
+  assert.equal(seen.size, total, 'en 60 días se usan todos los términos del banco');
+  assert.equal(t.pickTerms(999, day(0)).length, total, 'no pide más de los que hay');
   assert.ok(t.pickTerms(0, day(0)).length >= 1, 'nunca cero términos');
-  assert.equal(t.pickTerms(999, day(0)).length, t.CLOSER_TERMS.length, 'no pide más de los que hay');
+  assert.deepEqual(t.pickTerms(4, day(0)), t.termPlan(4, day(0)).map(slot => slot.term), 'pickTerms es el plan sin familias');
+  // La búsqueda nueva NO toca el clasificador: el mismo título sigue en su familia.
+  assert.equal(t.classifyRole({ title: 'BDR ON TRADE' }, ''), 'setter', 'BDR sigue en setter (ADR-007)');
+  assert.equal(t.classifyRole({ title: 'SDR LATAM' }, ''), 'sdr');
+  assert.equal(t.classifyRole({ title: 'Teleoperador comercial' }, ''), 'cold_caller');
+});
+
+step('la rotación queda declarada en el run, con su familia', () => {
+  const day = new Date(Date.UTC(2026, 9, 20));
+  const freehire = t.SOURCES.find(s => s.code === 'freehire-closer');
+  const declared = t.declaredTerms(freehire, day);
+  assert.deepEqual(declared.terms, t.pickTerms(freehire.termsPerRun, day), 'lo declarado es exactamente lo que se pide');
+  assert.equal(declared.terms.length, freehire.termsPerRun);
+  assert.equal(declared.by_family.sdr, 1, 'un sdr por pasada');
+  assert.equal(declared.by_family.cold_caller, 1, 'un cold caller por pasada');
+  assert.equal(declared.by_family.closer, freehire.termsPerRun - 2, 'el resto, cierre');
+  assert.equal(t.declaredTerms(t.SOURCES.find(s => s.code === 'jobtoday'), day), null, 'sin términos no se declara nada');
+  // Los seis términos nuevos salen de verdad a lo largo de la semana.
+  const week = new Set();
+  for (let i = 0; i < 7; i++) for (const slot of t.termPlan(4, new Date(Date.UTC(2026, 9, 20 + i)))) week.add(slot.term);
+  for (const term of ['sdr', 'bdr', 'teleoperador', 'cold caller', 'prospeccion', 'call center'])
+    assert.ok(week.has(term), `«${term}» se pide en la semana`);
+  for (const term of t.SDR_TERMS) assert.ok(t.SEARCH_BANKS.sdr.includes(term));
+  for (const term of t.COLD_TERMS) assert.ok(t.SEARCH_BANKS.cold_caller.includes(term));
 });
 
 step('coste en peticiones por fuente: se usa para aplazar, no para recortar ofertas', () => {
@@ -127,8 +164,9 @@ step('el presupuesto por invocación reserva el gasto D1: lo que no cabe se apla
   assert.equal(t.planRun(t.SOURCES, null, '2026-10-26', 400).budget, t.PLATFORM_SUBREQUEST_LIMIT - t.D1_RESERVED_SUBREQUESTS);
   // Sin estado previo o ilegible no se rompe: queda la rotación del día.
   assert.deepEqual(t.planRun(t.SOURCES, '{basura', '2026-10-26').ordered.map(s => s.code), plan.ordered.map(s => s.code));
-  // La ventana de términos cubre todo el vocabulario en menos de una semana.
-  assert.ok(Math.ceil(t.CLOSER_TERMS.length / 6) <= 4, 'el vocabulario se recorre en ≤ 4 días');
+  // La ventana de términos cubre todo el vocabulario (tres familias) en menos de una semana.
+  const bankSize = ['closer', 'sdr', 'cold_caller'].reduce((n, f) => n + t.SEARCH_BANKS[f].length, 0);
+  assert.ok(Math.ceil(bankSize / 6) <= 5, 'el vocabulario se recorre en ≤ 5 días');
 });
 
 // ---- Extractores con `fetch` simulado ----
