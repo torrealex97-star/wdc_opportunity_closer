@@ -372,6 +372,12 @@ const SOURCES = [
   // JobToday recupera los cuatro slugs retirados el 2026-10-22 por «0 elegibles». La razón de entonces
   // ya no se sostiene: el vocabulario de rol ahora reconoce «comercial» a secas y «teleoperador», que
   // son justo los títulos de estas páginas. Los cinco slugs responden 200 hoy (356–724 KB).
+  // Cold caller en España: recuperadas el 2026-11-16 (sesión 192) con medición en vivo de los slugs
+  // (responden 200): `call-center` 64 anuncios, 7 cold_caller, 58 ids que no estaban en raw_items;
+  // `servicio-al-cliente` 48 anuncios, 13 cold_caller, 37 ids nuevos. Son 2 subrequests. Se quedan
+  // solo si la pasada real aporta tarjetas nuevas; con cero, se retiran otra vez (y se anota).
+  { code: 'jobtoday-call-center', name: 'JobToday Call Center', kind: 'jobtoday', slug: 'call-center' },
+  { code: 'jobtoday-servicio-cliente', name: 'JobToday Servicio al cliente', kind: 'jobtoday', slug: 'servicio-al-cliente' },
   { code: 'jobtoday-telemarketing', name: 'JobToday Telemarketing', kind: 'jobtoday', slug: 'telemarketing' },
   { code: 'jobtoday-remoto', name: 'JobToday Comercial remoto', kind: 'jobtoday', slug: 'ventas-remoto' },
   { code: 'jobtoday-ventas', name: 'JobToday Ventas', kind: 'jobtoday', slug: 'ventas' },

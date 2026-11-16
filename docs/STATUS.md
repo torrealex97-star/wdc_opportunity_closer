@@ -1,5 +1,15 @@
 # Estado
 
+## JobToday call-center y servicio-al-cliente: encendidas y desplegadas (sesión 192) — 2026-11-16
+
+- **Vuelven a `SOURCES`** con sus slugs originales: `jobtoday-call-center` (`call-center`) y `jobtoday-servicio-cliente` (`servicio-al-cliente`), ambas `kind: jobtoday`, 1 subrequest cada una (38 fuentes y 111 de coste declarado; el plan de pago las mete en la misma pasada).
+- **Medición en vivo de los slugs antes de encenderlas** (GET público, mismo parser del motor, 2026-11-16): `call-center` responde 200 con **64 anuncios**, 7 clasifican `cold_caller`, 5 `account_executive` y **58 ids que no estaban en `raw_items`**; `servicio-al-cliente` responde 200 con **48 anuncios**, **13 `cold_caller`** y **37 ids nuevos**. Las dos páginas siguen publicando listado embebido (`__NEXT_DATA__`), así que el extractor no necesita cambios.
+- **Corrección de la cifra de la sesión 190**: el «68 anuncios con 17 cold ES» se midió con la métrica rota; sobre la **vista** de España estas dos fuentes dejan ver 4 y 6 tarjetas (2 y 4 cold). Lo que sí sostiene encenderlas es la medición de arriba: el inventario está en la fuente aunque casi todo caiga luego en los gates de idioma, mercado y perfil.
+- **Tests**: `tests/engine/sources.mjs` comprueba que están declaradas, con su slug, `kind` y coste de 1 petición, y que no hay dos fuentes pidiendo la misma página; `subrequests.mjs` sube la medida a 38 fuentes y 111 subrequests.
+- **Desplegado**: `wrangler deploy` del motor el 2026-11-16 (Version ID `11f55169-2e80-4054-90aa-10cebbea1c74`), sin tocar variables del entorno.
+- **Pendiente, y es la condición puesta**: contar en la **pasada real siguiente** cuántas tarjetas nuevas aportan de verdad (por `raw_items` y catálogo de cada `code`) y **retirarlas si dan cero**. No se ha disparado la pasada a mano: la lanza el cron del motor.
+- **Límite**: la medición en vivo es de hoy y de la página pública; el rendimiento en catálogo (aprobación editorial incluida) solo se ve tras la pasada.
+
 ## Banco de términos por familia: sdr y cold caller ya se piden (sesión 191) — 2026-11-16
 
 - **El banco de búsqueda tenía solo términos de cierre** (21, todos de closer y variantes). Ahora son tres familias: `closer` (los 21 de siempre), `sdr` (`sdr`, `bdr`, `prospeccion`) y `cold_caller` (`teleoperador`, `cold caller`, `call center`). Los términos van sin acento por la convención del repo (las APIs pliegan acentos; `prospeccion` en el banco, `prospección` en la calle).

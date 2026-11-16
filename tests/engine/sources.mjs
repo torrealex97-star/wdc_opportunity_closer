@@ -250,4 +250,24 @@ try {
   globalThis.fetch = realFetch;
 }
 
+// Cold caller en España: las dos páginas de JobToday recuperadas (2026-11-16) responden con listado
+// embebido y cuestan una petición cada una. Se comprueba la declaración, no la red.
+{
+  const byCode = new Map(SOURCES.map(s => [s.code, s]));
+  const call = byCode.get('jobtoday-call-center');
+  const servicio = byCode.get('jobtoday-servicio-cliente');
+  assert.ok(call, 'falta jobtoday-call-center');
+  assert.ok(servicio, 'falta jobtoday-servicio-cliente');
+  assert.equal(call.slug, 'call-center');
+  assert.equal(servicio.slug, 'servicio-al-cliente');
+  assert.equal(call.kind, 'jobtoday');
+  assert.equal(servicio.kind, 'jobtoday');
+  assert.equal(fetchCost(call), 1, 'una petición');
+  assert.equal(fetchCost(servicio), 1, 'una petición');
+  const codes = SOURCES.map(s => s.code);
+  assert.equal(new Set(codes).size, codes.length, 'códigos repetidos');
+  const slugs = SOURCES.filter(s => s.kind === 'jobtoday').map(s => s.slug);
+  assert.equal(new Set(slugs).size, slugs.length, 'dos fuentes pidiendo la misma página de JobToday');
+}
+
 console.log('PASS  motor: fuentes sin duplicados, backoff de FreeHire (Retry-After, 2 s, dos reintentos) dentro de su presupuesto y extractores sin inventar salario');
