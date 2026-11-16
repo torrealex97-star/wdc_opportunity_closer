@@ -62,6 +62,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/surface.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/market.mjs
 # El motor retira en bloque lo que descarta (no lo deja en la cola humana): prueba de conducta con D1 simulado.
+# Arnés de auditoría del vocabulario (scripts/vocabulary-audit.mjs): solo lee y cuenta bien.
+node --experimental-strip-types tests/vocabulary-audit.mjs
 node --experimental-strip-types tests/engine/activate.mjs
 # Búsquedas de closer del motor: vocabulario en español, rotación por día y extractores con `q`.
 node --experimental-strip-types tests/engine/terms.mjs

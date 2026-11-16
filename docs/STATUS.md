@@ -1,5 +1,16 @@
 # Estado
 
+## Arnés de auditoría del vocabulario (sesión 183) — 2026-11-16
+
+- **`scripts/vocabulary-audit.mjs`** (`npm run vocab:audit`): dado un cambio de keywords, reejecuta `classifyRole` sobre los títulos ya guardados y saca antes/después — títulos, cambios de familia, `null → perfil` (recuperados), `perfil → null` (regresiones) y qué fichas **revisadas** cambian de filtro.
+- **Cómo se da el cambio**: `--patch cambios.json` (`{"add":{"setter":["adr"]},"remove":{"closer":["business developer"]}}`) o `--keywords vocabulario-completo.json`. Extras: `--terms` (solo títulos con esos términos), `--window` (caracteres de cuerpo, 800 por defecto = el gate de ingesta `familyOf`), `--refresh` / `--max-age`, `--json`, `--fail-on-regression` para CI.
+- **Solo lectura, y probado**: `assertSelectOnly` rechaza cualquier sentencia que no sea `SELECT` y cualquier ejecución con dos consultas; el script no llama a `/api/collect`, no escribe en D1 y no despliega. La única vía es `wrangler d1 execute --remote` con un `SELECT`.
+- **Dos universos**: `raw_items` (lo recogido) y `catalog_entries` (lo almacenado, con `editorial_status` para separar revisadas). Instantánea en `.local/vocab-audit/snapshot.json` (**34 MB, gitignored**, se reutiliza 12 h).
+- **Validación con el cambio real de la sesión 177, al revés**: quitar `business developer` de closer y `adr`/`bdr`/`account development representative`/`business development representative` de setter (devolviendo `bdr` a sdr) da **164 títulos que cambian de familia** de 7.333 (2,2 %), **93 regresiones** (`perfil → null`) y **3 fichas revisadas** que cambian de filtro, sobre 10.064 filas recogidas y 9.987 de catálogo con 385 revisadas. Con `--patch {}` (sin cambio) da **0 y 0**: el arnés no inventa diferencias.
+- **`tests/vocabulary-audit.mjs`** (registrado en `tests/admin-auth/run.sh`): guarda de solo lectura, aplicación del cambio (sin duplicar, sin mutar el original, familia desconocida, término vacío, familia que falta), que el motor propuesto **clasifique distinto de verdad** (`BDR` setter→sdr), y que el recuento dedupe por título, cuente recuperados/regresiones y solo llame «revisadas» a `approved`/`published`.
+- **Probado**: `vocabulary-audit`, `roles`, `location`, `terms`, `latam`, `subrequests`, `catalog`, `sources` en PASS; `orphan-refs` PASS.
+- **Límite**: la ventana por defecto (800) es la del gate de ingesta, mientras la vista de alumna clasifica con el cuerpo completo; un título puede salir `null` aquí y estar clasificado en vivo. Con `--window 4000` se acerca, y la instantánea ya trae hasta 4.000 caracteres.
+
 ## Dos barridos idénticos: no fue caché; el 429 de Himalayas no lo provocamos (sesión 182) — 2026-11-13
 
 - **No hay caché en el motor**: `grep` de `caches`, `cacheTtl`, `Cache-Control` y `cacheEverything` en `worker.js` → **cero coincidencias**. Cada `POST /api/collect` abre su propio `run-<uuid>` en `collection_runs`; no existe camino de «devuelve la última pasada».
