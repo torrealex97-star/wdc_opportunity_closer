@@ -2361,9 +2361,11 @@ async function ingestBatch(db, source, candidates, known) {
 }
 
 // ------ API de lectura ------
-// Vocabulario canónico de la app (apps/api/career/vocabulary.py, ROLE_FAMILIES,
-// términos ya plegados): el motor cloud clasifica con la misma lista de verdad
-// que presentation.py, ahora mismo espejada aquí. Actualizado 2026-10-14.
+// Vocabulario canónico de clasificación: ESTA lista es la fuente de verdad desde que el motor cloud
+// clasifica. `apps/web/lib/vocabulary.ts` la copia palabra por palabra (lo comprueba
+// tests/admin-auth/parity.mjs) y `apps/api/career/vocabulary.py` es el backend Python anterior, con
+// su propia taxonomía: no se mantiene sincronizado y no se usa aquí. Términos ya plegados (sin
+// acentos) porque `hasWord` compara sobre texto plegado.
 const ROLE_KEYWORDS = {
   closer: [
     'closer', 'closer de ventas', 'closer comercial', 'closer high ticket',
@@ -2416,8 +2418,9 @@ const ROLE_KEYWORDS = {
     // se evaluaba DESPUÉS: el título acababa en un cajón donde el perfil se lee mal. Aquí manda el
     // orden (setter va antes que sdr) y la sigla suelta no se traga nada: hasWord exige frontera,
     // así que «Madrid» no es un ADR.
-    'adr', 'bdr', 'account development representative',
-    'business development representative', 'appointment development representative',
+    // Las dos formas largas van por separado a propósito: un «development representative» a secas
+    // se tragaría «Sales Development Representative», que es su propia familia (sdr).
+    'adr', 'bdr', 'account development representative', 'business development representative',
   ],
   cold_caller: [
     // «Teleoperador» es su propia familia, no un setter: llama para vender, no para agendar citas.

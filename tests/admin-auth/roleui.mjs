@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ROLE_LABELS, roleFromTitle } from '../../apps/web/lib/vocabulary.ts';
+import { ROLE_EVAL_ORDER, ROLE_LABELS, ROLE_OPTIONS, roleFromTitle } from '../../apps/web/lib/vocabulary.ts';
 import { parsePhrase } from '../../apps/web/components/queryFromPhrase.ts';
 
 const worker = readFileSync(fileURLToPath(new URL('../../sites/engine/worker.js', import.meta.url)), 'utf8');
@@ -14,6 +14,10 @@ const block = worker.match(/const ROLE_LABELS = \{([\s\S]*?)\};/);
 assert.ok(block, 'ROLE_LABELS del motor localizado');
 const engineLabels = Object.fromEntries([...block[1].matchAll(/(\w+):\s*'([^']*)'/g)].map(m => [m[1], m[2]]));
 assert.deepEqual(engineLabels, ROLE_LABELS, 'la tarjeta de la alumna y el panel usan la misma etiqueta');
+
+// El desplegable sale de las mismas dos listas: una familia sin etiqueta (o al revés) se ve aquí.
+assert.deepEqual(ROLE_OPTIONS.map(o => o.value), [...ROLE_EVAL_ORDER]);
+assert.deepEqual(ROLE_OPTIONS.map(o => o.label), ROLE_EVAL_ORDER.map(role => ROLE_LABELS[role]));
 
 // Donde el panel promete encontrar un BDR es setter, y la etiqueta lo dice sin ambigüedad.
 assert.match(ROLE_LABELS.setter, /ADR/, 'setter nombra ADR');

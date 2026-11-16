@@ -1,5 +1,17 @@
 # Estado
 
+## Limpieza del vocabulario: una lista, ninguna palabra inventada (sesión 180) — 2026-11-13
+
+- **Palabra de más, fuera**: `appointment development representative` la había inventado yo en la sesión 177. No es un título real —el ADR es *account* development rep y el puesto de agenda ya está como `appointment setter`— así que se retira. **38 casos siguen**, porque el caso de test pasa a fijar lo contrario: `Sales Development Representative` → **sdr**.
+- **Por qué no se funden en una**: las formas largas `account development representative` y `business development representative` van por separado a propósito. Un `development representative` genérico se tragaría a los SDR, que son su propia familia; queda comentado junto a la lista.
+- **Sin solapes comprobados**: `bdr`/`adr` solo en setter (sdr limpio), `business developer` solo en closer y `business development manager` sigue en account_executive.
+- **Una sola fuente para el panel**: `ROLE_OPTIONS` en `lib/vocabulary.ts` se deriva de `ROLE_EVAL_ORDER` + `ROLE_LABELS`, y ahora la usan los desplegables de la alumna, `CatalogTab` y `CloudAdminPanel`; `JobClassification`, `ClassificationsPanel` y `ReviewPanel` hacen spread de `ROLE_LABELS` en vez de copiar las cinco etiquetas; `queryFromPhrase` construye sus notas desde `ROLE_LABELS`. Ya no hay ninguna lista de familias escrita a mano fuera de `ROLE_EVAL_ORDER`.
+- **El comentario del motor mentía**: decía que su vocabulario era espejo de `apps/api/career/vocabulary.py`. Ahora dice la verdad: el motor es la fuente, `apps/web/lib/vocabulary.ts` la copia (lo comprueba `parity.mjs`) y el backend Python es anterior, con su taxonomía y **sin sincronizar**.
+- **`parity.mjs` pilló la desincronización** durante esta misma limpieza (al quitar la palabra del motor, el panel se quedó con ella): el guard funciona. `roleui.mjs` añade que `ROLE_OPTIONS` cubre exactamente las familias del motor.
+- **Restos de la retirada de la sesión 176**: `Workspace` seguía pre-marcando `ats-greenhouse-typeform`, `ats-greenhouse-wallapop` y `ats-recruitee-livestorm` en sus fuentes por defecto. Fuera; en su lugar, `ats-teamtailor-producthackers`, que sí existe.
+- **Verificado en el servicio real** (motor `2d5b3acc`, web `db1010e0`, build `Q9txuI4YcODkEFpaz9VJQ`): el desplegable de producción sirve «Setter / ADR-BDR» y «SDR»; `role=setter` → 7 ofertas todas con esa etiqueta y `role=sdr` → 8 con `SDR`.
+- **Probado**: `roles` (38), `roleui`, `parity`, `families`, `terms`, `location`, `latam`, `subrequests`, `catalog`, `sources` en PASS; `tsc --noEmit` en verde. **No ejecutadas** las pruebas de navegador. `apps/api/career/vocabulary.py` sigue sin tocar (backend anterior, no desplegado).
+
 ## «SDR / BDR» ya no promete lo que el motor no devuelve (sesión 179) — 2026-11-13
 
 - **El desajuste**: desde la sesión 177 `bdr`/`adr` son **setter**, pero el panel seguía ofreciendo el filtro «SDR / BDR» y `queryFromPhrase` resolvía «bdr» a **sdr**. Quien escribía BDR recibía una búsqueda vacía.

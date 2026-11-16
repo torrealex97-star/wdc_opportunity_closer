@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { draftFromDetail, sendable, type VersionPayload } from '../lib/reviewPayload';
+import { ROLE_OPTIONS } from '../lib/vocabulary';
 import { Check, ChevronRight, ExternalLink, Eye, LoaderCircle, RefreshCcw, Send, Sparkles, X } from 'lucide-react';
 
 // Panel de administración contra el ENGINE CLOUD (port fase 4). El navegador solo
@@ -9,13 +10,10 @@ import { Check, ChevronRight, ExternalLink, Eye, LoaderCircle, RefreshCcw, Send,
 const EDITORIAL: Record<string, string> = { draft: 'Borrador', needs_review: 'A revisar', approved: 'Aprobada', published: 'Publicada', withdrawn: 'Retirada' };
 const ACTIVITY: Record<string, string> = { active: 'Activa', verifying: 'Verificando', closed: 'Cerrada' };
 const APPLICATION: Record<string, string> = { company_ats: 'ATS de la empresa', external_platform: 'Plataforma externa', marketplace: 'Marketplace', wdc_referral: 'Referida WDC', email: 'Email', contact_form: 'Formulario de contacto', community_contact: 'Contacto de comunidad', unknown: 'Sin determinar' };
+// Familias y etiquetas vienen de lib/vocabulary; aquí solo se añade la opción «sin clasificar».
 const ROLES: Array<{ value: string; label: string }> = [
   { value: 'uncategorized', label: 'Sin clasificar (título original)' },
-  { value: 'closer', label: 'Closer' },
-  { value: 'setter', label: 'Setter / ADR-BDR' },
-  { value: 'cold_caller', label: 'Cold Caller' },
-  { value: 'account_executive', label: 'Ejecutivo comercial' },
-  { value: 'sdr', label: 'SDR' },
+  ...ROLE_OPTIONS,
 ];
 const FILTERS = ['', 'draft', 'needs_review', 'approved', 'published', 'withdrawn'] as const;
 type Item = { id: string; job_id: string; original_title: string | null; company: string | null; source_url: string | null; source: string; editorial_status: string; opportunity_status: string; connection_type: string; created_at: string; updated_at: string };

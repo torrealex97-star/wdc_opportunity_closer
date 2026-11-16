@@ -1,4 +1,5 @@
 import type { components } from '../../../packages/contracts/api';
+import { ROLE_LABELS } from '../lib/vocabulary';
 
 export type Query = components['schemas']['OpportunityQuery'];
 export type Role = NonNullable<Query['role']>;
@@ -15,12 +16,12 @@ export type PhraseResult = {
 const norm = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 const ROLES: Array<{ role: Role; label: string; test: RegExp }> = [
-  { role: 'closer', label: 'perfil Closer', test: /\bclosers?\b|\bcerrador(?:a|as|es)?\b/ },
+  { role: 'closer', label: `perfil ${ROLE_LABELS.closer}`, test: /\bclosers?\b|\bcerrador(?:a|as|es)?\b/ },
   // ADR/BDR son setter (2026-11-13): la frase tiene que llevar a la misma familia que el desplegable.
-  { role: 'setter', label: 'perfil Setter / ADR-BDR', test: /\bsetters?\b|\b(?:a|b)dr\b|\bbusiness development representatives?\b|\baccount development representatives?\b/ },
-  { role: 'cold_caller', label: 'perfil Cold Caller', test: /\bcold ?callers?\b|\bllamadas frias\b|\bteleoperador(?:a|as|es)?\b/ },
-  { role: 'account_executive', label: 'perfil Ejecutivo comercial', test: /\baccount executives?\b|\bejecutiv[oa]s? comercial(?:es)?\b|\basesor(?:a|as|es)? comercial(?:es)?\b/ },
-  { role: 'sdr', label: 'perfil SDR', test: /\bsdr\b/ },
+  { role: 'setter', label: `perfil ${ROLE_LABELS.setter}`, test: /\bsetters?\b|\b(?:a|b)dr\b|\bbusiness development representatives?\b|\baccount development representatives?\b/ },
+  { role: 'cold_caller', label: `perfil ${ROLE_LABELS.cold_caller}`, test: /\bcold ?callers?\b|\bllamadas frias\b|\bteleoperador(?:a|as|es)?\b/ },
+  { role: 'account_executive', label: `perfil ${ROLE_LABELS.account_executive}`, test: /\baccount executives?\b|\bejecutiv[oa]s? comercial(?:es)?\b|\basesor(?:a|as|es)? comercial(?:es)?\b/ },
+  { role: 'sdr', label: `perfil ${ROLE_LABELS.sdr}`, test: /\bsdr\b/ },
 ];
 
 const MARKETS: Array<{ market: Exclude<Query['market'], 'any'>; label: string; test: RegExp }> = [

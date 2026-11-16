@@ -2,14 +2,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, ExternalLink, Eye, FileWarning, LoaderCircle, RefreshCcw, Send, ShieldCheck, X } from 'lucide-react';
 import { request } from './client';
+import { ROLE_EVAL_ORDER, ROLE_LABELS } from '../lib/vocabulary';
 
 // Estados y vocabulario espejo de career/domain.py: nunca se inventa un estado.
 const EDITORIAL: Record<string, string> = { draft: 'Borrador', needs_review: 'A revisar', approved: 'Aprobada', published: 'Publicada', withdrawn: 'Retirada' };
 const ACTIVITY: Record<string, string> = { active: 'Activa', verifying: 'Verificando', closed: 'Cerrada' };
 const CONNECTION: Record<string, string> = { direct_partner: 'Socio directo', direct_recruiter: 'Reclutador directo', direct_company: 'Empresa directa', external_application: 'Candidatura externa', marketplace_application: 'Marketplace', community_opportunity: 'Comunidad' };
 const APPLICATION: Record<string, string> = { company_ats: 'ATS de la empresa', external_platform: 'Plataforma externa', marketplace: 'Marketplace', wdc_referral: 'Referida WDC', email: 'Email', contact_form: 'Formulario de contacto', community_contact: 'Contacto de comunidad', unknown: 'Sin determinar' };
-const ROLES = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'];
-const ROLE_LABEL: Record<string, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
+// El rol guardado llega como texto libre del motor: se compara contra la lista canónica.
+const ROLES: readonly string[] = ROLE_EVAL_ORDER;
+const ROLE_LABEL: Record<string, string> = ROLE_LABELS;
 const UNSPECIFIED = 'No especificado';
 const FILTERS = ['', 'draft', 'needs_review', 'approved', 'published', 'withdrawn'] as const;
 

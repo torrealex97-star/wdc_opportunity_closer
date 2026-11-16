@@ -45,7 +45,9 @@ assert.equal(role('BDR'), 'setter');
 assert.equal(role('BDR / SDR'), 'setter', 'con las dos siglas gana el orden de evaluación: setter');
 assert.equal(role('Account Development Representative'), 'setter');
 assert.equal(role('Business Development Representative'), 'setter');
-assert.equal(role('Appointment Development Representative (ADR)'), 'setter');
+// «Sales Development Representative» es su propia familia: el vocabulario no usa un
+// «development representative» genérico justamente para no tragarse el SDR.
+assert.equal(role('Sales Development Representative'), 'sdr');
 assert.equal(role('SDR'), 'sdr');
 // La sigla va por palabra completa: «Madrid» lleva las letras «adr» y no es un ADR.
 assert.equal(role('Comercial Madrid'), 'account_executive');

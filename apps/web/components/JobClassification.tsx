@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import { request } from './client';
+import { ROLE_LABELS } from '../lib/vocabulary';
 
 type Detail = {
   id: string; status: string; provider?: string; model?: string; error?: string;
@@ -9,11 +10,8 @@ type Detail = {
   usage?: { input_tokens?: number; output_tokens?: number } | null;
   result?: { role_family: string; confidence: string; reason: string; evidence: string } | null;
 };
-const FAMILIES: Record<string, string> = {
-  closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller',
-  account_executive: 'Ejecutivo comercial', sdr: 'SDR',
-  not_sales: 'No comercial', uncertain: 'Sin base para decidir',
-};
+// Las etiquetas de familia son las del vocabulario; aquí solo añaden los estados del modelo.
+const FAMILIES: Record<string, string> = { ...ROLE_LABELS, not_sales: 'No comercial', uncertain: 'Sin base para decidir' };
 
 // Admin-only AI classification for offers the deterministic vocabulary cannot place.
 // Always attributed, never silent; a failed/hallucinated result is shown as such.

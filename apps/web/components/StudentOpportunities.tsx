@@ -8,6 +8,7 @@ import StudentProgress from './StudentProgress';
 import StudentTraining from './StudentTraining';
 import { hasPay } from './offerFacts';
 import { parsePhrase } from './queryFromPhrase';
+import { ROLE_EVAL_ORDER, ROLE_LABELS, ROLE_OPTIONS } from '../lib/vocabulary';
 import { request } from './client';
 import type { components } from '../../../packages/contracts/api';
 
@@ -17,9 +18,10 @@ type Query = components['schemas']['OpportunityQuery'];
 // externas aprobadas a solas: no forma parte del contrato del motor.
 type Results = components['schemas']['OpportunityList'] & { degraded?: 'motor' };
 const defaults: Query = { role: null, market: 'any', days: 10, include_bilingual: false, starred_only: false, include_extra_roles: false };
-const ROLES = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'] as const;
-const ROLE_LABELS: Record<NonNullable<Query['role']>, string> = { closer: 'las del perfil Closer', setter: 'las del perfil Setter / ADR-BDR', cold_caller: 'las del perfil Cold Caller', account_executive: 'las de Ejecutivo comercial', sdr: 'las de SDR' };
-function label(role: NonNullable<Query['role']>): string { return ROLE_LABELS[role]; }
+// Una sola lista de familias y etiquetas (lib/vocabulary): el desplegable y la frase no pueden
+// decir cosas distintas de lo que filtra el motor.
+const ROLES = ROLE_EVAL_ORDER;
+const label = (role: NonNullable<Query['role']>): string => `las del perfil ${ROLE_LABELS[role]}`;
 const MARKETS = ['any', 'ES', 'EU', 'LATAM', 'US'] as const;
 // La alumna conserva su contexto: los filtros aplicados viven en la URL (compartible/recargable),
 // validados contra las opciones reales del desplegable para no inventar estados.
@@ -229,7 +231,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
           </form>
           {phraseNote && <p className="phrase-note" role="status">{phraseNote}</p>}
           <form onSubmit={e => { e.preventDefault(); setApplied({ ...query }); history.replaceState(null, '', urlFromQuery(query)); setPhraseNote(''); }}>
-          <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option><option value="closer">Closer</option><option value="setter">Setter / ADR-BDR</option><option value="cold_caller">Cold Caller</option><option value="account_executive">Ejecutivo comercial</option><option value="sdr">SDR</option></select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label><button className="primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}Ver oportunidades</button></div>
+          <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option>{ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label><button className="primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}Ver oportunidades</button></div>
           <div className="student-preferences"><span>En español · remoto o híbrido</span><label className="check-label"><input type="checkbox" checked={query.include_bilingual} onChange={e => setQuery({ ...query, include_bilingual: e.target.checked })} />También oportunidades bilingües español / inglés</label></div>
           </form>
         </div>}

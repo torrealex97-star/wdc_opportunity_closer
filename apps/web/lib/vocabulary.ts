@@ -53,8 +53,9 @@ export const ROLE_KEYWORDS: Record<string, string[]> = {
     // se evaluaba DESPUÉS: el título acababa en un cajón donde el perfil se lee mal. Aquí manda el
     // orden (setter va antes que sdr) y la sigla suelta no se traga nada: hasWord exige frontera,
     // así que «Madrid» no es un ADR.
-    'adr', 'bdr', 'account development representative',
-    'business development representative', 'appointment development representative',
+    // Las dos formas largas van por separado a propósito: un «development representative» a secas
+    // se tragaría «Sales Development Representative», que es su propia familia (sdr).
+    'adr', 'bdr', 'account development representative', 'business development representative',
   ],
   cold_caller: [
     // «Teleoperador» es su propia familia, no un setter: llama para vender, no para agendar citas.
@@ -111,9 +112,12 @@ export const ES_HINTS = ['españa', 'spain', 'madrid', 'barcelona', 'valencia', 
 export const NON_ES_HINTS = ['florida', 'texas', 'california', 'new york', 'london', 'londres', 'oklahoma', 'mississippi', 'georgia', 'st. petersburg', 'atlanta', 'nashville', 'dallas', 'okc'];
 
 export const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'] as const;
+// Opciones de desplegable derivadas de las dos listas de arriba: una sola fuente para la alumna,
+// el catálogo, la revisión y las clasificaciones, para que una etiqueta no se quede atrás en copias.
 export type RoleFamily = (typeof ROLE_EVAL_ORDER)[number];
 // ADR/BDR son setter desde 2026-11-13: la etiqueta lo dice y «SDR» deja de prometerlos.
 export const ROLE_LABELS: Record<RoleFamily, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
+export const ROLE_OPTIONS: ReadonlyArray<{ value: RoleFamily; label: string }> = ROLE_EVAL_ORDER.map(value => ({ value, label: ROLE_LABELS[value] }));
 
 export const fold = (text: string | null | undefined) => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
