@@ -90,12 +90,19 @@ test('student saves an opportunity and bilingual notices are an explicit choice'
   await expect.poll(() => bilingual).toBe(true);
 });
 
-test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, rotulado', async ({ page }) => {
+test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, rotulado y sin cambiar el idioma', async ({ page }) => {
   const closerOffers = Array.from({ length: 3 }, (_, i) => ({ ...offer, id: `closer-${i}` }));
   const widerOffers = Array.from({ length: 13 }, (_, i) => ({ ...offer, id: `wider-${i}`, role: 'account_executive', role_label: 'Ejecutivo comercial', original_title: 'AE comercial de ventas' }));
+  // El motor solo devuelve estas si la petición pide bilingües: así se ve si el relleno las enciende.
+  const englishOffers = Array.from({ length: 20 }, (_, i) => ({ ...offer, id: `english-${i}`, role: 'sdr', role_label: 'SDR', original_title: 'Sales development representative', language: 'Anuncio en inglés', company: 'English Co' }));
+  const bodies: Record<string, unknown>[] = [];
   await page.route('**/api/backend/opportunities/search', route => {
-    const body = route.request().postDataJSON() as { role?: string | null };
-    return route.fulfill({ json: body.role === 'closer' ? { items: closerOffers, total: 3 } : { items: [...closerOffers, ...widerOffers], total: 16 } });
+    const body = route.request().postDataJSON() as { role?: string | null; include_bilingual?: boolean };
+    bodies.push(body);
+    const items = body.role === 'closer'
+      ? [...closerOffers, ...(body.include_bilingual ? englishOffers : [])]
+      : [...closerOffers, ...widerOffers, ...(body.include_bilingual ? englishOffers : [])];
+    return route.fulfill({ json: { items, total: items.length } });
   });
   await page.goto('/');
   expect(new URL(page.url()).search).toBe('');
@@ -105,7 +112,17 @@ test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, ro
   // La petición primaria conserva su filtro; el bucket ampliado va por separado
   await expect(page.getByText('3 con tu filtro · 13 más del catálogo con tu mercado')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Oportunidades para explorar/ }).locator('span')).toHaveText('16');
-  await expect(page.locator('.wider-bucket').getByText('Ejecutivo comercial').first()).toBeVisible();
+  // El relleno solo relaja el rol: sigue en español, no aparece ni una tarjeta en inglés.
+  const widerBody = bodies.find(b => b.role === null) as { include_bilingual?: boolean } | undefined;
+  expect(widerBody?.include_bilingual).toBe(false);
+  await expect(page.locator('.wider-bucket').getByText('Anuncio en inglés')).toHaveCount(0);
+  await expect(page.getByText('Sales development representative')).toHaveCount(0);
+  // Cada tarjeta del bloque dice de qué familia viene, no solo el rótulo del bloque.
+  const widerCards = page.locator('.wider-bucket .opportunity-card');
+  await expect(widerCards).toHaveCount(13);
+  await expect(widerCards.locator('.role-chip')).toHaveText(Array(13).fill('Ejecutivo comercial'));
+  // Y el rótulo del bloque nombra el idioma y las familias que trae el relleno.
+  await expect(page.locator('.wider-bucket > p')).toContainText('en español y de Ejecutivo comercial');
   // Las del bucket comparten ficha pero el filtro sigue activo en la URL
   expect(new URL(page.url()).searchParams.get('role')).toBe('closer');
   expect(new URL(page.url()).searchParams.get('market')).toBe('ES');

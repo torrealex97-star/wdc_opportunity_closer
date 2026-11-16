@@ -6,7 +6,7 @@ import { copyFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { planWidening, shouldWiden } from '../../scripts/bucket-audit.mjs';
+import { planWidening, shouldWiden, widerRequest } from '../../scripts/bucket-audit.mjs';
 
 const workerPath = fileURLToPath(new URL('../../sites/engine/worker.js', import.meta.url));
 const stage = join(mkdtempSync(join(tmpdir(), 'wdc-engine-bucket-')), 'worker.mjs');
@@ -36,15 +36,30 @@ const rows = [
   row('1', 'Closer de ventas high ticket', 'Buscamos closer para cerrar ventas high ticket. Ofrecemos comisiones, jornada completa y formación. Experiencia mínima de un año vendiendo por videollamada con clientes.'),
   row('2', 'Setter comercial', 'Buscamos setter para agendar reuniones con leads cualificados. Jornada completa, comisiones y formación incluida. Experiencia previa en prospección y contacto con clientes.'),
   row('3', 'Ingeniero de software', 'Buscamos ingeniero backend para el equipo de plataforma. Jornada completa y formación. Experiencia con servicios distribuidos y clientes internos.'),
+  // Solo se cuela si la búsqueda pide bilingües: es la tarjeta en inglés que el relleno metía.
+  row('4', 'Sales closer high ticket', 'We are looking for a sales closer to close high ticket deals. Full time, commissions and training. You will sell over video calls to our clients.'),
 ];
 const env = { DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: rows }) }) }) } };
 const surface = opts => t.studentSurface(env, { starredOnly: false, includeExtraRoles: false, ...opts });
 
 const narrowResult = await surface({ role: 'closer', market: 'ES', days: 10, includeBilingual: false });
 assert.deepEqual(narrowResult.ranked.map(o => o.role), ['closer'], 'la búsqueda estrecha no mezcla familias');
-const wideResult = await surface({ role: null, market: 'ES', days: 10, includeBilingual: true });
+
+// El relleno respeta el idioma: la petición ampliada solo relaja el rol.
+const applied = { role: 'closer', market: 'ES', days: 10, includeBilingual: false, starred_only: false };
+assert.deepEqual(widerRequest(applied), { role: null, market: 'ES', days: 10, includeBilingual: false, starred_only: false }, 'el relleno no enciende bilingües');
+assert.equal(widerRequest({ ...applied, includeBilingual: true }).includeBilingual, true, 'si la alumna pidió bilingües, el relleno los mantiene');
+
+const wideResult = await surface(widerRequest(applied));
 assert.deepEqual(wideResult.ranked.map(o => o.role).sort(), ['closer', 'setter'], 'la amplia sí trae la otra familia');
+assert.deepEqual(wideResult.ranked.map(o => o.language), ['Anuncio en español', 'Anuncio en español'], 'el relleno no cambia el idioma: ni una tarjeta en inglés');
+assert.equal(wideResult.ranked.some(o => o.id === '4'), false, 'la oferta en inglés se queda fuera si no se pidió bilingüe');
 const extras = planWidening(narrowResult.ranked, wideResult.ranked);
 assert.deepEqual(extras.map(o => o.role), ['setter'], 'el relleno es exactamente la oferta de otra familia');
+assert.equal(extras.some(o => o.language !== 'Anuncio en español'), false, 'ninguna tarjeta de relleno está en inglés');
 
-console.log('PASS  hueco ampliado: regla de la web, tope de 20 y motor real sobre el shim');
+// Contraste: si se encendieran los bilingües (lo que hacía el relleno), la de inglés sí entraría.
+const bilingualWide = await surface({ ...widerRequest(applied), includeBilingual: true });
+assert.equal(bilingualWide.ranked.some(o => o.id === '4'), true, 'con bilingües la de inglés sí aparece: el test detecta el cambio');
+
+console.log('PASS  hueco ampliado: regla de la web, tope de 20, idioma intacto y motor real sobre el shim');

@@ -1,5 +1,14 @@
 # Estado
 
+## Hueco ampliado: el relleno ya no cambia el idioma (sesión 189) — 2026-11-16
+
+- **La segunda búsqueda solo relaja el rol.** `StudentOpportunities.tsx` pedía el hueco ampliado con `{ ...applied, role: null, starred_only: false, include_bilingual: true }`: el `true` encendía los bilingües aunque la alumna no los hubiera pedido. Ahora es `{ ...applied, role: null, starred_only: false }`, así que mercado, días e idioma son los suyos. No se toca el vocabulario ni el umbral de 10.
+- **La regla vive en un solo sitio para la medición**: `widerRequest(applied)` en `scripts/bucket-audit.mjs`, que usa también el informe (`bucket:audit`) en vez de su propio `includeBilingual: true`.
+- **Cada tarjeta del bloque dice su familia y el rótulo lo resume.** El chip ya existía, pero se pintaba vacío si el motor no mandaba `role_label`; ahora cae a `label(offer.role)`. El párrafo del bloque nombra el idioma y las familias («… en español y de Ejecutivo comercial»), así que el relleno se explica sin abrir tarjeta por tarjeta.
+- **Tests**: `tests/engine/bucket.mjs` añade una fila en inglés al shim y comprueba que (a) `widerRequest` no enciende bilingües, (b) con la petición ampliada real esa oferta **no** entra, (c) con `includeBilingual: true` sí entra —el test detecta el cambio en los dos sentidos—. `tests/browser/student.spec.ts` sirve 20 tarjetas en inglés solo si la petición pide bilingües, afirma que la petición ampliada lleva `include_bilingual: false`, que no se pinta ninguna en inglés, que las 13 tarjetas del bloque tienen su chip de familia y que el rótulo nombra idioma y familia. Verificado que el test **falla** si se vuelve a poner `include_bilingual: true` en el relleno.
+- **Comprobado**: `npm run typecheck` OK; `tests/browser/student.spec.ts` 7/7 PASS (Chrome real, `scripts/dev.mjs`); `tests/engine/bucket.mjs` PASS.
+- **Medición honesta sobre el catálogo de hoy** (`npm run bucket:audit`, 745 filas, 240 combinaciones): sigue abriéndose en 66 casos con 460 tarjetas extra, **idénticas antes y después**. Revisando de dónde salían las «20 en inglés» de la sesión 187: 10 son anuncios rotulados «Anuncio en inglés · exige español», que pasan el filtro porque el puesto exige español (no son una fuga), y las otras 10 venían de combinaciones que ya pedían bilingües. Es decir: hoy no había ni una tarjeta solo-inglés colándose; el código sí estaba mal y con el catálogo de mañana habría colado. El arreglo no cambia ninguna cifra del informe y quita esa posibilidad.
+
 ## Panel de administración: todo a la vista (sesión 188) — 2026-11-16
 
 - **Navegación agrupada**: las diez secciones siguen siendo las mismas y a un clic, pero ordenadas por momento del trabajo —`Empezar` (Resumen), `Ofertas` (Revisión rápida, Fuentes externas, Búsqueda automática, Revisión una a una, Probar ofertas), `Sistema` (Fuentes, APIs), `Equipo` (Alumnas, Usuarios)—. Antes era una lista plana de diez.

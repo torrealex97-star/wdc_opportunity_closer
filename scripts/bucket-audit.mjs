@@ -2,8 +2,8 @@
 // ¿Cuántas veces la vista de la alumna rellena con ofertas de OTRA familia? Solo lectura.
 //
 // La web (apps/web/components/StudentOpportunities.tsx) pide la búsqueda estrecha y, si vuelven
-// menos de 10 ofertas y hay algún filtro puesto, pide una SEGUNDA búsqueda más ancha —sin rol,
-// con bilingües— y la enseña en el bloque «hueco ampliado». Este script mide ese relleno con el
+// menos de 10 ofertas y hay algún filtro puesto, pide una SEGUNDA búsqueda más ancha —sin rol y
+// con el idioma que eligió la alumna— y la enseña en el bloque «hueco ampliado». Este script mide ese relleno con el
 // motor de verdad: llama a `studentSurface` (la MISMA función que sirve /v1/opportunities/search)
 // contra el catálogo real, sobre un shim de D1 que solo devuelve filas ya leídas con un SELECT.
 //
@@ -25,6 +25,11 @@ export const TOTAL_TARGET = 20;
 
 export const shouldWiden = (narrow, { role, market }) =>
   narrow.length < WIDEN_BELOW && Boolean(role || market !== 'any');
+
+// Misma petición ampliada que arma StudentOpportunities.tsx: quita el rol y el marcador de
+// guardadas, y NO toca nada más — sobre todo el idioma: encender bilingües aquí colaba ofertas
+// en inglés que nadie pidió.
+export const widerRequest = applied => ({ ...applied, role: null, starred_only: false });
 
 // Mismo corte que StudentOpportunities.tsx: se descartan las que ya salieron y se rellena hasta 20.
 export function planWidening(narrow, widerRanked) {
@@ -59,7 +64,7 @@ async function measure(engine, rows) {
           const narrow = await surface({ role, market, days, includeBilingual });
           const query0 = { role, market, days, includeBilingual };
           if (!shouldWiden(narrow.ranked, query0)) { combos.push({ ...query0, narrow: narrow.ranked.length, wider: 0, foreign: 0, bilingualOnly: 0, families: {} }); continue; }
-          const wide = await surface({ role: null, market, days, includeBilingual: true });
+          const wide = await surface(widerRequest(query0));
           const extras = planWidening(narrow.ranked, wide.ranked);
           const foreign = extras.filter(offer => offer.role !== role);
           const families = {};

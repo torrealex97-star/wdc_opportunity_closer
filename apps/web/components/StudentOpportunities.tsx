@@ -152,7 +152,10 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         // datos reales del motor — la alumna compara sin creer que el catálogo se vació.
         if (!stopped && !saved && result.items.length < 10 && (applied.role || applied.market !== 'any')) {
           return new Promise<Results>((resolve, reject) => {
-            request<Results>('opportunities/search', { ...applied, role: null, starred_only: false, include_bilingual: true })
+            // Se relaja SOLO el rol (y el marcador de guardadas): el mercado, los días y el idioma
+            // siguen siendo los de la alumna. Encender bilingües aquí colaba anuncios en inglés
+            // que nadie había pedido, así que el relleno nunca cambia el idioma.
+            request<Results>('opportunities/search', { ...applied, role: null, starred_only: false })
               .then(resolve, reject);
           }).then(widerResult => {
             if (stopped || sequence.current !== id) return null;
@@ -211,6 +214,8 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   }
   // Guardadas en modo hospedado: el marcador vive en este navegador.
   const visible = saved && hosted ? items.filter(isStarred) : items;
+  // Familias del relleno, en el orden en que aparecen: el rótulo del bloque y cada tarjeta las nombran.
+  const widerFamilies = [...new Set((wider ?? []).map(offer => offer.role_label || label(offer.role)))];
   return <div className="shell student-shell">
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="WDC · Inicio"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>
@@ -241,7 +246,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         <section className="student-results" aria-busy={busy}><div className="results-heading"><h2>{saved ? 'Tus oportunidades guardadas' : 'Oportunidades para explorar'} <span>{busy ? '…' : visible.length + (wider?.length ?? 0)}</span></h2><span className="student-freshness">Actualización diaria</span></div>
           {!saved && !busy && selectionTotal > 0 && <p className="selection-note">Selección del día: las {selectionTotal} que mejor cumplen los requisitos van primero. Puedes explorar el resto del catálogo debajo.</p>}
           {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <article className="opportunity-card" key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}>
-            <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label}</span>{offer.is_selected && <em className="pick-badge">Selección del día{rank(offer) ? ` · Nº ${rank(offer)}` : ''}</em>}</div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
+            <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label || label(offer.role)}</span>{offer.is_selected && <em className="pick-badge">Selección del día{rank(offer) ? ` · Nº ${rank(offer)}` : ''}</em>}</div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
             <h3 className="opportunity-title">{jobTitle(offer)}</h3>
             <div className="opp-badges"><span className={`opp-badge ${modalityBadge(offer.modality).tone}`}>{modalityBadge(offer.modality).text}</span>{offer.location && <span className="opp-badge">{offer.location}</span>}<span className="opp-freshness">{freshness(offer.published_at)}</span></div>
             <PayBlock offer={offer} note={false} />
@@ -255,9 +260,9 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
           </article>)}</div>}
           {!saved && !busy && wider?.length ? <div className="wider-bucket">
             <h3>{items.length} con tu filtro · {wider.length} más del catálogo {applied.market !== 'any' ? 'con tu mercado' : 'comercial en español'}</h3>
-            <p>Con tu filtro de perfil no aparecían suficientes {applied.role ? `ofertas de ${label(applied.role)}` : 'ofertas en tu mercado'}; estas vienen del mismo catálogo real con el filtro ampliado.</p>
+            <p>Con tu filtro de perfil no aparecían suficientes {applied.role ? `ofertas de ${label(applied.role)}` : 'ofertas en tu mercado'}; estas vienen del mismo catálogo real con el filtro ampliado, en {applied.include_bilingual ? 'español o inglés' : 'español'}{widerFamilies.length ? ` y de ${widerFamilies.join(', ')}` : ''}.</p>
             <div className="opportunity-grid">{wider.map(offer => <article className="opportunity-card" key={offer.id}>
-              <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label}</span></div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
+              <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label || label(offer.role)}</span></div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
               <h3 className="opportunity-title is-compact">{jobTitle(offer)}</h3>
               <div className="opp-badges"><span className={`opp-badge ${modalityBadge(offer.modality).tone}`}>{modalityBadge(offer.modality).text}</span>{offer.location && <span className="opp-badge">{offer.location}</span>}<span className="opp-freshness">{freshness(offer.published_at)}</span></div>
               <p className="opportunity-place"><Globe2 size={13} />{offer.language}</p>
