@@ -1,5 +1,13 @@
 # Estado
 
+## ¿Cuánto mando se cuela como setter/closer? (medición seca, sesión 185) — 2026-11-16
+
+- Medido con el motor actual sobre lo ya recogido (instantánea de `.local/vocab-audit/snapshot.json`, 10.064 filas / 7.336 títulos), **sin cambiar el vocabulario ni el filtro**.
+- Títulos con palabra fuerte de mando (`supervisor`, `team lead(er)`, `jefe/a`, `responsable`, `head of`, `coordinador/a`, `gerente`, `director/a`) que `classifyRole` manda a una familia del perfil: **23 títulos / 35 filas** — setter 18, closer 10, sdr 7 (una fila puede sumar en su familia; los títulos son únicos). Es el **1,8 % de las 1.267 filas de perfil** y el 0,3 % de los títulos recogidos.
+- **Hoy no se ve ninguno**: de esos 23, pasan el embudo con mercado España y castellano **0**; con `--market LATAM` pasarían **8** (Supervisor de Ventas La Plata, Team Leader de Ventas Digitales, Jefe de Ventas, Jefe de Ventas Terreno y Online México, Gerente de Tienda Pachuca, Supervisora de SDR…). Solo **1** está en el catálogo revisado.
+- **No usar `manager` ni `lead` sueltos**: por «manager» caen 21 títulos y por «lead» 11, casi todos legítimos (`Lead Business Development Representative I`, `Lead Outreach Caller`, `Community Manager y Setter`, `Seller / Closer ("Sales Manager")`). Y de los **894** títulos con «account manager / business development manager / account executive» en todo lo recogido, 886 son `account_executive` y **8 se clasifican hoy como perfil** — por eso la guarda debe ser solo palabras fuertes y solo sobre setter/closer/sdr/cold_caller: los 9 con palabra fuerte + «account/BD manager» (`Team Lead Account Executive`, `Enterprise Account Manager Team Lead`, `Senior Account Manager/Account Supervisor`…) son AE y no se tocarían.
+- **Conclusión**: la guarda es barata y sin daño colateral demostrable, pero hoy **no cambia nada visible**; gana cuando se abra LATAM (8 títulos) o crezcan los feeds hispanos presenciales. `leadershipTitle()` ya existe en el motor; la regla sería «si la familia es del perfil y el título lleva palabra fuerte de mando, la familia es `null`», y el descarte se contaría solo como `mando`.
+
 ## El descarte, por motivos (sesión 184) — 2026-11-16
 
 - **«sin perfil comercial reconocible» era un solo número** y no decía dónde se caía el embudo. Ahora `countFiltered` guarda el motivo: `mando`, `no_comercial`, `sin_palabra_de_rol`, `familia_extra` (familia comercial fuera del perfil de ingesta: hoy solo `account_executive`), `sin_url` (fuente sin enlace) y, en la superficie, `idioma`, `mercado` y `sin_texto` (anuncio sin cuerpo con el que juzgar el idioma).
