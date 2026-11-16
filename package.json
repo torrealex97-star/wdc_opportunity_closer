@@ -19,7 +19,8 @@
     "funnel:audit": "node scripts/funnel-audit.mjs",
     "test:voice": "node spikes/voice/tests/voice.mjs",
     "design": "node scripts/check-design.mjs",
-    "bucket:audit": "node scripts/bucket-audit.mjs"
+    "bucket:audit": "node scripts/bucket-audit.mjs",
+    "role:audit": "node scripts/role-audit.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
