@@ -1,5 +1,15 @@
 # Estado
 
+## «SDR / BDR» ya no promete lo que el motor no devuelve (sesión 179) — 2026-11-13
+
+- **El desajuste**: desde la sesión 177 `bdr`/`adr` son **setter**, pero el panel seguía ofreciendo el filtro «SDR / BDR» y `queryFromPhrase` resolvía «bdr» a **sdr**. Quien escribía BDR recibía una búsqueda vacía.
+- **Etiquetas**: setter pasa a **«Setter / ADR-BDR»** y sdr a **«SDR»** en el motor (`ROLE_LABELS`, que pinta la tarjeta) y en el panel: `vocabulary.ts`, desplegable de la alumna, `CatalogTab`, `CloudAdminPanel`, `JobClassification`, `ClassificationsPanel`, `ReviewPanel` y `Workspace`. `tests/browser/student.spec.ts` actualizado a la lista nueva.
+- **Frase**: «bdr», «adr», «business development representative» y «account development representative» → **setter**, con la etiqueta que se anuncia («perfil Setter / ADR-BDR»); «sdr» → sdr y su nota pasa a «perfil SDR».
+- **Test nuevo `tests/admin-auth/roleui.mjs`** (registrado en `tests/admin-auth/run.sh`): las etiquetas del motor y del panel son idénticas; la de setter nombra ADR y BDR y la de sdr no nombra BDR; un título BDR/ADR cae en la familia que el panel llama así; y la frase lleva a **esa misma familia** diciéndolo. Es la prueba de que un BDR se encuentra por donde el panel dice que filtra.
+- **Verificado en el servicio real** (motor `5a1f822b`, web `3e26d9b7`, build `vB5sSmktK23XbmPV2DCiL`): el desplegable de producción sirve «Setter / ADR-BDR» y «SDR» (ya no queda «SDR / BDR»); `role=setter` devuelve 7 ofertas con etiqueta `Setter / ADR-BDR` y `role=sdr` 8 con etiqueta `SDR`.
+- **Limitación honesta**: ahora mismo el catálogo no tiene ninguna oferta titulada «BDR», así que el extremo a extremo con una tarjeta BDR real no se puede ver; lo que está probado es el mapeo (tests) y que cada familia devuelve y etiqueta lo suyo (API real). `npm run typecheck -w apps/web` en verde; la prueba de navegador está actualizada pero **no ejecutada**.
+- **Visto de paso, fuera de alcance**: `Supervisor de Ventas, La Plata` cae en setter (mando, no agenda). No se toca aquí.
+
 ## «Closer en España» dejaba de ser España y el vertical decidía el rol (sesión 178) — 2026-11-13
 
 - **Medido en producción antes de tocar nada** (`POST /api/backend/opportunities/search`, `role=closer, market=ES, days=10`): **38 tarjetas**, de las que **4 eran de país ajeno** (3 Colombia, 1 Brasil) y **3 llevaban el rol equivocado** (`Sales Setter B2C – Admisiones…` y `ASESOR ADMISIONES - EJECUTIVO COMERCIAL` etiquetados Closer).

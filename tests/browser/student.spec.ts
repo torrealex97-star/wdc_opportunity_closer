@@ -10,7 +10,7 @@ test('student sees three profiles and decision facts without operational control
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Elige tu próxima oportunidad.' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Perfil profesional' }).locator('option')).toHaveText(['Todos los perfiles', 'Closer', 'Setter', 'Cold Caller', 'Ejecutivo comercial', 'SDR / BDR']);
+  await expect(page.getByRole('combobox', { name: 'Perfil profesional' }).locator('option')).toHaveText(['Todos los perfiles', 'Closer', 'Setter / ADR-BDR', 'Cold Caller', 'Ejecutivo comercial', 'SDR']);
   // El titular es el puesto real del anuncio, no la familia de rol con la que lo clasificamos.
   await expect(page.getByRole('heading', { name: offer.original_title, exact: true })).toBeVisible();
   await expect(page.getByText(offer.compensation, { exact: true })).toBeVisible();

@@ -112,7 +112,8 @@ export const NON_ES_HINTS = ['florida', 'texas', 'california', 'new york', 'lond
 
 export const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'] as const;
 export type RoleFamily = (typeof ROLE_EVAL_ORDER)[number];
-export const ROLE_LABELS: Record<RoleFamily, string> = { closer: 'Closer', setter: 'Setter', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR / BDR' };
+// ADR/BDR son setter desde 2026-11-13: la etiqueta lo dice y «SDR» deja de prometerlos.
+export const ROLE_LABELS: Record<RoleFamily, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
 
 export const fold = (text: string | null | undefined) => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 

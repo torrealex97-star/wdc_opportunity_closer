@@ -6,7 +6,7 @@ import type { components } from '../../../packages/contracts/api';
 
 type Item = { id: string; job_id: string; status: string; title: string; company: string; source?: string; provider?: string; model?: string; error?: string; latency_ms?: number; created_at: string; completed_at?: string | null; usage?: { input_tokens?: number; output_tokens?: number } | null; result?: { role_family: string; confidence: string; reason: string; evidence: string } | null; proposed?: { role_family?: string; confidence?: string; reason?: string; evidence?: string } | null };
 type Status = components['schemas']['ClassificationStatus'];
-const FAMILIES: Record<string, string> = { closer: 'Closer', setter: 'Setter', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR / BDR', not_sales: 'No comercial', uncertain: 'Sin base para decidir' };
+const FAMILIES: Record<string, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR', not_sales: 'No comercial', uncertain: 'Sin base para decidir' };
 const STATES: Record<string, string> = { queued: 'En cola', running: 'Clasificando', completed: 'Completada', failed: 'Fallida', uncertain: 'Interrumpida' };
 const date = (value?: string | null) => value ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
 

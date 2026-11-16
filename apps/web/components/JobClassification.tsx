@@ -10,8 +10,8 @@ type Detail = {
   result?: { role_family: string; confidence: string; reason: string; evidence: string } | null;
 };
 const FAMILIES: Record<string, string> = {
-  closer: 'Closer', setter: 'Setter', cold_caller: 'Cold Caller',
-  account_executive: 'Ejecutivo comercial', sdr: 'SDR / BDR',
+  closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller',
+  account_executive: 'Ejecutivo comercial', sdr: 'SDR',
   not_sales: 'No comercial', uncertain: 'Sin base para decidir',
 };
 

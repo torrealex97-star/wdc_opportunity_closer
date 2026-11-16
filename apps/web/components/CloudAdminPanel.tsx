@@ -12,10 +12,10 @@ const APPLICATION: Record<string, string> = { company_ats: 'ATS de la empresa', 
 const ROLES: Array<{ value: string; label: string }> = [
   { value: 'uncategorized', label: 'Sin clasificar (título original)' },
   { value: 'closer', label: 'Closer' },
-  { value: 'setter', label: 'Setter' },
+  { value: 'setter', label: 'Setter / ADR-BDR' },
   { value: 'cold_caller', label: 'Cold Caller' },
   { value: 'account_executive', label: 'Ejecutivo comercial' },
-  { value: 'sdr', label: 'SDR / BDR' },
+  { value: 'sdr', label: 'SDR' },
 ];
 const FILTERS = ['', 'draft', 'needs_review', 'approved', 'published', 'withdrawn'] as const;
 type Item = { id: string; job_id: string; original_title: string | null; company: string | null; source_url: string | null; source: string; editorial_status: string; opportunity_status: string; connection_type: string; created_at: string; updated_at: string };

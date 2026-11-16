@@ -9,7 +9,7 @@ const ACTIVITY: Record<string, string> = { active: 'Activa', verifying: 'Verific
 const CONNECTION: Record<string, string> = { direct_partner: 'Socio directo', direct_recruiter: 'Reclutador directo', direct_company: 'Empresa directa', external_application: 'Candidatura externa', marketplace_application: 'Marketplace', community_opportunity: 'Comunidad' };
 const APPLICATION: Record<string, string> = { company_ats: 'ATS de la empresa', external_platform: 'Plataforma externa', marketplace: 'Marketplace', wdc_referral: 'Referida WDC', email: 'Email', contact_form: 'Formulario de contacto', community_contact: 'Contacto de comunidad', unknown: 'Sin determinar' };
 const ROLES = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'];
-const ROLE_LABEL: Record<string, string> = { closer: 'Closer', setter: 'Setter', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR / BDR' };
+const ROLE_LABEL: Record<string, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
 const UNSPECIFIED = 'No especificado';
 const FILTERS = ['', 'draft', 'needs_review', 'approved', 'published', 'withdrawn'] as const;
 

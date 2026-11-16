@@ -11329,8 +11329,10 @@ async function handleOffers(request, env, url) {
 // título, mercado España por señales fuertes, frescura), ranking España-primero y selección
 // de excelencia (top 20, máx. 2 por empresa, AE/SDR fuera del top). Lo que la fuente no declara
 // se muestra como 'No indicado'/sin datos; nunca se infiere application_type (unknown).
-const ROLE_LABELS = { closer: 'Closer', setter: 'Setter', cold_caller: 'Cold Caller',
-  account_executive: 'Ejecutivo comercial', sdr: 'SDR / BDR' };
+// La etiqueta dice dónde vive cada título: desde 2026-11-13 ADR/BDR son setter, no sdr, así que
+// «SDR / BDR» prometía una búsqueda que ya no los devuelve. Mismo texto que apps/web/lib/vocabulary.ts.
+const ROLE_LABELS = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller',
+  account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
 const ROLE_PRIORITY = { closer: 0, setter: 1, cold_caller: 2, account_executive: 9, sdr: 10 };
 const EXTRA_ROLES = new Set(['account_executive', 'sdr']);
 const TOP_TARGET = 20;
