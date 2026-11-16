@@ -185,7 +185,7 @@ const QUERIES = {
     LEFT JOIN opportunities o ON o.org_id=c.org_id AND o.job_id=c.job_id`,
 };
 
-function query(sql) {
+export function query(sql) {
   const out = execFileSync('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'closer-engine', '--remote', '--config', 'wrangler.toml', '--json', '--command', assertSelectOnly(sql)], {
     cwd: join(ROOT, 'sites/engine'),
     env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId() },

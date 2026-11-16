@@ -1,5 +1,16 @@
 # Estado
 
+## El «hueco ampliado» de la vista de alumna, medido (sesión 187) — 2026-11-16
+
+- **Qué es**: `StudentOpportunities.tsx` pide la búsqueda estrecha y, si vuelven **menos de 10** ofertas y hay algún filtro (perfil o mercado), pide una **segunda búsqueda sin rol y con bilingües** y la enseña en el bloque «hueco ampliado», hasta completar 20 tarjetas. El motor **no** amplía nada por su cuenta: el relleno es del cliente.
+- **Cómo se midió** (`npm run bucket:audit`, solo lectura): llama a `studentSurface` —la misma función que sirve `/v1/opportunities/search`— contra el catálogo real, sobre un shim de D1 alimentado por un `SELECT` (las 800 filas más recientes con revisión `approved`/`published`; hoy **745**), y replica la regla del cliente tal cual.
+- **Resultado**: de **240 combinaciones** posibles (6 opciones de perfil × 5 mercados × 4 ventanas × bilingüe sí/no), el hueco se abre en **66**, y **siempre con perfil elegido** (0 de las 40 con «todos los perfiles»). En esas 66 se muestran **460 tarjetas extra: el 100 % son de otra familia** que la pedida. Además, **20** solo aparecen porque la búsqueda amplia enciende los bilingües.
+- **Volumen relativo**: en una combinación abierta, la media es **3,3 ofertas del filtro + 7 del hueco** ⇒ dos tercios de la lista son de otra familia. Casos extremos: 12 de 12 o 14 de 14 tarjetas ajenas (`closer` 7d, `setter` 10d, `cold_caller` 10d, `sdr` LATAM 7d), con 5-7 resultados estrechos.
+- **Quién rellena**: closer 166, cold_caller 150, setter 144. Por mercado: `any` 22/48 combinaciones, `LATAM` 22/48, `ES` 16/48, `EU` 6/48, `US` 0/48. Por perfil: sdr 18/40, setter 18/40, closer 16/40, cold_caller 14/40, account_executive 0/40 (siempre hay 10+).
+- **Conclusión**: **es alto**. El hueco no es un borde raro: aparece en 1 de cada 3 combinaciones con perfil y domina la lista cuando aparece. La palanca no es relajar más el filtro sino subir la cobertura real por familia (sobre todo `sdr` y `cold_caller`, que son las que más tiran del relleno) y, si se quiere mitigar ya, que el relleno deje de encender bilingües y que el rótulo del bloque diga la familia de cada tarjeta.
+- **Límites**: mide el catálogo actual vía `studentSurface` sobre un shim (no pasa por HTTP ni por el proxy web); las 240 combinaciones pesan igual, no por uso real de las alumnas; y el pool son las 800 filas más recientes, no las 9.987 del catálogo.
+- **Pruebas**: `tests/engine/bucket.mjs` (registrado en `tests/admin-auth/run.sh`): regla de la web (10, filtro presente), tope de 20 sin repetir, y que la medición pasa por `studentSurface` de verdad. `roles`, `terms`, `sources`, `discards`, `catalog`, `status` en PASS; `orphan-refs` PASS.
+
 ## ADR/BDR solo en el título: medición seca (sesión 186) — 2026-11-16
 
 - Probado sin cambiar el motor: copia temporal del worker con `BODY_AMBIGUOUS_KEYWORDS = {closer, adr, bdr}` (lo mismo que se hizo con `closer`) y comparación de la familia de cada fila recogida.
