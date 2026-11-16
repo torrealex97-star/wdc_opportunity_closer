@@ -58,15 +58,44 @@ const TARGETS = new Set(['sdr', 'cold_caller']);
 export const roleOf = (engine, row, window = WINDOW) =>
   engine.classifyRole({ title: row.title }, fold(`${row.title ?? ''} ${row.location ?? ''} ${String(row.body ?? '').slice(0, window)}`)) ?? null;
 
-// ¿La tarjeta llegaría a la vista de alumna? Mismos gates que la ingesta y la vista (ES, castellano),
-// con una URL de relleno que solo vive en memoria para que «sin enlace» no cuente como elegible.
-const PLACEHOLDER_URL = 'https://role-audit.invalid/anuncio';
-const eligibleIn = (engine, row) => {
-  const payload = { title: row.title, location: row.location, url: PLACEHOLDER_URL, raw: { description: row.body ?? '' } };
-  if (engine.discardReason(payload)) return { es: false, any: false };
-  const spanish = engine.spanishBodyGate(engine.descriptionOf(payload), false).ok;
-  return { any: spanish, es: spanish && !engine.marketRejects(payload, 'ES') };
-};
+// ── ¿La tarjeta llega a la alumna? Se le pregunta a la vista, no al gate de ingesta ─────────────
+//
+// Antes esto miraba `discardReason`, que es el gate de INGESTA: corre con el perfil de la pasada
+// (casi siempre closer) y marca `familia_extra` a todo lo demás. Con esa vara, un account executive
+// real salía como «no elegible» y el informe llegó a decir que en España no hay ni uno — falso: la
+// vista los enseña en cuanto se elige ese perfil, y el hueco ampliado los usa a diario.
+//
+// Ahora se mide con `studentSurface`, el mismo código que sirve /v1/opportunities/search: mismo
+// clasificador, mismo gate de idioma, mismo criterio de mercado, mismo dedupe y la misma regla de
+// roles extra. Sin D1: se le pasa un shim con las filas de la instantánea.
+//
+// Dos diferencias conocidas con la vista real, dichas aquí y no escondidas: la instantánea no trae
+// `posted_at`, así que la ventana de días no se aplica (no se finge aplicándola), y la URL se deriva
+// del título plegado para que el dedupe por URL colapse el mismo anuncio replicado entre fuentes.
+export function shimFor(rows, { nowMs = Date.now() } = {}) {
+  const results = rows.map((row, index) => ({
+    job_id: `snapshot-${index}`,
+    starred: 0,
+    source: row.source ?? null,
+    expires_at: new Date(nowMs + 86400000).toISOString(),
+    payload: JSON.stringify({
+      title: row.title,
+      location: row.location ?? null,
+      url: row.title ? `https://snapshot.invalid/${encodeURIComponent(fold(row.title).trim())}` : null,
+      raw: { description: row.body ?? '' },
+    }),
+  }));
+  return { DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results }) }) }) } };
+}
+
+// Las tarjetas que deja ver esa vista. `includeExtraRoles: true` a propósito: AE y SDR son roles
+// extra (solo salen al elegir su perfil) y son justo las familias que este informe mide.
+export async function viewOf(engine, rows, { market = 'ES', days = 10, includeBilingual = false } = {}) {
+  const { ranked } = await engine.studentSurface(shimFor(rows), {
+    role: null, market, days, includeBilingual, starredOnly: false, includeExtraRoles: true,
+  });
+  return { cards: ranked, titles: new Set(ranked.map(card => fold(card.original_title).trim())) };
+}
 
 const uniqueTitles = rows => {
   const seen = new Set();
@@ -80,27 +109,31 @@ const uniqueTitles = rows => {
   return out;
 };
 
-const sourceTable = (rows, engine) => {
+// Cruza lo recogido por fuente (`rows`) con lo que la vista de España deja ver (`view.cards`).
+// `visibles` son tarjetas únicas con el dedupe de la vista; `anuncios` es el bruto recogido.
+const sourceTable = (rows, view) => {
   const table = new Map();
-  for (const raw of rows) {
-    const row = { ...raw, eligible: eligibleIn(engine, raw) };
-    const key = row.source ?? '(sin fuente)';
-    const entry = table.get(key) ?? { source: key, rows: 0, sdr: 0, cold: 0, sdrES: 0, coldES: 0, closer: 0, setter: 0, ae: 0, none: 0, titles: new Set() };
+  const entryFor = key => {
+    if (!table.has(key)) table.set(key, { source: key, rows: 0, titles: new Set(), visibles: 0, sdr: 0, cold: 0, closer: 0, setter: 0, ae: 0 });
+    return table.get(key);
+  };
+  for (const row of rows) {
+    const entry = entryFor(row.source ?? '(sin fuente)');
     entry.rows += 1;
     entry.titles.add(fold(row.title).trim());
-    const role = roleOf(engine, row);
-    const inES = row.eligible.es;
-    if (role === 'sdr') { entry.sdr += 1; if (inES) entry.sdrES += 1; }
-    else if (role === 'cold_caller') { entry.cold += 1; if (inES) entry.coldES += 1; }
-    else if (role === 'closer') entry.closer += 1;
-    else if (role === 'setter') entry.setter += 1;
-    else if (role === 'account_executive') entry.ae += 1;
-    else entry.none += 1;
-    table.set(key, entry);
+  }
+  for (const card of view.cards) {
+    const entry = entryFor(card.source_code ?? '(sin fuente)');
+    entry.visibles += 1;
+    if (card.role === 'sdr') entry.sdr += 1;
+    else if (card.role === 'cold_caller') entry.cold += 1;
+    else if (card.role === 'closer') entry.closer += 1;
+    else if (card.role === 'setter') entry.setter += 1;
+    else if (card.role === 'account_executive') entry.ae += 1;
   }
   return [...table.values()]
     .map(entry => ({ ...entry, titles: entry.titles.size, target: entry.sdr + entry.cold }))
-    .sort((a, b) => b.target - a.target || b.rows - a.rows);
+    .sort((a, b) => b.target - a.target || b.visibles - a.visibles || b.rows - a.rows);
 };
 
 // Un término, un motor con ese término añadido: cuántos anuncios cambian de familia y de dónde salen.
@@ -125,6 +158,12 @@ const measureTerm = async (before, baseVocabulary, rows, { term, family }) => {
   return { term, family, matched: matched.length, eligible, already, becomes, becomesES, lost, transitions, sources };
 };
 
+const roleCounts = cards => {
+  const counts = {};
+  for (const card of cards) counts[card.role ?? 'sin familia'] = (counts[card.role ?? 'sin familia'] ?? 0) + 1;
+  return counts;
+};
+
 const pad = (text, size) => String(text).padEnd(size);
 const num = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
@@ -140,15 +179,21 @@ async function main() {
   const rows = snapshot.collected ?? [];
 
   if (!rows.length) throw new Error('la instantánea no trae anuncios recogidos');
-  const sources = sourceTable(rows, engine);
-  const pool = uniqueTitles(rows).map(row => ({ ...row, eligible: eligibleIn(engine, row) }));
+  // La vista, con su código: España y «cualquier mercado». De aquí sale qué tarjeta ve la alumna.
+  const esView = await viewOf(engine, rows, { market: 'ES' });
+  const anyView = await viewOf(engine, rows, { market: 'any' });
+  const sources = sourceTable(rows, esView);
+  const pool = uniqueTitles(rows).map(row => {
+    const key = fold(row.title).trim();
+    return { ...row, eligible: { es: esView.titles.has(key), any: anyView.titles.has(key) } };
+  });
   const terms = [];
   for (const candidate of CANDIDATES) terms.push(await measureTerm(engine, baseVocabulary, pool, candidate));
   const winners = terms.filter(t => t.becomes > 0).sort((a, b) => b.becomes - a.becomes);
   const patch = { add: { sdr: SDR_TERMS, cold_caller: COLD_TERMS } };
   const after = await buildCandidateEngine(applyVocabularyPatch(baseVocabulary, patch));
   const combined = { sdr: 0, cold_caller: 0, opened: 0, openedES: 0, sources: {} };
-  for (const row of uniqueTitles(rows).map(row => ({ ...row, eligible: eligibleIn(engine, row) }))) {
+  for (const row of pool) {
     const from = roleOf(engine, row);
     const to = roleOf(after, row);
     if (TARGETS.has(to) && from !== to) {
@@ -169,6 +214,7 @@ async function main() {
     sources,
     terms: terms.sort((a, b) => b.becomes - a.becomes),
     combined,
+    view: { es: roleCounts(esView.cards), any: roleCounts(anyView.cards), extraRoles: true },
   };
 
   if (json) { console.log(JSON.stringify(report, null, 2)); return 0; }
@@ -176,14 +222,24 @@ async function main() {
   console.log(`Instantánea ${cached ? 'reutilizada' : 'recién exportada'} de ${snapshot.exportedAt} · ventana ${WINDOW} caracteres`);
   console.log(`${num(rows.length)} anuncios recogidos · ${num(report.titles)} títulos únicos`);
 
-  console.log('\n== QUIÉN TRAE HOY SDR Y COLD CALLER ==');
-  console.log(`${pad('fuente', 34)}${pad('anuncios', 10)}${pad('títulos', 9)}${pad('sdr', 6)}${pad('cold', 6)}${pad('sdr ES', 7)}${pad('cold ES', 8)}${pad('closer', 8)}${pad('setter', 8)}${pad('AE', 6)}sin familia`);
-  for (const row of sources) {
-    console.log(`${pad(row.source, 34)}${pad(num(row.rows), 10)}${pad(num(row.titles), 9)}${pad(num(row.sdr), 6)}${pad(num(row.cold), 6)}${pad(num(row.sdrES), 7)}${pad(num(row.coldES), 8)}${pad(num(row.closer), 8)}${pad(num(row.setter), 8)}${pad(num(row.ae), 6)}${num(row.none)}`);
+  const esCounts = roleCounts(esView.cards);
+  const anyCounts = roleCounts(anyView.cards);
+  const famLine = counts => ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr']
+    .map(role => `${role} ${num(counts[role] ?? 0)}`).join(' · ');
+  console.log(`\nVISTA DE ESPAÑA (studentSurface, roles extra incluidos): ${num(esView.cards.length)} tarjetas`);
+  console.log(`  ${famLine(esCounts)}`);
+  console.log(`VISTA «CUALQUIER MERCADO»: ${num(anyView.cards.length)} tarjetas`);
+  console.log(`  ${famLine(anyCounts)}`);
+
+  console.log('\n== QUIÉN TRAE HOY SDR Y COLD CALLER (tarjetas visibles en España) ==');
+  console.log(`${pad('fuente', 34)}${pad('anuncios', 10)}${pad('títulos', 9)}${pad('visibles', 9)}${pad('sdr', 6)}${pad('cold', 6)}${pad('closer', 8)}${pad('setter', 8)}AE`);
+  for (const row of sources.slice(0, 20)) {
+    console.log(`${pad(row.source, 34)}${pad(num(row.rows), 10)}${pad(num(row.titles), 9)}${pad(num(row.visibles), 9)}${pad(num(row.sdr), 6)}${pad(num(row.cold), 6)}${pad(num(row.closer), 8)}${pad(num(row.setter), 8)}${num(row.ae)}`);
   }
+  const rest = sources.slice(20).reduce((n, row) => n + row.visibles, 0);
+  if (rest) console.log(`${pad('(otras fuentes)', 34)}${pad('', 10)}${pad('', 9)}${pad(num(rest), 9)}`);
   const targetRows = sources.reduce((n, row) => n + row.target, 0);
-  const targetES = sources.reduce((n, row) => n + row.sdrES + row.coldES, 0);
-  console.log(`\nsdr + cold_caller hoy: ${num(targetRows)} anuncios de ${num(rows.length)} (${((targetRows / rows.length) * 100).toFixed(1)} %) · elegibles en España: ${num(targetES)}`);
+  console.log(`\nsdr + cold_caller visibles en España: ${num(targetRows)} de ${num(esView.cards.length)} tarjetas`);
 
   console.log('\n== TÉRMINOS CANDIDATOS (cuántos anuncios YA recogidos pasan a sdr / cold_caller) ==');
   console.log(`${pad('término', 38)}${pad('familia', 13)}${pad('títulos', 9)}${pad('eligs ES', 10)}${pad('ya era', 8)}${pad('pasan ES', 10)}${pad('pasan', 7)}${pad('pierden', 9)}de dónde salen`);
@@ -194,7 +250,7 @@ async function main() {
   }
 
   console.log('\n== SI SE AÑADIERAN TODOS LOS CANDIDATOS ==');
-  console.log(`títulos únicos que cambian de familia: ${num(combined.opened)} (sdr +${num(combined.sdr)}, cold_caller +${num(combined.cold_caller)}) · de esos, elegibles en España: ${num(combined.openedES)}`);
+  console.log(`títulos únicos que cambian de familia: ${num(combined.opened)} (sdr +${num(combined.sdr)}, cold_caller +${num(combined.cold_caller)}) · de esos, visibles hoy en la vista de España: ${num(combined.openedES)}`);
   const perSource = Object.entries(combined.sources).sort((a, b) => b[1] - a[1]);
   if (perSource.length) console.log(`de dónde salen: ${perSource.map(([source, n]) => `${source} ${n}`).join(' · ')}`);
   if (winners.length) {

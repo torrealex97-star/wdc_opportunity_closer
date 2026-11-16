@@ -64,6 +64,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 # El motor retira en bloque lo que descarta (no lo deja en la cola humana): prueba de conducta con D1 simulado.
 # Arnés de auditoría del vocabulario (scripts/vocabulary-audit.mjs): solo lee y cuenta bien.
 node --experimental-strip-types tests/engine/bucket.mjs
+# Informe de rol: la elegibilidad se mide con la vista real (studentSurface); el AE no es «familia_extra».
+node --experimental-strip-types tests/engine/role-audit.mjs
 node --experimental-strip-types tests/engine/discards.mjs
 node --experimental-strip-types tests/vocabulary-audit.mjs
 node --experimental-strip-types tests/engine/activate.mjs
