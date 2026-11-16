@@ -372,12 +372,12 @@ const SOURCES = [
   // JobToday recupera los cuatro slugs retirados el 2026-10-22 por «0 elegibles». La razón de entonces
   // ya no se sostiene: el vocabulario de rol ahora reconoce «comercial» a secas y «teleoperador», que
   // son justo los títulos de estas páginas. Los cinco slugs responden 200 hoy (356–724 KB).
-  // Cold caller en España: recuperadas el 2026-11-16 (sesión 192) con medición en vivo de los slugs
-  // (responden 200): `call-center` 64 anuncios, 7 cold_caller, 58 ids que no estaban en raw_items;
-  // `servicio-al-cliente` 48 anuncios, 13 cold_caller, 37 ids nuevos. Son 2 subrequests. Se quedan
-  // solo si la pasada real aporta tarjetas nuevas; con cero, se retiran otra vez (y se anota).
-  { code: 'jobtoday-call-center', name: 'JobToday Call Center', kind: 'jobtoday', slug: 'call-center' },
-  { code: 'jobtoday-servicio-cliente', name: 'JobToday Servicio al cliente', kind: 'jobtoday', slug: 'servicio-al-cliente' },
+  // Cold caller en España: `call-center` y `servicio-al-cliente` volvieron a estar encendidas unas
+  // horas el 2026-11-16 (sesión 192) y se RETIRAN en la misma sesión: la pasada real, completada,
+  // trajo 64 y 48 anuncios (112 filas nuevas en raw_items) y **cero tarjetas nuevas** — el catálogo de
+  // cada fuente no se movió (16 y 49 fichas antes y después) y la vista de alumna siguió con 0 y 5
+  // elegibles (2 cold). El inventario existe, pero no pasa los gates de mercado, idioma y rol, así
+  // que la fuente solo gasta peticiones. No se vuelven a encender sin una medición que enseñe fichas.
   { code: 'jobtoday-telemarketing', name: 'JobToday Telemarketing', kind: 'jobtoday', slug: 'telemarketing' },
   { code: 'jobtoday-remoto', name: 'JobToday Comercial remoto', kind: 'jobtoday', slug: 'ventas-remoto' },
   { code: 'jobtoday-ventas', name: 'JobToday Ventas', kind: 'jobtoday', slug: 'ventas' },
