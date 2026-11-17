@@ -225,10 +225,19 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   await msg.fill('Mi mensaje revisado por mí.'); await alumna.getByRole('button', { name: 'Guardar mensaje' }).click(); await alumna.getByText('Mensaje guardado.').waitFor();
   await alumna.getByRole('button', { name: 'Copiar mensaje' }).click(); await alumna.getByText('Mensaje copiado.').waitFor(); assert.equal(await alumna.evaluate(() => navigator.clipboard.readText()), 'Mi mensaje revisado por mí.');
   await alumna.getByText('Datos para copiar en los formularios').click(); await alumna.getByRole('button', { name: 'Copiar Email' }).click(); assert.equal(await alumna.evaluate(() => navigator.clipboard.readText()), 'lucia@ejemplo.com');
-  const [tab] = await Promise.all([alumnaCtx.waitForEvent('page'), alumna.getByRole('link', { name: 'Abrir el anuncio' }).click()]); await tab.close();
-  await alumna.getByText('Anuncio abierto', { exact: false }).first().waitFor();
-  await alumna.getByRole('button', { name: 'Ya la he enviado' }).click(); await alumna.getByText('Enviada por ti', { exact: true }).waitFor(); if (process.env.SHOT2) await alumna.screenshot({ path: process.env.SHOT2, fullPage: true }); assert.equal(await alumna.getByRole('button', { name: 'Ya la he enviado' }).count(), 0);
-  await alumna.getByTestId('outcome-responded').click(); await alumna.getByText('La empresa ha respondido', { exact: true }).first().waitFor();
+  // Tablero: abrir el anuncio NO mueve la tarjeta (nada se detecta solo); la alumna la mueve. El enlace
+  // sigue abriendo el anuncio en otra pestaña, sin sacarla del tablero.
+  const card = () => alumna.getByTestId('application').first();
+  const [tab] = await Promise.all([alumnaCtx.waitForEvent('page'), card().getByRole('link', { name: 'Anuncio' }).click()]); await tab.close();
+  assert.equal(await alumna.getByTestId('stage-interested').getByTestId('application').count(), 1, 'abrir el anuncio no mueve la tarjeta');
+  await card().getByTestId('outcome-applied').click();
+  await alumna.getByTestId('stage-applied').getByTestId('application').first().waitFor();
+  assert.match(await alumna.getByTestId('stage-applied').innerText(), /Enviada por ti/);
+  assert.equal(await card().getByTestId('outcome-applied').count(), 0, 'una enviada no se vuelve a enviar');
+  if (process.env.SHOT2) await alumna.screenshot({ path: process.env.SHOT2, fullPage: true });
+  await card().getByTestId('outcome-responded').click();
+  await alumna.getByTestId('stage-follow_up').getByTestId('application').first().waitFor();
+  assert.match(await alumna.getByTestId('stage-follow_up').innerText(), /La empresa ha respondido/);
   assert.ok(await alumna.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil con candidaturas');
   // Progreso: una práctica y un repaso registrados con su sesión; la vista muestra solo datos reales y su tabla alternativa.
   const logged = await alumna.evaluate(async () => {
