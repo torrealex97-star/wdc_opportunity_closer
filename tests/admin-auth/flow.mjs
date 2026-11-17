@@ -372,6 +372,10 @@ await step('leads B2B (panel): exige sesión y origen, importa, lista y cambia e
 await step('métricas (panel): exige sesión y devuelve 14 días con coste y decisiones', async () => {
   assert.equal((await call('/api/admin/metrics', { cookies: false })).status, 401);
   const r = await call('/api/admin/metrics'); assert.equal(r.status, 200);
+  // Marcador por fuente: cerrado sin sesión; con sesión, o calcula o dice que no puede (nunca inventa).
+  assert.equal((await call('/api/admin/source-scorecard', { cookies: false })).status, 401);
+  const scorecard = await call('/api/admin/source-scorecard');
+  assert.ok([200, 503].includes(scorecard.status), `scorecard ${scorecard.status}`);
   assert.equal(r.json.days.length, 14); assert.ok(Array.isArray(r.json.perTier) && Array.isArray(r.json.perSource) && r.json.review.minutes === null && 'cost_per_good' in r.json.apify);
 });
 await step('embudo (panel): exige sesión y devuelve totales, filas por fuente×mercado y entradas brutas', async () => {

@@ -202,7 +202,8 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   await alumna.getByRole('button', { name: 'Entrar' }).click(); await alumna.getByText('TU PERFIL', { exact: true }).waitFor();
   assert.ok(await alumna.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil');
   assert.equal(await alumna.getByRole('button', { name: 'Guardar perfil' }).isDisabled(), true, 'sin consentimiento no se puede guardar');
-  await alumna.getByLabel('Nombre').fill('Lucía'); await alumna.getByRole('checkbox', { name: /closer/i }).first().check();
+  // `getByLabel('Nombre')` casa también con «Copiar Nombre y apellidos»: se pide el campo, no la etiqueta suelta.
+  await alumna.getByLabel('Nombre', { exact: true }).fill('Lucía'); await alumna.getByRole('checkbox', { name: /closer/i }).first().check();
   await alumna.getByLabel(/Enlace a tu vídeo/).fill('https://drive.google.com/file/d/abc/view');
   await alumna.getByLabel(/Acepto que Women Digital Closer/).check(); await alumna.getByRole('button', { name: 'Guardar perfil' }).click();
   await alumna.getByText('Perfil guardado.').waitFor();
@@ -211,7 +212,7 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   assert.match(await alumna.getByTestId('matches').innerText(), /Remoto/); assert.match(await alumna.getByTestId('matches').innerText(), /No sabemos:/);
   await alumna.reload(); await alumna.getByText('TU PERFIL', { exact: true }).waitFor(); await alumna.waitForFunction(() => document.querySelector('#sp-name')?.value === 'Lucía', null, { timeout: 8000 });
   assert.equal(await alumna.getByLabel(/Enlace a tu vídeo/).inputValue(), 'https://drive.google.com/file/d/abc/view');
-  assert.equal(await alumna.getByLabel('Nombre').inputValue(), 'Lucía');
+  assert.equal(await alumna.getByLabel('Nombre', { exact: true }).inputValue(), 'Lucía');
   // Candidatura ASISTIDA: formulario base → preparar → revisar y copiar → abrir → «ya la he enviado». La app no envía nada.
   await alumna.getByTestId('app-form').locator('summary').click();
   await alumna.getByLabel('Email de contacto').fill('lucia@ejemplo.com'); await alumna.getByLabel('Teléfono').fill('600 11 22 33'); await alumna.getByLabel('Tu CV (enlace a tu Drive)').fill('https://drive.google.com/file/d/cv/view');

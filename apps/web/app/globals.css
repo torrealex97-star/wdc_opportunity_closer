@@ -647,3 +647,18 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .assistant-answer{font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .assistant-list>li>button{justify-self:start;font-size:10px;min-height:32px;padding:5px 9px}
 @media(max-width:760px){.pipeline{grid-auto-flow:row;grid-auto-columns:auto;overflow-x:visible}.pipeline-column{width:100%}}
+
+/* Marcador por fuente: tabla con números alineados y desplazamiento horizontal en pantallas
+   estrechas (nueve columnas no caben en un móvil sin partir la lectura). */
+.scorecard-totals{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px}
+.scorecard-totals>span{font-size:11px;color:var(--secondary);background:var(--inset);border:1px solid var(--line);border-radius:99px;padding:4px 10px}
+.scorecard-totals strong{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.scorecard-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet)}
+.scorecard-table{border-collapse:collapse;width:100%;font-size:11px;min-width:720px}
+.scorecard-table caption{caption-side:top;text-align:left;color:var(--secondary);font-size:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.scorecard-table th,.scorecard-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.scorecard-table thead th{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--secondary);font-weight:650;background:var(--inset)}
+.scorecard-table tbody th{text-align:left;font-weight:550;font-variant-numeric:normal}
+.scorecard-table td{font-variant-numeric:tabular-nums;color:var(--ink)}
+.scorecard-table tbody tr:last-child th,.scorecard-table tbody tr:last-child td{border-bottom:0}
+.scorecard-table tr.is-unlinked th,.scorecard-table tr.is-unlinked td{color:var(--secondary);font-style:italic}

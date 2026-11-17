@@ -1,7 +1,8 @@
 // Formulario base y candidaturas asistidas (puro): node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/application.mjs
 import assert from 'node:assert/strict';
 import { sanitizeAppProfile, completeness } from '../../apps/web/lib/applicationProfile.ts';
-import { buildCoverMessage, buildCopyData, canMove } from '../../apps/web/lib/applications.ts';
+import { buildCoverMessage, buildCopyData } from '../../apps/web/lib/applications.ts';
+import { canMove } from '../../apps/web/lib/applicationStages.ts';
 
 // Saneado: valores fuera de rango/enumeración se descartan; nada de claves ajenas
 const s = sanitizeAppProfile({ contact_email: ' ANA@Ejemplo.COM ', phone: 'tel: +34 600 11 22 33 <b>', linkedin_url: 'http://insegura.test/x', cv_url: 'https://drive.google.com/file/d/1/view', country_residence: 'España',
