@@ -7,7 +7,7 @@ import ApplyAssistant from './ApplyAssistant';
 // Tablero (pipeline) de candidaturas: todas sus ofertas en columnas por etapa real del proceso.
 // La alumna mueve la tarjeta cuando la empresa contesta (nada se detecta solo) y la app nunca envía
 // ni rellena nada. Los estados son los del servidor: aquí solo se ofrecen movimientos permitidos.
-type Application = { id: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; notes: string | null; updated_at: string };
+type Application = { id: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; cover_message: string | null; notes: string | null; updated_at: string };
 type CopyField = { key: string; label: string; value: string };
 type Payload = { applications: Application[]; copy: CopyField[] };
 
@@ -27,6 +27,7 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
   const [note, setNote] = useState('');
   const [busyId, setBusyId] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     fetch('/api/student/applications', { headers: { 'Content-Type': 'application/json' }, cache: 'no-store' })
@@ -39,6 +40,7 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
         const payload = body as Payload;
         setData(payload);
         setNotes(Object.fromEntries(payload.applications.map(app => [app.id, app.notes ?? ''])));
+        setMessages(Object.fromEntries(payload.applications.map(app => [app.id, app.cover_message ?? ''])));
         setError('');
       })
       .catch((e: Error) => setError(e.message));
@@ -78,7 +80,9 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
           return <div className="pipeline-column" key={stage.id} data-testid={`stage-${stage.id}`}>
             <header><h3>{stage.title} <span>{cards.length}</span></h3><p>{stage.hint}</p></header>
             {cards.length === 0 ? <p className="pipeline-empty">—</p> : cards.map(app => {
-              const moves = NEXT[app.status].filter(to => to !== 'draft' && to !== 'opened');
+              // Todos los pasos que acepta el servidor salvo «anuncio abierto» (se marca solo al abrir el
+              // enlace y como botón solo añade ruido). Descartada → borrador sigue disponible: recuperar.
+              const moves = NEXT[app.status].filter(to => to !== 'opened');
               return <article className="pipeline-card" key={app.id} data-testid="application">
                 <p className="pipeline-company">{app.offer_company ?? 'Empresa no indicada'}</p>
                 <strong>{app.offer_title}</strong>
@@ -90,6 +94,16 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
                 {!!moves.length && <div className="pipeline-moves">
                   {moves.map(to => <button key={to} data-testid={`outcome-${to}`} disabled={busyId === app.id} onClick={() => void patch(app.id, { status: to }, `${MOVE_LABELS[to]}.`)}>{MOVE_LABELS[to]}</button>)}
                 </div>}
+                <details open>
+                  <summary>Mensaje de candidatura</summary>
+                  <label htmlFor={`msg-${app.id}`}>Revísalo y cámbialo antes de pegarlo en el formulario
+                    <textarea id={`msg-${app.id}`} rows={6} maxLength={3000} value={messages[app.id] ?? ''} onChange={event => setMessages({ ...messages, [app.id]: event.target.value })} />
+                  </label>
+                  <div className="pipeline-actions">
+                    <button type="button" disabled={busyId === app.id} onClick={() => void patch(app.id, { cover_message: messages[app.id] ?? '' }, 'Mensaje guardado.')}><Save size={14} /> Guardar mensaje</button>
+                    <button type="button" onClick={() => void copyIt(messages[app.id] ?? '', 'Mensaje')}><Copy size={14} /> Copiar mensaje</button>
+                  </div>
+                </details>
                 <details>
                   <summary>Notas y preguntas de la empresa</summary>
                   <label htmlFor={`notes-${app.id}`}>Qué te han dicho / cuándo llamar

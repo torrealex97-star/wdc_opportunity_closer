@@ -632,6 +632,7 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .pipeline-when{font-size:10px;color:var(--secondary)}
 .pipeline-actions{display:flex;gap:12px;font-size:11px;flex-wrap:wrap}
 .pipeline-actions a{display:inline-flex;align-items:center;gap:5px;text-decoration:none;color:var(--accent)}
+.pipeline-actions button{font-size:10px;min-height:32px;padding:5px 9px}
 .pipeline-moves{display:flex;flex-wrap:wrap;gap:6px}
 .pipeline-moves button{font-size:10px;min-height:32px;padding:5px 9px;border-radius:6px}
 .pipeline-card details{margin-top:2px}
