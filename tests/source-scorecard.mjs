@@ -3,6 +3,8 @@
 // Uso: node --experimental-strip-types tests/source-scorecard.mjs
 import assert from 'node:assert/strict';
 import { scorecard, scorecardTotals } from '../apps/web/lib/sourceScorecard.ts';
+import { parseSerpapiCost, recordedCosts } from '../apps/web/lib/sourceCost.ts';
+import { eurRate, __testFx } from '../apps/web/lib/fx.ts';
 
 const sources = new Map([
   ['ext-1', 'jobtoday'], ['ext-2', 'jobtoday'], ['ext-3', 'infojobs'], ['ext-4', 'infojobs'], ['ext-5', 'infojobs'], ['ext-6', 'infojobs'],
@@ -48,4 +50,69 @@ assert.equal(totals.ingested, 1500);
 // Las enviadas reales incluyen la que no se pudo atribuir a una fuente (5 + 1).
 assert.equal(totals.sent, 6);
 assert.equal(totals.interviews, 2);
-console.log('PASS  marcador por fuente: tasas por 1.000 anuncios vivos, huecos en «—» y ofertas sin fuente aparte');
+
+// ── Coste ya registrado: solo lo que consta, con «—» cuando falta ──────────────────────────────
+const costs = { usdBySource: new Map([['jobtoday', 0.5], ['infojobs', 0.1], ['solo-coste', 1]]), partial: new Set(['infojobs']), eurPerUsd: 0.8 };
+const paid = scorecard(apps, sources, ingested, costs);
+const p = new Map(paid.map(row => [row.source, row]));
+// jobtoday: 0,50 USD → 0,40 €; 2 enviadas y 1 entrevista.
+assert.equal(p.get('jobtoday').cost_usd, 0.5);
+assert.equal(p.get('jobtoday').cost_eur, 0.4);
+assert.equal(p.get('jobtoday').per_send_eur, 0.2);
+assert.equal(p.get('jobtoday').per_interview_eur, 0.4);
+assert.equal(p.get('jobtoday').cost_partial, false);
+// infojobs: coste mínimo declarado, 3 enviadas y 1 entrevista.
+assert.equal(p.get('infojobs').cost_eur, 0.08);
+assert.equal(p.get('infojobs').per_send_eur, 0.0267, '0,08 € entre 3 envíos');
+assert.equal(p.get('infojobs').per_interview_eur, 0.08);
+assert.equal(p.get('infojobs').cost_partial, true);
+// Sin coste registrado no se inventa un cero.
+assert.equal(p.get('remotive').cost_usd, null);
+assert.equal(p.get('remotive').cost_eur, null);
+assert.equal(p.get('remotive').per_send_eur, null);
+// Una fuente que gastó sin dejar anuncios vivos sale con su coste y sin denominador.
+assert.equal(p.get('solo-coste').ingested, null);
+assert.equal(p.get('solo-coste').cost_eur, 0.8);
+assert.equal(p.get('solo-coste').per_send_eur, null, 'sin envíos no hay € por envío');
+assert.equal(p.get('solo-coste').per_1000.sent, null);
+// El cajón sin fuente no lleva coste.
+assert.equal(p.get('sin fuente localizable').cost_eur, null);
+// Totales: 0,40 + 0,08 + 0,80; y 1,28 € entre 6 enviadas (incluye la no atribuida).
+const paidTotals = scorecardTotals(paid);
+assert.equal(paidTotals.cost_eur, 1.28);
+assert.equal(paidTotals.cost_sources, 3);
+assert.equal(paidTotals.per_send_eur, 0.2133);
+assert.equal(paidTotals.per_interview_eur, 0.64);
+assert.equal(paidTotals.cost_partial, true);
+// Sin tipo de cambio, el coste en dólares se conserva pero el de euros queda en «—».
+const noFx = new Map(scorecard(apps, sources, ingested, { ...costs, eurPerUsd: null }).map(row => [row.source, row]));
+assert.equal(noFx.get('jobtoday').cost_usd, 0.5);
+assert.equal(noFx.get('jobtoday').cost_eur, null);
+assert.equal(noFx.get('jobtoday').per_send_eur, null);
+assert.equal(scorecardTotals([...noFx.values()]).cost_eur, null);
+
+// ── Lectura del coste registrado (Apify + nota del respaldo) ────────────────────────────────────
+assert.equal(parseSerpapiCost('respaldo SerpApi · 1 búsqueda(s), 0.025 USD'), 0.025);
+assert.equal(parseSerpapiCost('20 recibidas, 19 aceptadas'), null);
+assert.equal(parseSerpapiCost(null), null);
+const recorded = recordedCosts(
+  [{ id: 'a1', source: 'apify-indeed' }, { id: 'a2', source: 'apify-indeed' }],
+  [{ actor_id: 'a1', cost_usd: '0.10', status: 'SUCCEEDED' }, { actor_id: 'a2', cost_usd: null, status: 'RUNNING' }, { actor_id: 'ghost', cost_usd: 0.5, status: 'SUCCEEDED' }],
+  [{ source: 'serpapi-infojobs', note: 'respaldo SerpApi · 1 búsqueda(s), 0.025 USD' }, { source: 'serpapi-adzuna', note: null }],
+);
+assert.equal(recorded.usdBySource.get('apify-indeed'), 0.1);
+assert.ok(recorded.partial.has('apify-indeed'), 'una ejecución sin importe deja el coste como mínimo');
+assert.equal(recorded.usdBySource.get('serpapi-infojobs'), 0.025);
+assert.ok(recorded.partial.has('serpapi-adzuna'), 'una nota sin importe no se cuenta como cero');
+assert.equal(recorded.unattributed_usd, 0.5, 'lo que no tiene actor no se atribuye a una fuente');
+assert.equal(recordedCosts(null, [], []), null, 'una lectura fallida no produce una suma parcial');
+
+// ── Tipo de cambio: del BCE, y fallo declarado ──────────────────────────────────────────────────
+__testFx.reset();
+const fx = await eurRate({ now: Date.now(), fetchImpl: async () => new Response("<Cube time='2026-11-17'><Cube currency='USD' rate='1.25'/></Cube>", { status: 200 }) });
+assert.equal(fx.source, 'BCE');
+assert.equal(fx.date, '2026-11-17');
+assert.ok(Math.abs(fx.eur_per_usd - 0.8) < 1e-9, 'USD por EUR se invierte');
+__testFx.reset();
+assert.equal(await eurRate({ now: Date.now(), fetchImpl: async () => new Response('no', { status: 500 }) }), null);
+console.log('PASS  marcador por fuente: tasas por 1.000 anuncios vivos, coste registrado en € y por envío/entrevista, huecos en «—» y ofertas sin fuente aparte');
