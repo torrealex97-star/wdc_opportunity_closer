@@ -9,11 +9,13 @@ type Row = {
   source: string; ingested: number | null; sent: number; responded: number; interviews: number; offers: number; rejected: number;
   per_1000: { sent: number | null; responded: number | null; interviews: number | null; offers: number | null };
   cost_usd: number | null; cost_eur: number | null; per_send_eur: number | null; per_interview_eur: number | null; cost_partial: boolean; unlinked?: boolean;
+  prepared: number; opened: number; sent_ever: number; sends_missing: number; conclusive: boolean;
 };
 type Payload = {
   rows: Row[];
-  totals: { sources: number; ingested: number; sent: number; responded: number; interviews: number; offers: number; cost_sources: number; cost_usd: number | null; cost_eur: number | null; per_send_eur: number | null; per_interview_eur: number | null; cost_partial: boolean };
+  totals: { sources: number; ingested: number; sent: number; responded: number; interviews: number; offers: number; cost_sources: number; cost_usd: number | null; cost_eur: number | null; per_send_eur: number | null; per_interview_eur: number | null; cost_partial: boolean; prepared: number; opened: number; sent_ever: number; conclusive_sources: number };
   basis: string; truncated: boolean;
+  attribution: { first_seen: string; shared_live: number | null };
   cost: { fx: { eur_per_usd: number; source: 'EUR_PER_USD' | 'BCE'; date: string | null } | null; unattributed_usd: number | null; error: string | null; note: string };
 };
 
@@ -104,6 +106,35 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
         </tbody>
       </table>
     </div>
+    <span className="eyebrow">EMBUDO POR FUENTE</span>
+    <p className="card-meta">Preparadas = candidaturas creadas (acumulado). Vistas = abrió el anuncio y aún no lo ha marcado como enviada (foto de ahora). Enviadas = tiene fecha de envío (acumulado). Respuestas = estado actual que declara ella. «Aún no concluyente» significa que todavía no hay envíos suficientes para comparar dos fuentes: faltan los que dice la celda.</p>
+    <div className="scorecard-scroll">
+      <table className="scorecard-table" data-testid="scorecard-funnel">
+        <caption>De la tarjeta al resultado. El umbral para comparar dos fuentes es de 30 envíos en cada una: es un mínimo declarado, no una prueba de significación.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Fuente</th>
+            <th scope="col" title="Candidaturas creadas para ofertas de esa fuente">Preparadas</th>
+            <th scope="col" title="Abrió el anuncio desde su tarjeta y aún no lo ha enviado">Vistas</th>
+            <th scope="col" title="Candidaturas con fecha de envío, aunque después se descartaran">Enviadas</th>
+            <th scope="col" title="Estado actual: la empresa ha respondido">Respuestas</th>
+            <th scope="col" title="Para comparar dos fuentes hacen falta 30 envíos en cada una">¿Se puede comparar?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.rows.filter(row => row.prepared > 0 || row.opened > 0 || row.sent_ever > 0).map(row => <tr key={`funnel-${row.source}`} className={row.unlinked ? 'is-unlinked' : undefined}>
+            <th scope="row">{row.source}</th>
+            <td>{row.prepared}</td>
+            <td>{row.opened}</td>
+            <td>{row.sent_ever}</td>
+            <td>{row.responded}</td>
+            <td>{row.conclusive ? 'Sí (≥30 envíos)' : `Aún no concluyente · faltan ${row.sends_missing} envíos`}</td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>
+    {!data.rows.some(row => row.prepared > 0 || row.opened > 0 || row.sent_ever > 0) && <p className="card-meta">Todavía no hay ninguna candidatura preparada: el embudo empezará en cuanto prepares la primera.</p>}
+    <p className="card-meta">Atribución: {data.attribution.first_seen}. {data.attribution.shared_live === null ? 'No se pudo contar cuántos anuncios vivos se vieron también en otra fuente.' : `${data.attribution.shared_live} de los anuncios vivos también estaban en otra fuente («Vista también en» en la oferta).`}</p>
     {!data.rows.length && <p className="card-meta">Todavía no hay candidaturas ni fuentes que medir.</p>}
     {data.cost.error && <p className="inline-hint" role="alert">{data.cost.error}</p>}
     <p className="card-meta">{data.cost.note}</p>

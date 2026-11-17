@@ -45,7 +45,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
   </div></div>;
 }
 
-type Match = { opportunity: { id: string; original_title: string; company: string; location: string; modality: string; compensation: string; source_url: string }; score: number; reasons: string[]; unknowns: string[] };
+type Match = { opportunity: { id: string; original_title: string; company: string; location: string; modality: string; compensation: string; source_url: string; also_seen?: string[] }; score: number; reasons: string[]; unknowns: string[] };
 // Ofertas aprobadas por el equipo que encajan con su perfil. Solo recomienda: el envío lo hace ella en la web de la oferta.
 function Matches({ refreshKey, onPrepared, onLost }: { refreshKey: number; onPrepared: () => void; onLost: () => void }) {
   const [msg, setMsg] = useState(''); const [busyId, setBusyId] = useState('');
@@ -60,6 +60,7 @@ function Matches({ refreshKey, onPrepared, onLost }: { refreshKey: number; onPre
         <div className="card-meta">{m.opportunity.location} · {m.opportunity.modality} · {m.opportunity.compensation}</div>
         {!!m.reasons.length && <div className="card-meta">Por qué: {m.reasons.join(' · ')}</div>}
         {!!m.unknowns.length && <div className="card-meta muted">No sabemos: {m.unknowns.join(' · ')}</div>}
+        {!!m.opportunity.also_seen?.length && <div className="card-meta">Vista también en: <strong>{m.opportunity.also_seen.join(' · ')}</strong> (mismo anuncio en otra fuente).</div>}
         <a href={m.opportunity.source_url} target="_blank" rel="noopener noreferrer">Ver el anuncio original</a> <button onClick={() => void prepare(m.opportunity.id)} disabled={busyId !== ''}>{busyId === m.opportunity.id ? <LoaderCircle size={14} className="spin" /> : null} Preparar candidatura</button></li>)}</ol>}
     {msg && <div className="auth-note" role="status">{msg}</div>}
   </section>;

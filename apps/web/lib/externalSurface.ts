@@ -67,6 +67,12 @@ export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
   // portal que Google atribuye (`via`, guardado en raw.site) y se declara el salto.
   const via = typeof o.raw?.site === 'string' ? o.raw.site.trim() : '';
   const sourceName = via && /(^|\.)google\./i.test(host) ? `${via} · vía Google Jobs` : host;
+  // Atribución honesta: `also_seen` guarda las OTRAS fuentes que publicaron el mismo anuncio
+  // (lo escribe `external_upsert` al encontrar la misma huella en otra fuente). La oferta se
+  // atribuye a la primera que la vio, y se dice dónde más estaba. Sin duplicados ni la propia fuente.
+  const alsoSeen = Array.isArray(o.also_seen)
+    ? [...new Set(o.also_seen.filter((s): s is string => typeof s === 'string' && s.trim() !== '' && s !== o.source))].slice(0, 8)
+    : [];
   return {
     id: `ext-${o.id}`, role, role_label: ROLE_LABELS[role], original_title: o.title, company: o.company || 'Empresa no indicada',
     // Aplicar sin rodeos: primero el enlace de candidatura que publica la fuente, después el anuncio.
@@ -76,7 +82,7 @@ export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
     compensation: o.salary || 'Importe no publicado', compensation_note: o.salary ? 'Tal como figura en el anuncio original.' : 'Pregunta por el fijo y las comisiones antes de avanzar.',
     modality: declared(o.raw).modality ?? 'Modalidad no indicada', location: o.location || 'Ubicación no indicada', language: 'Anuncio en español', experience: 'Experiencia no indicada', schedule: declared(o.raw).schedule ?? 'Jornada no indicada', contract: declared(o.raw).contract ?? 'Contrato no indicado',
     description: o.description || 'Consulta el anuncio original para ver las condiciones completas.',
-    published_at: o.posted_at, expires_at: o.expires_at, source_name: sourceName, source_url: o.url, starred: false, excellence_rank: null, is_selected: false,
+    published_at: o.posted_at, expires_at: o.expires_at, source_name: sourceName, source_url: o.url, also_seen: alsoSeen, starred: false, excellence_rank: null, is_selected: false,
   };
 }
 

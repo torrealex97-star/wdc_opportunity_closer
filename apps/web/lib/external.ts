@@ -261,6 +261,13 @@ export async function statsBySource(): Promise<SourceStat[] | null> {
   return stats.some(stat => stat === null) ? null : stats as SourceStat[];
 }
 
+// Anuncios vivos que además se vieron en otra fuente (`also_seen` no vacío). Es la medida de cuánta
+// atribución es «primera fuente que lo vio» y no exclusividad. `null` = no se pudo contar (hueco, no cero).
+export async function sharedLiveOffers(): Promise<number | null> {
+  const now = encodeURIComponent(new Date().toISOString());
+  return countExact([`org_id=eq.${ORG}`, `expires_at=gt.${now}`, 'also_seen=not.eq.%7B%7D']);
+}
+
 export async function recentRuns(limit = 8): Promise<Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }> | null> {
   const response = await serviceRest(`external_ingest_runs?org_id=eq.${ORG}&select=source,via,received,accepted,note,created_at&order=created_at.desc&limit=${limit}`);
   const rows = response.ok ? await response.json().catch(() => null) : null;

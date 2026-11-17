@@ -2,7 +2,10 @@
 // Es lo que convierte el tablero de la alumna en una señal de calidad del motor — y solo eso: aquí
 // no se retira nada. Piezas puras para poder medirlas sin base de datos; el lector vive en la ruta.
 
-export type AppStatusLite = { offer_ref: string; status: string };
+// Envíos mínimos por fuente para que comparar dos fuentes no sea comparar ruido. Es un umbral DECLARADO
+// (heurístico, no una prueba de significación): con menos, la diferencia entre dos tasas no es concluyente.
+export const MIN_SENDS_TO_COMPARE = 30;
+export type AppStatusLite = { offer_ref: string; status: string; created_at?: string | null; applied_at?: string | null };
 // Coste YA registrado (USD) por fuente y tipo de cambio para pasarlo a euros. Ausente = no se pudo leer:
 // todas las columnas de coste salen en `null` (—), nunca en 0.
 export type CostInput = {
@@ -32,6 +35,14 @@ export type SourceRow = {
   per_interview_eur: number | null;
   // El coste es un mínimo: alguna ejecución no informó importe.
   cost_partial: boolean;
+  // Embudo: preparadas = candidaturas creadas (acumulado); vistas = abrió el anuncio y aún no lo ha
+  // enviado (foto de ahora); enviadas_alguna_vez = tiene `applied_at` (acumulado).
+  prepared: number;
+  opened: number;
+  sent_ever: number;
+  // Cuántos envíos faltan para que esta fuente se pueda comparar con otra, y si ya se puede.
+  sends_missing: number;
+  conclusive: boolean;
   // Candidaturas cuya oferta ya no está en la tabla (borrada o caducada): se cuentan aparte en vez de
   // inventarles una fuente.
   unlinked?: boolean;
@@ -64,16 +75,22 @@ export function scorecard(
       source, ingested: ingested.get(source) ?? null, sent: 0, responded: 0, interviews: 0, offers: 0, rejected: 0,
       per_1000: { sent: null, responded: null, interviews: null, offers: null },
       cost_usd: null, cost_eur: null, per_send_eur: null, per_interview_eur: null, cost_partial: false,
+      prepared: 0, opened: 0, sent_ever: 0, sends_missing: MIN_SENDS_TO_COMPARE, conclusive: false,
     };
     rows.set(source, created);
     return created;
   };
 
   let unlinked = 0;
+  let unlinkedPrepared = 0, unlinkedSentEver = 0;
   for (const application of applications) {
     const source = sourcesOf.get(application.offer_ref);
-    if (!source) { unlinked += 1; continue; }
+    if (!source) { unlinked += 1; unlinkedPrepared += 1; if (application.applied_at) unlinkedSentEver += 1; continue; }
     const target = row(source);
+    // Toda candidatura existe porque ella la preparó; el embudo empieza aquí.
+    target.prepared += 1;
+    if (application.status === 'opened') target.opened += 1;
+    if (application.applied_at) target.sent_ever += 1;
     if ((SENT_STATUSES as readonly string[]).includes(application.status)) target.sent += 1;
     if (RESPONDED.includes(application.status)) target.responded += 1;
     if (INTERVIEW.includes(application.status)) target.interviews += 1;
@@ -97,6 +114,8 @@ export function scorecard(
       per_send_eur: cost_eur === null || item.sent === 0 ? null : money(cost_eur / item.sent),
       per_interview_eur: cost_eur === null || item.interviews === 0 ? null : money(cost_eur / item.interviews),
       cost_partial: costs?.partial.has(item.source) ?? false,
+      sends_missing: Math.max(0, MIN_SENDS_TO_COMPARE - item.sent_ever),
+      conclusive: item.sent_ever >= MIN_SENDS_TO_COMPARE,
       per_1000: {
         sent: rate(item.sent, item.ingested),
         responded: rate(item.responded, item.ingested),
@@ -111,7 +130,7 @@ export function scorecard(
     || b.sent - a.sent
     || (b.ingested ?? 0) - (a.ingested ?? 0)
     || a.source.localeCompare(b.source));
-  if (unlinked) out.push({ source: 'sin fuente localizable', ingested: null, sent: unlinked, responded: 0, interviews: 0, offers: 0, rejected: 0, per_1000: { sent: null, responded: null, interviews: null, offers: null }, cost_usd: null, cost_eur: null, per_send_eur: null, per_interview_eur: null, cost_partial: false, unlinked: true });
+  if (unlinked) out.push({ source: 'sin fuente localizable', ingested: null, sent: unlinked, responded: 0, interviews: 0, offers: 0, rejected: 0, per_1000: { sent: null, responded: null, interviews: null, offers: null }, cost_usd: null, cost_eur: null, per_send_eur: null, per_interview_eur: null, cost_partial: false, prepared: unlinkedPrepared, opened: 0, sent_ever: unlinkedSentEver, sends_missing: 0, conclusive: false, unlinked: true });
   return out;
 }
 
@@ -135,5 +154,7 @@ export function scorecardTotals(rows: SourceRow[]) {
     per_send_eur: cost_eur === null || sent === 0 ? null : money(cost_eur / sent),
     per_interview_eur: cost_eur === null || interviews === 0 ? null : money(cost_eur / interviews),
     cost_partial: rows.some(row => row.cost_partial),
+    prepared: sum(row => row.prepared), opened: sum(row => row.opened), sent_ever: sum(row => row.sent_ever),
+    conclusive_sources: linked.filter(row => row.conclusive).length,
   };
 }

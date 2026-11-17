@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { authenticate, withCookies } from '../../../../lib/adminAuth';
-import { statsBySource } from '../../../../lib/external';
+import { sharedLiveOffers, statsBySource } from '../../../../lib/external';
 import { ORG } from '../../../../lib/external';
 import { pagedRest, serviceRest } from '../../../../lib/supabaseAuth';
 import { scorecard, scorecardTotals, type AppStatusLite } from '../../../../lib/sourceScorecard';
@@ -39,13 +39,16 @@ export async function GET(request: NextRequest) {
   const auth = await authenticate(request);
   if (!auth.ok) return Response.json({ detail: auth.detail }, { status: auth.status });
 
-  const [applications, stats, actorsResponse, runs, notes, fx] = await Promise.all([
-    pagedRest<AppStatusLite>(`student_applications?org_id=eq.${ORG}&select=offer_ref,status`, 'id.asc'),
+  const [applications, stats, actorsResponse, runs, notes, fx, shared] = await Promise.all([
+    // `created_at` (preparada) y `applied_at` (enviada) sostienen el embudo; sin ellos no se puede separar
+    // «enviada alguna vez» de «enviada ahora».
+    pagedRest<AppStatusLite>(`student_applications?org_id=eq.${ORG}&select=offer_ref,status,created_at,applied_at`, 'id.asc'),
     statsBySource(),
     serviceRest(`apify_actors?org_id=eq.${ORG}&select=id,source`).catch(() => null),
     pagedRest<RunLite>(`apify_runs?org_id=eq.${ORG}&select=actor_id,cost_usd,status`, 'id.asc').catch(() => null),
     pagedRest<NoteLite>(`external_ingest_runs?org_id=eq.${ORG}&select=source,note&note=like.${encodeURIComponent('*respaldo SerpApi*')}`, 'id.asc').catch(() => null),
     eurRate().catch(() => null),
+    sharedLiveOffers().catch(() => null),
   ]);
   if (!applications || !stats) return Response.json({ detail: 'No se pudo cruzar el tablero con las fuentes ahora mismo.' }, { status: 503 });
 
@@ -67,6 +70,9 @@ export async function GET(request: NextRequest) {
     totals,
     // Se declara qué cuenta el denominador: anuncios VIVOS (sin caducar) por fuente, no el histórico.
     basis: 'anuncios vivos por fuente',
+    // Atribución: cada anuncio cuenta para la fuente que lo vio primero; `shared_live` dice cuántos de los
+    // vivos también estaban en otra fuente (`also_seen`). Sin ese dato, la exclusividad no se presume.
+    attribution: { first_seen: 'la fuente que vio el anuncio primero', shared_live: shared },
     cost: {
       recorded_currency: 'USD',
       display_currency: 'EUR',

@@ -2,7 +2,7 @@
 // ofertas sin fuente localizable aparte). Sin red ni base de datos.
 // Uso: node --experimental-strip-types tests/source-scorecard.mjs
 import assert from 'node:assert/strict';
-import { scorecard, scorecardTotals } from '../apps/web/lib/sourceScorecard.ts';
+import { scorecard, scorecardTotals, MIN_SENDS_TO_COMPARE } from '../apps/web/lib/sourceScorecard.ts';
 import { parseSerpapiCost, recordedCosts } from '../apps/web/lib/sourceCost.ts';
 import { eurRate, __testFx } from '../apps/web/lib/fx.ts';
 
@@ -90,6 +90,42 @@ assert.equal(noFx.get('jobtoday').cost_usd, 0.5);
 assert.equal(noFx.get('jobtoday').cost_eur, null);
 assert.equal(noFx.get('jobtoday').per_send_eur, null);
 assert.equal(scorecardTotals([...noFx.values()]).cost_eur, null);
+
+// ── Embudo: preparada → vista (abrió) → enviada → respuesta, y cuándo se puede comparar ─────────
+const funnelApps = [
+  { offer_ref: 'ext-1', status: 'opened', created_at: '2026-11-01T00:00:00Z', applied_at: null },
+  { offer_ref: 'ext-2', status: 'applied', created_at: '2026-11-02T00:00:00Z', applied_at: '2026-11-03T00:00:00Z' },
+  { offer_ref: 'ext-3', status: 'responded', created_at: '2026-11-04T00:00:00Z', applied_at: '2026-11-05T00:00:00Z' },
+  { offer_ref: 'ext-4', status: 'draft', created_at: '2026-11-06T00:00:00Z', applied_at: null },
+];
+const funnel = new Map(scorecard(funnelApps, sources, ingested).map(row => [row.source, row]));
+// jobtoday (ext-1 y ext-2): una sigue «vista» y otra llegó a enviarse.
+assert.equal(funnel.get('jobtoday').prepared, 2);
+assert.equal(funnel.get('jobtoday').opened, 1);
+assert.equal(funnel.get('jobtoday').sent_ever, 1);
+assert.equal(funnel.get('jobtoday').responded, 0);
+assert.equal(funnel.get('jobtoday').conclusive, false);
+assert.equal(funnel.get('jobtoday').sends_missing, MIN_SENDS_TO_COMPARE - 1);
+// infojobs (ext-3 y ext-4): una respondida y una en borrador; ninguna «vista» ahora.
+assert.equal(funnel.get('infojobs').prepared, 2);
+assert.equal(funnel.get('infojobs').opened, 0);
+assert.equal(funnel.get('infojobs').sent_ever, 1);
+assert.equal(funnel.get('infojobs').responded, 1);
+assert.equal(funnel.get('infojobs').sends_missing, MIN_SENDS_TO_COMPARE - 1);
+assert.equal(funnel.get('infojobs').conclusive, false);
+const funnelTotals = scorecardTotals([...funnel.values()]);
+assert.equal(funnelTotals.prepared, 4);
+assert.equal(funnelTotals.opened, 1);
+assert.equal(funnelTotals.sent_ever, 2);
+assert.equal(funnelTotals.conclusive_sources, 0);
+// Con 30 envíos acumulados la fuente ya se puede comparar; con 29, todavía no.
+const sent = (n) => Array.from({ length: n }, () => ({ offer_ref: 'ext-1', status: 'applied', created_at: '2026-10-01T00:00:00Z', applied_at: '2026-10-02T00:00:00Z' }));
+const almost = new Map(scorecard(sent(MIN_SENDS_TO_COMPARE - 1), sources, ingested).map(row => [row.source, row]));
+assert.equal(almost.get('jobtoday').conclusive, false);
+assert.equal(almost.get('jobtoday').sends_missing, 1);
+const enough = new Map(scorecard(sent(MIN_SENDS_TO_COMPARE), sources, ingested).map(row => [row.source, row]));
+assert.equal(enough.get('jobtoday').conclusive, true);
+assert.equal(enough.get('jobtoday').sends_missing, 0);
 
 // ── Lectura del coste registrado (Apify + nota del respaldo) ────────────────────────────────────
 assert.equal(parseSerpapiCost('respaldo SerpApi · 1 búsqueda(s), 0.025 USD'), 0.025);

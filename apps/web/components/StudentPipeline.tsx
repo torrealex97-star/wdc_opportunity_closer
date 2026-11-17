@@ -83,12 +83,15 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
               // Todos los pasos que acepta el servidor salvo «anuncio abierto» (se marca solo al abrir el
               // enlace y como botón solo añade ruido). Descartada → borrador sigue disponible: recuperar.
               const moves = NEXT[app.status].filter(to => to !== 'opened');
+              // Abrir el anuncio SÍ deja huella: es el primer paso del embudo (vista). Solo desde el borrador:
+              // una tarjeta ya enviada no retrocede. El enlace sigue abriendo en otra pestaña.
+              const markOpened = () => { if (app.status === 'draft') void patch(app.id, { status: 'opened' }, 'Anuncio abierto.'); };
               return <article className="pipeline-card" key={app.id} data-testid="application">
                 <p className="pipeline-company">{app.offer_company ?? 'Empresa no indicada'}</p>
                 <strong>{app.offer_title}</strong>
                 <div className="pipeline-meta"><span className="status">{LABELS[app.status]}</span><span className="pipeline-when">{when(app.updated_at)}</span></div>
                 <div className="pipeline-actions">
-                  <a href={app.offer_url} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Anuncio</a>
+                  <a href={app.offer_url} target="_blank" rel="noopener noreferrer" onClick={markOpened}><ExternalLink size={14} /> Anuncio</a>
                   <a href="/?tab=practica"><MessageSquare size={14} /> Practicar</a>
                 </div>
                 {!!moves.length && <div className="pipeline-moves">
