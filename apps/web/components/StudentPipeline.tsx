@@ -7,9 +7,9 @@ import ApplyAssistant from './ApplyAssistant';
 // Tablero (pipeline) de candidaturas: todas sus ofertas en columnas por etapa real del proceso.
 // La alumna mueve la tarjeta cuando la empresa contesta (nada se detecta solo) y la app nunca envía
 // ni rellena nada. Los estados son los del servidor: aquí solo se ofrecen movimientos permitidos.
-type Application = { id: string; offer_ref: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; cover_message: string | null; notes: string | null; updated_at: string };
+type Application = { id: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; notes: string | null; updated_at: string };
 type CopyField = { key: string; label: string; value: string };
-type Payload = { applications: Application[]; truncated?: boolean; copy: CopyField[] };
+type Payload = { applications: Application[]; copy: CopyField[] };
 
 const when = (value: string) => {
   const time = Date.parse(value);
@@ -107,9 +107,5 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
       <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 6 }}>{data.copy.map(field => <li key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', justifyContent: 'space-between' }}>
         <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}><span className="card-meta" style={{ margin: 0 }}>{field.label}: </span>{field.value.length > 120 ? `${field.value.slice(0, 120)}…` : field.value}</span>
         <button onClick={() => void copyIt(field.value, field.label)} aria-label={`Copiar ${field.label}`}><Copy size={14} /></button></li>)}</ul></details>}
-    <details className="search-panel" style={{ marginTop: 12 }}><summary><strong>Asistente sin candidatura concreta</strong></summary>
-      <p className="card-meta">¿Tienes las preguntas de una empresa que aún no está en tu tablero? Pégalas aquí.</p>
-      <ApplyAssistant onLost={onLost} />
-    </details>
   </section>;
 }

@@ -7,7 +7,6 @@
 
 export const MAX_QUESTIONS = 10;
 export const MAX_QUESTION_CHARS = 400;
-export const MAX_TOTAL_CHARS = 3500;
 export const MAX_ANSWER_CHARS = 1200;
 
 export type AnswerInput = {
@@ -25,7 +24,6 @@ export type SuggestedAnswer = { question: string; answer: string; why: string; m
 export function parseQuestions(raw: unknown): { questions: string[]; error: string | null } {
   if (typeof raw !== 'string') return { questions: [], error: 'Escribe las preguntas de la empresa.' };
   const text = raw.replace(/\r/g, '');
-  if (text.length > MAX_TOTAL_CHARS) return { questions: [], error: `Son demasiado largas: recorta a ${MAX_TOTAL_CHARS} caracteres.` };
   const cleaned = text
     .split('\n')
     .map(line => line.replace(/^\s*(?:[-*•·]|\d+[.)]|[a-z][.)])\s*/i, '').trim())
@@ -160,19 +158,12 @@ export function cleanAnswers(content: string, questions: string[]): SuggestedAns
       missing: Array.isArray(row.missing) ? row.missing.map(item => text(item, 200)).filter(Boolean).slice(0, 4) : [],
     });
   }
-  // Se recorren las preguntas en su orden y solo se acepta la que coincide por texto (o la única que
-  // quede, para no perder respuestas cuando el modelo abrevia la pregunta).
+  // Se recorren las preguntas en su orden y solo se acepta la que coincide por texto: una respuesta
+  // que no corresponde a ninguna pregunta no se muestra.
   const out: SuggestedAnswer[] = [];
-  const unused = new Set(byQuestion.keys());
   for (const question of questions) {
-    const exact = byQuestion.get(question.toLowerCase());
-    let found: SuggestedAnswer | undefined = exact;
-    if (!found && unused.size === 1) { const [only] = [...unused]; found = byQuestion.get(only); }
-    if (!found) continue;
-    unused.delete(found.question.toLowerCase());
-    out.push({ ...found, question });
+    const found = byQuestion.get(question.toLowerCase());
+    if (found) out.push({ ...found, question });
   }
-  // Se devuelven las respuestas que SÍ corresponden, en el orden de sus preguntas. Si el modelo
-  // dejó alguna fuera, la vista la marca como pendiente en vez de inventarla.
   return out.length ? out : null;
 }

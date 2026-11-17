@@ -9,8 +9,7 @@ type Answer = { question: string; answer: string; why: string; missing: string[]
 
 export default function ApplyAssistant({ applicationId, offerTitle, onLost }: { applicationId?: string; offerTitle?: string; onLost: () => void }) {
   const [questions, setQuestions] = useState('');
-  const [includeProfile, setIncludeProfile] = useState(false);
-  const [consent, setConsent] = useState(false);
+  const [attach, setAttach] = useState(false);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
   const [pending, setPending] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -23,7 +22,7 @@ export default function ApplyAssistant({ applicationId, offerTitle, onLost }: { 
     try {
       const response = await fetch('/api/student/answer-assistant', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questions, include_profile: includeProfile && consent, application_id: applicationId }),
+        body: JSON.stringify({ questions, include_profile: attach, application_id: applicationId }),
       });
       const data = await response.json().catch(() => ({})) as { detail?: string; answers?: Answer[]; pending?: string[] };
       if (!response.ok) {
@@ -44,20 +43,16 @@ export default function ApplyAssistant({ applicationId, offerTitle, onLost }: { 
   return <div className="assistant-answers" data-testid="answer-assistant">
     <form onSubmit={ask}>
       <label htmlFor={`ask-${applicationId ?? 'libre'}`}>Pega aquí las preguntas de la empresa{offerTitle ? ` para ${offerTitle}` : ''}
-        <textarea id={`ask-${applicationId ?? 'libre'}`} rows={5} maxLength={3500} value={questions}
+        <textarea id={`ask-${applicationId ?? 'libre'}`} rows={5} maxLength={4000} value={questions}
           onChange={event => setQuestions(event.target.value)} placeholder={'Una por línea. Ej.:\n¿Por qué quieres trabajar con nosotros?\nCuéntanos tu mayor logro en ventas.'} />
       </label>
       <label className="check-label" style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <input type="checkbox" checked={includeProfile} onChange={event => { setIncludeProfile(event.target.checked); if (!event.target.checked) setConsent(false); }} />
-        <span>Adjuntar lo que ya escribí en mi formulario (experiencia, herramientas, idiomas, motivación). Nunca se envía mi email, teléfono, CV ni LinkedIn.</span>
+        <input type="checkbox" checked={attach} onChange={event => setAttach(event.target.checked)} />
+        <span>Adjuntar lo que ya escribí en mi formulario a ESTA consulta (experiencia, herramientas, idiomas, motivación). Autorizo el envío al proveedor de IA solo con marcarlo; nunca se envía mi email, teléfono, CV ni LinkedIn. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a>.</span>
       </label>
-      {includeProfile && <label className="check-label" style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} />
-        <span>Autorizo que en ESTA consulta mis datos del formulario se envíen al proveedor de IA para redactar las respuestas. Puedo desmarcarlo cuando quiera. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Política de privacidad</a>.</span>
-      </label>}
       {error && <div className="alert error" role="alert"><span>{error}</span></div>}
       {notice && <div className="auth-note" role="status">{notice}</div>}
-      <button className="primary" disabled={busy || !questions.trim() || (includeProfile && !consent)}>
+      <button className="primary" disabled={busy || !questions.trim()}>
         {busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />} Preparar respuestas
       </button>
     </form>
