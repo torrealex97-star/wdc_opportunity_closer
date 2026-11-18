@@ -209,7 +209,16 @@ export function startMocks({ authPort, enginePort }) {
     // APIs oficiales simuladas: InfoJobs (Basic), Adzuna (app_id/app_key) y Jooble (clave en la ruta).
     if (url.pathname === '/api/9/offer') {
       if (req.headers.authorization !== 'Basic ' + Buffer.from('cid:good-key-1234').toString('base64')) return send(res, 401, {});
-      return send(res, 200, { offers: [{ id: 'ij-1', title: 'Closer de ventas high ticket', author: { name: 'Acme' }, city: 'Madrid', province: { value: 'Madrid' }, link: 'https://www.infojobs.net/oferta-ij-1', salaryDescription: '30.000 €/año', published: '2026-10-15T08:00:00Z' }] });
+      return send(res, 200, { currentPage: 1, totalPages: 1, offers: [{ id: 'ij-1', title: 'Closer de ventas high ticket', author: { name: 'Acme' }, city: 'Madrid', province: { value: 'Madrid' }, link: 'https://www.infojobs.net/oferta-ij-1', salaryDescription: '30.000 €/año', teleworking: { key: 'solo-teletrabajo', value: 'Solo teletrabajo' }, published: '2026-10-15T08:00:00Z' }] });
+    }
+    // Ficha de la oferta: solo la piden las que ya puntúan alto (el cuerpo y el salario con periodo viven aquí).
+    if (url.pathname.startsWith('/api/9/offer/')) {
+      if (req.headers.authorization !== 'Basic ' + Buffer.from('cid:good-key-1234').toString('base64')) return send(res, 401, {});
+      return send(res, 200, {
+        id: url.pathname.slice('/api/9/offer/'.length), description: 'Buscamos closer con experiencia en ventas high ticket para el equipo comercial en España.',
+        salaryMin: { amount: 30000, amountValue: '30.000 €', periodValue: 'Bruto/año' }, salaryMax: { amount: 45000, amountValue: '45.000 €', periodValue: 'Bruto/año' },
+        teleworking: { key: 'solo-teletrabajo', value: 'Solo teletrabajo' },
+      });
     }
     if (url.pathname === '/v1/api/jobs/es/search/1') {
       if (url.searchParams.get('app_key') !== 'good-key-1234') return send(res, 401, {});
