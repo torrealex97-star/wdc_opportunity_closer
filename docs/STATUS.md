@@ -1,5 +1,23 @@
 # Estado
 
+## «Ejecutivo comercial» deja de tragarse otros oficios y no gasta publicación (sesión 217) — 2026-11-18
+
+- **Petición del propietario**: afinar la familia `account_executive` para que deje de clasificar arquitectos, analistas, atención al cliente y administrativos; dejar de gastar presupuesto de publicación en AE genérico; medir antes cuántas closers se ganan con cada cambio.
+- **Medido antes de tocar código, sobre las 1.543 publicadas como AE** (payload de producción, clasificador real):
+
+  | Variante | Fuera del perfil | Closers ganados |
+  |---|---|---|
+  | V1 · AE solo desde el título (sin respaldo por cuerpo) | 128 | 0 |
+  | V3 · señal comercial en el título + cuerpo | 46 | 1 (falso positivo: «Recepcionista Comercial») |
+  | **V5 · señal + exclusión por oficio + 15 rescates (la aplicada)** | **77 (5,0 %)** | **0** |
+
+  La conclusión honesta: afinar el vocabulario **no gana closers** — las 3 únicas AE con palabras de cierre ya eran closer por orden de evaluación—; lo que gana es precisión (77 tarjetas falsas menos) y presupuesto. V1 se descartó porque se llevaba títulos de venta reales («Ejecutivo/a de Ventas – Copiapó», «Field Sales», «Sales Assistant»).
+- **Qué se aplicó en [classifyRole](../sites/engine/worker.js)**: (1) un título que nombra otro oficio —arquitecto, analista, administrativo, atención al cliente, recepción, ingeniero, desarrollador de software— **no tiene perfil comercial**, diga lo que diga el cuerpo; se bloquea el título entero, no solo AE (así «Recepcionista Comercial» deja de colarse como closer por el cuerpo); (2) la familia AE **no nace solo del cuerpo**: exige señal comercial en el título (`sales`, `ventas`, `comercial`, `commercial`, `account`, `business development`); (3) 15 rescates medidos para no perder venta real: `ejecutivo/a de ventas`, `dependiente/a`, `agente de seguros`, `mediador de seguros`, `desarrollo de negocio(s)`, `captacion de leads`, `sales partner`, `field sales`, `consultor/executivo de vendas`, `gerente de contas`, `kae`. `developer` no se excluye: «Business Developer» es cierre.
+- **Publicación**: en la activación, un AE se salta con motivo declarado («no gasta publicación») y no se escribe ni se verifica nada; queda en su estado y se publica con `publish_account_executive: true`. Mando y SDR conservan su publicación porque tienen selector propio.
+- **Medido en el motor desplegado (verified, `e1df7833-82eb-415b-9ed1-fcb29295b97b`, plan en seco `market: any`)**: 222 ofertas en la ventana; **45 AE saltados** sin gastar publicación (≈ 45 verificaciones y ≈ 270 escrituras no gastadas en esa pasada); publicables 21 —5 setter, 2 cold caller, 5 mando, 9 SDR—, **0 closers** (el pool no tiene ninguno ahora mismo) y 177 retiradas por la puerta determinista.
+- **Probado (tested)**: prueba nueva [tests/engine/aefamily.mjs](../tests/engine/aefamily.mjs) —16 títulos de otro oficio dan `null`, los rescates conservan familia, AE sin señal en el título no nace del cuerpo, el AE del pool se salta sin tocar la base, el opt-in lo publica y un arquitecto se retira como «sin perfil»—; `roles`, `terms`, `latam`, `sources`, `discards`, `activate`, `status`, `surfacewindow`, `rankorder` y `bucket` en verde.
+- **Límites**: las 1.543 AE ya publicadas siguen publicadas y visibles solo con opt-in; no se retiran (no fue pedido y es escritura masiva). El título bloqueado tampoco entra en `management`: «Country Director DACH» o «Jefe/a de ventas» con cuerpo genérico se quedan sin familia si su título no está en el vocabulario de mando — siguiente afinado, medido ya en 8 títulos. Reversión: `wrangler rollback` a `ca2c7441`.
+
 ## La ventana de alumna sirve lo publicado, no las 800 entradas más nuevas (sesión 216) — 2026-11-18
 
 - **Petición del propietario**: tras el arreglo del orden, abrir la ventana de 800 para que las 1.852 publicadas que quedaban fuera puedan servirse, midiendo el coste de la consulta por petición y con un tope por fuente para no llenar la lista de teleoperadores.

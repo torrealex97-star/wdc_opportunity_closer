@@ -2033,6 +2033,15 @@ async function handleAdminActivate(request, env) {
     // Un payload que no se puede leer no se arregla desde una cola humana: se retira y se declara.
     if (!p) { reject(row.opportunity_id, 'payload ilegible'); continue; }
     if (!derivedRole) { reject(row.opportunity_id, 'sin perfil comercial reconocible'); continue; }
+    // Presupuesto de publicación (decisión del propietario, 2026-11-18): la familia genérica AE
+    // no se publica sola. Cada publicación cuesta ~6 escrituras y una verificación de enlace, y
+    // la vista de alumna no la sirve salvo opt-in. Queda en su estado y se publica con
+    // `publish_account_executive: true` si el operador la quiere. Mando y SDR conservan su
+    // publicación: tienen selector propio.
+    if (derivedRole === 'account_executive' && body.publish_account_executive !== true) {
+      skip('ejecutivo comercial genérico: no gasta publicación (opción publish_account_executive)');
+      continue;
+    }
     if (role && derivedRole !== role) { skip(`perfil ${derivedRole} distinto del pedido (${role})`); continue; }
     if (market === 'ES' && marketRejects(p, 'ES')) { reject(row.opportunity_id, 'sin señal de mercado España'); continue; }
     // Sin texto no se puede comprobar el idioma y una persona no puede arreglarlo: se retira en vez
@@ -2671,6 +2680,13 @@ const ROLE_KEYWORDS = {
     'business development manager',
     'sales account executive', 'senior sales executive', 'remote sales consultant',
     'high-ticket sales consultant', 'high ticket sales consultant',
+    // Rescates medidos (2026-11-18): títulos de venta real que se quedaban sin familia al exigir
+    // señal comercial en el título, por la forma con barra o por faltar la variante.
+    'ejecutivo/a de ventas', 'dependiente', 'dependienta', 'dependiente/a',
+    'agente de seguros', 'mediador de seguros', 'mediadora de seguros',
+    'desarrollo de negocio', 'desarrollo de negocios', 'captacion de leads',
+    'sales partner', 'field sales', 'consultor de vendas',
+    'executivo de vendas', 'gerente de contas', 'kae',
   ],
   sdr: ['sdr', 'sales development', 'sales development representative'],
 };
@@ -11769,6 +11785,18 @@ const BODY_AMBIGUOUS_KEYWORDS = new Set(['closer']);
 // Desarrollo Comercial» salía closer (la familia se evalúa primero) y «Asesor Admisiones –
 // Ejecutivo Comercial» también, que es justo lo que la alumna ve como «esto no es un closer».
 const WEAK_TITLE_KEYWORDS = new Set(['admisiones']);
+// Afinar la familia `account_executive` (medido 2026-11-18 sobre las 1.534 AE publicadas):
+// 1) un título de OTRO oficio no pertenece a ninguna familia comercial, aunque su cuerpo mencione
+//    «sales» o «comercial» — arquitectos, analistas, administrativos, atención al cliente,
+//    recepción, ingenieros, desarrolladores. Bloquea el título entero, no solo AE: «Recepcionista
+//    Comercial» entraba como closer por el cuerpo.
+// 2) la familia genérica AE no puede nacer SOLO del cuerpo: exige una señal comercial en el título
+//    (`sales`, `ventas`, `comercial`, `account`, `business development`). Sin esto, cualquier
+//    anuncio que mencionara «clientes» o «ventas» acababa en AE.
+const AE_TITLE_SIGNAL = /\b(?:sales|ventas?|comercial|commercial|account|business development)\b/;
+const AE_TITLE_EXCLUDES = /\b(?:architect|arquitect[oa]|analyst|analista|product owner|engineer|ingenier[oa]|software developer|desarrollador de software|desarrollador web|administrativ[oa]|administracion|administrative|atencion al cliente|atencion al publico|servicio al cliente|recepcionista|recepcion|customer service|customer support|accounts receivable)\b/;
+function nonSalesTitle(title) { return AE_TITLE_EXCLUDES.test(title); }
+
 function classifyRole(p, text) {
   // Determinista y con la misma prioridad que presentation.py: primero el título de toda
   // la vida, después la evidencia en el texto de la oferta; nunca se inventa familia.
@@ -11777,6 +11805,8 @@ function classifyRole(p, text) {
   // clasificarse como setter solo por el orden de evaluación.
   const title = fold(p.title ?? '');
   const body = String(text ?? '');
+  // Un título que nombra otro oficio no tiene perfil comercial, diga lo que diga el cuerpo.
+  if (nonSalesTitle(title)) return null;
   // Primero las palabras de rol; el vertical solo decide si el título no dice nada más.
   for (const role of ROLE_EVAL_ORDER) {
     if (ROLE_KEYWORDS[role].some(k => !WEAK_TITLE_KEYWORDS.has(k) && hasWord(title, k))) return role;
@@ -11785,6 +11815,7 @@ function classifyRole(p, text) {
     if (ROLE_KEYWORDS[role].some(k => hasWord(title, k))) return role;
   }
   for (const role of ROLE_EVAL_ORDER) {
+    if (role === 'account_executive' && !AE_TITLE_SIGNAL.test(title)) continue;
     if (ROLE_KEYWORDS[role].some(k => !BODY_AMBIGUOUS_KEYWORDS.has(k) && hasWord(body, k))) return role;
   }
   return null;
