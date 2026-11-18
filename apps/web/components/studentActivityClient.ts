@@ -3,7 +3,7 @@
 export type ActivityBody =
   | { kind: 'training_review'; ref: string; detail: { met: number; total: number } }
   | { kind: 'training_exam'; ref: 'final'; detail: { answers: Record<string, string> } }
-  | { kind: 'practice'; ref: string; score: number; detail?: { axes?: Record<string, number>; difficulty?: string; mode?: 'texto' | 'voz' } };
+  | { kind: 'practice'; ref: string; score: number; detail?: { axes?: Record<string, number>; difficulty?: string; mode?: 'texto' | 'voz'; duration_s?: number } };
 
 export async function logActivity(body: ActivityBody): Promise<{ saved: boolean; status: number }> {
   try {

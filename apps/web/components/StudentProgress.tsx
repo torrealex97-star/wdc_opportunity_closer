@@ -22,6 +22,15 @@ const number = new Intl.NumberFormat('es');
 const dateFmt = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' });
 const weekLabel = (iso: string) => dateFmt.format(new Date(`${iso}T12:00:00Z`));
 const dash = (value: number | null, suffix = '') => value === null ? '—' : `${number.format(value)}${suffix}`;
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
+// Un eje puede existir en las dos salas («objeciones»): se pinta por sala para no mezclar medias.
+function AxisGroup({ title, rows }: { title: string; rows: Progress['axes'] }) {
+  if (!rows.length) return null;
+  return <section className="axis-room"><h3>{title}</h3><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Eje</th><th scope="col">Nota</th></tr></thead><tbody>
+    {rows.map(a => <tr key={`${a.track ?? 'sin'}:${a.axis}`}><th scope="row">{AXIS_LABELS[a.axis] ?? a.axis}</th><td><div className="meter" role="progressbar" aria-label={`${AXIS_LABELS[a.axis] ?? a.axis} en ${title.toLowerCase()}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={a.avg}><span style={{ width: `${a.avg}%` }} /></div><span className="num">{a.avg}/100</span></td></tr>)}
+  </tbody></table></div></section>;
+}
 
 // Barras verticales con base en 0; una semana sin prácticas se queda sin barra y con «—» (no es un cero).
 function WeeklyBars({ weekly }: { weekly: Progress['weekly'] }) {
@@ -110,8 +119,12 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
       <article className="progress-card"><h2>Evolución semanal</h2><p className="card-meta">Nota media de tus prácticas por semana (de lunes a domingo, hora de Madrid). Una semana sin prácticas se queda en «—».</p>
         <WeeklyBars weekly={p.weekly} />
         <details><summary>Ver como tabla</summary><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Semana del</th><th scope="col" className="num">Prácticas</th><th scope="col" className="num">Nota media</th></tr></thead><tbody>{p.weekly.map(w => <tr key={w.week}><th scope="row">{weekLabel(w.week)}</th><td className="num">{w.count}</td><td className="num">{dash(w.avg)}</td></tr>)}</tbody></table></div></details></article>
-      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en las prácticas de los últimos {p.days} días.</p>
-        {p.axes.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Eje</th><th scope="col">Nota</th></tr></thead><tbody>{p.axes.map(a => <tr key={a.axis}><th scope="row">{AXIS_LABELS[a.axis] ?? a.axis}</th><td><div className="meter" role="progressbar" aria-label={AXIS_LABELS[a.axis] ?? a.axis} aria-valuemin={0} aria-valuemax={100} aria-valuenow={a.avg}><span style={{ width: `${a.avg}%` }} /></div><span className="num">{a.avg}/100</span></td></tr>)}</tbody></table></div>
+      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en los últimos {p.days} días. La llamada y la entrevista van por separado: un eje con el mismo nombre no mezcla las dos salas.</p>
+        {p.axes.length ? <div className="axis-rooms">
+          <AxisGroup title="Llamada" rows={p.axes.filter(a => a.track === 'llamada')} />
+          <AxisGroup title="Entrevista" rows={p.axes.filter(a => a.track === 'entrevista')} />
+          <AxisGroup title="Prácticas anteriores sin sala" rows={p.axes.filter(a => a.track === null)} />
+        </div>
           : <p className="card-meta">— Todavía no hay prácticas puntuadas por eje en este periodo.</p>}</article>
       <article className="progress-card"><h2>Formación</h2><p className="card-meta">{p.lifetime.training.modules.length} de {REVIEW_REFS.length} módulos repasados (en total, no solo este periodo).</p>
         <ul className="plain-list">{REVIEW_REFS.map(ref => { const done = p.lifetime.training.modules.includes(ref); return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Repasado' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>; })}</ul>
@@ -133,7 +146,7 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
     <h2 className="progress-heading">Actividad reciente</h2>
     {p.recent.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Qué</th><th scope="col">Detalle</th><th scope="col" className="num">Nota</th></tr></thead><tbody>{p.recent.map((r, i) => <tr key={r.id ?? i}>
       <td>{dateFmt.format(new Date(r.created_at))}</td><td>{KIND_LABELS[r.kind] ?? r.kind}</td>
-      <td>{r.kind === 'training_review' ? `${REVIEW_LABELS[r.ref ?? ''] ?? r.ref}: ${r.detail.met}/${r.detail.total} criterios` : r.kind === 'training_exam' ? (r.detail.passed ? 'Superado' : 'No superado') : (r.kind === 'practice' ? scenarioById(r.ref ?? '')?.title : null) ?? r.ref ?? '—'}</td>
+      <td>{r.kind === 'training_review' ? `${REVIEW_LABELS[r.ref ?? ''] ?? r.ref}: ${r.detail.met}/${r.detail.total} criterios` : r.kind === 'training_exam' ? (r.detail.passed ? 'Superado' : 'No superado') : r.kind === 'practice' ? `${scenarioById(r.ref ?? '')?.title ?? r.ref ?? 'Práctica'}${r.detail.mode === 'voz' ? ' · por voz' : ''}${typeof r.detail.duration_s === 'number' ? ` · ${clock(r.detail.duration_s)}` : ''}` : null}</td>
       <td className="num">{dash(r.score)}</td></tr>)}</tbody></table></div>
       : <p className="card-meta">— Nada en los últimos {p.days} días.</p>}
   </>;

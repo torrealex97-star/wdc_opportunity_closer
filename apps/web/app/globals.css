@@ -523,6 +523,7 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .progress-card{border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet);padding:20px;min-width:0}
 .progress-card h2,.progress-heading{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px}.progress-heading{margin:8px 0 12px}
 .progress-card details{margin-top:12px;font-size:12px}.progress-card summary{cursor:pointer;color:var(--accent)}
+.axis-rooms{display:grid;gap:16px;margin-top:10px}.axis-room h3{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--secondary);margin:0 0 6px}
 .meter{height:6px;min-width:80px;background:var(--inset);border-radius:99px;overflow:hidden;margin-bottom:4px}.meter>span{display:block;height:100%;background:var(--accent)}
 .plain-list{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px;font-size:13px}
 .achievements{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}

@@ -28,6 +28,11 @@ assert.equal(checkActivity({ kind: 'training_exam', ref: 'final', detail: { answ
 assert.equal(checkActivity({ kind: 'practice', ref: 'precio', detail: {} }).ok, false, 'la práctica exige nota');
 const practice = checkActivity({ kind: 'practice', ref: 'precio', score: 70, detail: { axes: { empatia: 80, 'x y': 5, cierre: 999 }, difficulty: 'Media', mode: 'voz', extra: 'no' } });
 assert.ok(practice.ok); assert.deepEqual(practice.value.detail, { axes: { empatia: 80 }, difficulty: 'Media', mode: 'voz' }, 'solo ejes válidos y campos conocidos');
+// Modo real (texto o voz) y duración de la práctica, no un «texto» fijo ni un cero.
+const timed = checkActivity({ kind: 'practice', ref: 'llamada-completa', score: 70, detail: { mode: 'voz', duration_s: 212, axes: { cierre: 60 } } });
+assert.deepEqual(timed.value.detail, { axes: { cierre: 60 }, mode: 'voz', duration_s: 212 }, 'guarda el modo real y la duración');
+const badDuration = checkActivity({ kind: 'practice', ref: 'llamada-completa', score: 70, detail: { mode: 'texto', duration_s: 999999 } });
+assert.ok(badDuration.ok && !('duration_s' in badDuration.value.detail), 'una duración imposible se descarta en vez de guardarse');
 ok('validación: el servidor decide la nota del examen y descarta lo que no reconoce');
 
 // 2. Día y semana en Madrid, no en UTC.
@@ -59,7 +64,16 @@ const week = summarize(rows, 7, now);
 assert.equal(week.sessions, 1, 'solo la entrada de la semana');
 assert.equal(week.practice.count, 2); assert.equal(week.practice.avg, 70); assert.equal(week.practice.best, 80);
 assert.equal(week.training.examBest, 100); assert.equal(week.training.examPassed, true, 'el mejor intento cuenta');
-assert.deepEqual(week.axes, [{ axis: 'empatia', avg: 80 }, { axis: 'cierre', avg: 70 }]);
+assert.deepEqual(week.axes, [{ axis: 'empatia', avg: 80, track: null }, { axis: 'cierre', avg: 70, track: null }], 'un escenario desconocido no se atribuye a ninguna sala');
+// «objeciones» existe en las dos salas: la media de cada una va por separado, no promediada entre ambas.
+const split = summarize([
+  row('practice', '2026-10-24T10:00:00Z', { ref: 'llamada-completa', score: 80, detail: { axes: { objecion: 90, cierre: 70 } } }),
+  row('practice', '2026-10-24T09:00:00Z', { ref: 'entrevista-closer', score: 60, detail: { axes: { objecion: 50, encaje: 65 } } }),
+], 7, new Date('2026-10-25T12:00:00Z'));
+assert.deepEqual(split.axes, [
+  { axis: 'objecion', avg: 90, track: 'llamada' }, { axis: 'cierre', avg: 70, track: 'llamada' },
+  { axis: 'objecion', avg: 50, track: 'entrevista' }, { axis: 'encaje', avg: 65, track: 'entrevista' },
+], 'objeciones de llamada y de entrevista no se mezclan');
 assert.equal(week.recent[0].kind, 'training_exam'); assert.equal(week.recent[0].score, 33, 'lo más reciente primero');
 const all = summarize(rows, 90, now);
 assert.equal(week.lifetime.practice.count, 3, 'el resumen de siempre no depende del periodo'); assert.equal(all.lifetime.practice.count, 3);

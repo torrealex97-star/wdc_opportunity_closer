@@ -98,7 +98,9 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [offerSession, setOfferSession] = useState<OfferSession | null>(null);
   const [speaking, setSpeaking] = useState(false);
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
-  const voice = useVoiceInput(text => setDraft(current => current.trim() ? `${current.trimEnd()} ${text}` : text));
+  // Si en esta sesión ha dictado algo, la práctica se registra como «voz»: el modo es el que usó, no el que tocaba.
+  const usedVoice = useRef(false);
+  const voice = useVoiceInput(text => { usedVoice.current = true; setDraft(current => current.trim() ? `${current.trimEnd()} ${text}` : text); });
   const chat = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
 
@@ -156,6 +158,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     setTurns([{ role: 'coach', content: item.opening }]);
     setDebrief(null);
     setDraft('');
+    usedVoice.current = false;
     setStartedAt(Date.now());
     setNow(Date.now());
     setView('room');
@@ -194,7 +197,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       setDebrief(data.debrief);
       setView('debrief');
       // Alimenta «Mi progreso» (solo con sesión; sin ella la práctica sigue igual). Se guarda la nota y la de cada eje, no el texto.
-      if (typeof data.debrief.score === 'number') void logActivity({ kind: 'practice', ref: scenario.id, score: Math.max(0, Math.min(100, Math.round(data.debrief.score))), detail: { mode: 'texto', axes: Object.fromEntries((data.debrief.axes ?? []).map(axis => [axis.id, Math.max(0, Math.min(100, Math.round(axis.score)))])) } });
+      if (typeof data.debrief.score === 'number') void logActivity({ kind: 'practice', ref: scenario.id, score: Math.max(0, Math.min(100, Math.round(data.debrief.score))), detail: { mode: usedVoice.current ? 'voz' : 'texto', duration_s: Math.min(7200, Math.max(1, Math.round((Date.now() - startedAt) / 1000))), axes: Object.fromEntries((data.debrief.axes ?? []).map(axis => [axis.id, Math.max(0, Math.min(100, Math.round(axis.score)))])) } });
       saveHistory([{ id: crypto.randomUUID?.() ?? String(Date.now()), scenarioId: scenario.id, title: scenario.title, startedAt, turns: studentTurns, debrief: data.debrief }, ...history]);
     } catch (exception) {
       setError((exception as Error).message);

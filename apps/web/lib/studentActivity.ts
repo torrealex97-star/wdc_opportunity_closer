@@ -1,6 +1,7 @@
 import { FINAL_EXAM } from '../components/trainingContent';
 import { EXAM_PASS, gradeExam } from '../components/trainingCheck';
 import { REVIEW_REFS } from '../components/trainingRefs';
+import { scenarioById } from '../components/practiceScenarios';
 import { ORG } from './external';
 import { pagedRest, serviceRest } from './supabaseAuth';
 
@@ -55,6 +56,8 @@ export function checkActivity(body: unknown): Checked {
     }
     if (typeof info.difficulty === 'string' && /^[\p{L} ]{1,20}$/u.test(info.difficulty)) clean.difficulty = info.difficulty;
     if (info.mode === 'texto' || info.mode === 'voz') clean.mode = info.mode;
+    // Duración real de la práctica (segundos); un valor imposible se descarta como el resto de campos.
+    if (isInt(info.duration_s, 1, 7200)) clean.duration_s = info.duration_s;
     return { ok: true, value: { kind, ref, score, detail: clean } };
   }
   return { ok: false, detail: 'Tipo de actividad no válido.' };
@@ -141,7 +144,8 @@ export type Progress = {
   practice: Totals['practice']; training: Totals['training'];
   streak: { current: number; best: number };
   weekly: { week: string; avg: number | null; count: number }[];
-  axes: { axis: string; avg: number }[];
+  // Los ejes se agrupan por sala: «objeciones» existe en la llamada y en la entrevista y no son la misma competencia.
+  axes: { axis: string; avg: number; track: 'llamada' | 'entrevista' | null }[];
   recent: ActivityRow[];
   lifetime: Totals & { achievements: Achievement[] };
 };
@@ -156,14 +160,21 @@ export function summarize(rows: ActivityRow[], days: number, now = new Date(), t
     const scores = rows.filter(row => row.kind === 'practice' && typeof row.score === 'number' && mondayOf(madridDay(row.created_at)) === week).map(row => row.score as number);
     return { week, avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null, count: scores.length };
   });
-  const byAxis = new Map<string, number[]>();
-  for (const row of windowed) if (row.kind === 'practice' && isRecord(row.detail.axes)) for (const [axis, value] of Object.entries(row.detail.axes)) if (typeof value === 'number') byAxis.set(axis, [...(byAxis.get(axis) ?? []), value]);
+  const byAxis = new Map<string, { axis: string; track: 'llamada' | 'entrevista' | null; values: number[] }>();
+  for (const row of windowed) if (row.kind === 'practice' && isRecord(row.detail.axes)) {
+    const track = scenarioById(row.ref ?? '')?.track ?? null;
+    for (const [axis, value] of Object.entries(row.detail.axes)) if (typeof value === 'number') {
+      const key = `${track ?? 'sin'}:${axis}`;
+      const entry = byAxis.get(key) ?? { axis, track, values: [] };
+      entry.values.push(value); byAxis.set(key, entry);
+    }
+  }
   return {
     days, truncated,
     sessions: windowed.filter(row => row.kind === 'session').length,
     last_seen: rows[0]?.created_at ?? null,
     ...totals(windowed), streak, weekly,
-    axes: [...byAxis].map(([axis, values]) => ({ axis, avg: Math.round(values.reduce((a, b) => a + b, 0) / values.length) })),
+    axes: [...byAxis.values()].map(entry => ({ axis: entry.axis, track: entry.track, avg: Math.round(entry.values.reduce((a, b) => a + b, 0) / entry.values.length) })),
     recent: windowed.slice(0, 20),
     lifetime: { ...life, achievements: achievements(life, streak) },
   };

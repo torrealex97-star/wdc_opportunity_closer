@@ -4,6 +4,8 @@ import { test, expect } from '@playwright/test';
 // el formulario los resuelve el servidor (ver lib/practiceContext), y el panel lo dice.
 test('la sala practica la entrevista de una candidatura con su anuncio', async ({ page }) => {
   const posts: Array<Record<string, unknown>> = [];
+  const activity: Array<Record<string, any>> = [];
+  await page.route('**/api/student/activity', route => { activity.push(route.request().postDataJSON()); return route.fulfill({ json: { saved: true } }); });
   const application = {
     id: '11111111-1111-4111-8111-111111111111', offer_ref: 'ext-22222222-2222-4222-8222-222222222222',
     offer_title: 'Closer de ventas', offer_company: 'Acme', offer_url: 'https://jobs.example.com/1',
@@ -68,4 +70,60 @@ test('la sala practica la entrevista de una candidatura con su anuncio', async (
   expect(conversation?.include_profile).toBe(true);
   expect(JSON.stringify(conversation)).not.toContain('ana@');
   expect(posts.find(post => post.mode === 'debrief')?.application_id).toBe(application.id);
+  // La práctica se guarda con el modo que usó y su duración real, no con un «texto» fijo.
+  await expect.poll(() => activity.length).toBe(1);
+  expect(activity[0].detail.mode).toBe('texto');
+  expect(activity[0].detail.duration_s).toBeGreaterThanOrEqual(1);
+});
+
+test('el dictado se registra como práctica por voz, con su duración', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      lang = ''; interimResults = false; continuous = false;
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        setTimeout(() => {
+          const result = [{ transcript: 'he cerrado doce mil euros este trimestre' }] as Array<{ transcript: string }> & { isFinal?: boolean };
+          result.isFinal = true;
+          this.onresult?.({ resultIndex: 0, results: [result] });
+        }, 200);
+        setTimeout(() => this.onend?.(), 700);
+      }
+      stop() { this.onend?.(); }
+      abort() { /* nada */ }
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition });
+    Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: FakeRecognition });
+  });
+  const activity: Array<Record<string, any>> = [];
+  await page.route('**/api/student/activity', route => { activity.push(route.request().postDataJSON()); return route.fulfill({ json: { saved: true } }); });
+  await page.route('**/api/practice', route => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    if (body.mode === 'debrief') {
+      return route.fulfill({ json: { debrief: {
+        summary: 'Dictaste y cerraste.', focus: 'Mantén ese tono.', strengths: ['Naturalidad'], improvements: ['Una cifra más'],
+        score: 68, model: 'Podrías haber dicho la cifra al principio.', next: 'Repite por voz.',
+        axes: [{ id: 'objecion', label: 'Objeciones', score: 66, note: '', quote: '' }],
+      } } });
+    }
+    return route.fulfill({ json: { reply: 'Bien. ¿Y el siguiente paso?' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'AI roleplay · entrevista' }).click();
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
+  await expect(page.getByLabel('Tu respuesta')).toHaveValue(/he cerrado doce mil euros/);
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await expect(page.getByText('Bien. ¿Y el siguiente paso?')).toBeVisible();
+  // La sala pide dos respuestas antes del feedback; la segunda puede ser escrita (el modo ya es «voz»).
+  await page.getByLabel('Tu respuesta').fill('Cierro con un siguiente paso agendado.');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await expect(page.getByRole('button', { name: 'Terminar y ver feedback' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Terminar y ver feedback' }).click();
+  await expect(page.getByRole('heading', { name: 'Qué ha funcionado y qué pulir.' })).toBeVisible();
+  await expect.poll(() => activity.length).toBe(1);
+  expect(activity[0].detail.mode).toBe('voz');
+  expect(activity[0].detail.duration_s).toBeGreaterThanOrEqual(1);
 });

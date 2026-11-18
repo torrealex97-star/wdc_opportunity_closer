@@ -68,7 +68,8 @@ test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con 
   expect(calls.filter(call => call.mode === 'debrief')).toHaveLength(1);
   // La nota y la de cada eje alimentan «Mi progreso»; el texto de la conversación no se envía.
   await expect.poll(() => activity.length).toBe(1);
-  expect(activity[0]).toEqual({ kind: 'practice', ref: 'venta-fria', score: 61, detail: { mode: 'texto', axes: { apertura: 78, descubrimiento: 64, objecion: 58, cierre: 42 } } });
+  expect(activity[0]).toMatchObject({ kind: 'practice', ref: 'venta-fria', score: 61, detail: { mode: 'texto', axes: { apertura: 78, descubrimiento: 64, objecion: 58, cierre: 42 } } });
+  expect((activity[0] as { detail: { duration_s?: number } }).detail.duration_s).toBeGreaterThanOrEqual(1);
   // La petición ya no lleva código de cohorte.
   expect(calls.every(call => !('code' in call))).toBe(true);
   await expect(page.locator('.practice-debrief > .practice-note')).toHaveText(/no es una nota oficial/i);

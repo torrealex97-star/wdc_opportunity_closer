@@ -1,5 +1,12 @@
 # Estado
 
+## La práctica guarda cómo se hizo, y «Competencias» separa llamada de entrevista (sesión 227) — 2026-11-18
+
+- **Dos defectos pequeños que quedaban de la sesión 226**: (1) toda práctica se registraba como `mode: 'texto'`, aunque hubiera dictado, y sin duración; (2) la tarjeta «Competencias» promediaba juntos los ejes de la llamada y de la entrevista, así que «Objeciones» mezclaba dos competencias distintas con el mismo nombre.
+- **Arreglado**: [StudentPractice.tsx](../apps/web/components/StudentPractice.tsx) marca la sesión como voz en cuanto el dictado añade texto (se reinicia en cada práctica) y al terminar envía `mode` real y `duration_s` (segundos desde el inicio, acotados a 1–7200); [studentActivity.ts](../apps/web/lib/studentActivity.ts) acepta y sanea `duration_s` igual que el resto, y `summarize` etiqueta cada eje con su sala (`llamada`, `entrevista` o `null` si el escenario ya no se reconoce), calculando la media por separado. [StudentProgress.tsx](../apps/web/components/StudentProgress.tsx) pinta tres grupos —Llamada, Entrevista y prácticas anteriores sin sala— y la actividad reciente añade «por voz» y la duración.
+- **Probado** (`tested`): `tests/admin-auth/activity.mjs` 5/5 (modo y duración guardados; una duración imposible se descarta; escenario desconocido sin sala; «objeciones» de llamada 90 y de entrevista 50 no se promedian) → `npm run test:web` **46/46** y **13/13**; Playwright **19/19** en las suites de práctica, incluida una prueba nueva de que el dictado se registra como `voz` y otra de que el texto se registra con su duración; `typecheck`, `build`, `design` y `handoff` PASS.
+- **Límites honestos**: el modo es «voz» si dictó al menos una intervención en esa sesión (no se guarda cuántas); la duración es el tiempo de la práctica, no el de cada turno; las filas antiguas no tienen duración ni modo y se muestran sin ese dato. Sin revisión visual con captura: el cambio de la tarjeta se ha verificado por estructura y pruebas, no mirando píxeles.
+
 ## La sala practica la entrevista y el cierre de una candidatura concreta (sesión 226) — 2026-11-18
 
 - **Petición del propietario**: «que la sala de AI roleplay pueda practicar la entrevista (y la llamada de cierre) de una candidatura concreta, usando la oferta pública y el formulario base con el consentimiento que ya existe».
