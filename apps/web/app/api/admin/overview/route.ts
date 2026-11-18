@@ -58,13 +58,14 @@ export async function GET(request: NextRequest) {
     { id: 'supabase-db', name: 'Supabase · lista de operadores', status: admins ? 'ok' : 'error', detail: admins ? `${admins.length} usuario(s) con acceso` : 'No se pudo leer (¿service role?)' },
     { id: 'admin-token', name: 'Token admin del motor', status: env('CAREER_ADMIN_TOKEN') ? 'ok' : 'not_configured', detail: env('CAREER_ADMIN_TOKEN') ? 'Presente en el servidor' : 'Falta CAREER_ADMIN_TOKEN' },
   ];
-  // Proveedores externos: estado de la clave guardada y de su última prueba. El motor cloud público no los usa
-  // (gasto solo con orden explícita), así que «guardada» no implica que se esté consumiendo crédito.
+  // Proveedores externos: estado de la clave guardada y de su última prueba. Las claves las leen las recolecciones
+  // de la web (colectores, Google Jobs, IA y avisos); el motor cloud no lee estas claves. «Guardada» no implica
+  // que se esté consumiendo crédito: el gasto empieza cuando corre una recolección, y eso se ve en el marcador.
   const paid: Check[] = Object.entries(PROVIDERS).map(([id, spec]) => {
     const row = saved?.find(r => r.provider === id);
     if (!row) return { id, name: spec.name, status: 'not_configured', detail: 'Sin clave guardada (pestaña APIs)' };
     return { id, name: spec.name, status: row.last_test_ok === false ? 'error' : 'ok',
-      detail: `Clave …${row.last4} guardada · ${row.last_test_ok == null ? 'sin probar' : row.last_test_detail ?? ''} · el motor cloud no la usa todavía` };
+      detail: `Clave …${row.last4} guardada · ${row.last_test_ok == null ? 'sin probar' : row.last_test_detail ?? ''} · la usan las recolecciones de la web` };
   });
 
   const sources = Array.isArray(funnel?.sources) ? funnel.sources : [];

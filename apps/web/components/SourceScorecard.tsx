@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { money, unit, usd } from '../lib/money';
+import { cost, money, unit, usd } from '../lib/money';
 
 // Marcador por fuente: lo que pasa DESPUÉS de publicar. Envía la alumna, contesta la empresa y aquí se
 // cruza con la fuente del anuncio. No retira ninguna fuente: solo enseña dónde merece la pena insistir.
@@ -81,7 +81,7 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
       {!data.totals.sent && !data.totals.interviews
         ? <p className="card-meta">Todavía no hay envíos ni entrevistas que comparar: las barras aparecerán en cuanto las alumnas empiecen a enviar candidaturas.</p>
         : topRows.map(row => <div className="dash-bar" key={`bar-${row.source}`}>
-          <div className="dash-bar-name"><strong>{row.source}</strong><span>{row.cost_eur === null ? 'coste sin datos' : `${money(row.cost_eur)}${row.cost_partial ? '*' : ''}`}</span></div>
+          <div className="dash-bar-name"><strong>{row.source}</strong><span>{row.cost_eur === null ? 'coste sin datos' : `${cost(row.cost_eur)}${row.cost_partial ? '*' : ''}`}</span></div>
           <div className="dash-bar-track" role="img" aria-label={`${row.source}: ${row.sent} envíos, ${row.interviews} entrevistas`}>
             <span className="is-sent" style={{ width: `${Math.max(row.sent ? 2 : 0, (row.sent / peakSent) * 100)}%` }} />
             <span className="is-interview" style={{ width: `${Math.max(row.interviews ? 2 : 0, (row.interviews / peakInterviews) * 100)}%` }} />
@@ -120,7 +120,7 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
             <td>{rate(row.per_1000.sent)}</td>
             <td>{rate(row.per_1000.interviews)}</td>
             <td>{rate(row.per_1000.offers)}</td>
-            <td title={costReason(row)}>{money(row.cost_eur)}{row.cost_partial && row.cost_eur !== null ? '*' : ''}</td>
+            <td title={costReason(row)}>{cost(row.cost_eur)}{row.cost_partial && row.cost_eur !== null ? '*' : ''}</td>
             <td title={row.cost_eur === null ? costReason(row) : row.sent === 0 ? 'Sin envíos: no hay denominador.' : undefined}>{unit(row.per_send_eur)}</td>
             <td title={row.cost_eur === null ? costReason(row) : row.interviews === 0 ? 'Sin entrevistas: no hay denominador.' : undefined}>{unit(row.per_interview_eur)}</td>
           </tr>)}

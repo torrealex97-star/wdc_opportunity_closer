@@ -1,5 +1,13 @@
 # Estado
 
+## El coste de céntimos se declara y la clave dice quién la usa (sesión 206) — 2026-11-18
+
+- **Petición del propietario**: arreglar los dos fallos vistos al revisar el panel en producción —una fuente con gasto de céntimos pintada como «0,00 €» y la frase «el motor cloud no la usa todavía»— y añadir la prueba del formato.
+- **Formato** ([money.ts](../apps/web/lib/money.ts)): nuevo `cost()`; por debajo de un céntimo pinta **«< 0,01 €»** en vez de redondear a 0,00. Lo usan la tabla y las barras del marcador ([SourceScorecard.tsx](../apps/web/components/SourceScorecard.tsx)) y la tabla por proveedor ([ApisTab.tsx](../apps/web/components/ApisTab.tsx)). `money()` sigue para totales y `—` sigue siendo el hueco: un cero **medido** se pinta «0,00 €»; lo que no puede pasar es que un gasto real parezca cero.
+- **Frase** ([overview/route.ts](../apps/web/app/api/admin/overview/route.ts)): «el motor cloud no la usa todavía» pasa a «**la usan las recolecciones de la web**». Es lo que hace el código: los colectores, Google Jobs (`serpapi`), la revisión con IA (`groq`), Apify y los avisos leen su clave con `getSecret`; el motor cloud no lee estas claves. El comentario de la ruta lo explica y el marcador deja de contradecirse (las fuentes `apify-*` y `serpapi-*` existen precisamente por esas recolecciones).
+- **Comprobado (tested)**: `tests/source-scorecard.mjs` PASS con las aserciones nuevas del formato —`cost(0.004)` y `cost(0.0009)` → «< 0,01 €», ya no coinciden con `money(0.004)`, `cost(0)` = «0,00 €», `cost(0.01)`/`cost(0.03)`/`cost(0.27)` = el importe, `cost(null)` = «—»—. La prueba **muerde**: con `cost()` reducido a redondear, el test falla (`AssertionError: un gasto real por debajo de un céntimo se dice, no se redondea a cero`). `npm run typecheck` OK y `npm run design` OK.
+- **Sin verificar visualmente**: el cambio está en `main`, pero producción sigue con el build de la sesión 204 hasta que se despliegue: el workflow `Web deploy` se salta la publicación porque falta `CLOUDFLARE_API_TOKEN`. En cuanto exista, el siguiente push lo pinta; o se lanza `opennextjs-cloudflare build` + `wrangler deploy` a mano, como en la sesión 204.
+
 ## El Worker de la web se publica solo al empujar a main (sesión 205) — 2026-11-18
 
 - **Petición del propietario**: que el Worker `closer-web` se despliegue automáticamente al hacer push a `main`, con las comprobaciones necesarias antes de publicar y sin tocar secretos.

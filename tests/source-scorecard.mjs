@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { scorecard, scorecardTotals, providerBreakdown, providerTotals, providerOfSource, MIN_SENDS_TO_COMPARE } from '../apps/web/lib/sourceScorecard.ts';
 import { parseSerpapiCost, recordedCosts } from '../apps/web/lib/sourceCost.ts';
 import { eurRate, __testFx } from '../apps/web/lib/fx.ts';
+import { cost, money } from '../apps/web/lib/money.ts';
 
 const sources = new Map([
   ['ext-1', 'jobtoday'], ['ext-2', 'jobtoday'], ['ext-3', 'infojobs'], ['ext-4', 'infojobs'], ['ext-5', 'infojobs'], ['ext-6', 'infojobs'],
@@ -228,4 +229,15 @@ assert.equal(fx.date, '2026-11-17');
 assert.ok(Math.abs(fx.eur_per_usd - 0.8) < 1e-9, 'USD por EUR se invierte');
 __testFx.reset();
 assert.equal(await eurRate({ now: Date.now(), fetchImpl: async () => new Response('no', { status: 500 }) }), null);
+// ── Formato del coste: un gasto de céntimos no se pinta como «0,00 €» ──────────────────────────
+// Visto en producción: `apify-indeed` gastó 0,004 € y la tabla del marcador decía 0,00 €, que se lee
+// como «gratis». Un importe por debajo de un céntimo se declara; un cero medido sigue siendo cero.
+assert.equal(cost(0.004), '< 0,01 €', 'un gasto real por debajo de un céntimo se dice, no se redondea a cero');
+assert.equal(cost(0.0009), '< 0,01 €');
+assert.notEqual(cost(0.004), money(0.004), 'ya no se confunde con 0,00 €');
+assert.equal(cost(0), money(0), 'un cero registrado sigue siendo 0,00 €');
+assert.equal(cost(0.01), money(0.01), 'desde un céntimo se pinta el importe');
+assert.equal(cost(0.03), money(0.03));
+assert.equal(cost(0.27), money(0.27));
+assert.equal(cost(null), '—', 'sin importe registrado el hueco es una raya, no un cero');
 console.log('PASS  marcador por fuente y por proveedor: tasas por 1.000 anuncios vivos, coste registrado en €, € por envío y por entrevista, huecos en «—» y ofertas sin fuente aparte');

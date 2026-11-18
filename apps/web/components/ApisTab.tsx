@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, LoaderCircle, PlugZap, Trash2 } from 'lucide-react';
-import { money, unit, usd } from '../lib/money';
+import { cost, money, unit, usd } from '../lib/money';
 import { providerBreakdown, providerTotals, type SourceRow } from '../lib/sourceScorecard';
 
 type Connection = { provider: string; name: string; configured: boolean; last4: string | null; updated_by: string | null; updated_at: string | null; last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: string | null };
@@ -92,7 +92,7 @@ export default function ApisTab({ owner, onSessionLost }: { owner: boolean; onSe
                 {providers.map(row => <tr key={`provider-${row.provider}`}>
                   <th scope="row">{row.name}{row.sources ? <span className="card-meta" style={{ display: 'block' }}>{row.sources} fuente{row.sources === 1 ? '' : 's'}</span> : null}</th>
                   <td>{row.configured ? <span className="status ok">Con clave</span> : <span className="status">Sin clave</span>}</td>
-                  <td title={row.cost_reason === 'sin_coste' ? 'Sin importe registrado para este proveedor (no significa que sea gratis).' : row.cost_reason === 'sin_tipo_de_cambio' ? `Registrado ${usd(row.cost_usd)}, pero falta el tipo de cambio para pasarlo a euros.` : undefined}>{money(row.cost_eur)}{row.cost_partial && row.cost_eur !== null ? '*' : ''}</td>
+                  <td title={row.cost_reason === 'sin_coste' ? 'Sin importe registrado para este proveedor (no significa que sea gratis).' : row.cost_reason === 'sin_tipo_de_cambio' ? `Registrado ${usd(row.cost_usd)}, pero falta el tipo de cambio para pasarlo a euros.` : undefined}>{cost(row.cost_eur)}{row.cost_partial && row.cost_eur !== null ? '*' : ''}</td>
                   <td>{int(row.ingested)}</td>
                   <td>{row.sent}</td>
                   <td>{row.interviews}</td>

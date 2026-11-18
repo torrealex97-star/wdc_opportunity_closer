@@ -6,6 +6,8 @@ const usdFmt = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD',
 
 /** Euros con céntimos. */
 export const money = (value: number | null) => value === null ? '—' : eur.format(value);
+/** Coste de una fuente o proveedor: un gasto por debajo de un céntimo se declara, no se pinta como 0,00 €. */
+export const cost = (value: number | null) => value === null ? '—' : value > 0 && value < 0.01 ? '< 0,01 €' : eur.format(value);
 /** Euros con cuatro decimales, para costes unitarios pequeños (por envío, por entrevista). */
 export const unit = (value: number | null) => value === null ? '—' : eurUnit.format(value);
 /** Dólares con cuatro decimales: es la moneda en la que se registra el gasto. */
