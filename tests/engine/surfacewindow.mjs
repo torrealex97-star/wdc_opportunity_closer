@@ -111,10 +111,23 @@ const perSource = items => items.reduce((acc, o) => ({ ...acc, [o.source_code]: 
   assert.equal(body2.truncated, true);
 }
 
+// 3b) Tope por empresa: tres vacantes casi idénticas del mismo empleador no copan la lista, y una
+//     empresa sin nombre no se agrupa con las demás.
+{
+  const same = [1, 2, 3].map(i => row(`inmark-${i}`, { title: `Closer de ventas ${i}`, description: CLOSER_TEXT, source: 'fuente-b' }))
+    .map(r => ({ ...r, payload: JSON.stringify({ ...JSON.parse(r.payload), company: 'Grupo Empresarial Inmark' }) }));
+  const other = row('otra', { title: 'Closer de ventas otra', description: CLOSER_TEXT, source: 'fuente-b' });
+  const db = fakeDb([...same, other]);
+  const { body } = await search(db, {}, { market: 'any', days: 10 });
+  assert.equal(body.items.filter(item => item.company === 'Grupo Empresarial Inmark').length, 2, 'máx. 2 por empresa');
+  assert.equal(body.items.length, 3);
+  assert.equal(body.truncated, true);
+}
+
 // 4) Un valor inválido no se convierte en cero: cae al defecto (regla de presupuesto del motor).
 {
   const limits = workerModule.__test.surfaceLimits({ SURFACE_SCAN_LIMIT: 'muchas', SURFACE_SOURCE_CAP: '-4', SURFACE_MAX_ITEMS: '0' });
-  assert.deepEqual(limits, { scan: 3000, perSource: 40, serve: 400 });
+  assert.deepEqual(limits, { scan: 3000, perSource: 40, perCompany: 2, serve: 400 });
 }
 
 // 5) El diagnóstico del embudo (editorialOnly false) conserva su consulta de catálogo: mide el

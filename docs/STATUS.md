@@ -1,5 +1,15 @@
 # Estado
 
+## Las mejores arriba y una ficha que se lee de un vistazo (sesión 219) — 2026-11-18
+
+- **Petición del propietario**: que las mejores ofertas estén siempre arriba y que la tarjeta donde la alumna ve la información sea más visual y esté mejor diseñada.
+- **Orden (motor)**: la puntuación de calidad ya no es una caja de dos valores. Suma salario publicado (12), frescura por tramos (20 / 12 / 6 según 1, 3 o 7 días), detalle del anuncio (8 si el cuerpo pasa de 800 caracteres, 4 desde 250) y empresa identificada (2); el perfil pesa 15 para Closer y 8 para Setter, y la prioridad de perfil sigue siendo el desempate. Medido en el motor desplegado: el top 10 pasa de **1 oferta con salario publicado y 9 cold callers** a **5 Closer seguidos de España** (una sin importe por delante de un cold caller con importe) y el resto ordenado por salario y frescura.
+- **El efecto que había que corregir**: con el salario pesando solo, siete vacantes casi idénticas de «Grupo Empresarial Inmark» subieron a los puestos 5-11. Se añadió **tope por empresa (2, `SURFACE_COMPANY_CAP`)** junto al tope por fuente: la lista pasa de 90 a **77 tarjetas** y el máximo por empresa es **2**.
+- **Ficha (web)**: una sola tarjeta para la lista y el bloque ampliado ([StudentOpportunities.tsx](../apps/web/components/StudentOpportunities.tsx)). Monograma en rosa empolvado, empresa en secundario, perfil como píldora con color por familia y la palabra escrita, titular en serif, insignias con icono (ubicación, modalidad, frescura en salvia si es de los últimos tres días), compensación como foco —fondo salvia y cifra grande si hay importe, fondo inset y frase explícita si no—, datos comparables en rejilla 2×2 con icono y un único CTA con la procedencia debajo. La destacada lleva filete terracota y su insignia. Ubicación y modalidad no se repiten cuando dicen lo mismo.
+- **Verificado**: `typecheck` y `build` de la web PASS, `npm run design` OK (solo tokens; ningún hex nuevo), motor `ba85dabc` y web `a9ca73c9` desplegados. Mirada la vista real en el navegador (`https://app.womendigitalclosers.com/`): 200 tarjetas con la ficha nueva, titulares en Libre Caslon, cero errores de consola; la primera tarjeta es una Closer destacada y la duplicidad Inmark ya no está.
+- **Probado (tested)**: `rankorder` con dos bloques nuevos —salario publicado a igual perfil y fecha, y closer sin importe por delante de cold caller con importe— y `surfacewindow` con el tope por empresa; el resto de la suite del motor en verde.
+- **Límites**: el orden sigue siendo determinista y no se presenta como probabilidad; el tope por empresa recorta ofertas reales de empleadores que publican en serie (es intencionado, se ajusta por entorno). Los datos de jornada/experiencia siguen viniendo del anuncio y se cortan a tres líneas. No se ha probado en móvil real (solo escritorio en 1920×1080).
+
 ## Cerrado lo caducado: el panel deja de enseñar trabajo que nunca se servirá (sesión 218) — 2026-11-18
 
 - **Petición del propietario**: cerrar los 642 borradores y las ofertas de la cola humana ya caducadas, para que el panel no las cuente como pendientes.

@@ -11893,20 +11893,28 @@ function surfaceLimits(env = {}) {
   return {
     scan: int(env.SURFACE_SCAN_LIMIT, 3000, 800, 10000),
     perSource: int(env.SURFACE_SOURCE_CAP, 40, 1, 5000),
+    // Mismo tope por empresa que la selección del día: sin él, siete vacantes casi idénticas del
+    // mismo empleador copan la lista por delante de ofertas distintas que merecen más la pena.
+    perCompany: int(env.SURFACE_COMPANY_CAP, 2, 1, 100),
     serve: int(env.SURFACE_MAX_ITEMS, 400, 10, 10000),
   };
 }
 
 // Recorte de lo servido: conserva el orden del ranking y declara el corte (`truncated`),
 // como cualquier otro límite del motor. Un ítem sin código de fuente no se descarta.
-function serveSurfaceRanked(ranked, { perSource, serve }) {
+function serveSurfaceRanked(ranked, { perSource, perCompany = 2, serve }) {
   const used = new Map();
+  const companies = new Map();
   const items = [];
   for (const offer of ranked) {
     const code = offer.source_code ?? 'sin_fuente';
     const seen = used.get(code) ?? 0;
     if (seen >= perSource) continue;
+    const company = String(offer.company ?? '').trim().toLowerCase();
+    const repeated = companies.get(company) ?? 0;
+    if (company && repeated >= perCompany) continue;
     used.set(code, seen + 1);
+    if (company) companies.set(company, repeated + 1);
     items.push(offer);
     if (items.length >= serve) break;
   }
@@ -12077,9 +12085,25 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
       excellence_rank: null,
       is_selected: false,
     });
+    // Puntuación de calidad para el orden ("las mejores arriba"): lo que la alumna compara de
+    // verdad. Pesa más el salario publicado que cualquier otra señal; la frescura va por tramos
+    // (1 día, 3, 7) en vez de dos cajas; un anuncio con detalle y una empresa identificada suman.
+    const descChars = description.length;
+    const companyName = fold(p.company ?? '').trim();
+    const companyNamed = Boolean(companyName) && companyName !== 'empresa no indicada';
+    // El perfil de la alumna pesa: una closer por delante de un cold caller, con el mismo salario
+    // y la misma frescura. La prioridad de perfil sigue siendo el desempate final del comparador.
+    // El perfil de la alumna manda sobre el salario publicado de otro perfil: una closer sin importe
+    // va por delante de un cold caller con importe, porque es la búsqueda que ella hace.
+    const ROLE_WEIGHT = { closer: 15, setter: 8, cold_caller: 0, management: 0, account_executive: 0, sdr: 0 };
     quality[row.job_id] = {
       es: spainSignal(p) ? 0 : 1,
-      score: (titleHit ? 50 : 25) + (ages !== null && ages <= 3 ? 20 : 10) + (pay !== 'Importe no publicado' ? 1 : 0),
+      score: (titleHit ? 50 : 25)
+        + (ROLE_WEIGHT[derivedRole] ?? 0)
+        + (pay !== 'Importe no publicado' ? 12 : 0)
+        + (ages === null ? 0 : ages <= 1 ? 20 : ages <= 3 ? 12 : ages <= 7 ? 6 : 0)
+        + (descChars >= 800 ? 8 : descChars >= 250 ? 4 : 0)
+        + (companyNamed ? 2 : 0),
       published_ts: Number.isFinite(postedTs) ? postedTs : 0,
       role: derivedRole,
     };

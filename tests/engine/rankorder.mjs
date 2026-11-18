@@ -34,7 +34,7 @@ const ids = result => result.ranked.map(offer => offer.id);
 
 // 1) Puntuación y frescura manda dentro del mismo mercado: la más puntuada y reciente
 //    primero, aunque el catálogo la devuelva la última. Puntuación = título del perfil (50)
-//    + frescura (20 si <= 3 días) + salario publicado (1).
+//    + salario publicado (15) + frescura por tramos (20 / 12 / 6) + detalle + empresa.
 {
   const result = await surface([
     row('vieja', { title: 'Closer de ventas vieja', posted_at: daysAgo(9) }),
@@ -43,6 +43,29 @@ const ids = result => result.ranked.map(offer => offer.id);
   ]);
   assert.deepEqual(ids(result), ['fresca', 'media', 'vieja'],
     'sin puntuación ni frescura, el orden sería el de inserción del catálogo');
+}
+
+// 1b) «Las mejores arriba»: a igual perfil y misma fecha, la que publica salario va antes
+//     que la que no lo publica, y la del anuncio con detalle antes que la de un titular.
+{
+  const result = await surface(
+    [
+      row('sin-sueldo', { title: 'Closer de ventas sin sueldo', posted_at: daysAgo(1) }),
+      row('con-sueldo', { title: 'Closer de ventas con sueldo', posted_at: daysAgo(1), salary: '32.000 €' }),
+    ],
+    { role: null },
+  );
+  assert.deepEqual(ids(result), ['con-sueldo', 'sin-sueldo'], 'el salario publicado pesa más que el orden del catálogo');
+}
+
+// 1c) El perfil de la alumna pesa más que el salario publicado de otro perfil: una closer sin
+//     importe va por delante de un cold caller con importe.
+{
+  const result = await surface([
+    row('cold-con-sueldo', { title: 'Teleoperador de ventas', description: COLD_TEXT, posted_at: daysAgo(1), salary: '1.200 €' }),
+    row('closer-sin-sueldo', { title: 'Closer de ventas', posted_at: daysAgo(1) }),
+  ], { role: null });
+  assert.deepEqual(ids(result), ['closer-sin-sueldo', 'cold-con-sueldo'], 'closer primero aunque la otra publique importe');
 }
 
 // 2) Con puntuación y fecha empatadas, decide la prioridad de perfil: closer antes que

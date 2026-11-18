@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Compass, Globe2, GraduationCap, HeartHandshake, LoaderCircle, MessageSquare, Search, ShieldAlert, TrendingUp, X } from 'lucide-react';
+import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Clock3, Compass, FileText, Globe2, GraduationCap, HeartHandshake, Languages, Laptop, LoaderCircle, MapPin, MessageSquare, Search, ShieldAlert, TrendingUp, X } from 'lucide-react';
 import OpportunityRadar from './OpportunityRadar';
 import StudentPractice from './StudentPractice';
 import StudentProgress from './StudentProgress';
@@ -92,14 +92,68 @@ const initials = (company: string) => company.slice(0, 2).toUpperCase();
 // Dominio que se enseña junto al botón de aplicar: dice a dónde va antes de pulsar.
 const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'el anuncio'; } };
 const applyTo = (offer: Offer) => offer.apply_url || offer.source_url;
-// `note` en false para la tarjeta: la misma advertencia repetida en 39 tarjetas es ruido y alargaba
-// cada ficha (en móvil, ~40 px por tarjeta). El detalle la sigue mostrando.
+// El importe es el dato que más pesa al comparar: se enseña como cifra grande cuando la empresa lo
+// publica y, cuando no, se dice con la misma claridad en vez de dejar un hueco.
 function PayBlock({ offer, note = true }: { offer: Offer; note?: boolean }) {
-  return <div className={`opportunity-pay ${hasPay(offer) ? '' : 'is-unpublished'}`}>
-    <span>{hasPay(offer) ? 'COMPENSACIÓN PUBLICADA' : 'COMPENSACIÓN'}</span>
+  return <div className={`opportunity-pay ${hasPay(offer) ? 'is-paid' : 'is-unpublished'}`}>
+    <span className="pay-label">{hasPay(offer) ? 'Salario publicado' : 'Compensación'}</span>
     <p className="pay-value">{hasPay(offer) ? offer.compensation : 'La empresa no publica importe'}</p>
-    {note && <p>{offer.compensation_note}</p>}
+    {hasPay(offer) ? (note && <p className="pay-note">{offer.compensation_note}</p>)
+      : <p className="pay-note">Pregunta por el fijo y las comisiones antes de avanzar.</p>}
   </div>;
+}
+
+const freshTone = (value: string | null) => {
+  if (!value) return '';
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+  return Number.isFinite(days) && days >= 0 && days <= 3 ? 'is-fresh' : '';
+};
+const factIcon = (label: string) => label === 'Idioma' ? <Languages size={13} aria-hidden="true" />
+  : label === 'Jornada' ? <Clock3 size={13} aria-hidden="true" />
+  : label === 'Experiencia' ? <BriefcaseBusiness size={13} aria-hidden="true" />
+  : <FileText size={13} aria-hidden="true" />;
+
+// Ficha de la alumna: empresa y puesto primero, condiciones después, y un único siguiente paso.
+// `compact` es el bloque ampliado (mismo diseño, sin la lista de datos para no repetir la ficha).
+function OfferCard({ offer, starred, saving, onStar, onOpen, compact = false }: {
+  offer: Offer; starred: boolean; saving: boolean; onStar: () => void; onOpen: () => void; compact?: boolean;
+}) {
+  const modality = modalityBadge(offer.modality);
+  const facts = knownFacts(offer);
+  // «Remoto» como ubicación y como modalidad es el mismo dato: no se dice dos veces.
+  const showLocation = Boolean(offer.location) && offer.location.trim().toLowerCase() !== modality.text.toLowerCase();
+  return <article className={`opportunity-card ${offer.is_selected ? 'is-pick' : ''}`}>
+    <div className="opportunity-company">
+      <div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div>
+      <div className="company-identity">
+        <p className="company-name">{offer.company}</p>
+        <div className="company-tags">
+          <span className={`role-chip role-${offer.role}`}>{offer.role_label || label(offer.role)}</span>
+          {offer.is_selected && <em className="pick-badge">Selección del día{rank(offer) ? ` · Nº ${rank(offer)}` : ''}</em>}
+        </div>
+      </div>
+      <button className={`icon-button ${starred ? 'is-starred' : ''}`} disabled={saving}
+        aria-label={`${starred ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={onStar}>
+        <Bookmark size={19} fill={starred ? 'currentColor' : 'none'} />
+      </button>
+    </div>
+    <h3 className={`opportunity-title ${compact ? 'is-compact' : ''}`}>{jobTitle(offer)}</h3>
+    <div className="opp-badges">
+      {showLocation && <span className="opp-badge"><MapPin size={12} aria-hidden="true" />{offer.location}</span>}
+      <span className={`opp-badge ${modality.tone}`}><Laptop size={12} aria-hidden="true" />{modality.text}</span>
+      <span className={`opp-freshness ${freshTone(offer.published_at)}`}><Clock3 size={12} aria-hidden="true" />{freshness(offer.published_at)}</span>
+    </div>
+    {offer.caution && <p className="offer-caution" role="note"><ShieldAlert size={13} /><span><strong>{offer.caution.title}.</strong> {offer.caution.flags[0]} <button type="button" className="link-button" onClick={onOpen}>Ver por qué</button></span></p>}
+    <PayBlock offer={offer} note={compact} />
+    {!compact && <dl className="opportunity-facts">
+      {facts.map(f => <div key={f.label}><dt>{factIcon(f.label)}{f.label}</dt><dd>{f.value}</dd></div>)}
+      {facts.length <= 1 && <div><dt>{factIcon('Contrato')}Detalles del puesto</dt><dd>El anuncio no detalla jornada, experiencia ni contrato.</dd></div>}
+    </dl>}
+    <div className="opportunity-footer">
+      <a className="opp-source" href={offer.source_url} target="_blank" rel="noopener noreferrer">Publicado en {offer.source_name}</a>
+      <button className="primary" onClick={onOpen}>Ver oportunidad<ArrowUpRight size={16} /></button>
+    </div>
+  </article>;
 }
 
 // WDC student: compare companies and conditions, then choose her next step.
@@ -250,31 +304,15 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         {!saved && <OpportunityRadar offers={[...visible, ...(wider ?? [])]} busy={busy} role={applied.role ?? null} onRole={next => applyQuery({ ...applied, role: next })} />}
         <section className="student-results" aria-busy={busy}><div className="results-heading"><h2>{saved ? 'Tus oportunidades guardadas' : 'Oportunidades para explorar'} <span>{busy ? '…' : visible.length + (wider?.length ?? 0)}</span></h2><span className="student-freshness">Actualización diaria</span></div>
           {!saved && !busy && selectionTotal > 0 && <p className="selection-note">Selección del día: las {selectionTotal} que mejor cumplen los requisitos van primero. Puedes explorar el resto del catálogo debajo.</p>}
-          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <article className="opportunity-card" key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}>
-            <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label || label(offer.role)}</span>{offer.is_selected && <em className="pick-badge">Selección del día{rank(offer) ? ` · Nº ${rank(offer)}` : ''}</em>}</div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
-            <h3 className="opportunity-title">{jobTitle(offer)}</h3>
-            {offer.caution && <p className="offer-caution" role="note"><ShieldAlert size={13} /><span><strong>{offer.caution.title}.</strong> {offer.caution.flags[0]} <button type="button" className="link-button" onClick={() => setDetail(offer)}>Ver por qué</button></span></p>}
-            <div className="opp-badges"><span className={`opp-badge ${modalityBadge(offer.modality).tone}`}>{modalityBadge(offer.modality).text}</span>{offer.location && <span className="opp-badge">{offer.location}</span>}<span className="opp-freshness">{freshness(offer.published_at)}</span></div>
-            <PayBlock offer={offer} note={false} />
-            {/* Modalidad y ubicación ya están en las insignias de arriba: repetirlas aquí alargaba la ficha
-                sin añadir nada. Quedan los datos que la alumna compara (idioma, jornada, experiencia, contrato). */}
-            <dl className="opportunity-facts">
-              {knownFacts(offer).map(f => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}
-              {knownFacts(offer).length <= 1 && <div><dt>Detalles del puesto</dt><dd>El anuncio no detalla jornada, experiencia ni contrato.</dd></div>}
-            </dl>
-            <div className="opportunity-footer"><div><a href={offer.source_url} target="_blank" rel="noopener noreferrer">Publicado en {offer.source_name}</a></div><button className="primary" onClick={() => setDetail(offer)}>Ver oportunidad<ArrowUpRight size={16} /></button></div>
-          </article>)}</div>}
+          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <div key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}><OfferCard offer={offer}
+              starred={isStarred(offer)} saving={saving === offer.id}
+              onStar={() => void star(offer)} onOpen={() => setDetail(offer)} /></div>)}</div>}
           {!saved && !busy && wider?.length ? <div className="wider-bucket">
             <h3>{items.length} con tu filtro · {wider.length} más del catálogo {applied.market !== 'any' ? 'con tu mercado' : 'comercial en español'}</h3>
             <p>Con tu filtro de perfil no aparecían suficientes {applied.role ? `ofertas de ${label(applied.role)}` : 'ofertas en tu mercado'}; estas vienen del mismo catálogo real con el filtro ampliado, en {applied.include_bilingual ? 'español o inglés' : 'español'}{widerFamilies.length ? ` y de ${widerFamilies.join(', ')}` : ''}.</p>
-            <div className="opportunity-grid">{wider.map(offer => <article className="opportunity-card" key={offer.id}>
-              <div className="opportunity-company"><div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div><div><p>{offer.company}</p><span className="role-chip">{offer.role_label || label(offer.role)}</span></div><button className={`icon-button ${isStarred(offer) ? 'is-starred' : ''}`} disabled={saving === offer.id} aria-label={`${isStarred(offer) ? 'Quitar de guardadas' : 'Guardar'} ${jobTitle(offer)} · ${offer.company}`} onClick={() => void star(offer)}><Bookmark size={19} fill={isStarred(offer) ? 'currentColor' : 'none'} /></button></div>
-              <h3 className="opportunity-title is-compact">{jobTitle(offer)}</h3>
-              <div className="opp-badges"><span className={`opp-badge ${modalityBadge(offer.modality).tone}`}>{modalityBadge(offer.modality).text}</span>{offer.location && <span className="opp-badge">{offer.location}</span>}<span className="opp-freshness">{freshness(offer.published_at)}</span></div>
-              <p className="opportunity-place"><Globe2 size={13} />{offer.language}</p>
-              <PayBlock offer={offer} />
-              <div className="opportunity-footer"><button className="primary" onClick={() => setDetail(offer)}>Ver oportunidad<ArrowUpRight size={16} /></button></div>
-            </article>)}</div>
+            <div className="opportunity-grid">{wider.map(offer => <OfferCard key={offer.id} offer={offer} compact
+                starred={isStarred(offer)} saving={saving === offer.id}
+                onStar={() => void star(offer)} onOpen={() => setDetail(offer)} />)}</div>
           </div> : null}
         </section>
         <p className="footnote"><BriefcaseBusiness size={14} />Tú eliges dónde avanzar. Revisa las condiciones y presenta tu candidatura en el proceso de la empresa.</p>

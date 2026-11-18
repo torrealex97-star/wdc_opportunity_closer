@@ -14,6 +14,10 @@ Empresa, puesto, condiciones, vigencia y siguiente paso son protagonistas. Mante
 
 El preview usa WDCOpportunity, no copia del objeto admin. Diseño/estados/copy normativos en [17](spec/17_WDC_OPPORTUNITY_EXPERIENCE.md) y [UI/UX](spec/07_UI_UX.md). No afirmar conexión directa, verificación ni selección que no se haya realizado.
 
+## Ficha de oportunidad (alumna)
+
+Dos columnas en escritorio y una en móvil. La tarjeta se lee de arriba abajo en el orden en que la alumna decide: monograma y empresa en gris, perfil como píldora (terracota en Closer, salvia en Setter, ámbar en Cold Caller, siempre con la palabra escrita), titular del puesto en serif, e insignias con icono para ubicación, modalidad y frescura (salvia si es de los últimos tres días). El bloque de compensación es el foco: fondo salvia y cifra grande cuando la empresa publica importe; fondo inset y frase explícita («La empresa no publica importe») cuando no. Los datos comparables van en rejilla 2×2 con icono y etiqueta en mayúsculas diminutas; el pie lleva procedencia y un único CTA. La tarjeta destacada se marca con filete terracota arriba y la insignia «Selección del día», nunca solo con color. Ubicación y modalidad no se repiten cuando dicen lo mismo.
+
 ## Sala de práctica
 
 Ocho tarjetas de situación en dos columnas, con etiqueta (`Venta` terracota / `Entrevista` salvia) y **nivel** discreto (suave en salvia, dura en ámbar), titular serif, contexto ficticio explícito y objetivos numerados 01–04. La sala es una conversación de papel: burbujas inset para el interlocutor y rosa empolvado para la alumna, sin avatares inventados (un icono y «Simulación · empresa ficticia»). El cronómetro es discreto y no compite con el título. El **orbe de voz** vive en la cabecera del chat junto a su estado escrito («Voz en espera», «Te escucho», «Pensando», «Hablando»): anillos finos y núcleo con el color del estado (terracota al escuchar, ámbar al pensar, salvia al hablar, gris apagado en reposo), sin animación con `prefers-reduced-motion`. El **dictado** es un botón cuadrado de 44 px pegado al compositor: activo en rosa empolvado, y si el navegador no lo soporta no se muestra; nunca envía solo.
