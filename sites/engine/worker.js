@@ -1930,6 +1930,51 @@ function activationBudget(env) {
 // desconocidos explícitos como 'No especificado'—, verifica la vigencia y PUBLICA
 // solo las verificadas `open`; el resto queda `needs_review` con la razón escrita.
 // `dry_run` (por defecto) no escribe nada: devuelve el plan para que el operador decida.
+// Cerrar lo caducado (petición del propietario, 2026-11-18): un borrador o una oferta de la cola
+// humana cuyo anuncio ya no está en el catálogo no puede salir a la alumna por mucha revisión que
+// reciba. Se retira con su motivo para que el panel no cuente como pendiente lo que nunca se
+// servirá. Reversible (UPDATE, no DELETE), idempotente (repetir devuelve 0) y declara el corte.
+const EXPIRED_REASON = 'caducada en el catálogo: la vista de alumna no la puede servir';
+async function handleAdminCloseExpired(request, env) {
+  const db = env.DB;
+  await ensureSchema(db);
+  let body = {};
+  try {
+    const parsed = await request.json();
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) body = parsed;
+  } catch { body = {}; }
+  const dryRun = body.dry_run !== false;
+  const limit = Math.min(Math.max(Number(body.limit) || 2000, 1), 5000);
+  const counts = { draft: 0, needs_review: 0, total: 0, withdrawn: 0 };
+  const truncated = { draft: false, needs_review: false };
+  for (const status of ['draft', 'needs_review']) {
+    const rows = await db.prepare(`
+      SELECT o.id AS id FROM opportunities o
+      JOIN catalog_entries c ON c.org_id=o.org_id AND c.job_id=o.job_id
+      WHERE o.org_id=? AND o.editorial_status=? AND c.expires_at <= ?
+      ORDER BY c.expires_at LIMIT ?`).bind(ORG, status, now(), limit + 1).all();
+    const ids = rows.results.map(r => r.id);
+    truncated[status] = ids.length > limit;
+    const use = truncated[status] ? ids.slice(0, limit) : ids;
+    counts[status] = use.length;
+    counts.total += use.length;
+    if (dryRun) continue;
+    for (let i = 0; i < use.length; i += 80) {
+      const chunk = use.slice(i, i + 80);
+      // La guarda `editorial_status=?` es la misma que la retirada de la activación: si alguien ya
+      // movió la oferta, no se pisa. Una fila que no cambie no se cuenta.
+      const applied = await db.prepare(`UPDATE opportunities SET editorial_status='withdrawn', status_reason=?, updated_at=?
+        WHERE org_id=? AND editorial_status=? AND id IN (${chunk.map(() => '?').join(',')})`)
+        .bind(EXPIRED_REASON, now(), ORG, status, ...chunk).run();
+      counts.withdrawn += Number(applied?.meta?.changes ?? 0);
+    }
+  }
+  return Response.json({
+    dry_run: dryRun, counts, truncated,
+    note: dryRun ? 'Plan: no se ha escrito nada.' : `${counts.withdrawn} ofertas cerradas como caducadas.`,
+  });
+}
+
 async function handleAdminActivate(request, env) {
   const db = env.DB;
   await ensureSchema(db);
@@ -12292,6 +12337,7 @@ export default {
       // (dry_run por defecto). Va ANTES de las rutas por id: 'activate' no es un id.
       if (request.method === 'POST' && adminMatch[1] === 'activate' && !adminMatch[2]) return handleAdminActivate(request, env);
       if (request.method === 'POST' && adminMatch[1] === 'reclassify' && !adminMatch[2]) return handleAdminReclassify(request, env);
+      if (request.method === 'POST' && adminMatch[1] === 'close-expired' && !adminMatch[2]) return handleAdminCloseExpired(request, env);
       // Port fase 3 (sesión 32): POST {id}/verify = verificación de vigencia.
       if (request.method === 'POST' && adminMatch[1] && adminMatch[2] === '/verify') return handleAdminVerify(request, env, adminMatch[1]);
       if (request.method === 'PATCH' && adminMatch[1]) return handleAdminReview(request, env, adminMatch[1]);

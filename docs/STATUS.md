@@ -1,5 +1,14 @@
 # Estado
 
+## Cerrado lo caducado: el panel deja de enseñar trabajo que nunca se servirá (sesión 218) — 2026-11-18
+
+- **Petición del propietario**: cerrar los 642 borradores y las ofertas de la cola humana ya caducadas, para que el panel no las cuente como pendientes.
+- **Qué se añadió**: `POST /v1/admin/opportunities/close-expired` (solo `ADMIN_TOKEN`, `dry_run` por defecto) en [worker.js](../sites/engine/worker.js). Retira —`editorial_status='withdrawn'` con motivo `caducada en el catálogo: la vista de alumna no la puede servir`— los estados `draft` y `needs_review` cuyo `catalog_entries.expires_at` ya pasó. Una escritura por estado (no por oferta), guarda `editorial_status=?` para no pisar lo que una persona movió, `UPDATE` y nunca `DELETE`, tope de 2.000 por llamada con `truncated` declarado y repetir devuelve 0.
+- **Medido en el motor desplegado (`5c624135-ba56-47b9-91b6-308f0e57b831`)**: plan en seco **819** (642 borradores + **177** en cola humana; el propietario citaba 168 y 9 más caducaron entre la medición y la ejecución). Ejecución real: **819 cerradas**, `truncated` falso en los dos estados. Segunda llamada: **total 0, cerradas 0** (idempotente). Coste: 819 filas escritas, dentro de la cuota del día.
+- **Estado después (verified, leído de D1)**: **0** borradores y **0** ofertas de cola humana caducadas. El panel queda con `needs_review` **731** y `draft` **243**, todas vigentes (los 243 borradores son recogida nueva del cron, no las que se cerraron), y `published` **2.061**. `/v1/admin/opportunities?status=needs_review` responde con el recuento nuevo y `/alumna` 200.
+- **Probado (tested)**: prueba nueva [tests/engine/expiredqueue.mjs](../tests/engine/expiredqueue.mjs) —sin token 401; el plan cuenta y no escribe; la ejecución retira con motivo y guarda el estado; repetir devuelve 0; el tope de lote se declara con `truncated`— y el resto de la suite del motor en verde.
+- **Límites**: no se tocan las **311 publicadas caducadas** (no se sirven por la consulta de la vista, pero retirarlas es otra escritura masiva y no se pidió). La retirada es reversible de una en una con el PATCH de revisión, no en bloque. No se ha mirado el panel con sesión de operador: lo verificado es la respuesta de la ruta y el recuento en la base.
+
 ## «Ejecutivo comercial» deja de tragarse otros oficios y no gasta publicación (sesión 217) — 2026-11-18
 
 - **Petición del propietario**: afinar la familia `account_executive` para que deje de clasificar arquitectos, analistas, atención al cliente y administrativos; dejar de gastar presupuesto de publicación en AE genérico; medir antes cuántas closers se ganan con cada cambio.
