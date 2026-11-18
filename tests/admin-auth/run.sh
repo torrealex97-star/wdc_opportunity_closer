@@ -7,6 +7,8 @@ export NODE_NO_WARNINGS=1
 # Antes de arrancar nada: ninguna prueba puede llamar a una ruta o fichero que no esté en el repositorio (y el chequeo se prueba a sí mismo).
 node tests/orphan-refs.selftest.mjs
 node tests/orphan-refs.mjs
+# Comprobación en seco de la retirada masiva: cuenta motivos y se aborta si el motor no simula.
+node tests/withdraw-preview.mjs
 export PORT=3199
 SUPABASE_URL=http://127.0.0.1:8791 SUPABASE_PUBLISHABLE_KEY=anon-key SUPABASE_SERVICE_ROLE_KEY=service-key \
 CAREER_ENGINE_URL=http://127.0.0.1:8792 CAREER_ADMIN_TOKEN=engine-token ADMIN_PUBLIC_URL=https://app.test.dev \

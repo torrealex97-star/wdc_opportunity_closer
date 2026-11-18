@@ -17,6 +17,7 @@
     "handoff": "node scripts/handoff.mjs check",
     "vocab:audit": "node scripts/vocabulary-audit.mjs",
     "funnel:audit": "node scripts/funnel-audit.mjs",
+    "withdraw:preview": "node scripts/withdraw-preview.mjs",
     "test:voice": "node spikes/voice/tests/voice.mjs",
     "design": "node scripts/check-design.mjs",
     "bucket:audit": "node scripts/bucket-audit.mjs",
