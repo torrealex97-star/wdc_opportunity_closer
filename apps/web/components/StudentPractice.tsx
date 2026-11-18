@@ -2,7 +2,7 @@
 
 import { logActivity } from './studentActivityClient';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, Sparkles, Target, Users, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, Sparkles, Target, Users, Volume2 } from 'lucide-react';
 import { INTENSITY_LABELS, PRACTICE_SCENARIOS, categoriesFor, scenarioById } from './practiceScenarios';
 import type { PracticePersona, PracticeScenario, PracticeTrack } from './practiceScenarios';
 import JarvisOrb from './JarvisOrb';
@@ -32,6 +32,10 @@ type Stored = { id: string; scenarioId: string; title: string; startedAt: number
 type View = 'scenarios' | 'room' | 'debrief';
 
 const HISTORY_KEY = 'wdc_practice_history';
+// Una candidatura de su tablero: el id es lo único que se manda al servidor; el anuncio y el
+// formulario los resuelve él (la página no ve el contexto que va al modelo).
+type Prepared = { id: string; offer_title: string; offer_company: string | null };
+type OfferSession = { applicationId: string; title: string; company: string | null; includeProfile: boolean };
 // La ruta acepta 24 turnos por petición. La sala corta antes para que el feedback
 // siempre quepa: sin este tope, una conversación larga acababa en 422 y no había
 // forma de cerrarla ni de recibir nota.
@@ -87,6 +91,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [now, setNow] = useState(Date.now());
   const [history, setHistory] = useState<Stored[]>([]);
   const [canSpeak, setCanSpeak] = useState(false);
+  const [prepared, setPrepared] = useState<Prepared[]>([]);
+  const [preparedId, setPreparedId] = useState('');
+  const [canUseProfile, setCanUseProfile] = useState(false);
+  const [useProfile, setUseProfile] = useState(false);
+  const [offerSession, setOfferSession] = useState<OfferSession | null>(null);
   const [speaking, setSpeaking] = useState(false);
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
   const voice = useVoiceInput(text => setDraft(current => current.trim() ? `${current.trimEnd()} ${text}` : text));
@@ -99,6 +108,18 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       if (Array.isArray(stored)) setHistory(stored.filter((item): item is Stored => Boolean(item?.id && item?.title)));
     } catch { /* almacenamiento no disponible: la práctica sigue funcionando sin historial */ }
     setCanSpeak(typeof window !== 'undefined' && 'speechSynthesis' in window);
+  }, []);
+  // Candidaturas del tablero para practicar una oferta concreta. Sin sesión no hay panel: la sala
+  // genérica sigue funcionando igual. El permiso del formulario base lo decide el servidor también.
+  useEffect(() => {
+    fetch('/api/student/applications', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { applications?: Prepared[] } | null) => { if (Array.isArray(data?.applications)) setPrepared(data.applications); })
+      .catch(() => undefined);
+    fetch('/api/student/application-profile', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { profile?: { autofill_consent_at?: string | null } | null } | null) => setCanUseProfile(Boolean(data?.profile?.autofill_consent_at)))
+      .catch(() => undefined);
   }, []);
   useEffect(() => {
     if (view !== 'room') return;
@@ -128,9 +149,10 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }
-  function begin(item: PracticeScenario) {
+  function begin(item: PracticeScenario, offer: OfferSession | null = null) {
     setError('');
     setScenario(item);
+    setOfferSession(offer);
     setTurns([{ role: 'coach', content: item.opening }]);
     setDebrief(null);
     setDraft('');
@@ -138,8 +160,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     setNow(Date.now());
     setView('room');
   }
+  // La candidatura viaja como id: el servidor comprueba que es suya y resuelve el anuncio y el
+  // formulario. La página nunca manda el texto de la oferta ni sus datos personales.
   async function post(body: Record<string, unknown>) {
-    const response = await fetch('/api/practice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const payload = offerSession ? { ...body, application_id: offerSession.applicationId, include_profile: offerSession.includeProfile } : body;
+    const response = await fetch('/api/practice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await response.json().catch(() => ({})) as { detail?: string };
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se ha podido completar la práctica.');
     return data as { reply?: string; debrief?: Debrief };
@@ -178,14 +203,22 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     }
   }
 
+  function startPrepared(kind: 'entrevista' | 'llamada') {
+    const application = prepared.find(item => item.id === preparedId);
+    const item = scenarioById(kind === 'entrevista' ? 'entrevista-closer' : 'llamada-completa');
+    if (!application || !item) return;
+    onTrackChange(kind);
+    begin(item, { applicationId: application.id, title: application.offer_title, company: application.offer_company, includeProfile: useProfile && canUseProfile });
+  }
+
   if (view === 'room' && scenario) {
     return <section className="practice practice-room">
       <div className="practice-room-head">
-        <button className="practice-back" type="button" onClick={() => { setView('scenarios'); setScenario(null); setTurns([]); }}><ArrowLeft size={16} />Salir</button>
+        <button className="practice-back" type="button" onClick={() => { setView('scenarios'); setScenario(null); setOfferSession(null); setTurns([]); }}><ArrowLeft size={16} />Salir</button>
         <div>
-          <span className="eyebrow">SIMULACRO · {scenario.kind === 'venta' ? 'VENTA' : 'ENTREVISTA'} · {INTENSITY_LABELS[scenario.intensity].toUpperCase()}</span>
-          <h1>{scenario.title}</h1>
-          <p>{scenario.context}</p>
+          <span className="eyebrow">{offerSession ? 'SIMULACRO · TU CANDIDATURA' : `SIMULACRO · ${scenario.kind === 'venta' ? 'VENTA' : 'ENTREVISTA'} · ${INTENSITY_LABELS[scenario.intensity].toUpperCase()}`}</span>
+          <h1>{offerSession ? offerSession.title : scenario.title}</h1>
+          <p>{offerSession ? `${offerSession.company ?? 'Empresa no indicada'} · Conversación basada en el anuncio público que estás trabajando.` : scenario.context}</p>
         </div>
         <div className="practice-clock" role="timer" aria-label={`Tiempo de práctica: ${clock(elapsed)}`}><Clock3 size={15} /><span>{clock(elapsed)}</span></div>
       </div>
@@ -212,6 +245,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         <aside className="practice-aside">
           <h2>Lo que practicas</h2>
           <ol>{scenario.objectives.map(objective => <li key={objective}>{objective}</li>)}</ol>
+          {offerSession && <div className="practice-hint"><BriefcaseBusiness size={16} /><p>Practicas para {offerSession.title}{offerSession.company ? ` en ${offerSession.company}` : ''}. El anuncio es público; lo que no publica, no se inventa.</p></div>}
           <div className="practice-hint"><MessageSquare size={16} /><p>Escribe como hablarías: frases cortas, una pregunta cada vez. El interlocutor no conoce tu CV.</p></div>
           <div className="practice-hint"><Target size={16} /><p>No hay respuestas perfectas. Si te bloqueas, pide contexto o propón un siguiente paso.</p></div>
           <p className="practice-note">Empresa y personas son ficticias. Esta práctica no envía nada a ninguna empresa.</p>
@@ -222,10 +256,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
 
   if (view === 'debrief' && debrief) {
     return <section className="practice practice-debrief">
-      <button className="practice-back" type="button" onClick={() => { setView('scenarios'); setScenario(null); setDebrief(null); }}><ArrowLeft size={16} />Volver a las situaciones</button>
+      <button className="practice-back" type="button" onClick={() => { setView('scenarios'); setScenario(null); setOfferSession(null); setDebrief(null); }}><ArrowLeft size={16} />Volver a las situaciones</button>
       <span className="eyebrow">FEEDBACK DE PRÁCTICA</span>
       <h1>Qué ha funcionado y qué pulir.</h1>
       <p className="practice-summary">{debrief.summary}</p>
+      {offerSession && <p className="card-meta">Práctica de tu candidatura: {offerSession.title}{offerSession.company ? ` · ${offerSession.company}` : ''}.</p>}
       {typeof debrief.score === 'number' && debrief.axes?.length ? <div className="practice-score">
         <div className="practice-score-total" data-band={band(debrief.score)}>
           <Gauge size={16} />
@@ -266,8 +301,8 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       </div> : null}
       <div className="practice-next"><span className="eyebrow">SIGUIENTE PRÁCTICA</span><p>{debrief.next}</p></div>
       <div className="practice-actions">
-        <button type="button" onClick={() => scenario && begin(scenario)}><RotateCcw size={16} />Repetir esta situación</button>
-        <button className="primary" type="button" onClick={() => { setView('scenarios'); setScenario(null); setDebrief(null); }}>Elegir otra situación<ArrowRight size={16} /></button>
+        <button type="button" onClick={() => scenario && begin(scenario, offerSession)}><RotateCcw size={16} />Repetir esta situación</button>
+        <button className="primary" type="button" onClick={() => { setView('scenarios'); setScenario(null); setOfferSession(null); setDebrief(null); }}>Elegir otra situación<ArrowRight size={16} /></button>
       </div>
       <p className="practice-note">El feedback y la puntuación los estima un modelo de IA a partir de tu conversación; la puntuación no es una nota oficial. Es un simulacro: no evalúa tu candidatura ni decide nada sobre ningún proceso. Tu texto se envía a un proveedor de IA: no escribas datos personales de terceros (<a href="/privacidad">Privacidad</a> · <a href="/terminos">Términos</a>).</p>
     </section>;
@@ -291,6 +326,18 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         {item === 'llamada' ? <Phone size={16} /> : <Users size={16} />}{TRACK_TEXT[item].nav}
       </button>)}
     </div>
+    {prepared.length > 0 && <section className="practice-prepared" aria-label="Practica una candidatura tuya">
+      <div className="practice-prepared-head"><BriefcaseBusiness size={18} /><div><span className="eyebrow">CON UNA CANDIDATURA TUYA</span><h2>Ensaya la conversación de una oferta real</h2><p>Elige una candidatura de tu tablero y practica con el anuncio que estás trabajando, no con un caso genérico.</p></div></div>
+      <div className="practice-prepared-form">
+        <label htmlFor="practice-application">Candidatura<select id="practice-application" value={preparedId} onChange={event => { setPreparedId(event.target.value); setUseProfile(false); }}><option value="">Elige una oferta preparada</option>{prepared.map(item => <option key={item.id} value={item.id}>{item.offer_title}{item.offer_company ? ` · ${item.offer_company}` : ''}</option>)}</select></label>
+        <label className="check-label"><input type="checkbox" checked={useProfile} disabled={!canUseProfile} onChange={event => setUseProfile(event.target.checked)} />Usar mi formulario base en esta práctica{canUseProfile ? '' : ' (marca antes el permiso en «Mi formulario base»)'}</label>
+        <div className="practice-prepared-actions">
+          <button type="button" className="primary" disabled={!preparedId} onClick={() => startPrepared('entrevista')}><Users size={15} />Entrevista de esta oferta</button>
+          <button type="button" disabled={!preparedId} onClick={() => startPrepared('llamada')}><Phone size={15} />Llamada de cierre</button>
+        </div>
+      </div>
+      <p className="practice-note">Al proveedor de IA solo viajan el anuncio público y la conversación. Si marcas el formulario, también tu experiencia, herramientas, presentación y motivación; nunca tu email, teléfono, LinkedIn, CV, vídeo ni expectativa salarial.</p>
+    </section>}
     {error && <p className="practice-error" role="alert"><CircleAlert size={15} />{error}</p>}
     <div className="practice-categories">
       <span className="practice-categories-label">{text.categoriesLabel}</span>

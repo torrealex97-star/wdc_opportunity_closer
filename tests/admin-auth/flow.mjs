@@ -343,6 +343,14 @@ await step('candidaturas asistidas: formulario base, borrador, copia, seguimient
   const again = await call('/api/student/applications', { ...A, method: 'POST', body: { offer_id: OK } }); assert.equal(again.status, 200); assert.equal(again.json.created, false); assert.equal(again.json.application.id, app.id);
   assert.equal(state.applications.filter(a => a.offer_ref === OK).length, 1, 'una sola candidatura por oferta');
   const list = await call('/api/student/applications', A); assert.equal(list.json.applications.length, 1); assert.equal(list.json.assisted_only, true);
+  // Práctica atada a UNA candidatura: sin sesión no se abre, la de otra alumna tampoco, y el
+  // formulario base no se manda sin el permiso que ella ya puede retirar (aquí está retirado).
+  const practiceBody = { scenario: 'entrevista-closer', messages: [{ role: 'coach', content: 'Cuéntame por qué te interesa.' }], mode: 'reply' };
+  assert.equal((await call('/api/practice', { cookies: false, method: 'POST', body: { ...practiceBody, application_id: app.id } })).status, 401, 'la práctica con candidatura exige sesión');
+  assert.equal((await call('/api/practice', { ...B, method: 'POST', body: { ...practiceBody, application_id: app.id } })).status, 404, 'la candidatura de otra alumna no se abre');
+  assert.equal((await call('/api/practice', { ...A, method: 'POST', body: { ...practiceBody, application_id: '00000000-0000-4000-8000-000000000999' } })).status, 404);
+  assert.equal((await call('/api/practice', { ...A, method: 'POST', body: { ...practiceBody, application_id: app.id, include_profile: true } })).status, 422, 'sin permiso del formulario base no se envía');
+  assert.equal((await call('/api/practice', { ...A, method: 'POST', body: { ...practiceBody, application_id: app.id } })).status, 503, 'sin clave del modelo la sala se declara apagada');
   const copyKeys = list.json.copy.map(c => c.key); for (const k of ['full_name', 'contact_email', 'phone', 'cv_url', 'video_url', 'work_authorization', 'pitch']) assert.ok(copyKeys.includes(k), `copia: ${k}`);
   assert.equal(list.json.copy.find(c => c.key === 'work_authorization').value, 'Ciudadana de la UE');
   // Seguimiento: ella edita y marca; transiciones coherentes; applied_at solo al enviar

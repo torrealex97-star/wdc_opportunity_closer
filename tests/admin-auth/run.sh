@@ -104,6 +104,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/offertags.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/voice.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice.mjs
+# Práctica de una candidatura: solo el anuncio y la parte profesional del formulario viajan al modelo.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practicecontext.mjs
 # Topes de la sala: la IP del limitador no puede salir de una cabecera que elija el cliente.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practicebudget.mjs
 node tests/secrets.mjs

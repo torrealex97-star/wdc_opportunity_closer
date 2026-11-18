@@ -805,3 +805,16 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .admin-progress .student-progress .page-heading h1{font-size:34px;overflow-wrap:anywhere}
 .student-row-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 @media(max-width:760px){.admin-progress{width:100vw;max-height:100vh;border-radius:0}.admin-progress .detail{padding:20px}}
+
+/* --- Practicar una candidatura desde la sala (2026-11-18) ---
+   El panel deja claro de dónde sale el contexto y qué no viaja al modelo; la sala conserva su
+   composición y solo cambia el titular de la sesión. */
+.practice-prepared{display:grid;gap:14px;margin:0 0 24px;padding:20px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}
+.practice-prepared-head{display:flex;gap:12px;align-items:flex-start;color:var(--accent)}
+.practice-prepared-head h2{font-size:18px;margin:2px 0 4px;color:var(--ink)}
+.practice-prepared-head p{font-size:12px;color:var(--secondary);max-width:70ch}
+.practice-prepared-form{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end}
+.practice-prepared-form>label:first-child{flex:1 1 320px;min-width:0}
+.practice-prepared-form .check-label{flex:1 1 320px;max-width:520px;font-size:11px}
+.practice-prepared-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+@media(max-width:700px){.practice-prepared{padding:16px}.practice-prepared-form>label:first-child,.practice-prepared-form .check-label{flex:1 1 100%}.practice-prepared-actions{margin-left:0;width:100%}.practice-prepared-actions button{flex:1 1 auto}}

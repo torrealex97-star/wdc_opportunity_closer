@@ -1,4 +1,5 @@
 import type { PracticeScenario } from '../../../components/practiceScenarios';
+import { contextInstructions, type PracticeContext } from '../../../lib/practiceContext';
 
 // Prompts de la sala de práctica. Viven solo en servidor: el navegador recibe el
 // catálogo visible, nunca el personaje ni las capas de resistencia.
@@ -341,13 +342,15 @@ export function stageFor(scenario: PracticeScenario, studentTurns: number) {
   return Math.min(3, stage);
 }
 
-export function buildPersonaPrompt(scenario: PracticeScenario, studentTurns: number) {
+export function buildPersonaPrompt(scenario: PracticeScenario, studentTurns: number, context?: PracticeContext | null) {
   const persona = PERSONAS[scenario.id];
   const stage = stageFor(scenario, studentTurns);
   const axisText = axesFor(scenario).map(axis => `${axis.label}: ${axis.guide}`).join('\n');
   return `Eres ${persona.name}, ${persona.role}.
 
 ${persona.brief}
+
+${context ? `${contextInstructions(context)}\n\nEn esta práctica representas a esa empresa y ese puesto: usa el contexto de arriba como base y no añadas hechos que no estén ahí.` : 'La empresa y la persona son ficticias; si te preguntan, dilo y sigue en el papel.'}
 
 Estás en una simulación formativa de ${scenario.kind === 'venta' ? 'venta' : 'entrevista'}. La otra persona es una alumna que practica; tú no eres su coach.
 
@@ -386,7 +389,7 @@ const METHOD_ANCHORS: Record<PracticeScenario['kind'], string[]> = {
   ],
 };
 
-export function debriefInstructions(scenario: PracticeScenario) {
+export function debriefInstructions(scenario: PracticeScenario, context?: PracticeContext | null) {
   const definitions = axesFor(scenario);
   const axes = definitions
     .map(axis => `- ${axis.id}: ${axis.guide}${axis.weight ? ` (peso ${axis.weight}%)` : ''}`)
@@ -411,7 +414,7 @@ ${METHOD_ANCHORS[scenario.kind].map(rule => `- ${rule}`).join('\n')}
 Ejes (puntúa los ${count}, con el id exacto):
 ${axes}
 
-Situación practicada: ${scenario.title} (${scenario.kind}). Objetivos: ${scenario.objectives.join('; ')}.`;
+Situación practicada: ${scenario.title} (${scenario.kind}). Objetivos: ${scenario.objectives.join('; ')}.${context ? `\n\nLa práctica va sobre una candidatura concreta: ${context.offer.title}${context.offer.company ? ` en ${context.offer.company}` : ''}. Valora el encaje con ese puesto usando solo el anuncio y la conversación; no inventes requisitos, condiciones ni procesos que no aparezcan.` : ''}`;
 }
 
 export function debriefSchema(scenario: PracticeScenario) {
