@@ -31,6 +31,17 @@ const MARKETS = ['any', 'ES', 'EU', 'LATAM', 'US'] as const;
 // prospección solo consta cuando el anuncio la menciona, así que ninguna se supone.
 const MODALITIES = ['any', 'remote', 'hybrid', 'onsite'] as const;
 const MOTIONS = ['any', 'outbound', 'inbound'] as const;
+// Modalidad y prospección se marcan como el bilingüe: una casilla por opción, sin desplegable.
+// Son excluyentes porque el motor filtra por un valor; desmarcar la activa vuelve a «cualquiera».
+function Ticks({ legend, hint, value, options, onChange }: { legend: string; hint?: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+  return <fieldset className="tick-field">
+    <legend>{legend}</legend>
+    <div className="tick-row">{options.map(option => <label key={option.value} className="check-label">
+      <input type="checkbox" checked={value === option.value} onChange={event => onChange(event.target.checked ? option.value : 'any')} />{option.label}
+    </label>)}</div>
+    <small>{hint ?? 'Sin marcar: cualquiera.'}</small>
+  </fieldset>;
+}
 // La alumna conserva su contexto: los filtros aplicados viven en la URL (compartible/recargable),
 // validados contra las opciones reales del desplegable para no inventar estados.
 function queryFromUrl(): Query | null {
@@ -293,8 +304,8 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
           <form onSubmit={e => { e.preventDefault(); setApplied({ ...query }); history.replaceState(null, '', urlFromQuery(query)); }}>
           <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option>{ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label></div>
           <div className="student-preferences">
-            <label className="pref-field"><span>Modalidad</span><select value={query.modality} onChange={e => setQuery({ ...query, modality: e.target.value as Query['modality'] })}><option value="any">Cualquier modalidad</option><option value="remote">Remoto</option><option value="hybrid">Híbrido</option><option value="onsite">Presencial</option></select></label>
-            <label className="pref-field"><span>Prospección</span><select value={query.sales_motion} onChange={e => setQuery({ ...query, sales_motion: e.target.value as Query['sales_motion'] })}><option value="any">Cualquiera</option><option value="outbound">En frío (outbound)</option><option value="inbound">Leads entrantes (inbound)</option></select><small>Solo cuando el anuncio lo menciona.</small></label>
+            <Ticks legend="Modalidad" value={query.modality} options={[{ value: 'remote', label: 'Remoto' }, { value: 'hybrid', label: 'Híbrido' }, { value: 'onsite', label: 'Presencial' }]} onChange={value => setQuery({ ...query, modality: value as Query['modality'] })} />
+            <Ticks legend="Prospección" value={query.sales_motion} hint="Solo cuando el anuncio lo menciona. Sin marcar: cualquiera." options={[{ value: 'outbound', label: 'En frío (outbound)' }, { value: 'inbound', label: 'Leads entrantes (inbound)' }]} onChange={value => setQuery({ ...query, sales_motion: value as Query['sales_motion'] })} />
             <label className="check-label"><input type="checkbox" checked={query.include_bilingual} onChange={e => setQuery({ ...query, include_bilingual: e.target.checked })} />También oportunidades bilingües español / inglés</label>
             <button className="primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}Ver oportunidades</button></div>
           </form>

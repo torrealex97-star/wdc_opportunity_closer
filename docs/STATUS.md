@@ -1,5 +1,13 @@
 # Estado
 
+## Modalidad y prospección se marcan con casillas, como el bilingüe (sesión 225) — 2026-11-18
+
+- **Petición del propietario**: «La modalidad y prospección que sean como el tick de español inglés».
+- **Qué se ha cambiado**: los dos desplegables de Modalidad y Prospección del buscador de alumnas pasan a **casillas** con el mismo aspecto que «También oportunidades bilingües español / inglés» ([StudentOpportunities.tsx](../apps/web/components/StudentOpportunities.tsx), componente `Ticks`; estilos en [globals.css](../apps/web/app/globals.css)). Modalidad ofrece Remoto · Híbrido · Presencial; prospección, En frío (outbound) · Leads entrantes (inbound). Sin marcar no se filtra (cualquiera) y una marca por eje: marcar otra sustituye a la anterior y desmarcar vuelve a «cualquiera», porque el motor sigue filtrando por **un** valor (`OpportunityQuery.modality` / `sales_motion`). La app y el contrato no cambian.
+- **Por qué**: el filtro se lee de un vistazo y se comporta como el resto de preferencias de la alumna; un desplegable para dos o tres opciones esconde las opciones detrás de un clic y parece un ajuste técnico, no una preferencia.
+- **Probado** (`tested`): `npm run typecheck` y `npm run build` PASS; `npm run test:web` **46/46** pasos backend y **13/13** de interfaz; `tests/browser/student.spec.ts` **8/8**, con la prueba de modalidad/prospección actualizada a casillas: marca Presencial y outbound, comprueba que marcar Remoto desmarca Presencial, vuelve a Presencial y verifica que tras recargar siguen marcadas y que el body y la URL llevan `onsite` y `outbound`; `npm run design` OK (sin hex nuevos) y `npm run handoff` OK.
+- **Límites honestos**: siguen siendo excluyentes (una modalidad y una prospección a la vez) porque el contrato del motor no acepta listas; si el propietario quiere «presencial **o** remoto» a la vez, es un cambio de contrato y de motor, no de esta pantalla. No hay revisión visual con captura en esta sesión: lo verificado es el DOM, el estado de las casillas y las peticiones.
+
 ## Se retira «Pídelo en una frase»: se elige en los filtros (sesión 224) — 2026-11-18
 
 - **Petición del propietario**: «Quita esta parte que al final son pocas opciones es mejor que los seleccione» (sobre el campo «Pídelo en una frase» del buscador de alumnas).

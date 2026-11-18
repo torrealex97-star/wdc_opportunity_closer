@@ -184,8 +184,12 @@ test('modalidad y prospección son filtros propios y viajan a la búsqueda', asy
   await page.goto('/');
   // El idioma ya no afirma la modalidad: cada eje se elige aparte.
   await expect(page.getByText('En español · remoto o híbrido')).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Modalidad' }).selectOption('onsite');
-  await page.getByRole('combobox', { name: 'Prospección' }).selectOption('outbound');
+  // Modalidad y prospección son casillas, como el bilingüe; una marca por eje.
+  await page.getByRole('checkbox', { name: 'Presencial' }).check();
+  await page.getByRole('checkbox', { name: 'En frío (outbound)' }).check();
+  await page.getByRole('checkbox', { name: 'Remoto' }).check();
+  await expect(page.getByRole('checkbox', { name: 'Presencial' })).not.toBeChecked();
+  await page.getByRole('checkbox', { name: 'Presencial' }).check();
   await page.getByRole('button', { name: 'Ver oportunidades', exact: true }).click();
   await expect.poll(() => bodies.some(b => b.modality === 'onsite' && b.sales_motion === 'outbound')).toBe(true);
   // La tarjeta dice la prospección con la palabra del anuncio, no con una clasificación nuestra.
@@ -194,7 +198,7 @@ test('modalidad y prospección son filtros propios y viajan a la búsqueda', asy
   expect(url.searchParams.get('modality')).toBe('onsite');
   expect(url.searchParams.get('motion')).toBe('outbound');
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Modalidad' })).toHaveValue('onsite');
-  await expect(page.getByRole('combobox', { name: 'Prospección' })).toHaveValue('outbound');
+  await expect(page.getByRole('checkbox', { name: 'Presencial' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'En frío (outbound)' })).toBeChecked();
   await expect.poll(() => bodies.filter(b => b.modality === 'onsite').length).toBeGreaterThan(1);
 });
