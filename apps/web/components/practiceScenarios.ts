@@ -1,9 +1,20 @@
 // Catálogo visible de prácticas. Sin empresas reales: toda situación es ficticia y
 // la UI lo dice. Los prompts de cada personaje viven solo en el servidor, igual que
 // las capas de resistencia: aquí solo se declara lo que la alumna ve.
+// Dos salas: la de llamada (cliente simulado) y la de entrevista (entrevistador simulado).
+// Cada situación declara en qué sala vive, su categoría y la persona que la interpreta;
+// esto es lo único que el navegador sabe del personaje (el prompt vive en el servidor).
+export type PracticeTrack = 'llamada' | 'entrevista';
+export type CallCategory = 'inicio' | 'objeciones' | 'completa';
+export type InterviewerType = 'dueno' | 'direccion' | 'rrhh' | 'responsable' | 'esceptico' | 'cercano' | 'experiencia';
+export type PracticePersona = { name: string; role: string; initials: string; tone: 'clay' | 'sage' | 'amber' };
+
 export type PracticeScenario = {
   id: string;
   kind: 'venta' | 'entrevista';
+  track: PracticeTrack;
+  category: CallCategory | InterviewerType;
+  persona: PracticePersona;
   // Entrevista con perfil: usa la rúbrica WDC de seis criterios en vez de los cuatro genéricos.
   rubric?: 'wdc-entrevista';
   title: string;
@@ -16,13 +27,84 @@ export type PracticeScenario = {
   minutes: number;
 };
 
+export const CALL_CATEGORIES: Array<{ id: CallCategory; label: string; hint: string }> = [
+  { id: 'inicio', label: 'Inicio de llamada', hint: 'Los primeros treinta segundos: contexto, permiso y una pregunta que abra la conversación.' },
+  { id: 'objeciones', label: 'Objeciones', hint: 'El «es caro», el «lo tengo que pensar», el tercero y el ataque directo.' },
+  { id: 'completa', label: 'Llamada completa', hint: 'De la apertura al cierre, con descubrimiento, precio y siguiente paso en la misma conversación.' },
+];
+
+export const INTERVIEWER_TYPES: Array<{ id: InterviewerType; label: string; hint: string }> = [
+  { id: 'dueno', label: 'Dueño directo', hint: 'Quien firma y paga: pide números, casos y retorno.' },
+  { id: 'direccion', label: 'Dirección', hint: 'Dirección de ventas o CEO: criterio, métricas y escalabilidad.' },
+  { id: 'rrhh', label: 'Recursos Humanos', hint: 'Primera criba: encaje, expectativas y condiciones del puesto.' },
+  { id: 'responsable', label: 'Responsable de ventas', hint: 'Quien dirige el equipo: método, seguimiento y día a día.' },
+  { id: 'esceptico', label: 'Escéptica', hint: 'Ya se ha quemado con otros closers y no cree promesas.' },
+  { id: 'cercano', label: 'Cercano', hint: 'Conversación cálida que detecta si recitas un guion.' },
+  { id: 'experiencia', label: 'Objeción de experiencia', hint: 'Te cuestionan no conocer el sector: piden un plan creíble.' },
+];
+
+export const categoriesFor = (track: PracticeTrack) => track === 'llamada' ? CALL_CATEGORIES : INTERVIEWER_TYPES;
+
+const PERSONAS: Record<string, PracticePersona> = {
+  'venta-fria': { name: 'Marta', role: 'Directora de marketing · empresa ficticia', initials: 'MA', tone: 'clay' },
+  'objeciones-precio': { name: 'Javier', role: 'Gerente de academia · ficticia', initials: 'JA', tone: 'clay' },
+  'venta-pensarlo': { name: 'Cristina', role: 'Fundadora de consultoría · ficticia', initials: 'CR', tone: 'clay' },
+  'venta-pareja': { name: 'Andrés', role: 'Socio de agencia · ficticia', initials: 'AN', tone: 'clay' },
+  'venta-cerrada': { name: 'Nuria', role: 'Dueña de clínica dental · ficticia', initials: 'NU', tone: 'clay' },
+  'venta-infoproducto': { name: 'Carolina', role: 'Dueña de agencia de diseño · ficticia', initials: 'CA', tone: 'clay' },
+  'venta-saas-b2b': { name: 'Elena', role: 'Gerente de gestoría · ficticia', initials: 'EL', tone: 'clay' },
+  'venta-clinica': { name: 'Lucía', role: 'Paciente · clínica ficticia', initials: 'LU', tone: 'amber' },
+  'venta-reformas': { name: 'Sofía', role: 'Propietaria · empresa ficticia', initials: 'SO', tone: 'clay' },
+  'venta-fitness': { name: 'Daniel', role: 'Autónomo · programa ficticio', initials: 'DA', tone: 'amber' },
+  'llamada-completa': { name: 'Paula', role: 'Responsable de operaciones · ficticia', initials: 'PA', tone: 'clay' },
+  'llamada-completa-b2b': { name: 'Marcos', role: 'Director financiero · ficticio', initials: 'MR', tone: 'clay' },
+  'entrevista-closer': { name: 'Lucía', role: 'Responsable de ventas', initials: 'LU', tone: 'sage' },
+  'entrevista-setter': { name: 'Diego', role: 'Sales manager', initials: 'DI', tone: 'sage' },
+  'entrevista-experiencia': { name: 'Elena', role: 'Dueña de servicios · ficticia', initials: 'EL', tone: 'sage' },
+  'perfil-directo': { name: 'Carlos', role: 'Dueño directo · ficticio', initials: 'CA', tone: 'sage' },
+  'perfil-esceptico': { name: 'Patricia', role: 'Dueña escéptica · ficticia', initials: 'PA', tone: 'sage' },
+  'perfil-amable': { name: 'Miguel', role: 'Dueño cercano · ficticio', initials: 'MI', tone: 'sage' },
+  'perfil-exigente': { name: 'Lucía', role: 'CEO · startup ficticia', initials: 'LU', tone: 'sage' },
+  'entrevista-rrhh': { name: 'Inés', role: 'Recursos Humanos · ficticia', initials: 'IN', tone: 'sage' },
+  'entrevista-head-sales': { name: 'Rodrigo', role: 'Dirección de ventas · ficticia', initials: 'RO', tone: 'sage' },
+};
+const personaOf = (id: string): PracticePersona => PERSONAS[id] ?? { name: 'Interlocutor', role: 'Simulación · empresa ficticia', initials: 'IN', tone: 'sage' };
+
 export const INTENSITY_LABELS: Record<PracticeScenario['intensity'], string> = {
   suave: 'Suave',
   real: 'Real',
   dura: 'Dura',
 };
 
-export const PRACTICE_SCENARIOS: PracticeScenario[] = [
+// Sala y categoría de cada situación. La llamada se agrupa por momento de la conversación;
+// la entrevista, por tipo de entrevistador.
+const SCENARIO_META: Record<string, { track: PracticeTrack; category: CallCategory | InterviewerType }> = {
+  'venta-fria': { track: 'llamada', category: 'inicio' },
+  'objeciones-precio': { track: 'llamada', category: 'objeciones' },
+  'venta-pensarlo': { track: 'llamada', category: 'objeciones' },
+  'venta-pareja': { track: 'llamada', category: 'objeciones' },
+  'venta-cerrada': { track: 'llamada', category: 'objeciones' },
+  'venta-infoproducto': { track: 'llamada', category: 'objeciones' },
+  'venta-saas-b2b': { track: 'llamada', category: 'objeciones' },
+  'venta-clinica': { track: 'llamada', category: 'objeciones' },
+  'venta-reformas': { track: 'llamada', category: 'objeciones' },
+  'venta-fitness': { track: 'llamada', category: 'objeciones' },
+  'llamada-completa': { track: 'llamada', category: 'completa' },
+  'llamada-completa-b2b': { track: 'llamada', category: 'completa' },
+  'entrevista-closer': { track: 'entrevista', category: 'responsable' },
+  'entrevista-setter': { track: 'entrevista', category: 'responsable' },
+  'entrevista-experiencia': { track: 'entrevista', category: 'experiencia' },
+  'entrevista-rrhh': { track: 'entrevista', category: 'rrhh' },
+  'entrevista-head-sales': { track: 'entrevista', category: 'direccion' },
+  'perfil-directo': { track: 'entrevista', category: 'dueno' },
+  'perfil-esceptico': { track: 'entrevista', category: 'esceptico' },
+  'perfil-amable': { track: 'entrevista', category: 'cercano' },
+  'perfil-exigente': { track: 'entrevista', category: 'direccion' },
+};
+
+type ScenarioSeed = Omit<PracticeScenario, 'track' | 'category' | 'persona'>;
+
+const SEEDS: ScenarioSeed[] = [
   {
     id: 'venta-fria',
     kind: 'venta',
@@ -258,6 +340,37 @@ export const PRACTICE_SCENARIOS: PracticeScenario[] = [
     intensity: 'dura',
     minutes: 10,
   },
+  // Llamada completa: el arco entero en una sesión, para entrenar los cambios de fase.
+  {
+    id: 'llamada-completa',
+    kind: 'venta',
+    title: 'Llamada completa: de la apertura al cierre',
+    context: 'Consultora ficticia de captación de clientes · 18 personas',
+    summary: 'La llamada entera en una sola práctica: abrir sin disculparte, descubrir el problema, sostener el precio y pedir el siguiente paso sin rellenar el silencio.',
+    objectives: ['Abrir con contexto y pedir permiso', 'Descubrir y cuantificar el problema antes de hablar del servicio', 'Sostener el precio sin justificarte ni rellenar el silencio', 'Cerrar con una fecha concreta'],
+    opening: 'Hola, ¿sí? Perdona, ¿me llamabas por algo?',
+    level: 'Closer · llamada completa',
+    intensity: 'real',
+    minutes: 10,
+  },
+  {
+    id: 'llamada-completa-b2b',
+    kind: 'venta',
+    title: 'Llamada completa B2B: del descubrimiento a la firma',
+    context: 'Software ficticio de gestión comercial · ciclo de 30 días · compras y dirección',
+    summary: 'Una sola llamada con dos decisiones en la cabeza: quien usa el producto y quien firma. Practicas descubrir criterios, tratar al que decide y acordar un paso con fecha.',
+    objectives: ['Descubrir quién decide y con qué criterio', 'Cuantificar el coste de seguir como ahora', 'Tratar la objeción de presupuesto sin rebajar', 'Acordar una reunión con quien firma'],
+    opening: 'Te escucho, aunque te aviso: la decisión de compra no es solo mía.',
+    level: 'Closer · B2B completo',
+    intensity: 'real',
+    minutes: 11,
+  },
 ];
+
+export const PRACTICE_SCENARIOS: PracticeScenario[] = SEEDS.map(seed => ({
+  ...seed,
+  ...(SCENARIO_META[seed.id] ?? { track: seed.kind === 'venta' ? 'llamada' : 'entrevista', category: seed.kind === 'venta' ? 'inicio' : 'responsable' }),
+  persona: personaOf(seed.id),
+}));
 
 export const scenarioById = (id: string) => PRACTICE_SCENARIOS.find(item => item.id === id) ?? null;

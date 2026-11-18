@@ -55,7 +55,10 @@ const rows = [
   { title: 'ADR', location: '', body: '', status: 'draft' },                  // setter → null (regresión)
   { title: 'Closer de ventas', location: '', body: '', status: 'approved' },  // igual
   { title: 'BDR', location: '', body: '', status: 'withdrawn' },              // duplicado del título: no cuenta dos veces
-  { title: 'Analista de Pré Vendas BDR', location: '', body: '', status: 'needs_review' },
+  // «Analista de Pré Vendas BDR» ya no clasifica: `nonSalesTitle` descarta «analista»
+  // (sesión 219). El caso que importa —un título con BDR fuera de la palabra exacta—
+  // se cubre con «Comercial BDR», que sigue siendo setter antes y sdr después.
+  { title: 'Comercial BDR', location: '', body: '', status: 'needs_review' },
 ];
 const result = summarize(rows, before, after, { window: 800, hasWord: before.hasWord });
 assert.equal(result.titles, 4, 'dedupe por título normalizado');

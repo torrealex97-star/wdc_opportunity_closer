@@ -122,8 +122,14 @@ export const ROLE_KEYWORDS: Record<string, string[]> = {
     'inside sales representative', 'inside sales specialist',
     'inbound sales representative', 'outbound sales representative',
     'business development manager',
-    'sales account executive', 'senior sales executive', 'remote sales consultant',
-    'high-ticket sales consultant', 'high ticket sales consultant',
+    'sales account executive', 'senior sales executive',     'remote sales consultant', 'high-ticket sales consultant', 'high ticket sales consultant',
+    // Paridad con el motor (parity.mjs): faltaban las variantes que el engine ya clasifica como
+    // ejecutivo comercial (retail, seguros, desarrollo de negocio y el mercado portugués).
+    'ejecutivo/a de ventas', 'dependiente', 'dependienta', 'dependiente/a',
+    'agente de seguros', 'mediador de seguros', 'mediadora de seguros',
+    'desarrollo de negocio', 'desarrollo de negocios', 'captacion de leads',
+    'sales partner', 'field sales',
+    'consultor de vendas', 'executivo de vendas', 'gerente de contas', 'kae',
   ],
   sdr: ['sdr', 'sales development', 'sales development representative'],
 };

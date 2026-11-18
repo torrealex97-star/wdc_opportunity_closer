@@ -2,9 +2,9 @@
 
 import { logActivity } from './studentActivityClient';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Play, Quote, RotateCcw, Send, Sparkles, Target, Volume2 } from 'lucide-react';
-import { INTENSITY_LABELS, PRACTICE_SCENARIOS, scenarioById } from './practiceScenarios';
-import type { PracticeScenario } from './practiceScenarios';
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, Sparkles, Target, Users, Volume2 } from 'lucide-react';
+import { INTENSITY_LABELS, PRACTICE_SCENARIOS, categoriesFor, scenarioById } from './practiceScenarios';
+import type { PracticePersona, PracticeScenario, PracticeTrack } from './practiceScenarios';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
@@ -49,9 +49,33 @@ function Bubble({ turn, onSpeak }: { turn: Turn; onSpeak?: (text: string) => voi
   </div>;
 }
 
-// Sala de práctica: simulacro de venta o entrevista con feedback. Todo es ficticio y
-// se dice; el feedback cita solo frases literales de la alumna (validadas en servidor).
-export default function StudentPractice() {
+// Sala de AI roleplay: dos salas, una de llamada con cliente simulado y otra de entrevista con
+// entrevistador simulado. Todo es ficticio y se dice; el feedback cita solo frases literales de
+// la alumna (validadas en servidor) y se apoya en el método de WDC.
+const TRACK_TEXT: Record<PracticeTrack, { nav: string; eyebrow: string; title: string; lead: string; categoriesLabel: string }> = {
+  llamada: {
+    nav: 'AI roleplay · llamada',
+    eyebrow: 'SALA DE AI ROLEPLAY · LLAMADA',
+    title: 'Ensaya la llamada antes de la real.',
+    lead: 'Un cliente simulado al otro lado: practica el inicio, las objeciones o la llamada completa. Recibes feedback sobre lo que has dicho.',
+    categoriesLabel: 'Momento de la llamada',
+  },
+  entrevista: {
+    nav: 'AI roleplay · entrevista',
+    eyebrow: 'SALA DE AI ROLEPLAY · ENTREVISTA',
+    title: 'Practica con cada tipo de entrevistador.',
+    lead: 'Un entrevistador simulado, del dueño directo a dirección o Recursos Humanos. Elige su estilo y ensaya tus respuestas con feedback.',
+    categoriesLabel: 'Tipo de entrevistador',
+  },
+};
+
+// «Carita» del personaje con las iniciales, en un solo sitio para la tarjeta y la sala.
+export function PersonaFace({ persona, size = 'md' }: { persona: PracticePersona; size?: 'sm' | 'md' | 'lg' }) {
+  return <span className={`persona-face is-${persona.tone} size-${size}`} aria-hidden="true">{persona.initials}</span>;
+}
+
+export default function StudentPractice({ track, onTrackChange }: { track: PracticeTrack; onTrackChange: (track: PracticeTrack) => void }) {
+  const [category, setCategory] = useState<string>('todas');
   const [view, setView] = useState<View>('scenarios');
   const [scenario, setScenario] = useState<PracticeScenario | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -167,7 +191,7 @@ export default function StudentPractice() {
       </div>
       <div className="practice-grid">
         <div className="practice-chat">
-          <div className="practice-chat-head"><span className="practice-avatar" aria-hidden="true"><MessageSquare size={16} /></span><div><strong>Interlocutor</strong><small>Simulación · empresa ficticia</small></div><div className="practice-voice"><JarvisOrb state={orb} /><small>{orb === 'listening' ? 'Te escucho' : orb === 'thinking' ? 'Pensando' : orb === 'speaking' ? 'Hablando' : 'Voz en espera'}</small></div></div>
+          <div className="practice-chat-head"><PersonaFace persona={scenario.persona} /><div><strong>{scenario.persona.name}</strong><small>{scenario.persona.role} · simulación</small></div><div className="practice-voice"><JarvisOrb state={orb} /><small>{orb === 'listening' ? 'Te escucho' : orb === 'thinking' ? 'Pensando' : orb === 'speaking' ? 'Hablando' : 'Voz en espera'}</small></div></div>
           <div className="practice-body" ref={chat} aria-live="polite">
             {turns.map((turn, index) => <Bubble key={`${index}-${turn.role}`} turn={turn} onSpeak={canSpeak && turn.role === 'coach' ? speak : undefined} />)}
             {busy && <div className="practice-turn is-them"><div className="practice-bubble is-typing" role="status" aria-label="El interlocutor está escribiendo"><i /><i /><i /></div></div>}
@@ -249,19 +273,39 @@ export default function StudentPractice() {
     </section>;
   }
 
+  const text = TRACK_TEXT[track];
+  const categories = categoriesFor(track);
+  const pool = PRACTICE_SCENARIOS.filter(item => item.track === track);
+  const shown = category === 'todas' ? pool : pool.filter(item => item.category === category);
   return <section className="practice">
     <div className="practice-head">
       <div>
-        <span className="eyebrow">PRÁCTICA DE CONVERSACIÓN</span>
-        <h1>Ensaya la conversación antes de la real.</h1>
-        <p>Elige una situación, habla con un interlocutor simulado y recibe feedback sobre lo que has dicho. Empresas y personas son ficticias.</p>
+        <span className="eyebrow">{text.eyebrow}</span>
+        <h1>{text.title}</h1>
+        <p>{text.lead}</p>
       </div>
-      <span className="practice-icon"><MessageSquare size={26} strokeWidth={1.4} /></span>
+      <span className="practice-icon">{track === 'llamada' ? <Phone size={26} strokeWidth={1.4} /> : <Users size={26} strokeWidth={1.4} />}</span>
+    </div>
+    <div className="practice-rooms" role="tablist" aria-label="Salas de AI roleplay">
+      {(['llamada', 'entrevista'] as PracticeTrack[]).map(item => <button key={item} type="button" role="tab" aria-selected={track === item} className={`practice-room-tab ${track === item ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); }}>
+        {item === 'llamada' ? <Phone size={16} /> : <Users size={16} />}{TRACK_TEXT[item].nav}
+      </button>)}
     </div>
     {error && <p className="practice-error" role="alert"><CircleAlert size={15} />{error}</p>}
-    <div className="practice-scenarios">
-      {PRACTICE_SCENARIOS.map(item => <article className="practice-card" key={item.id}>
-        <div className="practice-card-top"><span className={`practice-kind ${item.kind}`}>{item.kind === 'venta' ? 'Venta' : 'Entrevista'}</span><span className="practice-card-meta"><span className="practice-level" data-intensity={item.intensity}>{INTENSITY_LABELS[item.intensity]}</span><span className="practice-minutes"><Clock3 size={13} />{item.minutes} min</span></span></div>
+    <div className="practice-categories">
+      <span className="practice-categories-label">{text.categoriesLabel}</span>
+      <div role="group" aria-label={text.categoriesLabel}>
+        <button type="button" aria-pressed={category === 'todas'} onClick={() => setCategory('todas')}>Todas</button>
+        {categories.map(item => <button key={item.id} type="button" aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>)}
+      </div>
+    </div>
+    {category !== 'todas' && <p className="practice-category-hint">{categories.find(item => item.id === category)?.hint}</p>}
+    <div className="practice-scenarios" data-track={track}>
+      {shown.map(item => <article className="practice-card" key={item.id} data-category={item.category}>
+        <div className="practice-card-top">
+          <span className="practice-persona"><PersonaFace persona={item.persona} /><span><strong>{item.persona.name}</strong><small>{item.persona.role}</small></span></span>
+          <span className="practice-card-meta"><span className={`practice-kind ${item.kind}`}>{item.kind === 'venta' ? 'Cliente' : 'Entrevistador'}</span><span className="practice-level" data-intensity={item.intensity}>{INTENSITY_LABELS[item.intensity]}</span><span className="practice-minutes"><Clock3 size={13} />{item.minutes} min</span></span>
+        </div>
         <h2>{item.title}</h2>
         <p className="practice-context">{item.context}</p>
         <p>{item.summary}</p>
@@ -269,6 +313,7 @@ export default function StudentPractice() {
         <div className="practice-card-foot"><span>{item.level}</span><button className="primary" type="button" onClick={() => begin(item)}><Play size={15} />Practicar</button></div>
       </article>)}
     </div>
+    {!shown.length && <p className="card-meta">— Todavía no hay situaciones en esta categoría.</p>}
     {history.length > 0 && <div className="practice-history">
       <h2>Tus últimas prácticas</h2>
       <ul>{history.map(entry => <li key={entry.id}>

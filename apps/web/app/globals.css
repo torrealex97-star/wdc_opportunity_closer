@@ -758,3 +758,30 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 @media(max-width:560px){.search-grid{grid-template-columns:1fr}}
 @media(max-width:1200px){.student-results .opportunity-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.opportunity-card{padding:18px}.opportunity-card .opportunity-title{font-size:21px}.opportunity-card .opp-freshness{margin-left:0}.opportunity-card .opportunity-facts{grid-template-columns:1fr}.opportunity-card .opportunity-footer{flex-direction:column;align-items:stretch;gap:12px}.opportunity-card .opp-source{max-width:100%}}
+
+/* --- Sala de AI roleplay: dos salas, categorías y carita del personaje (2026-11-18) ---
+   La llamada se agrupa por momento (inicio, objeciones, completa) y la entrevista por tipo
+   de entrevistador. La carita es un monograma: no hay fotos inventadas. Solo tokens. */
+.practice-rooms{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.practice-room-tab{border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;background:var(--inset);color:var(--secondary);font-size:12px;padding:10px 14px;min-height:42px}
+.practice-room-tab.is-active{background:var(--sheet);color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.practice-categories{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.practice-categories-label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--secondary);font-weight:650}
+.practice-categories>div{display:flex;gap:6px;flex-wrap:wrap}
+.practice-categories button{border:1px solid var(--line);background:var(--sheet);color:var(--secondary);border-radius:999px;padding:6px 12px;min-height:34px;font-size:11px;font-weight:550}
+.practice-categories button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.practice-category-hint{margin:0;font-size:12px;color:var(--secondary);line-height:1.6}
+.practice-persona{display:flex;align-items:center;gap:10px;min-width:0}
+.practice-persona>span:last-child{display:grid;gap:2px;min-width:0}
+.practice-persona strong{font-size:12px;font-weight:600}
+.practice-persona small{font-size:10px;color:var(--secondary);line-height:1.4}
+.persona-face{display:grid;place-items:center;border-radius:50%;font-weight:650;letter-spacing:.4px;flex-shrink:0;border:1px solid transparent}
+.persona-face.is-clay{background:var(--accent-soft);color:var(--accent)}
+.persona-face.is-sage{background:var(--sage-soft);color:var(--sage)}
+.persona-face.is-amber{background:var(--warning-soft);color:var(--warning)}
+.persona-face.size-sm{height:32px;width:32px;font-size:11px}
+.persona-face.size-md{height:40px;width:40px;font-size:12px}
+.persona-face.size-lg{height:46px;width:46px;font-size:13px}
+@media(max-width:700px){.practice-card-top{flex-wrap:wrap}.practice-rooms{display:grid;grid-template-columns:1fr}}
+/* Los dos nombres de sala son largos: a 12 px caben en la barra sin partirse. */
+.student-shell .sidebar .nav{font-size:12px;gap:10px}

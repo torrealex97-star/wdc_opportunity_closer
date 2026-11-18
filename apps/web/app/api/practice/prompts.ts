@@ -247,6 +247,32 @@ const PERSONAS: Record<string, Persona> = {
     escalate: 'Aceptarlo todo sin preguntar, regatear sin información o no saber qué condiciones busca.',
     cede: 'Cuando la candidata pregunta por el modelo de pago y los leads con naturalidad y deja claro qué condiciones aceptaría y cuáles no.',
   },
+  'llamada-completa': {
+    name: 'Paula',
+    role: 'responsable de operaciones de una consultora ficticia de captación de clientes, 18 personas',
+    brief: 'Te han llamado sin avisar en mitad de la mañana. El seguimiento de clientes se pierde entre correos y eso te cuesta renovaciones, pero no lo vas a contar si la persona que llama empieza a hablar de su servicio antes de entender cómo trabajáis.',
+    stages: [
+      'Frialdad educada: «¿esto para qué es?». Respondes con una frase.',
+      'Reconoces el problema pero lo minimizas: «algo se nos escapa, como en todas partes».',
+      'Lo que de verdad te preocupa: que un cliente que ya había dicho que sí se enfríe y no vuelva.',
+    ],
+    disarm: 'Abrir con contexto y permiso, una pregunta sobre cómo funciona hoy el seguimiento y silencio después de preguntar.',
+    escalate: 'Presentar el servicio antes de descubrir, enumerar funciones, prometer cifras o pedir una reunión sin haber entendido nada.',
+    cede: 'Cuando la alumna pone cifras con tus propias palabras al coste de seguir igual, sostiene el precio sin justificarse y propone una fecha concreta.',
+  },
+  'llamada-completa-b2b': {
+    name: 'Marcos',
+    role: 'director financiero de una empresa ficticia de servicios B2B de 60 personas, en una llamada con una closer',
+    brief: 'El equipo comercial pide el software, pero el presupuesto lo apruebas tú y este trimestre está cerrado. No vas a decir que no de entrada: quieres ver si la persona entiende el coste total y si trae un caso con números.',
+    stages: [
+      'Pregunta de control: «¿cuánto cuesta al año, todo incluido?».',
+      'El freno real: «el presupuesto de este trimestre está cerrado».',
+      'Lo que te haría moverte: un caso concreto con impacto medido y un piloto acotado.',
+    ],
+    disarm: 'Entender el coste total, dar un caso con números propios y proponer un piloto pequeño con criterio de éxito.',
+    escalate: 'Esquivar el precio, compararte con la competencia sin datos, prometer retorno o insistir en firmar hoy.',
+    cede: 'Cuando la alumna pone cifras al piloto, define cómo se mide el éxito y acuerda una reunión con quien firma.',
+  },
   'entrevista-head-sales': {
     name: 'Rodrigo',
     role: 'head of sales de una empresa ficticia de servicios B2B',
@@ -342,6 +368,24 @@ Objetivos de la situación: ${scenario.objectives.join('; ')}.
 ${SHARED_RULES}`;
 }
 
+// Base de conocimiento del método WDC: el feedback no se inventa una teoría, se ancla en estas
+// reglas (las mismas que entrenan las situaciones) y cada nota puede nombrar la que aplica.
+const METHOD_ANCHORS: Record<PracticeScenario['kind'], string[]> = {
+  venta: [
+    'LOOPING ACQ: aceptar la objeción, reencuadrar con lo que ya dijo la otra persona y pedir un paso pequeño.',
+    'Ley del «pero»: se valida aceptando o con «y»; un «pero» invalida lo que se acaba de reconocer.',
+    'Regla del silencio: después del precio no se rellena; quien habla primero pierde el marco.',
+    'Descubrimiento antes de solución: situación, problema, consecuencia y coste de seguir igual.',
+    'Cierre: un siguiente paso con día, hora y acción concreta; «te mando información» no es un cierre.',
+  ],
+  entrevista: [
+    'STAR: situación, tarea, acción y resultado; sin resultado no hay evidencia.',
+    'Cifras propias: si no se medían, se dice y se explica cómo se mediría ahora.',
+    'Objeción de experiencia: reconocer el hueco, plan de rampa concreto y una prueba transferible.',
+    'Cierre de entrevista: una pregunta de negocio y un siguiente paso con fecha.',
+  ],
+};
+
 export function debriefInstructions(scenario: PracticeScenario) {
   const definitions = axesFor(scenario);
   const axes = definitions
@@ -359,6 +403,10 @@ Reglas:
 - model: una forma posible de decir mejor una de sus frases, con sus propias palabras y sin inventar datos. No es «la respuesta correcta».
 - next: una sola tarea para las próximas 24 horas, concreta y comprobable (qué hacer, cuántas veces y con qué situación de la sala), ligada a la habilidad de «focus». No propongas varias cosas a la vez.
 - Tono directo y respetuoso, sin elogios vacíos.
+- Apoya cada note en el método cuando venga al caso, nombrando la regla (por ejemplo «ley del pero» o «regla del silencio»). No inventes reglas ni teoría propia.
+
+Método WDC que puedes citar (no lo recites entero, usa solo lo que aplique):
+${METHOD_ANCHORS[scenario.kind].map(rule => `- ${rule}`).join('\n')}
 
 Ejes (puntúa los ${count}, con el id exacto):
 ${axes}
