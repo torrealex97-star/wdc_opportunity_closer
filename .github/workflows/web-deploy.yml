@@ -1,0 +1,88 @@
+name: Web deploy
+# Publica el Worker `closer-web` —el que sirve el dominio real app.womendigitalclosers.com— al empujar a main.
+#
+# Por qué existe: hasta la sesión 204 ese Worker se desplegaba a mano y el dominio se quedó dos días
+# atrás sin que nadie lo notara (Vercel estaba al día, el dominio real no).
+#
+# Comprobaciones ANTES de publicar (si alguna falla, no se despliega nada):
+#   typecheck · colores como tokens (design) · referencias huérfanas · ninguna credencial versionada
+#   · build de producción del Worker con OpenNext.
+# Y DESPUÉS: se comprueba que el dominio responde 200 y sirve la web.
+#
+# Credenciales: hacen falta DOS valores del repositorio, los pone el propietario (nunca se versionan):
+#   CLOUDFLARE_API_TOKEN  secreto con permiso «Workers Scripts: Edit» sobre la cuenta Women Digital Closers
+#   CLOUDFLARE_ACCOUNT_ID secreto o variable con el id de esa cuenta (si falta, se usa el valor por
+#                         defecto de aquí abajo: es un identificador público, no una credencial)
+# Sin el token, el despliegue se SALTA con un aviso en el resumen del job y no se publica nada.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/web-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Lo que tiene que estar bien para que la alumna reciba una web sana. Son las mismas puertas que
+      # corre el CI, pero aquí en corto: si una se rompe, el despliegue no ocurre.
+      - name: Comprobaciones previas
+        run: |
+          npm run typecheck
+          node tests/design.mjs
+          npm run design
+          node tests/orphan-refs.mjs
+          node tests/secrets.mjs
+      - name: Build de producción del Worker (OpenNext)
+        working-directory: apps/web
+        run: npx --no-install opennextjs-cloudflare build
+      - name: ¿Hay credenciales de Cloudflare?
+        id: creds
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Falta el secreto CLOUDFLARE_API_TOKEN: NO se publica. Añádelo en Settings → Secrets and variables → Actions con permiso «Workers Scripts: Edit»."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      # `wrangler deploy` sube el bundle ya construido con los bindings de apps/web/wrangler.jsonc
+      # (ENGINE, ASSETS, las dos variables públicas) y NO toca los secretos del Worker: siguen como están.
+      - name: Publicar el Worker closer-web
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '267ff3546dd1d780232981b1393d09ef' }}
+        run: npx --no-install wrangler deploy
+      # Un despliegue «correcto» que no sirve la web no es un despliegue: se mira el dominio de verdad.
+      - name: Comprobar el dominio real
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          code=000
+          for _ in $(seq 1 12); do
+            code=$(curl -s -o /tmp/home.html -w '%{http_code}' https://app.womendigitalclosers.com/ || echo 000)
+            [ "$code" = "200" ] && break
+            sleep 5
+          done
+          echo "GET / -> HTTP $code"
+          [ "$code" = "200" ]
+          grep -q "Women Digital" /tmp/home.html
+          echo "El dominio sirve la web."
