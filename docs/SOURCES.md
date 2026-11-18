@@ -1,17 +1,17 @@
 # Fuentes y búsquedas para WDC
 
-Actualizado: 2026-11-13. Los recuentos de esta cabecera y de la sección «Estado real» están **medidos** contra el código (`sites/engine/worker.js`, `apps/web/lib/sourceCatalog.json`) y contra los servicios; los recuentos de las secciones antiguas (33, 38, «quince conectores») se conservan como contexto histórico y **no son el estado actual**. La revisión de métodos, filtros y 51 referencias del Excel sigue en [SOURCE_ACQUISITION](SOURCE_ACQUISITION.md). Integración local, independiente de Scalix.
+Actualizado: 2026-11-18. Los recuentos de esta cabecera y de la sección «Estado real» están **medidos** contra el código (`sites/engine/worker.js`, `apps/web/lib/sourceCatalog.json`) y contra los servicios; los recuentos de las secciones antiguas (33, 38, «quince conectores») se conservan como contexto histórico y **no son el estado actual**. La revisión de métodos, filtros y 51 referencias del Excel sigue en [SOURCE_ACQUISITION](SOURCE_ACQUISITION.md). Integración local, independiente de Scalix.
 
 ## Estado real — medido el 2026-11-13
 
-- **Catálogo del panel: 63 entradas.** De ellas, **36** están marcadas `requires: input` («Requiere configurar») y 27 no piden configuración (25 recogidas y 2 libres sin conector).
-- **Motor cloud: 36 conectores** (`SOURCES`). Una pasada completa declara **109 subrequests de fetch** (tope 1.000 con Workers de pago; 50 en el plan gratuito, donde el planificador aplaza fuentes en vez de romper). El salto desde 79 es el plan B de FreeHire: tres páginas de datos por término cuando su API responde 429.
-- **25 entradas del catálogo tienen recogida ahora.** Las 36 fuentes del motor se agrupan por portal, así que las cifras no coinciden: JobToday son 13 conectores y FreeHire 4; el panel los suma en una fila.
+- **Catálogo del panel: 64 entradas.** De ellas, **36** están marcadas `requires: input` («Requiere configurar») y 28 no piden configuración (26 recogidas y 2 libres sin conector).
+- **Motor cloud: 37 conectores** (`SOURCES`). Una pasada completa declara **112 subrequests de fetch** (tope 1.000 con Workers de pago; 50 en el plan gratuito, donde el planificador aplaza fuentes en vez de romper). El salto desde 79 es el plan B de FreeHire: tres páginas de datos por término cuando su API responde 429.
+- **26 entradas del catálogo tienen recogida ahora.** Las 37 fuentes del motor se agrupan por portal, así que las cifras no coinciden: JobToday son 13 conectores y FreeHire 4; el panel los suma en una fila.
 - **Sin duplicados engañosos (corregido el 2026-11-13)**: `getonbrd` era una segunda entrada del mismo portal que el motor recoge como `getonbrd-public` y se pintaba «Requiere configurar»; se eliminó. `freelancer` y `jobgether` se recogían pero su ficha seguía diciendo «Adaptador pendiente / Sin proveedor verificado»: ahora dicen «Conector operativo». Un test (`tests/engine/catalog.mjs`) falla si vuelve a pasar cualquiera de las dos cosas.
 - **2 entradas gratuitas sin conector hoy**: dos feeds muertos, Remote.jobs (301) y Remote First Jobs (404).
 - **Cinco tableros ATS retirados el 2026-11-13** por cero elegibles en dos mediciones independientes: Holded · Recruitee, Monest Capital · Teamtailor, Typeform · Greenhouse, Wallapop · Greenhouse y Livestorm · Recruitee (23 ofertas entre los cinco, ninguna publicable nunca). Responden 200 y cuestan una petición, así que volver a conectarlos es re-añadir su fila; el criterio de retirada está en STATUS (sesión 172).
 
-### Gratis y conectadas (36 conectores, coste cero)
+### Gratis y conectadas (37 conectores, coste cero)
 
 | Portal | Conectores | Cómo se lee | Coste por pasada |
 |---|---|---|---|
@@ -20,6 +20,7 @@ Actualizado: 2026-11-13. Los recuentos de esta cabecera y de la sección «Estad
 | Himalayas | 1 | consultas por alias (`q`) | 1 |
 | Get on Board | 1 | API pública, categoría Sales | 2 |
 | Remotive · Jobicy · Working Nomads · Jobspresso · RemotoJOB · We Work Remotely · Remote OK · Arbeitnow · Virtual Vocations | 9 | RSS o JSON públicos | 1 cada uno |
+| openradar.fun | 1 | API pública sin clave (OpenAPI 3.1): vacantes y encargos con el texto completo; `q` por término, 3 términos por pasada | 3 |
 | Freelancer.com | 1 | API pública de proyectos (encargos, no empleos) | 1 |
 | Jobgether | 1 | feed público | 1 |
 | ATS por empresa | 6 | Greenhouse (Fever, Stripe, Cabify), Ashby (Qonto, Pennylane), Teamtailor (ProductHackers) | 1 cada uno |
@@ -62,6 +63,39 @@ La búsqueda inicial usa «Closers, setters y comercial online», evidencia de e
 Desde el 2026-11-13 también entran los **anuncios escritos en inglés que exigen español** («Spanish speaker», «Spanish speaking», «bilingual Spanish», «fluent in Spanish», «español requerido»). Se aceptan con etiqueta explícita en la tarjeta —«Anuncio en inglés · exige español»— para que nadie lea un anuncio en inglés creyendo que es en español. No basta con que aparezca «Spanish» suelto junto al nombre de la empresa o de la oficina: la palabra tiene que ir con una exigencia a menos de 30 caracteres. Un anuncio en portugués no entra nunca, ni pidiendo español.
 
 Además hay una watchlist de empresas objetivo consultable a diario (migración 5, tablas `company_watchlist`/`watchlist_targets`); ampliarla exige un slug verificado, no se adivinan URLs. Un enlace a un Actor es referencia de integración, no una garantía de calidad o mantenimiento.
+
+## Lote de APIs evaluado — 2026-11-18
+
+Revisión del listado de APIs propuesto (sin autorización y con clave) contra lo que ya recoge el repo. **No se añadió un
+sistema de conectores paralelo**: el motor (`sites/engine/worker.js`, 37 fuentes) ya es el registro de fuentes gratuitas,
+con dedupe, descarte por rol/idioma/mercado y presupuesto de subrequests; las APIs con clave viven en
+`apps/web/lib/collectors.ts` (InfoJobs, Adzuna, Jooble) con la clave cifrada en **Panel → APIs**. Lo medido aquí es qué
+queda por conectar de esa lista y con qué evidencia.
+
+### Sin clave
+
+| API | Resultado medido (2026-11-18) | Decisión |
+|---|---|---|
+| **Jobicy** | 200; ya conectada (`jobicy-marketing`, 1 fetch). `industry=sales` no es un slug válido de su API. | Sin cambios |
+| **Himalayas** | 200; ya conectada con términos (`himalayas-closer`, 4 por pasada). | Sin cambios |
+| **Arbeitnow** | 200; ya conectada (`arbeitnow`, 1 fetch). | Sin cambios |
+| **openradar** | 200 y OpenAPI 3.1 en `/openapi.json`. 10 términos → **317 leads únicos**, 75 con perfil comercial y, entre ellos, closers y setters **en español** (SDR telefónico para pymes españolas, setter telefónico, closer B2C de admisiones). Texto completo incluido. | **Conectado** (`openradar`, 3 términos por pasada) |
+| **YubHub** | 200 y API sin clave (`/search`, feeds `.json`). Pero el filtro `country` no acota (`country=Spain` devuelve UK/US), sus facetas de país solo tienen US, UK, Canadá, Alemania, Australia, Francia y Nueva Zelanda, `feeds.yubhub.co/facet/country/spain.json` responde **404** y el feed `category/sales.json` (100 vacantes, todas con descripción) trae **0 de España o LATAM**. Su `/search` sí devuelve títulos en español de LATAM, pero sin cuerpo. | **No se conecta**: gastaría peticiones y no pasaría el gate de idioma/mercado |
+| **Parlel** | 200; `roles?q=closer`, `q=comercial` y `q=ventas` devuelven `items: []`. | **Desactivada, sin resultados útiles** |
+| **openradar (encargos)** | Los `type: gig` entran como encargos, sin salario (el importe va en `raw.rawSalary`), igual que Freelancer.com. | Incluido en el conector |
+| **JobYap** | Sin respuesta desde este entorno (tres intentos, 000/timeout). | **Desactivada**: no verificable |
+
+### Con clave
+
+No se implementan conectores nuevos sin una clave ni una cuenta con la que probarlos. Los tres que ya están escritos se
+activan solos al guardar la clave en **Panel → APIs** y su paso a paso está en [EXTERNAL_SOURCES](EXTERNAL_SOURCES.md) y
+[OWNER_GUIDE](OWNER_GUIDE.md): **InfoJobs** (app de desarrollador, `client_id:client_secret`), **Adzuna**
+(`app_id:app_key`) y **Jooble** (clave **de España**: la de `jooble.org` solo trae EE. UU.).
+
+El resto del lote queda como propuesta, no como código: Careerjet y WhatJobs exigen afiliación o acuerdo de partner;
+TheirStack, Fantastic.jobs, Techmap y Jobspipe son de pago; JOA, Jobven, jobdata, Hiring Index, Worklittle, Reqbeat y
+Findwork no tienen cobertura española verificada; Upwork exige OAuth con revisión de la app. Documentar un paso a paso
+inventado para conseguir esas claves sería peor que no tenerlo.
 
 ## Expansión de fuentes solicitada por WDC — 2026-09-23
 
@@ -147,7 +181,7 @@ Solo entra como conector coste cero lo verificado en vivo con datos reales. Todo
 
 ## Expansión documental US — 2026-09-22
 
-La nueva investigación añade 17 fichas priorizadas en [18_US_HISPANIC_SOURCE_RESEARCH](spec/18_US_HISPANIC_SOURCE_RESEARCH.md). El catálogo ejecutable seguía con 33 entradas y seis conectores públicos **cuando se escribió esta sección (2026-09-22)**; los recuentos vigentes están en «Estado real — medido el 2026-11-13» (36 conectores, 63 entradas). Esta entrega no cambió los recuentos de entonces ni activó scrapers.
+La nueva investigación añade 17 fichas priorizadas en [18_US_HISPANIC_SOURCE_RESEARCH](spec/18_US_HISPANIC_SOURCE_RESEARCH.md). El catálogo ejecutable seguía con 33 entradas y seis conectores públicos **cuando se escribió esta sección (2026-09-22)**; los recuentos vigentes están en «Estado real — medido el 2026-11-18» (37 conectores, 64 entradas). Esta entrega no cambió los recuentos de entonces ni activó scrapers.
 
 Prioridad: ATS por empresa (Greenhouse/Lever/Ashby), recruiters LATAM→US (Remote Latinos/HireLATAM/Near), boards hispanos (Hispanic-Jobs/iHispano/DiversityJobs) y fuentes remotas/ventas/comunidades. Acceso y bloqueos documentados por ficha; sin Actors nuevos declarados operativos.
 

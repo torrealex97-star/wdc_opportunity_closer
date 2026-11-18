@@ -97,10 +97,11 @@ const TOTAL_COST = t.SOURCES.reduce((n, s) => n + fetchCost(s), 0);
 //    −5 retiradas por cero elegibles (Holded, Monest Capital, Typeform, Wallapop, Livestorm) → 36.
 //    2026-11-16: +2 slugs de JobToday para cold caller (call-center y servicio-al-cliente) → 38, y
 //    retirados el mismo día al medir cero tarjetas nuevas en la pasada real → 36.
-assert.equal(t.SOURCES.length, 36, 'el catálogo del motor tiene 36 fuentes: si cambia, actualizar la medida');
+//    2026-11-18: +1 `openradar` (3 términos rotando por día) → 37 fuentes y 112 de coste declarado.
+assert.equal(t.SOURCES.length, 37, 'el catálogo del motor tiene 37 fuentes: si cambia, actualizar la medida');
 //    2026-11-13: el plan B de FreeHire (`/jobs/__data.json`) pasa a 3 páginas por término, que es lo
-//    que de verdad trae las ofertas mientras la API esté en 429 → 109 de coste declarado.
-assert.equal(TOTAL_COST, 109, 'coste medido del barrido completo: 109 subrequests de fetch');
+//    que de verdad trae las ofertas mientras la API esté en 429 → 109 de coste declarado (+3 de openradar).
+assert.equal(TOTAL_COST, 112, 'coste medido del barrido completo: 112 subrequests de fetch');
 for (const source of t.SOURCES) {
   // Tope 32 desde el plan B de FreeHire: sus fuentes declaran también las tres páginas de datos por
   // término (las que se piden cuando la API responde 429 por la IP compartida del Worker).
@@ -196,7 +197,7 @@ for (const source of t.SOURCES) {
     // —el cuerpo vacío no es el HTML/JSON de cada portal—, no del presupuesto: lo que se afirma aquí
     // es que ninguna se queda sin turno por falta de peticiones.
     const executed = body.sources.filter(s => s.status === 'completed' || s.status === 'failed');
-    assert.equal(executed.length, t.SOURCES.length, 'las 36 fuentes se intentan en la misma pasada');
+    assert.equal(executed.length, t.SOURCES.length, 'las 37 fuentes se intentan en la misma pasada');
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -208,7 +209,7 @@ for (const source of t.SOURCES) {
   assert.equal(free.status, 200);
   assert.equal(free.body.subrequests.ceiling, 50);
   assert.equal(free.body.subrequests.budget, FREE_BUDGET);
-  assert.equal(free.body.subrequests.sources, 36);
+  assert.equal(free.body.subrequests.sources, 37);
   assert.equal(free.body.subrequests.fetch_cost, TOTAL_COST);
   assert.deepEqual(free.body.subrequests.deferred, ['himalayas-closer']);
   const paid = await status({ SUBREQUEST_LIMIT: '1000' });

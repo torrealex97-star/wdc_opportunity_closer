@@ -73,6 +73,8 @@ node --experimental-strip-types tests/engine/role-audit.mjs
 node --experimental-strip-types tests/engine/discards.mjs
 node --experimental-strip-types tests/vocabulary-audit.mjs
 node --experimental-strip-types tests/engine/activate.mjs
+# openradar: API pública sin clave con vacantes y encargos; campos del OpenAPI y sin inventar salario.
+node --experimental-strip-types tests/engine/openradar.mjs
 # Búsquedas de closer del motor: vocabulario en español, rotación por día y extractores con `q`.
 node --experimental-strip-types tests/engine/terms.mjs
 # Cuota de escritura de la plataforma (100.000 filas/mes): el motor se para antes de que la pausa deje el sitio sin servir.

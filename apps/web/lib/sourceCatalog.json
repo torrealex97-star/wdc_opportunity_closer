@@ -41,6 +41,21 @@
     ]
   },
   {
+    "code": "openradar",
+    "name": "openradar",
+    "category": "Internacional",
+    "website": "https://openradar.fun",
+    "acquisition_method": "API pública (OpenAPI 3.1)",
+    "validation_status": "Conector operativo",
+    "requires": "none",
+    "note": "Vacantes y encargos de boards, RSS y Telegram, con el texto completo y sin clave. `q` busca en título y texto; 3 términos por pasada, rotando por día. Medido el 2026-11-18: closers y setters en español entre los resultados.",
+    "upstream_filters": [
+      "Búsqueda por texto",
+      "Tipo vacante/encargo",
+      "Remoto o presencial"
+    ]
+  },
+  {
     "code": "remotive",
     "name": "Remotive",
     "category": "Internacional",

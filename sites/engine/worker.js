@@ -330,6 +330,9 @@ const SOURCES = [
   { code: 'jobgether', name: 'Jobgether', kind: 'jobgether' },
   { code: 'remotive-sales', name: 'Remotive · ventas', kind: 'remotive', category: 'sales' },
   { code: 'jobicy-marketing', name: 'Jobicy · marketing', kind: 'jobicy', industry: 'marketing' },
+  // openradar.fun (2026-11-18): sin clave, OpenAPI 3.1, vacantes y encargos de boards/RSS/Telegram con
+  // el texto completo. 3 términos por pasada (rotan por día): es búsqueda por texto, 1 petición por término.
+  { code: 'openradar', name: 'openradar', kind: 'openradar', terms: true, termsPerRun: 3 },
   { code: 'workingnomads', name: 'Working Nomads', kind: 'workingnomads' },
   { code: 'jobspresso', name: 'Jobspresso', kind: 'jobspresso', slug: 'https://jobspresso.co/feed/?post_type=job_listing' },
   // ATS al final: el budget de subrequests por invocación (~20 fetches medidos
@@ -970,6 +973,45 @@ async function sourceArbeitnow() {
   } }));
 }
 
+// openradar.fun (2026-11-18): API pública sin clave (OpenAPI 3.1 en /openapi.json) que mezcla vacantes
+// y encargos de boards, RSS y Telegram. `q` busca en título Y texto; `limit` llega a 500. Medido ese día
+// con 10 términos del vocabulario: 317 leads únicos, 75 con perfil comercial y, entre ellos, closers y
+// setters EN ESPAÑOL (SDR telefónico para pymes españolas, setter telefónico, closer B2C de admisiones).
+// Se piden `termsPerRun` términos (rotan por día) y se aplica el mismo descarte de rol que al resto.
+async function sourceOpenradar(source = {}) {
+  const seen = new Set(); const all = []; const errors = [];
+  for (const term of pickTerms(source.termsPerRun || 3)) {
+    try {
+      const data = JSON.parse(await fetchText(`https://openradar.fun/api/leads?q=${encodeURIComponent(term)}&limit=50`, 20000));
+      for (const j of (Array.isArray(data) ? data : [])) {
+        const external = String(j?.id ?? j?.url ?? '');
+        if (!external || !j?.title || seen.has(external)) continue;
+        const link = j.url || j.canonicalUrl;
+        if (!link) { countFiltered(source.code, 'sin_url'); continue; }
+        seen.add(external);
+        // `city` a veces viene en cirílico («Онлайн») para un remoto de LATAM: no es una ubicación
+        // publicable; el mercado se decide con el texto, que sí dice «Location: Colombia».
+        const city = typeof j.city === 'string' && !/[\u0400-\u04FF]/.test(j.city) && !/^online$/i.test(j.city.trim()) ? j.city.trim() : null;
+        const isGig = j.type === 'gig';
+        const text = typeof j.text === 'string' ? j.text.slice(0, 20000) : '';
+        const payload = {
+          title: j.title, company: j.author ?? null, location: city, url: link,
+          // Un encargo no lleva salario: el importe es el presupuesto del proyecto y va en `raw`,
+          // nunca disfrazado de nómina (mismo criterio que Freelancer.com).
+          salary: !isGig && typeof j.rawSalary === 'string' && j.rawSalary.trim() ? j.rawSalary.trim() : null,
+          posted_at: j.publishedAt ? new Date(j.publishedAt).toISOString() : null,
+          raw: { ...j, text: undefined, description: text, search_term: term, ...(isGig ? { engagement: 'freelance' } : {}) },
+        };
+        const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
+        all.push({ external_id: external, payload });
+      }
+    } catch (error) { errors.push(`${term}: ${String(error.message || error).slice(0, 80)}`); }
+  }
+  if (errors.length && !all.length) throw new Error(`ningún término respondió (${errors[0]})`);
+  return all.slice(0, MAX_ITEMS_PER_SOURCE);
+}
+
 async function sourceJobspresso(source) {
   // RSS de WordPress con `post_type=job_listing` (2026-11-08: 200, 20 ítems de empleo). Usa el
   // mismo parseo que `sourceRss` pero SÍ filtra por rol: el feed es heterogéneo.
@@ -995,14 +1037,14 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
   recruitee: sourceRecruitee, teamtailor: sourceTeamtailorRss, himalayas: sourceHimalayas, rss: sourceRss,
   getonbrd: sourceGetOnBoard, freehire: sourceFreehire, freelancer: sourceFreelancer,
   jobgether: sourceJobgether, remotive: sourceRemotive, jobicy: sourceJobicy,
-  workingnomads: sourceWorkingNomads, jobspresso: sourceJobspresso,
+  workingnomads: sourceWorkingNomads, jobspresso: sourceJobspresso, openradar: sourceOpenradar,
   remoteok: sourceRemoteOk, arbeitnow: sourceArbeitnow,
 };
 
