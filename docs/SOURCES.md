@@ -2,12 +2,21 @@
 
 Actualizado: 2026-11-18. Los recuentos de esta cabecera y de la sección «Estado real» están **medidos** contra el código (`sites/engine/worker.js`, `apps/web/lib/sourceCatalog.json`) y contra los servicios; los recuentos de las secciones antiguas (33, 38, «quince conectores») se conservan como contexto histórico y **no son el estado actual**. La revisión de métodos, filtros y 51 referencias del Excel sigue en [SOURCE_ACQUISITION](SOURCE_ACQUISITION.md). Integración local, independiente de Scalix.
 
-## Estado real — medido el 2026-11-13
+## Qué catálogo manda
 
-- **Catálogo del panel: 64 entradas.** De ellas, **36** están marcadas `requires: input` («Requiere configurar») y 28 no piden configuración (26 recogidas y 2 libres sin conector).
+Hay dos listas y no son la misma cosa:
+
+- **`apps/api/career/sources.py`** describe lo que puede recoger el **backend local** (`apps/api`): su `REGISTRY`, su watchlist de empresas y el catálogo de portales pendientes. No se toca para reflejar el cloud.
+- **El motor cloud** (`sites/engine/worker.js`) es lo que sirve al panel en producción. Su realidad se declara en [`scripts/export_source_catalog.py`](../scripts/export_source_catalog.py), en dos tablas explícitas: `CLOUD_OPERATIONAL` (método y estado verificados en el cloud, o fuentes que el cloud recoge y el backend local no tiene) y `CLOUD_RETIRED` (tableros retirados del cloud por cero elegibles).
+- **`apps/web/lib/sourceCatalog.json` es el export, no una fuente**: no se edita a mano. Cualquier hecho nuevo se escribe en `sources.py` si es del backend local, o en las tablas del export si es del cloud, y se regenera con `PYTHONPATH=apps/api python scripts/export_source_catalog.py`.
+- La prueba [`tests/test_source_catalog_export.py`](../tests/test_source_catalog_export.py) falla si el JSON deja de coincidir con su generador, si vuelve un tablero retirado o si una fuente que el cloud recoge se queda en «pendiente».
+
+## Estado real — medido el 2026-11-18
+
+- **Catálogo del panel: 65 entradas.** De ellas, **36** están marcadas `requires: input` («Requiere configurar») y **29** son operativas (no piden configuración).
 - **Motor cloud: 37 conectores** (`SOURCES`). Una pasada completa declara **112 subrequests de fetch** (tope 1.000 con Workers de pago; 50 en el plan gratuito, donde el planificador aplaza fuentes en vez de romper). El salto desde 79 es el plan B de FreeHire: tres páginas de datos por término cuando su API responde 429.
 - **26 entradas del catálogo tienen recogida ahora.** Las 37 fuentes del motor se agrupan por portal, así que las cifras no coinciden: JobToday son 13 conectores y FreeHire 4; el panel los suma en una fila.
-- **Sin duplicados engañosos (corregido el 2026-11-13)**: `getonbrd` era una segunda entrada del mismo portal que el motor recoge como `getonbrd-public` y se pintaba «Requiere configurar»; se eliminó. `freelancer` y `jobgether` se recogían pero su ficha seguía diciendo «Adaptador pendiente / Sin proveedor verificado»: ahora dicen «Conector operativo». Un test (`tests/engine/catalog.mjs`) falla si vuelve a pasar cualquiera de las dos cosas.
+- **Sin duplicados engañosos**: el solape histórico era `getonbrd-public` (backend) frente a `getonbrd` (cloud), y dejaba el portal como «fuera del cloud» mientras el motor lo leía cada pasada. El catálogo del panel lista **`getonbrd`**, el código que el motor cloud emite de verdad, y una sola vez. `freelancer` y `jobgether` se recogían mientras su ficha decía «Adaptador pendiente / Sin proveedor verificado»: ahora dicen «Conector operativo», y eso se declara en el export (2026-11-18). Un test (`tests/engine/catalog.mjs`) falla si vuelve a haber dos entradas para el mismo portal.
 - **2 entradas gratuitas sin conector hoy**: dos feeds muertos, Remote.jobs (301) y Remote First Jobs (404).
 - **Cinco tableros ATS retirados el 2026-11-13** por cero elegibles en dos mediciones independientes: Holded · Recruitee, Monest Capital · Teamtailor, Typeform · Greenhouse, Wallapop · Greenhouse y Livestorm · Recruitee (23 ofertas entre los cinco, ninguna publicable nunca). Responden 200 y cuestan una petición, así que volver a conectarlos es re-añadir su fila; el criterio de retirada está en STATUS (sesión 172).
 

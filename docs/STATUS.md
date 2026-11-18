@@ -1,5 +1,14 @@
 # Estado
 
+## El catálogo del panel sigue al motor cloud y `main` vuelve a verde (sesión 207) — 2026-11-18
+
+- **Petición del propietario**: alinear el catálogo de la web con `apps/api/career/sources.py` sin perder los hechos verificados después, dejar verde `test_source_catalog_export` y documentar cuál de las dos listas manda.
+- **Diagnóstico**: las dos listas no describen lo mismo. `sources.py` describe el **backend local** (su `REGISTRY`, su watchlist y los portales pendientes); el panel habla con el **motor cloud** (`sites/engine/worker.js`). La divergencia eran 3 códigos solo en el JSON (openradar, Fever, Qonto — el cloud los recoge y el backend no los tiene), 5 solo en el backend (getonbrd y cuatro tableros retirados del cloud por cero elegibles, sesión 176) y 6 fichas con método/estado más nuevos en el JSON (freehire, freelancer, jobgether, jobtoday-comercial, jobtoday-ventas, ProductHackers).
+- **Qué manda (documentado)**: para el panel, el motor cloud. Se declara en el único sitio que genera el catálogo, [export_source_catalog.py](../scripts/export_source_catalog.py), con dos tablas explícitas: `CLOUD_OPERATIONAL` (hechos verificados en el cloud y fuentes que el cloud recoge y el backend local no) y `CLOUD_RETIRED` (tableros retirados). `apps/api/career/sources.py` **no se toca**: sigue contando la verdad del backend local, y así sus pruebas (`test_engine.py`, watchlist y Monest) siguen valiendo. `apps/web/lib/sourceCatalog.json` es el export y no se edita a mano; la regla quedó escrita en [SOURCES.md](../docs/SOURCES.md) («Qué catálogo manda»).
+- **Efecto en el JSON**: 64 → **65** entradas. Nada se perdió: 0 fichas eliminadas y 0 modificadas respecto a lo que había escrito a mano, y se añade `getonbrd` —el código que el motor cloud emite de verdad— con su ficha operativa. Los cuatro tableros retirados no vuelven al panel.
+- **Comprobado (tested)**: `tests/test_source_catalog_export.py` verde, con una prueba nueva que fija la regla (los retirados no aparecen; openradar, Fever, Qonto, getonbrd, freehire, freelancer y jobgether salen «Conector operativo» y `requires: none`). `npm test` completo: **176 passed, 1 skipped**. `tests/engine/catalog.mjs` PASS (el panel y el motor siguen cruzando por el mismo código: `getonbrd`).
+- **Límites**: no se ha vuelto a exportar `source_audit.json` (el script de export lo reescribe con metadatos de Apify y marcas de tiempo del día; se descartó ese cambio). Producción sigue sirviendo el build de la sesión 204: el catálogo nuevo llega al panel cuando se despliegue (falta `CLOUDFLARE_API_TOKEN`, o un despliegue manual).
+
 ## El coste de céntimos se declara y la clave dice quién la usa (sesión 206) — 2026-11-18
 
 - **Petición del propietario**: arreglar los dos fallos vistos al revisar el panel en producción —una fuente con gasto de céntimos pintada como «0,00 €» y la frase «el motor cloud no la usa todavía»— y añadir la prueba del formato.
