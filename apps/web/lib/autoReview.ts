@@ -164,7 +164,12 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
       const batch = group.ids.slice(i, i + 100);
       const n = await approveByRule(batch, { decision: 'approve', why: 'cumple_reglas_con_aviso', rule: 'reglas_v1', at: now, flags: group.flags });
       if (n === null) summary.failed_writes = (summary.failed_writes ?? 0) + batch.length;
-      else summary.approved += n;
+      else {
+        summary.approved += n;
+        // Como el resto de motivos, se cuenta lo que la base confirma: si una persona movió la oferta
+        // entre la lectura y la escritura, la guarda la descarta y no debe aparecer en el recuento.
+        if (n) summary.by_reason.cumple_reglas_con_aviso = (summary.by_reason.cumple_reglas_con_aviso ?? 0) + n;
+      }
     }
   }
 
@@ -188,8 +193,6 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
       else summary.moved = (summary.moved ?? 0) + n;
     }
   }
-
-  if (caution.size) summary.by_reason.cumple_reglas_con_aviso = [...caution.values()].reduce((n, g) => n + g.ids.length, 0);
 
   // Desempate: solo si hay hueco, la IA está en vivo y queda presupuesto. Su cupo es lo que queda del tope
   // diario —`remaining` ya cuenta sus aprobaciones de hoy, no solo las de las reglas— y viaja como ENTORNO

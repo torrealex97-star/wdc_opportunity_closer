@@ -9,6 +9,7 @@ import http from 'node:http';
 const rows = new Map();
 const patches = [];   // cada PATCH, para comprobar la guarda de estado
 let failWrites = false;
+let beforePatch = null;   // simula a una persona moviendo una fila entre la lectura y la escritura
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   let body = '';
@@ -23,9 +24,10 @@ const server = http.createServer((req, res) => {
     if (req.method === 'PATCH') {
       patches.push({ query: url.search, body });
       if (failWrites) return send(500, { message: 'escritura rechazada' });
+      const patch = JSON.parse(body || '{}');
+      if (beforePatch) beforePatch(patch, all);
       let hit = ids ? all.filter(r => ids.includes(r.id)) : all;
       if (q.editorial_status === 'eq.draft') hit = hit.filter(r => r.editorial_status === 'draft');
-      const patch = JSON.parse(body || '{}');
       hit.forEach(r => Object.assign(r, patch));
       return send(200, hit);
     }
@@ -62,7 +64,7 @@ const offer = (n, extra = {}) => ({
   expires_at: new Date(Date.now() + 5 * 864e5).toISOString(), ...extra,
 });
 const seed = () => {
-  rows.clear(); patches.length = 0; failWrites = false;
+  rows.clear(); patches.length = 0; failWrites = false; beforePatch = null;
   rows.set(uuid(1), offer(1));                                               // clara
   rows.set(uuid(2), offer(2));                                               // clara
   rows.set(uuid(3), offer(3));                                               // clara
@@ -219,5 +221,26 @@ assert.equal(face(21).editorial_status, 'needs_review', 'lo crítico no se publi
 assert.equal(face(21).auto_review.why, 'oferta_peligrosa');
 assert.equal(aviso.by_reason.oferta_peligrosa, 1);
 console.log('PASS  lo leve se publica con aviso y lo crítico sigue esperando a una persona');
+
+// 10) `cumple_reglas_con_aviso` cuenta lo que la base CONFIRMA, como el resto de motivos: si una persona
+// mueve la oferta entre la lectura y la escritura, la guarda la descarta y no puede aparecer en el recuento
+// (antes se contaban las que se intentaban aprobar, así que el panel inflaba el número).
+seed();
+rows.set(uuid(20), offer(20, { description: offer(20).description + ' Trabajo 100% a comisión.' }));
+rows.set(uuid(22), offer(22, { description: offer(22).description + ' Trabajo 100% a comisión.' }));
+beforePatch = (patch, all) => {
+  if (patch.auto_review?.why !== 'cumple_reglas_con_aviso') return;
+  const raced = all.find(r => r.id === uuid(22));
+  raced.editorial_status = 'needs_review';
+  raced.reviewed_by = 'persona';
+};
+const raced = await run({ cap: 100 });
+beforePatch = null;
+assert.equal(face(20).editorial_status, 'approved', 'la que seguía en borrador sí se publica');
+assert.equal(face(22).reviewed_by, 'persona', 'la guarda no pisa lo que movió una persona');
+assert.equal(face(22).auto_review, undefined, 'y no se le anota un motivo que no se aplicó');
+assert.equal(raced.approved, 4, 'tres claras y una con aviso confirmada');
+assert.equal(raced.by_reason.cumple_reglas_con_aviso, 1, 'solo la confirmada, no las dos intentadas');
+console.log('PASS  el recuento de aprobadas con aviso es el que confirma la base');
 
 server.close();
