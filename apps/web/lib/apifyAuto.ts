@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
-import { dailyApify, listActors, listRuns, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
+import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
 import { ORG } from './external';
-import { PORTALS, portalBySource, type Portal, type Recipe } from './apifyCatalog';
+import { measuredYield, readBudget, spendPlan } from './paidBudget';
+import { PORTALS, portalBySource, portalById, type Portal, type Recipe } from './apifyCatalog';
 import { serviceRest } from './supabaseAuth';
 
 // Búsqueda automática con buscadores de repuesto. Si el primero no arranca, falla o termina sin ofertas, se prueba el
@@ -50,7 +51,7 @@ const GLOBAL_STOP = /Presupuesto|gasto del mes|Guarda antes la clave|rechaz[oó]
 
 export type SearchResult = { ok: true; recipe: string; actor: string; fallback: boolean; attempts: Array<{ recipe: string; error: string }> }
   | { ok: false; busy?: boolean; stopped?: boolean; error: string; attempts: Array<{ recipe: string; error: string }> };
-export async function searchPortal(portal: Portal, opts: { by: string; publicBase: string; test?: boolean; maxAttempts?: number; now?: number }): Promise<SearchResult> {
+export async function searchPortal(portal: Portal, opts: { by: string; publicBase: string; test?: boolean; maxAttempts?: number; now?: number; maxChargeUsd?: number }): Promise<SearchResult> {
   const now = opts.now ?? Date.now(), attempts: Array<{ recipe: string; error: string }> = [];
   const [rows, runs] = [await ensureRows(portal, opts.by), await listRuns(80) ?? []];
   const todays = runs.filter(r => rows.some(a => a.id === r.actor_id) && age(r, now) < DAY).length;
@@ -58,7 +59,7 @@ export async function searchPortal(portal: Portal, opts: { by: string; publicBas
   for (const recipe of orderRecipes(portal, rows, runs, now).slice(0, opts.maxAttempts ?? MAX_ATTEMPTS)) {
     const row = rows.find(a => a.actor === recipe.actor); if (!row) continue;
     const usable = opts.test ? { ...row, max_items: portal.testItems } : row;
-    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : RUN_CAP_USD, vars: { max_items: usable.max_items, ...(portal.query ? { query: portal.query } : {}) } });
+    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(portal.query ? { query: portal.query } : {}) } });
     if (r.ok) return { ok: true, recipe: recipe.name, actor: recipe.actor, fallback: attempts.length > 0, attempts };
     if (GLOBAL_STOP.test(r.error)) return { ok: false, busy: /Ya hay una ejecuci/i.test(r.error), stopped: true, error: r.error, attempts };
     attempts.push({ recipe: recipe.name, error: r.error }); await recordStartFailure(row, r.error, opts.by);
@@ -80,15 +81,31 @@ export async function recoverAfter(run: RunRow, actor: ActorRow, result: Harvest
 }
 
 // Cron: cada portal activado hace UNA búsqueda al día (con repuestos); los actores sueltos siguen la lógica antigua.
+// El orden y el tope de cada búsqueda salen del límite mensual guardado: primero los portales con mejor
+// rendimiento medido (ofertas recogidas por dólar) y, si el mes no da para más, se aplaza y se dice por qué.
 export async function dailyAuto(publicBase: string, opts: { start?: boolean; deadline?: number } = {}) {
   const [actors, runs] = [await listActors() ?? [], await listRuns(80) ?? []]; const started: Array<{ actor: string; ok: boolean; error?: string }> = []; const now = Date.now();
-  for (const portal of opts.start === false ? [] : PORTALS) {
-    const rows = actors.filter(a => a.source === portal.source); if (!rows.some(a => a.schedule_daily)) continue;
+  const pending = (opts.start === false ? [] : PORTALS).filter(portal => {
+    const rows = actors.filter(a => a.source === portal.source); if (!rows.some(a => a.schedule_daily)) return false;
     const ids = new Set(rows.map(a => a.id));
-    if (runs.some(r => ids.has(r.actor_id) && (isGood(r) || isActive(r)) && age(r, now) < 20 * 3600 * 1000)) continue;
-    if (timeLeft(opts.deadline) < MIN_STEP_MS * 2) { started.push({ actor: portal.recipes[0].actor, ok: false, error: 'Sin tiempo en el presupuesto del cron: se lanzará en la próxima ejecución.' }); continue; }
-    const r = await searchPortal(portal, { by: 'cron', publicBase, now });
-    started.push({ actor: r.ok ? r.actor : portal.recipes[0].actor, ok: r.ok, ...(r.ok ? {} : { error: r.error }) });
+    return !runs.some(r => ids.has(r.actor_id) && (isGood(r) || isActive(r)) && age(r, now) < 20 * 3600 * 1000);
+  });
+  if (pending.length) {
+    const [budget, spent] = await Promise.all([readBudget(), monthSpent()]);
+    const plan = spendPlan(budget.usd, spent, pending.map(p => {
+      const ids = new Set(actors.filter(a => a.source === p.source).map(a => a.id));
+      return { code: p.id, yield_per_usd: measuredYield(runs.filter(r => ids.has(r.actor_id))) };
+    }), RUN_CAP_USD);
+    for (const code of plan.order) {
+      const portal = pending.find(p => p.id === code); if (!portal) continue;
+      if (timeLeft(opts.deadline) < MIN_STEP_MS * 2) { started.push({ actor: portal.recipes[0].actor, ok: false, error: 'Sin tiempo en el presupuesto del cron: se lanzará en la próxima ejecución.' }); continue; }
+      const r = await searchPortal(portal, { by: 'cron', publicBase, now, maxChargeUsd: plan.caps[code] });
+      started.push({ actor: r.ok ? r.actor : portal.recipes[0].actor, ok: r.ok, ...(r.ok ? {} : { error: r.error }) });
+    }
+    for (const d of plan.deferred) {
+      const portal = portalById(d.code); if (!portal) continue;
+      started.push({ actor: portal.recipes[0].actor, ok: false, error: `Aplazada: ${d.reason}. Súbelo en Apify → «Límite de gasto del mes».` });
+    }
   }
   const legacy = await dailyApify(publicBase, { ...opts, skip: a => Boolean(portalBySource(a.source)), after: (run, actor, res) => recoverAfter(run, actor, res, publicBase) });
   return { ...legacy, started: [...started, ...legacy.started] };

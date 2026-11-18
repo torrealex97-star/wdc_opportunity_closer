@@ -2,12 +2,15 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { ingest, MAX_CANDIDATES, ORG, type Candidate } from './external';
 import { getSecret } from './integrations';
+import { budgetLimitUsd } from './paidBudget';
 import { serviceRest } from './supabaseAuth';
 
 // Actores de Apify: el scraping corre en la infraestructura de Apify (con sus proxies), no en la nuestra, y los
 // resultados se recogen por lotes en el catálogo externo. De pago por uso: desactivado por defecto, con límites por
 // ejecución (memoria, tiempo, elementos) y un tope mensual. Aprobar lo recogido sigue siendo humano.
 const base = () => (process.env.APIFY_API_BASE ?? 'https://api.apify.com').replace(/\/$/, '');
+// Valor del entorno: es el respaldo cuando el propietario aún no ha guardado un límite en el panel. El
+// límite que MANDA es el guardado (paid_budget, editable en Apify → «Límite de gasto del mes»).
 export const MONTHLY_BUDGET_USD = () => Number(process.env.APIFY_MONTHLY_BUDGET_USD) > 0 ? Number(process.env.APIFY_MONTHLY_BUDGET_USD) : 10;
 const RESERVE_USD = 1; // lo que se reserva por ejecución en curso hasta conocer su coste real
 
@@ -100,7 +103,8 @@ export async function startRun(actor: ActorRow, by: string, publicBase: string, 
   const token = await apifyToken(); if (!token) return { ok: false, error: 'Guarda antes la clave de Apify en la pestaña APIs.' };
   const [spent, runs] = await Promise.all([monthSpent(), listRuns(30)]);
   if (spent === null) return { ok: false, error: 'No se pudo leer el gasto del mes en Apify; por seguridad no se lanza la ejecución. Reintenta en un momento.' };
-  if (spent + RESERVE_USD > MONTHLY_BUDGET_USD()) return { ok: false, error: `Presupuesto mensual agotado (${spent.toFixed(2)} de ${MONTHLY_BUDGET_USD()} USD).` };
+  const limit = await budgetLimitUsd();
+  if (spent + RESERVE_USD > limit) return { ok: false, error: `Presupuesto mensual agotado (${spent.toFixed(2)} de ${limit} USD). Súbelo en Apify → «Límite de gasto del mes».` };
   if (runs?.some(r => r.actor_id === actor.id && r.status === 'RUNNING' && Date.now() - Date.parse(r.started_at) < 2 * 3600 * 1000)) return { ok: false, error: 'Ya hay una ejecución en curso de este actor.' };
   const vars = varsFor(actor, opts.vars); let input: Record<string, unknown>;
   if (actor.input_template) input = fillTemplate(actor.input_template, vars) as Record<string, unknown>;

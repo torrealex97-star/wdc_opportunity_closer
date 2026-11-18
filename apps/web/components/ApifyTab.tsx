@@ -10,7 +10,7 @@ type PortalView = { id: string; name: string; plain: string; caution?: string; d
 const RUN_CAP = 2, TEST_CAP = 0.5; // topes duros que la app pide a Apify (mismos valores que lib/apify.ts)
 // Estado = texto + icono (nunca solo color).
 const STATE_META = { ok: { cls: 'status ok', Icon: CircleCheck }, running: { cls: 'status', Icon: LoaderCircle }, trying: { cls: 'status', Icon: TriangleAlert }, down: { cls: 'status bad', Icon: CircleX }, new: { cls: 'status', Icon: CircleDashed }, off: { cls: 'status', Icon: CircleDashed } } as const;
-type Data = { portals?: PortalView[]; actors: Actor[]; runs: Run[]; presets: Array<{ label: string; actor: string; source: string }>; budget: { spent: number | null; limit: number }; has_key: boolean };
+type Data = { portals?: PortalView[]; actors: Actor[]; runs: Run[]; presets: Array<{ label: string; actor: string; source: string }>; budget: { spent: number | null; limit: number; source?: 'propietario' | 'entorno' | 'defecto'; updated_by?: string | null; updated_at?: string | null; error?: string | null }; has_key: boolean };
 type Form = { id?: string; label: string; actor: string; source: string; input_template: string; max_items: number; memory_mb: number; timeout_s: number; schedule_daily: boolean };
 const blank: Form = { label: '', actor: '', source: '', input_template: '', max_items: 500, memory_mb: 1024, timeout_s: 900, schedule_daily: false };
 const fmt = (v: string | null) => v ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v)) : '—';
@@ -29,10 +29,11 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
   const [fields, setFields] = useState<Array<{ name: string; type: string; required: boolean }> | null>(null);
   const [busy, setBusy] = useState(true);
   const [working, setWorking] = useState('');
+  const [limit, setLimit] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const lost = useCallback((err: Error) => { if (err.message.includes('Sesión')) onSessionLost(); setError(err.message); }, [onSessionLost]);
-  const load = useCallback(() => { setBusy(true); call<Data>().then(d => { setData(d); setError(''); }).catch(lost).finally(() => setBusy(false)); }, [lost]);
+  const load = useCallback(() => { setBusy(true); call<Data>().then(d => { setData(d); setLimit(v => v === '' ? String(d.budget.limit) : v); setError(''); }).catch(lost).finally(() => setBusy(false)); }, [lost]);
   useEffect(load, [load]);
   // Mientras haya una búsqueda en curso, se recogen y refrescan los resultados solos cada 30 s (y, si una falla, entra el repuesto).
   const anyRunning = Boolean(data?.portals?.some(p => p.state === 'running'));
@@ -46,6 +47,13 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
   const edit = (a: Actor) => { setFields(null); setForm({ id: a.id, label: a.label, actor: a.actor, source: a.source, input_template: a.input_template ? JSON.stringify(a.input_template, null, 2) : '', max_items: a.max_items, memory_mb: a.memory_mb, timeout_s: a.timeout_s, schedule_daily: a.schedule_daily }); };
   const actorName = (id: string) => data?.actors.find(a => a.id === id)?.label ?? '—';
   const pct = data && data.budget.spent !== null ? Math.min(100, Math.round((data.budget.spent / data.budget.limit) * 100)) : 0;
+  // El límite no es solo un aviso: reparte el gasto entre los portales con búsqueda diaria.
+  const dailyCount = data?.portals?.filter(p => p.daily).length ?? 0;
+  const perPortal = data && dailyCount ? Math.floor((data.budget.limit / dailyCount) * 100) / 100 : null;
+  const limitOrigin = !data ? '' : data.budget.source === 'propietario'
+    ? `Límite guardado por ${data.budget.updated_by ?? 'el propietario'}${data.budget.updated_at ? ` el ${fmt(data.budget.updated_at)}` : ''}.`
+    : data.budget.source === 'entorno' ? 'Límite del entorno (variable APIFY_MONTHLY_BUDGET_USD): guárdalo aquí para cambiarlo sin desplegar.'
+      : 'Límite por defecto: guárdalo aquí para cambiarlo sin desplegar.';
 
   return <section aria-label="Apify">
     <div className="search-panel" style={{ marginBottom: 20, maxWidth: 820 }}>
@@ -70,6 +78,16 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
       <div className="card-head"><div><span className="eyebrow">GASTO DEL MES EN APIFY</span><h3 style={{ marginTop: 4 }}>{data.budget.spent === null ? '—' : data.budget.spent.toFixed(2)} USD de {data.budget.limit} USD</h3>{data.budget.spent === null && <p className="card-meta" role="alert">No se pudo leer el gasto del mes: no se lanzará ninguna ejecución hasta poder comprobarlo.</p>}</div><span className={data.budget.spent === null ? 'status' : pct >= 90 ? 'status bad' : 'status'}>{data.budget.spent === null ? '—' : `${pct} %`}</span></div>
       <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Gasto del mes" style={{ height: 8, borderRadius: 99, background: 'var(--inset)', marginTop: 14, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: pct >= 90 ? 'var(--warning)' : 'var(--accent)' }} /></div>
       <p className="card-meta">Se suma el coste real de cada ejecución terminada y se reserva 1 USD por cada una en curso. Al llegar al tope no se lanza ninguna más. Es un límite de esta app: ponlo también en Apify (Settings → Billing → límite de gasto).</p>
+      <p className="card-meta">{limitOrigin}{data.budget.error ? ` ${data.budget.error}` : ''}</p>
+      {owner && <form className="card-form" onSubmit={e => { e.preventDefault(); void run('budget', async () => (await post({ action: 'budget', monthly_usd: Number(limit) }) as { message: string }).message); }}>
+        <label htmlFor="monthly-limit" style={{ display: 'grid', gap: 4 }}>Límite de gasto del mes (USD)
+          <input id="monthly-limit" type="number" min={1} max={5000} step="0.5" value={limit} onChange={e => setLimit(e.target.value)} aria-describedby="monthly-limit-hint" />
+        </label>
+        <button className="primary" disabled={working !== '' || !limit.trim() || Number(limit) < 1 || Number(limit) > 5000}>Guardar límite</button>
+      </form>}
+      <p className="card-meta" id="monthly-limit-hint">{dailyCount
+        ? `Se reparte entre los ${dailyCount} portales con búsqueda diaria: unos ${perPortal} USD por portal y mes, con un tope de ${RUN_CAP} USD por búsqueda. Los de mejor rendimiento medido van primero; si el mes no llega, la búsqueda se aplaza y la tarjeta del portal dice cuánto queda.`
+        : 'En cuanto actives «Buscar cada día» en algún portal, el límite se reparte entre ellos por rendimiento medido.'}</p>
     </article>}
     {data?.portals && <>
       <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}><h2 className="section-title" style={{ margin: 0 }}>Portales de empleo</h2>

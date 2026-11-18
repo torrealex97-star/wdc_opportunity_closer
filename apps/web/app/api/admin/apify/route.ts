@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, publicBaseUrl, withCookies } from '../../../../lib/adminAuth';
-import { ACTOR_RE, apifyToken, fetchSchema, harvestPending, listActors, listRuns, MONTHLY_BUDGET_USD, monthSpent, PRESETS } from '../../../../lib/apify';
+import { ACTOR_RE, apifyToken, fetchSchema, harvestPending, listActors, listRuns, monthSpent, PRESETS } from '../../../../lib/apify';
+import { readBudget, writeBudget } from '../../../../lib/paidBudget';
 import { ORG, SOURCE_RE } from '../../../../lib/external';
 import { startRun } from '../../../../lib/apify';
 import { portalViews, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
@@ -26,9 +27,11 @@ const int = (v: unknown, min: number, max: number, d: number) => { const n = Mat
 export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request, false);
   if (error) return error;
-  const [actors, runs, spent, token] = await Promise.all([listActors(), listRuns(), monthSpent(), apifyToken()]);
+  const [actors, runs, spent, token, budget] = await Promise.all([listActors(), listRuns(), monthSpent(), apifyToken(), readBudget()]);
   if (!actors || !runs) return Response.json({ detail: 'No se pudo leer los actores.' }, { status: 503 });
-  return reply(auth!, { portals: portalViews(actors, runs), actors, runs, presets: PRESETS, budget: { spent: spent === null ? null : Number(spent.toFixed(4)), limit: MONTHLY_BUDGET_USD() }, has_key: Boolean(token) });
+  // El límite que manda es el guardado por el propietario; `source` y `error` declaran de dónde sale (y si el
+  // control del panel aún no está activo, p. ej. migración sin aplicar) para que el panel no finja que manda.
+  return reply(auth!, { portals: portalViews(actors, runs), actors, runs, presets: PRESETS, budget: { spent: spent === null ? null : Number(spent.toFixed(4)), limit: budget.usd, source: budget.source, updated_by: budget.updated_by, updated_at: budget.updated_at, error: budget.error }, has_key: Boolean(token) });
 }
 
 export async function POST(request: NextRequest) {
@@ -36,6 +39,15 @@ export async function POST(request: NextRequest) {
   const action = body.action;
   const { auth, error } = await gate(request, action !== 'harvest');
   if (error) return error;
+
+  // El propietario sube o baja el límite desde el panel: se guarda en la base, se audita quién y cuándo, y
+  // desde ese momento manda en cada lanzamiento de pago (no hace falta desplegar ni tocar el entorno).
+  if (action === 'budget') {
+    const saved = await writeBudget(body.monthly_usd, auth!.admin.email);
+    return saved.ok
+      ? reply(auth!, { ok: true, budget: { limit: saved.usd }, message: `Límite de gasto del mes guardado: ${saved.usd} USD. El reparto entre portales se ajusta en la siguiente búsqueda.` })
+      : Response.json({ detail: saved.error }, { status: 422 });
+  }
 
   if (action === 'harvest') { const base = publicBaseUrl(request); return reply(auth!, { results: await harvestPending(45000, auth!.admin.role === 'owner' ? (run, actor, res) => recoverAfter(run, actor, res, base) : undefined) }); } // solo el propietario dispara repuestos (gastan crédito)
 
