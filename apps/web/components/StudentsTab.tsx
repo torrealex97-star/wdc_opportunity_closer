@@ -1,9 +1,10 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LoaderCircle, Pause, Play, Trash2, UserPlus } from 'lucide-react';
+import { LineChart, LoaderCircle, Pause, Play, Trash2, UserPlus, X } from 'lucide-react';
 import { api } from './AdminShell';
 import { REVIEW_REFS } from './trainingRefs';
 import StudentActivityDashboard from './StudentActivityDashboard';
+import StudentProgress from './StudentProgress';
 
 // Alumnas: invitar, pausar/reactivar (reversible) y dar de baja (solo propietario, irreversible). Sin datos de perfil aquí.
 type Row = { id: string; email: string; status: 'invited' | 'active' | 'paused'; invited_by: string | null; created_at: string };
@@ -17,6 +18,10 @@ export default function StudentsTab({ owner, onSessionLost }: { owner: boolean; 
   const [rows, setRows] = useState<Row[]>([]); const [email, setEmail] = useState('');
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30); const [overview, setOverview] = useState<Overview | null>(null); const seq = useRef(0);
   const [busy, setBusy] = useState(true); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  // Ficha de una alumna concreta: se abre en un diálogo con SU progreso, no con el agregado del panel.
+  const [progressOf, setProgressOf] = useState<Row | null>(null);
+  const progressDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { if (progressOf && progressDialog.current && !progressDialog.current.open) progressDialog.current.showModal(); }, [progressOf]);
   const fail = useCallback((err: Error) => { if (err.message.includes('Sesión')) onSessionLost(); setError(err.message); }, [onSessionLost]);
   const load = useCallback(() => {
     const mine = ++seq.current; setBusy(true);
@@ -62,6 +67,14 @@ export default function StudentsTab({ owner, onSessionLost }: { owner: boolean; 
           <td className="num">{!live ? '—' : a ? `${a.practice.count}${a.practice.avg !== null ? ` · media ${a.practice.avg}` : ''}` : 0}</td>
           <td className="num">{!live ? '—' : `${a?.training.modules.length ?? 0}/${REVIEW_REFS.length}`}</td>
           <td>{!live ? '—' : a?.training.examBest == null ? 'Sin intentar' : `${a.training.examBest}/100 · ${a.training.examPassed ? 'superado' : 'no superado'}`}</td></>; })()}
-        <td style={{ textAlign: 'right' }}><button onClick={() => void toggle(r)} aria-label={`${r.status === 'paused' ? 'Reactivar' : 'Pausar'} a ${r.email}`}>{r.status === 'paused' ? <Play size={14} /> : <Pause size={14} />} {r.status === 'paused' ? 'Reactivar' : 'Pausar'}</button>{owner && <button onClick={() => void remove(r)} aria-label={`Dar de baja a ${r.email}`}><Trash2 size={14} /> Baja</button>}</td></tr>)}</tbody></table></div>}
+        <td className="student-row-actions"><button onClick={() => setProgressOf(r)} aria-label={`Ver progreso de ${r.email}`}><LineChart size={14} /> Progreso</button><button onClick={() => void toggle(r)} aria-label={`${r.status === 'paused' ? 'Reactivar' : 'Pausar'} a ${r.email}`}>{r.status === 'paused' ? <Play size={14} /> : <Pause size={14} />} {r.status === 'paused' ? 'Reactivar' : 'Pausar'}</button>{owner && <button onClick={() => void remove(r)} aria-label={`Dar de baja a ${r.email}`}><Trash2 size={14} /> Baja</button>}</td></tr>)}</tbody></table></div>}
+    {/* La ficha reutiliza StudentProgress: mismo componente, otro endpoint (el de esta alumna). */}
+    <dialog ref={progressDialog} className="admin-progress" aria-label={progressOf ? `Progreso de ${progressOf.email}` : 'Progreso de la alumna'} onClose={() => setProgressOf(null)} onClick={e => { if (e.target === progressDialog.current) progressDialog.current.close(); }}>
+      {progressOf && <div className="detail">
+        <div className="detail-top"><span className="eyebrow">FICHA DE LA ALUMNA · {LABEL[progressOf.status]}</span><button className="icon-button" aria-label="Cerrar el progreso" onClick={() => progressDialog.current?.close()}><X size={20} /></button></div>
+        <StudentProgress endpoint={`/api/admin/students/${progressOf.id}/progress`} audience="coach"
+          heading={{ eyebrow: 'SU ACTIVIDAD EN EL PORTAL', title: progressOf.email, lead: 'La misma ficha que ella ve en «Mi progreso»: sus prácticas, notas, evolución y formación. Sin compararla con otras alumnas.' }} />
+      </div>}
+    </dialog>
   </section>;
 }

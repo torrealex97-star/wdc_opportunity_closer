@@ -269,6 +269,27 @@ await step('alumnas: invitación, recuperación, login, perfil con consentimient
   assert.equal((await call('/api/student/profile', { cookies: false, headers: { cookie: `wdc_admin_at=${jar.wdc_admin_at}` } })).status, 401);
   // Pausar corta el acceso (con su token aún vivo) y reactivar lo devuelve; la lista la ve el panel
   const id = (await call('/api/admin/students')).json.students.find(x => x.email === E).id;
+  // Ficha de UNA alumna desde el panel: la misma lectura que ve ella, atada a su id — no el agregado.
+  assert.equal((await call(`/api/admin/students/${id}/progress`, { cookies: false })).status, 401, 'sin sesión del panel no hay ficha');
+  const otherEmail = 'progreso-otra@alumna.dev';
+  assert.equal((await call('/api/admin/students', { method: 'POST', body: { email: otherEmail } })).status, 201);
+  const other = (await call('/api/admin/students')).json.students.find(x => x.email === otherEmail);
+  assert.ok(other?.id, 'la segunda alumna existe');
+  // Actividad de la otra alumna: una práctica de 40, sin examen. La de E ya tiene sus prácticas y su 100.
+  state.activity.push({ id: 'act-prueba-otra', org_id: 'cloud-wdc', student_id: other.id, kind: 'practice', ref: 'objeciones-precio', score: 40, detail: { axes: { objecion: 40 } }, created_at: new Date().toISOString() });
+  const ficha = await call(`/api/admin/students/${id}/progress?days=30`);
+  assert.equal(ficha.status, 200);
+  assert.equal(ficha.json.student.email, E, 'la ficha es de esa alumna');
+  assert.equal(ficha.json.progress.practice.count, recomputed.json.progress.practice.count, 'cuenta lo suyo, no lo de todas');
+  assert.deepEqual(ficha.json.progress.recent.map(r => r.kind), recomputed.json.progress.recent.map(r => r.kind));
+  assert.equal(ficha.json.metrics.xp.level, recomputed.json.metrics.xp.level, 'el nivel sale de su actividad');
+  const otraFicha = await call(`/api/admin/students/${other.id}/progress?days=30`);
+  assert.equal(otraFicha.json.student.email, otherEmail);
+  assert.equal(otraFicha.json.progress.practice.count, 1, 'solo la práctica de esta alumna');
+  assert.equal(otraFicha.json.progress.practice.avg, 40);
+  assert.ok(!otraFicha.json.progress.recent.some(r => r.kind === 'training_exam'), 'el examen de la otra alumna no aparece');
+  assert.equal((await call('/api/admin/students/00000000-0000-4000-8000-000000000999/progress')).status, 404, 'un id ajeno no abre ficha');
+  assert.equal((await call(`/api/admin/students?id=${other.id}`, { method: 'DELETE' })).status, 200, 'se limpia la alumna de prueba');
   assert.equal((await call('/api/admin/students', { method: 'PATCH', body: { id, status: 'paused' } })).status, 200);
   assert.equal((await call('/api/student/profile', own)).status, 403);
   assert.equal((await call('/api/student/session', { method: 'POST', cookies: false, body: { email: E, password: 'Contraseña-alumna-1' } })).status, 403);

@@ -797,3 +797,12 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 @media(max-width:700px){.student-preferences .pref-field{flex:1 1 100%;min-width:0}}
 .student-preferences .primary{margin-left:auto}
 @media(max-width:700px){.student-preferences .primary{width:100%;margin-left:0}}
+
+/* --- Ficha de una alumna desde el panel (2026-11-18) ---
+   El diálogo reutiliza el componente de «Mi progreso»: mismo contenido y mismos estados, leído
+   por el id de esa alumna. El nombre es el titular porque dos alumnas no se confunden. */
+.admin-progress{width:min(980px,94vw);max-height:88vh;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);padding:0;background:var(--paper);color:var(--ink)}
+.admin-progress .detail{padding:28px}
+.admin-progress .student-progress .page-heading h1{font-size:34px;overflow-wrap:anywhere}
+.student-row-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:760px){.admin-progress{width:100vw;max-height:100vh;border-radius:0}.admin-progress .detail{padding:20px}}
