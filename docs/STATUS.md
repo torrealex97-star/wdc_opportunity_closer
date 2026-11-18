@@ -1,5 +1,14 @@
 # Estado
 
+## Todo el trabajo de hoy publicado en el dominio real (sesión 204) — 2026-11-18
+
+- **Petición del propietario**: llevar todo al `main` y fusionarlo para verlo en vivo.
+- **Estado de `main`**: ya contenía el trabajo de las sesiones 197-203 (`67e7855` … `14c58f8`) y está sincronizado con `origin/main`; no había ramas propias pendientes de fusionar. Las dos únicas ramas viejas que no están en `main` (`feat/formacion-progreso` del 25-10 y `claude/cloud-student-view` del 12-10) se dejan **sin tocar**: su trabajo está reimplementado en `main` y fusionarlas ahora arrastraría código obsoleto. Los PR abiertos son solo de dependabot y tampoco se tocan sin su propia verificación.
+- **Causa de que no se viera**: `app.womendigitalclosers.com` lo sirve el Worker de Cloudflare `closer-web`, cuyo último despliegue era del **2026-11-16 11:13**; Vercel (rollback) sí tenía lo nuevo, el dominio real no. El síntoma medido: `/api/backend/opportunities/search` en el dominio devolvía 39 externas **sin** la clave `caution` ni `also_seen`.
+- **Hecho**: `npx opennextjs-cloudflare build` + `npx wrangler deploy` en `apps/web` (cuenta Women Digital Closers). Version ID `c50db87d-3e37-4d31-8217-2174ac7530b0`, 27 ms de arranque, bindings intactos (`ENGINE`, `ASSETS`, `ADMIN_PUBLIC_URL`, `CAREER_ENGINE_URL`) y secretos conservados. Sin migraciones, sin variables nuevas, sin gasto nuevo.
+- **Verificado contra el servicio real**: en `https://app.womendigitalclosers.com` la búsqueda devuelve 155 ofertas (39 externas, las 39 con la clave `caution`) y `/`, `/admin`, `/alumna`, `/privacidad`, `/terminos` responden 200. En el navegador, `/` pinta 155 tarjetas y **2 avisos visibles** («Publicada con avisos · promete ingresos muy altos…») en las ofertas `Closer de ventas High-Ticket` y `Closer B2B Freelance`.
+- **Límites**: no se ha abierto el panel `/admin` con sesión de operador (no hay credenciales de Supabase en esta máquina), así que el gasto por proveedor y el marcador por fuente siguen comprobados por pruebas y tipos, no visualmente en producción. Los dos avisos que se ven dependen de los datos reales de hoy: si no hay ofertas con señales leves aprobadas, el banner no aparece y eso no es un fallo.
+
 ## La prueba del aviso ejecuta la ruta, y el banner se ve con sesión de alumna (sesión 203) — 2026-11-18
 
 - **Petición del propietario**: cambiar la comprobación por texto de la ruta en `caution.mjs` por una prueba de comportamiento (manteniendo las aserciones del banner) y verificar con una sesión real de alumna que la tarjeta pinta el aviso.
