@@ -11935,6 +11935,11 @@ function remoteAccessibleFromSpain(p) {
 function marketRejects(p, market) {
   if (market === 'ES') return Boolean(foreignCountry(p) || nonSpain(p) || (!spainSignal(p) && !remoteAccessibleFromSpain(p)));
   if (market === 'any') return false;
+  // La ubicación manda sobre las pistas del cuerpo: «Cgm · España» no es una oferta de LATAM aunque
+  // su descripción nombre México. Sin este corte, una pista de país latinoamericano en el texto metía
+  // vacantes españolas en el filtro Latinoamérica (medido 2026-11-18: puesto 3 de 48).
+  const located = countryOfLocation(p.location);
+  if (market === 'LATAM' && located && !LATAM_COUNTRIES.has(located)) return true;
   // Mercados sin cobertura propia del motor: se exponen solo los que traen país explícito.
   const hay = fold(`${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`);
   const hinted = marketHinted(market, p, hay);
@@ -12041,7 +12046,9 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
       const extra = typeof salary.extraOptions === 'string' && salary.extraOptions.trim() ? salary.extraOptions.trim() : null;
       const low = salary.from ?? salary.min; const high = salary.to ?? salary.max;
       const amount = v => Number(v) ? String(Math.round(Number(v))).replace(/\B(?=(\d{3})+(?!\d))/g, '.') : null;
-      if (low && high) pay = `${amount(low)} – ${amount(high)} ${salary.currencyCode ?? ''}`.trim();
+      // Un rango de mínimo igual a máximo no es un rango: «1.150 – 1.150 EUR» se lee como error.
+      if (low && high) pay = Number(low) === Number(high) ? `${amount(low)} ${salary.currencyCode ?? ''}`.trim()
+        : `${amount(low)} – ${amount(high)} ${salary.currencyCode ?? ''}`.trim();
       else if (low || high) pay = `${low ? 'Desde' : 'Hasta'} ${amount(low ?? high)} ${salary.currencyCode ?? ''}`.trim();
       else if (extra) pay = extra;
       if (pay !== 'Importe no publicado') {

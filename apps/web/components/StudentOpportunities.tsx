@@ -120,8 +120,11 @@ function OfferCard({ offer, starred, saving, onStar, onOpen, compact = false }: 
 }) {
   const modality = modalityBadge(offer.modality);
   const facts = knownFacts(offer);
+  // «Sin indicar» no es una condición: ocupaba una insignia en casi todas las tarjetas para decir
+  // que no hay dato. Se omite, igual que los datos desconocidos de la ficha.
+  const showModality = modality.text !== 'Sin indicar';
   // «Remoto» como ubicación y como modalidad es el mismo dato: no se dice dos veces.
-  const showLocation = Boolean(offer.location) && offer.location.trim().toLowerCase() !== modality.text.toLowerCase();
+  const showLocation = Boolean(offer.location) && (!showModality || offer.location.trim().toLowerCase() !== modality.text.toLowerCase());
   return <article className={`opportunity-card ${offer.is_selected ? 'is-pick' : ''}`}>
     <div className="opportunity-company">
       <div className="company-monogram" aria-hidden="true">{initials(offer.company)}</div>
@@ -140,7 +143,7 @@ function OfferCard({ offer, starred, saving, onStar, onOpen, compact = false }: 
     <h3 className={`opportunity-title ${compact ? 'is-compact' : ''}`}>{jobTitle(offer)}</h3>
     <div className="opp-badges">
       {showLocation && <span className="opp-badge"><MapPin size={12} aria-hidden="true" />{offer.location}</span>}
-      <span className={`opp-badge ${modality.tone}`}><Laptop size={12} aria-hidden="true" />{modality.text}</span>
+      {showModality && <span className={`opp-badge ${modality.tone}`}><Laptop size={12} aria-hidden="true" />{modality.text}</span>}
       <span className={`opp-freshness ${freshTone(offer.published_at)}`}><Clock3 size={12} aria-hidden="true" />{freshness(offer.published_at)}</span>
     </div>
     {offer.caution && <p className="offer-caution" role="note"><ShieldAlert size={13} /><span><strong>{offer.caution.title}.</strong> {offer.caution.flags[0]} <button type="button" className="link-button" onClick={onOpen}>Ver por qué</button></span></p>}

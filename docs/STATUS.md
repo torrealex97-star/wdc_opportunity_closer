@@ -1,5 +1,14 @@
 # Estado
 
+## La ficha en móvil y en cada filtro (sesión 220) — 2026-11-18
+
+- **Petición del propietario**: comprobar la ficha nueva en móvil y con cada filtro de perfil y mercado (España, LATAM, Closer, Setter, Cold Caller), decir qué se rompe, se repite o queda desordenado y arreglarlo si es pequeño.
+- **Lo que se repetía**: cada tarjeta sin dato de modalidad llevaba una insignia «Sin indicar» que no decía nada y se repetía en 30 de 41 tarjetas de Cold Caller. Se omite, con el mismo criterio que ya se aplicaba a jornada/experiencia/contrato. Las cifras idénticas en los dos extremos del rango («1.150 – 1.150 EUR», «13 – 13 EUR») se publicaban como rango: ahora se sirve una sola cifra.
+- **Lo que se rompía**: en el filtro **Latinoamérica** entraba `Cgm · España` en el puesto 3 de 48 porque el cuerpo del anuncio nombra México. La ubicación ahora manda: si dice un país que no es de LATAM, la oferta no entra en ese mercado (remoto sin país sigue entrando). Medido tras desplegar: **0 tarjetas con ubicación España** en LATAM, 47 servidas de 110 elegibles.
+- **Lo que quedaba desordenado en móvil**: los tres selectores del buscador se partían en dos columnas de 148 px y el texto salía cortado («Todos los mercadc»). A 560 px o menos van a una columna; medido a 390 y 320 px: selectores de 312 y 280 px, sin recorte.
+- **Verificado a mano en el navegador** (390×844 y 320×700): 0 desbordes horizontales en 41 tarjetas de Cold Caller, 0 insignias repetidas dentro de la misma tarjeta, títulos largos a tres líneas sin cortar, empresa larga («Marketing Digital y Sistemas a medida») en una línea junto al guardado, y el pie con procedencia y CTA apilados. Los cinco estados medidos: España (106 tarjetas), LATAM (47), Closer (61 con España), Setter (74, todas su rol), Cold Caller (41, todas su rol), ninguno con desbordes. Escritorio a 1440×900 sigue en dos columnas de 559 px.
+- **Límites**: en móvil el radar, el buscador en una frase y los selectores van apilados y la tarjeta ocupa el ancho completo con 3 filas de datos; no hay vista de dos columnas por debajo de 1200 px. La navegación lateral es una tira horizontal desplazable por diseño (regla existente), no un fallo. No se ha probado en un teléfono real ni en Safari iOS, solo con ventana de 390 y 320 px en Chromium.
+
 ## Las mejores arriba y una ficha que se lee de un vistazo (sesión 219) — 2026-11-18
 
 - **Petición del propietario**: que las mejores ofertas estén siempre arriba y que la tarjeta donde la alumna ve la información sea más visual y esté mejor diseñada.

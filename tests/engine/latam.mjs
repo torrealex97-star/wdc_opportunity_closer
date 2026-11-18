@@ -11,7 +11,7 @@ const workerPath = fileURLToPath(new URL('../../sites/engine/worker.js', import.
 const stage = join(mkdtempSync(join(tmpdir(), 'wdc-engine-latam-')), 'worker.mjs');
 copyFileSync(workerPath, stage);
 const { __test } = await import(pathToFileURL(stage).href);
-const { isoCountryName, hintInText, MARKET_HINTS, spanishBodyGate, activationBudget, checkTarget, explicitSpain, marketHinted } = __test;
+const { isoCountryName, hintInText, MARKET_HINTS, spanishBodyGate, activationBudget, checkTarget, explicitSpain, marketHinted, marketRejects } = __test;
 const latam = hay => MARKET_HINTS.LATAM.some(k => hintInText(hay, k));
 
 assert.equal(isoCountryName('MX'), 'México');
@@ -67,6 +67,14 @@ assert.equal(explicitSpain({ title: 'Closer', location: 'Madrid, España' }), tr
 assert.equal(explicitSpain({ title: 'Closer', location: 'Miami, Florida' }), true, 'señal clara de otro mercado: no es «sin país»');
 for (const ok of ['la habana cuba', 'cuba', 'tegucigalpa']) assert.ok(latam(ok), ok);
 
+// El filtro LATAM no se deja convencer por una mención de México en el cuerpo si la ubicación
+// dice España: el mercado lo decide el lugar, no el texto de venta.
+assert.equal(marketRejects({ title: 'Closer', location: 'España', description: 'Clientes en México y toda Latinoamérica.' }, 'LATAM'), true,
+  'España en la ubicación no entra en LATAM');
+assert.equal(marketRejects({ title: 'Closer', location: 'Bogotá, Colombia', description: 'Ventas de software.' }, 'LATAM'), false);
+assert.equal(marketRejects({ title: 'Closer', location: 'Remoto', description: 'Equipo distribuido en LATAM.' }, 'LATAM'), false,
+  'el remoto sin país sigue entrando');
+
 // Redirección: se sigue una vez y manda el cuerpo de la página final.
 const realFetch = globalThis.fetch;
 try {
@@ -83,4 +91,4 @@ try {
   assert.equal(r2, 'unknown'); assert.equal(code, 'redirect_without_verification', 'redirección a http: sin evidencia');
 } finally { globalThis.fetch = realFetch; }
 
-console.log('PASS  motor LATAM: mercado por palabra, ISO, inglés por proximidad, redirección y lote por plan');
+console.log('PASS  motor LATAM: mercado por palabra, ubicación por encima del cuerpo, ISO, inglés por proximidad, redirección y lote por plan');

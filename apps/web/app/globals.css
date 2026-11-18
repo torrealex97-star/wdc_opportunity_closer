@@ -755,5 +755,6 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .opportunity-card .opportunity-footer{align-items:center;padding-top:16px}
 .opportunity-card .opp-source{font-size:10px;color:var(--secondary);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere;max-width:52%}
 .opportunity-card .opportunity-footer .primary{font-size:11px;padding:10px 14px;min-height:42px}
+@media(max-width:560px){.search-grid{grid-template-columns:1fr}}
 @media(max-width:1200px){.student-results .opportunity-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.opportunity-card{padding:18px}.opportunity-card .opportunity-title{font-size:21px}.opportunity-card .opp-freshness{margin-left:0}.opportunity-card .opportunity-facts{grid-template-columns:1fr}.opportunity-card .opportunity-footer{flex-direction:column;align-items:stretch;gap:12px}.opportunity-card .opp-source{max-width:100%}}
