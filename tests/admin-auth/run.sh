@@ -63,6 +63,9 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 # Panel: los conectores del motor se cruzan con el catálogo por portal (Himalayas no es «fuera del cloud»).
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/families.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/roleui.mjs
+# Aviso en la tarjeta de la alumna: `caution` viaja de Supabase a la búsqueda, al modo degradado y a las
+# recomendaciones sin que ninguna fusión lo recorte.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/caution.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/surface.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/market.mjs
 # El motor retira en bloque lo que descarta (no lo deja en la cola humana): prueba de conducta con D1 simulado.

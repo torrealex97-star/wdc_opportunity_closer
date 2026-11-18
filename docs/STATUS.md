@@ -1,5 +1,13 @@
 # Estado
 
+## El aviso llega a la tarjeta, comprobado de punta a punta (sesión 202) — 2026-11-18
+
+- **Petición del propietario**: comprobar que `caution` llega de verdad a la tarjeta de la alumna, revisar la ruta que sirve las oportunidades y añadir una prueba que falle si el banner desaparece por el camino.
+- **Recorrido revisado**: `external_offers.auto_review.flags` (lo escribe `approveByRule`) → `judgeOffer`/`runAutoReview` dejan `cumple_reglas_con_aviso` → `listOffers` ya pide `auto_review` en su `select` → `cautionOf`/`toOpportunity` construyen `caution` → la ruta `/api/backend/opportunities/search` fusiona motor + externas → el JSON llega a `StudentOpportunities`, que pinta `.offer-caution` en la tarjeta y en el detalle. También se revisaron `/api/student/matches` (matching puntúa con spread, no reconstruye la oferta) y el camino degradado (motor caído), que responde las externas tal cual.
+- **Qué se cambió**: la fusión estaba incrustada en la ruta; se extrae a `mergeStudentSearch` ([externalSurface.ts](../apps/web/lib/externalSurface.ts)) y la ruta la usa. No cambia el comportamiento: deja una sola función probada y hace que la prueba detecte si alguien vuelve a reconstruir la oferta campo a campo. Nada más se toca.
+- **Comprobado (tested, sin red real)**: [caution.mjs](../tests/admin-auth/caution.mjs) 4/4 con Supabase simulado y una oferta aprobada con `flags: [COMMISSION_ONLY]` — (1) `caution` sobrevive a la fusión con la oferta del motor y la bandera llega en texto; (2) la ruta sigue llamando a `mergeStudentSearch` y el camino degradado devuelve `items: extra`; (3) el modo degradado conserva el aviso; (4) `recommendForStudent` y la serialización JSON lo conservan. Añadida a `tests/admin-auth/run.sh`. `surface.mjs` 11/11, `typecheck` OK, `npm run build` OK.
+- **Sin verificar**: no se ha abierto la tarjeta en un navegador con sesión de alumna; el banner está comprobado por datos y tipos, **no visualmente**. En modo local sin motor (`CAREER_ENGINE_URL` sin definir) la búsqueda no fusiona externas —comportamiento previo, ajeno a este cambio—, así que allí el aviso no se pinta.
+
 ## Gasto y rendimiento por proveedor en el panel de APIs (sesión 201) — 2026-11-18
 
 - **Petición del propietario**: el panel de APIs no puede quedarse en «Resultados por fuente»; cada proveedor debe enseñar su gasto y su rendimiento, incluido el coste por envío y por entrevista cuando exista.

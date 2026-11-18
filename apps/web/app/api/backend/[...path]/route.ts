@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
-import { externalForStudent } from '../../../../lib/externalSurface';
-import { fold } from '../../../../lib/vocabulary';
+import { externalForStudent, mergeStudentSearch, type StudentSearchItem } from '../../../../lib/externalSurface';
 import { authenticateStudent, studentLoginRequired } from '../../../../lib/studentAuth';
 import { engineFetch } from '../../../../lib/engineTransport';
 
@@ -90,13 +89,10 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     if (engine && upstream.ok && path.join('/') === 'opportunities/search' && request.method === 'POST') {
       try {
         const body = JSON.parse(requestBody) as { role?: string | null; market?: string; days?: number; include_bilingual?: boolean; starred_only?: boolean };
-        const mine = await upstream.clone().json() as { items: Array<{ source_url: string }>; total: number };
+        const mine = await upstream.clone().json() as { items: StudentSearchItem[]; total: number };
         const extra = await externalForStudent({ role: body.role ?? null, market: body.market ?? 'any', days: Number(body.days) || 10, include_bilingual: Boolean(body.include_bilingual), starred_only: Boolean(body.starred_only) }).catch(() => []);
-        // Sin duplicados: mismo enlace o misma empresa + título (el mismo anuncio llega por varias fuentes).
-        const key = (i: { company?: string; original_title?: string }) => `${fold(i.company)}|${fold(i.original_title)}`;
-        const seen = new Set(mine.items.map(i => i.source_url));
-        const seenKeys = new Set((mine.items as Array<{ company?: string; original_title?: string }>).map(key));
-        const items = [...mine.items, ...extra.filter(e => !seen.has(e.source_url) && !seenKeys.has(key(e)) && (seenKeys.add(key(e)), seen.add(e.source_url), true))];
+        // Sin duplicados, y sin reconstruir las externas: el aviso (`caution`) viaja dentro de cada oferta.
+        const items = mergeStudentSearch(mine.items, extra);
         return Response.json({ ...mine, items, total: items.length }, { headers });
       } catch { /* si algo falla, se devuelve la respuesta del motor tal cual */ }
     }

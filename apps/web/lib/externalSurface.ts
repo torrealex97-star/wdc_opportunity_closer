@@ -107,6 +107,20 @@ export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
   };
 }
 
+export type StudentSearchItem = { source_url: string; company?: string; original_title?: string };
+
+/**
+ * Fusiona las ofertas externas aprobadas con las del motor sin duplicar el mismo anuncio (mismo enlace o
+ * misma empresa + título). Las externas entran TAL CUAL: ahí viaja `caution`, el aviso que ve la alumna, y
+ * reconstruir el objeto campo a campo es como se perdió antes este dato por el camino.
+ */
+export function mergeStudentSearch<T extends StudentSearchItem>(engineItems: T[], extra: T[]): T[] {
+  const key = (item: StudentSearchItem) => `${fold(item.company)}|${fold(item.original_title)}`;
+  const seen = new Set(engineItems.map(item => item.source_url));
+  const seenKeys = new Set(engineItems.map(key));
+  return [...engineItems, ...extra.filter(item => !seen.has(item.source_url) && !seenKeys.has(key(item)) && (seenKeys.add(key(item)), seen.add(item.source_url), true))];
+}
+
 const MARKET_OK = new Set(['any', 'ES', 'EU', 'LATAM', 'US']);
 
 // Mercado de una oferta externa: usa el guardado al entrar (con su motivo) y, si falta, lo calcula.
