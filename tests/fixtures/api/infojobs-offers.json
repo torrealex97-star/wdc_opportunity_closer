@@ -1,0 +1,45 @@
+{
+  "currentPage": 1,
+  "pageSize": 2,
+  "totalResults": 2,
+  "currentResults": 2,
+  "totalPages": 1,
+  "sortBy": "updated-desc",
+  "sinceDate": "_15_DAYS",
+  "offers": [
+    {
+      "id": "258eae420249ffa67cf64681a2ef80",
+      "title": "Camareros/as y 2º de Sala Zona Penedès",
+      "province": { "id": 9, "value": "Barcelona" },
+      "city": "Vilafranca del Penedès",
+      "link": "https://www.infojobs.net/vilafranca-del-penedes/camareros-2-sala-zona-penedes/of-i258eae420249ffa67cf64681a2ef80",
+      "category": { "id": 160, "value": "Turismo y restauración" },
+      "contractType": { "id": 5, "value": "Otros contratos" },
+      "subcategory": { "id": 3116, "value": "Restauración" },
+      "salaryMin": { "id": 10, "value": "12 €" },
+      "salaryMax": { "id": 10, "value": "12 €" },
+      "salaryPeriod": { "id": 1, "value": "Bruto/hora" },
+      "experienceMin": { "id": 6, "value": "Al menos 2 años" },
+      "workDay": { "id": 1, "value": "Completa" },
+      "teleworking": { "id": 1, "value": "Presencial" },
+      "published": "2026-05-09T14:04:02.000Z",
+      "updated": "2026-05-09T14:04:02.000Z",
+      "author": { "id": "8275252453610761051133485087", "name": "ADECCO" }
+    },
+    {
+      "id": "eb371a01c14f97838d790d19d606ce",
+      "title": "Closer de ventas high ticket",
+      "province": { "id": 33, "value": "Madrid" },
+      "city": "Madrid",
+      "link": "https://www.infojobs.net/madrid/closer-de-ventas/of-ieb371a01c14f97838d790d19d606ce",
+      "category": { "id": 152, "value": "Comercial y ventas" },
+      "salaryMin": { "id": 1, "value": "30.000 €" },
+      "salaryMax": { "id": 2, "value": "36.000 €" },
+      "salaryPeriod": { "id": 1, "value": "Bruto/año" },
+      "teleworking": { "id": 2, "value": "Solo teletrabajo" },
+      "published": "2026-11-16T08:00:00.000Z",
+      "updated": "2026-11-16T08:00:00.000Z",
+      "author": { "name": "Acme" }
+    }
+  ]
+}

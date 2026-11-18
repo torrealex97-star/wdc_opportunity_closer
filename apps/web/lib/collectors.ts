@@ -17,6 +17,14 @@ const intInRange = (raw: string | undefined, fallback: number, min: number, max:
   const n = Number(raw);
   return raw !== undefined && Number.isInteger(n) && n >= min && n <= max ? n : fallback;
 };
+// Una respuesta sin su lista NO es «cero ofertas»: es la API cambiando de forma. Se lanza para que el run lo
+// declare (`ok:false` con el motivo) en vez de cerrar la pasada con un 0 que parece una medición.
+const arrayField = (data: unknown, key: string, provider: string): unknown[] => {
+  if (!data || typeof data !== 'object') throw new Error(`${provider}: la respuesta no es un objeto`);
+  const list = (data as Record<string, unknown>)[key];
+  if (!Array.isArray(list)) throw new Error(`${provider}: la respuesta no trae «${key}» (¿cambió la API?)`);
+  return list;
+};
 
 // ── InfoJobs v9 (documentación oficial leída el 2026-11-18) ───────────────────────────────────────
 // El listado admite `province` (repetible), `category`, `sinceDate`, `teleworking` y `page`, y la ficha
@@ -113,6 +121,46 @@ export function infojobsCandidate(offer: InfojobsOffer, detail?: InfojobsOffer |
   };
 }
 
+/** Listado de InfoJobs ya validado: `offers` tiene que ser una lista (la doc v9 así lo define). */
+export function infojobsOffers(data: unknown): InfojobsOffer[] {
+  return arrayField(data, 'offers', 'InfoJobs') as InfojobsOffer[];
+}
+
+// Adzuna (doc oficial «Search ads»): `results[]` con `id`, `title`, `company.display_name`,
+// `location.display_name`, `redirect_url`, `salary_min`/`salary_max`, `created`, `description` y
+// `category.label`. Se lee eso, no lo que devolvía el mock.
+export function adzunaCandidates(data: unknown): Candidate[] {
+  return (arrayField(data, 'results', 'Adzuna') as Array<Record<string, unknown>>).map(o => ({
+    external_id: String(o.id ?? ''),
+    title: typeof o.title === 'string' ? o.title : '',
+    company: infoString(infoField(o.company, 'display_name')),
+    location: infoString(infoField(o.location, 'display_name')),
+    url: typeof o.redirect_url === 'string' ? o.redirect_url : '',
+    salary: money(o.salary_min as number | null, o.salary_max as number | null),
+    posted_at: infoString(o.created), description: infoString(o.description),
+    raw: { provider: 'adzuna', category: infoString(infoField(o.category, 'label')) ?? '' },
+  }));
+}
+
+// Jooble (doc oficial «REST API»): `jobs[]` con `id` numérico, `title`, `location`, `snippet`, `salary`,
+// `source`, `type`, `link`, `company` y `updated`. Ojo: la doc muestra `link` SIN esquema
+// («ua.jooble.org/jdp/12345»); sin `https://` la oferta se descartaba al entrar y parecía «0 aceptadas».
+export function joobleLink(link: unknown): string {
+  const raw = typeof link === 'string' ? link.trim() : '';
+  if (!raw || /^https?:\/\//i.test(raw)) return raw;
+  // Se completa solo si parece un host; una ruta relativa se deja como está y se descarta al entrar (declarada).
+  return /^[\w-]+(?:\.[\w-]+)+\//.test(raw) ? `https://${raw}` : raw;
+}
+export function joobleCandidates(data: unknown): Candidate[] {
+  return (arrayField(data, 'jobs', 'Jooble') as Array<Record<string, unknown>>).map(o => ({
+    external_id: String(o.id ?? o.link ?? ''),
+    title: typeof o.title === 'string' ? o.title : '',
+    company: infoString(o.company), location: infoString(o.location), url: joobleLink(o.link),
+    salary: infoString(o.salary), posted_at: infoString(o.updated), description: infoString(o.snippet),
+    raw: { provider: 'jooble', job_type: infoString(o.type) ?? '' },
+  }));
+}
+
 type Fetcher = (query: string, timeoutMs: number, deadline?: number) => Promise<Candidate[]>;
 const fetchers: Record<ApiProvider, (secret: string) => Fetcher> = {
   infojobs: secret => {
@@ -123,7 +171,7 @@ const fetchers: Record<ApiProvider, (secret: string) => Fetcher> = {
       const offers = new Map<string, InfojobsOffer>();
       for (let page = 1; page <= pages; page++) {
         const data = await get(`/api/9/offer?${infojobsListParams(query, page)}`, timeoutMs);
-        const batch: InfojobsOffer[] = Array.isArray(data.offers) ? data.offers : [];
+        const batch = infojobsOffers(data);
         for (const offer of batch) if (infoString(offer.id) && infoString(offer.link)) offers.set(String(infoString(offer.id)), offer);
         // La respuesta dice cuántas páginas hay: no se pide una vacía por rutina.
         if (!batch.length || page >= (Number(data.totalPages) || 1)) break;
@@ -155,20 +203,15 @@ const fetchers: Record<ApiProvider, (secret: string) => Fetcher> = {
     const [id, key] = pairOf(secret);
     return async (query, timeoutMs) => {
       const data = await json(await fetch(`${process.env.ADZUNA_API_BASE ?? 'https://api.adzuna.com'}/v1/api/jobs/es/search/1?app_id=${encodeURIComponent(id)}&app_key=${encodeURIComponent(key)}&results_per_page=50&max_days_old=10&sort_by=date&what=${encodeURIComponent(query)}`, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) }));
-      return (data.results ?? []).map((o: Record<string, any>) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-        external_id: String(o.id), title: o.title, company: o.company?.display_name ?? null, location: o.location?.display_name ?? null, url: o.redirect_url,
-        salary: money(o.salary_min, o.salary_max), posted_at: o.created ?? null, description: o.description ?? null, raw: { provider: 'adzuna', category: o.category?.label ?? '' },
-      }));
+      return adzunaCandidates(data);
     };
   },
   // Jooble emite una clave POR DOMINIO de país: la de jooble.org solo devuelve ofertas de EE. UU.
   // Para España hay que usar la clave de es.jooble.org y pegarle a ese dominio.
   jooble: secret => async (query, timeoutMs) => {
-    const data = await json(await fetch(`${process.env.JOOBLE_API_BASE ?? 'https://es.jooble.org'}/api/${encodeURIComponent(secret)}`, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: query, location: 'España', page: 1, searchMode: 1 }) }));
-    return (data.jobs ?? []).map((o: Record<string, any>) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      external_id: String(o.id ?? o.link), title: o.title, company: o.company ?? null, location: o.location ?? null, url: o.link,
-      salary: o.salary || null, posted_at: o.updated ?? null, description: o.snippet ?? null, raw: { provider: 'jooble', job_type: o.type ?? '' },
-    }));
+    // Cuerpo con los campos que documenta Jooble (`keywords` y `location` son obligatorios; `page` pagina).
+    const data = await json(await fetch(`${process.env.JOOBLE_API_BASE ?? 'https://es.jooble.org'}/api/${encodeURIComponent(secret)}`, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: query, location: 'España', page: 1 }) }));
+    return joobleCandidates(data);
   },
 };
 

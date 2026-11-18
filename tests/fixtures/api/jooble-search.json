@@ -1,0 +1,17 @@
+{
+  "totalCount": 1,
+  "jobs": [
+    {
+      "id": 1234567890,
+      "title": "Closer de ventas",
+      "location": "Madrid",
+      "snippet": "Buscamos una persona con experiencia en ventas para agendar y cerrar oportunidades del equipo comercial.",
+      "salary": "30.000 €",
+      "source": "jooble",
+      "type": "Full-time",
+      "link": "es.jooble.org/jdp/12345",
+      "company": "ABC Corp",
+      "updated": "2023-09-15T12:55:35.3870000"
+    }
+  ]
+}

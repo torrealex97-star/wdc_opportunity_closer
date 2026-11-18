@@ -1,0 +1,14 @@
+{
+  "id": "eb371a01c14f97838d790d19d606ce",
+  "title": "Closer de ventas high ticket",
+  "city": "Madrid",
+  "province": { "id": 33, "value": "Madrid" },
+  "link": "https://www.infojobs.net/madrid/closer-de-ventas/of-ieb371a01c14f97838d790d19d606ce",
+  "category": { "id": 152, "value": "Comercial y ventas" },
+  "description": "Buscamos una persona con experiencia en ventas high ticket para cerrar oportunidades del equipo comercial en España.",
+  "salaryMin": { "amount": 30000, "amountId": 1, "amountValue": "30.000 €", "periodId": 1, "periodValue": "Bruto/año" },
+  "salaryMax": { "amount": 36000, "amountId": 2, "amountValue": "36.000 €", "periodId": 1, "periodValue": "Bruto/año" },
+  "teleworking": { "id": 2, "value": "Solo teletrabajo" },
+  "minRequirements": "Experiencia mínima de 2 años en ventas",
+  "state": 1
+}

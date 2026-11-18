@@ -1,0 +1,34 @@
+{
+  "__CLASS__": "Adzuna::API::Response::JobSearchResults",
+  "results": [
+    {
+      "salary_min": 28000,
+      "longitude": -3.7038,
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "area": ["ES", "Comunidad de Madrid", "Madrid"],
+        "display_name": "Madrid, Comunidad de Madrid"
+      },
+      "salary_is_predicted": 0,
+      "description": "Buscamos closer con experiencia en ventas high ticket para cerrar oportunidades del equipo comercial en España.",
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "created": "2026-11-16T08:12:39Z",
+      "latitude": 40.4168,
+      "redirect_url": "https://www.adzuna.es/jobs/land/ad/129698749",
+      "title": "Closer de ventas high ticket",
+      "category": {
+        "__CLASS__": "Adzuna::API::Response::Category",
+        "label": "Sales Jobs",
+        "tag": "sales-jobs"
+      },
+      "id": "129698749",
+      "salary_max": 32000,
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Acme"
+      },
+      "contract_type": "permanent",
+      "contract_time": "full_time"
+    }
+  ]
+}

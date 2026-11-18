@@ -225,7 +225,7 @@ export function startMocks({ authPort, enginePort }) {
       return send(res, 200, { results: [{ id: 123, title: 'Closer comercial remoto', company: { display_name: 'Beta' }, location: { display_name: 'Barcelona, España' }, redirect_url: 'https://www.adzuna.es/details/123', created: '2026-10-14T08:00:00Z', description: 'Buscamos una persona con experiencia en ventas para incorporar al equipo comercial de la empresa.' }] });
     }
     if (url.pathname === '/api/good-key-1234' && req.method === 'POST') {
-      return send(res, 200, { jobs: [{ id: 77, title: 'Setter de ventas', company: 'Gamma', location: 'Valencia', link: 'https://es.jooble.org/desc/77', snippet: 'Llama a leads para agendar citas de ventas con el equipo.', updated: '2026-10-13T08:00:00Z' }] });
+      return send(res, 200, { totalCount: 1, jobs: [{ id: 77, title: 'Setter de ventas', company: 'Gamma', location: 'Valencia', source: 'jooble', type: 'Full-time', link: 'https://es.jooble.org/desc/77', snippet: 'Llama a leads para agendar citas de ventas con el equipo.', updated: '2026-10-13T08:00:00Z' }] });
     }
     // Tablas de actores y ejecuciones de Apify (PostgREST simulado).
     if (url.pathname === '/rest/v1/apify_actors') {
