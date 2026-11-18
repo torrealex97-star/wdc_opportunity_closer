@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
+import { money, unit, usd } from '../lib/money';
 
 // Marcador por fuente: lo que pasa DESPUÉS de publicar. Envía la alumna, contesta la empresa y aquí se
 // cruza con la fuente del anuncio. No retira ninguna fuente: solo enseña dónde merece la pena insistir.
@@ -21,18 +22,13 @@ type Payload = {
 
 const num = (value: number | null) => value === null ? '—' : String(value);
 const rate = (value: number | null) => value === null ? '—' : value.toLocaleString('es', { maximumFractionDigits: 1 });
-const eur = new Intl.NumberFormat('es', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
-const eurUnit = new Intl.NumberFormat('es', { style: 'currency', currency: 'EUR', maximumFractionDigits: 4 });
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 });
-const money = (value: number | null) => value === null ? '—' : eur.format(value);
-const unit = (value: number | null) => value === null ? '—' : eurUnit.format(value);
 
 // Por qué una celda de coste está en «—»: un hueco no es un cero y el motivo se puede leer.
 const costReason = (row: Row) => row.cost_usd === null
   ? 'Sin coste registrado para esta fuente (no significa que sea gratis).'
   : row.cost_eur === null
-    ? `Registrado ${usd.format(row.cost_usd)}, pero falta el tipo de cambio para pasarlo a euros.`
-    : `${usd.format(row.cost_usd)} registrados${row.cost_partial ? ' (mínimo: alguna ejecución no informó importe)' : ''}.`;
+    ? `Registrado ${usd(row.cost_usd)}, pero falta el tipo de cambio para pasarlo a euros.`
+    : `${usd(row.cost_usd)} registrados${row.cost_partial ? ' (mínimo: alguna ejecución no informó importe)' : ''}.`;
 
 export default function SourceScorecard({ onSessionLost }: { onSessionLost: () => void }) {
   const [data, setData] = useState<Payload | null>(null);
@@ -166,7 +162,7 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
     {fx
       ? <p className="card-meta">Tipo de cambio: 1 USD = {fx.eur_per_usd.toLocaleString('es', { maximumFractionDigits: 4 })} € ({fx.source === 'BCE' ? `BCE${fx.date ? `, ${fx.date}` : ''}` : 'fijado en EUR_PER_USD'}).</p>
       : <p className="card-meta">Sin tipo de cambio EUR/USD: el coste queda en dólares registrados y las columnas en € en «—».</p>}
-    {data.cost.unattributed_usd !== null && data.cost.unattributed_usd > 0 && <p className="card-meta">{usd.format(data.cost.unattributed_usd)} de Apify no se pudieron atribuir a una fuente (su actor ya no está en la tabla).</p>}
+    {data.cost.unattributed_usd !== null && data.cost.unattributed_usd > 0 && <p className="card-meta">{usd(data.cost.unattributed_usd)} de Apify no se pudieron atribuir a una fuente (su actor ya no está en la tabla).</p>}
     {data.totals.cost_partial && <p className="card-meta">* Coste mínimo: alguna ejecución no informó su importe, así que el total real puede ser mayor.</p>}
   </section>;
 }

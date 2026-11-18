@@ -2,7 +2,7 @@
 // ofertas sin fuente localizable aparte). Sin red ni base de datos.
 // Uso: node --experimental-strip-types tests/source-scorecard.mjs
 import assert from 'node:assert/strict';
-import { scorecard, scorecardTotals, MIN_SENDS_TO_COMPARE } from '../apps/web/lib/sourceScorecard.ts';
+import { scorecard, scorecardTotals, providerBreakdown, providerTotals, providerOfSource, MIN_SENDS_TO_COMPARE } from '../apps/web/lib/sourceScorecard.ts';
 import { parseSerpapiCost, recordedCosts } from '../apps/web/lib/sourceCost.ts';
 import { eurRate, __testFx } from '../apps/web/lib/fx.ts';
 
@@ -143,6 +143,83 @@ assert.ok(recorded.partial.has('serpapi-adzuna'), 'una nota sin importe no se cu
 assert.equal(recorded.unattributed_usd, 0.5, 'lo que no tiene actor no se atribuye a una fuente');
 assert.equal(recordedCosts(null, [], []), null, 'una lectura fallida no produce una suma parcial');
 
+// ── Gasto y rendimiento por PROVEEDOR (panel de APIs) ─────────────────────────────────────────
+// El marcador agrupa por fuente; el panel de APIs necesita saber quién cobra por traerlas.
+assert.equal(providerOfSource('apify-indeed'), 'apify');
+assert.equal(providerOfSource('serpapi-infojobs'), 'serpapi');
+assert.equal(providerOfSource('infojobs'), 'infojobs');
+assert.equal(providerOfSource('himalayas'), null, 'una fuente gratuita del motor no tiene proveedor');
+const pSources = new Map([['ext-1', 'apify-indeed'], ['ext-2', 'apify-indeed'], ['ext-3', 'serpapi-infojobs'], ['ext-4', 'serpapi-infojobs'], ['ext-5', 'himalayas'], ['ext-6', 'infojobs']]);
+const pApps = [
+  { offer_ref: 'ext-1', status: 'applied' },
+  { offer_ref: 'ext-2', status: 'interview' },
+  { offer_ref: 'ext-3', status: 'applied' },
+  { offer_ref: 'ext-4', status: 'offer' },
+  { offer_ref: 'ext-5', status: 'applied' },
+  { offer_ref: 'ext-6', status: 'applied' },
+];
+const pIngested = new Map([['apify-indeed', 1000], ['serpapi-infojobs', 400], ['himalayas', 900], ['infojobs', 300]]);
+const pCosts = { usdBySource: new Map([['apify-indeed', 2], ['serpapi-infojobs', 0.1]]), partial: new Set(['serpapi-infojobs']), eurPerUsd: 0.8 };
+const pRows = scorecard(pApps, pSources, pIngested, pCosts);
+const providers = providerBreakdown(pRows, [
+  { provider: 'apify', name: 'Apify', configured: true },
+  { provider: 'serpapi', name: 'SerpApi', configured: true },
+  { provider: 'infojobs', name: 'InfoJobs', configured: false },
+  { provider: 'groq', name: 'Groq', configured: true },
+]);
+const prov = new Map(providers.map(row => [row.provider, row]));
+// Apify: 2 USD → 1,60 €; 1.000 anuncios vivos, 2 enviadas y 1 entrevista desde sus ofertas.
+assert.equal(prov.get('apify').cost_usd, 2);
+assert.equal(prov.get('apify').cost_eur, 1.6);
+assert.equal(prov.get('apify').ingested, 1000);
+assert.equal(prov.get('apify').sent, 2);
+assert.equal(prov.get('apify').interviews, 1);
+assert.equal(prov.get('apify').per_send_eur, 0.8);
+assert.equal(prov.get('apify').per_interview_eur, 1.6);
+assert.equal(prov.get('apify').cost_reason, null);
+assert.equal(prov.get('apify').sources, 1);
+assert.equal(prov.get('apify').configured, true);
+// SerpApi: nota de respaldo 0,10 USD → 0,08 €, con el coste declarado como mínimo.
+assert.equal(prov.get('serpapi').cost_eur, 0.08);
+assert.equal(prov.get('serpapi').cost_partial, true);
+assert.equal(prov.get('serpapi').sent, 2);
+assert.equal(prov.get('serpapi').interviews, 1);
+assert.equal(prov.get('serpapi').per_interview_eur, 0.08);
+// InfoJobs con clave oficial: trae ofertas pero NO registra importe, así que su coste es hueco, no 0.
+assert.equal(prov.get('infojobs').sent, 1);
+assert.equal(prov.get('infojobs').ingested, 300);
+assert.equal(prov.get('infojobs').cost_eur, null);
+assert.equal(prov.get('infojobs').cost_reason, 'sin_coste');
+assert.equal(prov.get('infojobs').per_send_eur, null);
+assert.equal(prov.get('infojobs').configured, false);
+// Groq no trae ofertas, pero es un proveedor de la pestaña: sale con su estado de clave y sin datos.
+assert.equal(prov.get('groq').name, 'Groq');
+assert.equal(prov.get('groq').cost_eur, null);
+assert.equal(prov.get('groq').sources, 0);
+// Una fuente gratuita del motor (Himalayas) no se mete en la tabla de proveedores.
+assert.equal(prov.has('himalayas'), false);
+// Orden: primero quien tiene gasto (más gasto arriba); los proveedores sin importe al final.
+assert.deepEqual(providers.map(row => row.provider), ['apify', 'serpapi', 'infojobs', 'groq']);
+// Sin tipo de cambio se conserva el importe en dólares y el de euros queda en «—» con su causa.
+const noFxProviders = new Map(providerBreakdown(scorecard(pApps, pSources, pIngested, { ...pCosts, eurPerUsd: null }), []).map(row => [row.provider, row]));
+assert.equal(noFxProviders.get('apify').cost_usd, 2);
+assert.equal(noFxProviders.get('apify').cost_eur, null);
+assert.equal(noFxProviders.get('apify').cost_reason, 'sin_tipo_de_cambio');
+assert.equal(noFxProviders.get('apify').per_send_eur, null);
+// Totales por proveedor: 1,68 € entre 5 enviadas y 2 entrevistas (las de fuentes gratuitas cuentan como envíos).
+const pTotals = providerTotals(providers);
+assert.equal(pTotals.providers, 4);
+assert.equal(pTotals.funded, 2);
+assert.equal(pTotals.cost_usd, 2.1);
+assert.equal(pTotals.cost_eur, 1.68);
+assert.equal(pTotals.sent, 5);
+assert.equal(pTotals.interviews, 2);
+assert.equal(pTotals.per_send_eur, 0.336);
+assert.equal(pTotals.per_interview_eur, 0.84);
+assert.equal(pTotals.cost_partial, true);
+// Sin ningún importe registrado el total es «—», no 0.
+assert.equal(providerTotals(providerBreakdown(scorecard(pApps, pSources, pIngested), [])).cost_eur, null);
+
 // ── Tipo de cambio: del BCE, y fallo declarado ──────────────────────────────────────────────────
 __testFx.reset();
 const fx = await eurRate({ now: Date.now(), fetchImpl: async () => new Response("<Cube time='2026-11-17'><Cube currency='USD' rate='1.25'/></Cube>", { status: 200 }) });
@@ -151,4 +228,4 @@ assert.equal(fx.date, '2026-11-17');
 assert.ok(Math.abs(fx.eur_per_usd - 0.8) < 1e-9, 'USD por EUR se invierte');
 __testFx.reset();
 assert.equal(await eurRate({ now: Date.now(), fetchImpl: async () => new Response('no', { status: 500 }) }), null);
-console.log('PASS  marcador por fuente: tasas por 1.000 anuncios vivos, coste registrado en € y por envío/entrevista, huecos en «—» y ofertas sin fuente aparte');
+console.log('PASS  marcador por fuente y por proveedor: tasas por 1.000 anuncios vivos, coste registrado en €, € por envío y por entrevista, huecos en «—» y ofertas sin fuente aparte');

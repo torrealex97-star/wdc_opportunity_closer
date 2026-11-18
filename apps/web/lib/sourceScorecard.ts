@@ -134,6 +134,112 @@ export function scorecard(
   return out;
 }
 
+// ── Por proveedor ─────────────────────────────────────────────────────────────────────────────
+// El marcador agrupa por FUENTE (de dónde salió el anuncio); el panel de APIs necesita la otra
+// lectura: quién cobra por traerlas. `apify-*` y `serpapi-*` son los códigos que ya escriben importe
+// (ejecuciones de Apify y nota del respaldo); las claves oficiales (InfoJobs, Adzuna, Jooble) usan su
+// propio código como fuente y no registran gasto, así que su coste es «—», no 0.
+const KEY_PROVIDERS = ['infojobs', 'adzuna', 'jooble', 'groq', 'openai', 'resend'];
+/** Proveedor que paga una fuente, o `null` para las fuentes gratuitas del motor (RSS, APIs públicas). */
+export function providerOfSource(source: string): string | null {
+  const head = source.split('-')[0];
+  if (head === 'apify' || head === 'serpapi') return head;
+  return KEY_PROVIDERS.includes(source) ? source : null;
+}
+
+export type ProviderInput = { provider: string; name: string; configured: boolean };
+export type ProviderRow = {
+  provider: string;
+  name: string;
+  configured: boolean;
+  // Coste registrado de sus fuentes. `null` = no hay importe registrado (no significa gratis).
+  cost_usd: number | null;
+  cost_eur: number | null;
+  cost_partial: boolean;
+  // Por qué el coste está en «—»: sin importe anotado o sin tipo de cambio.
+  cost_reason: 'sin_coste' | 'sin_tipo_de_cambio' | null;
+  // Fuentes de ese proveedor con actividad medida, y sus cifras sumadas.
+  sources: number;
+  ingested: number | null;
+  sent: number;
+  responded: number;
+  interviews: number;
+  offers: number;
+  per_send_eur: number | null;
+  per_interview_eur: number | null;
+};
+
+/**
+ * Agrupa las filas del marcador por proveedor y suma su gasto y su rendimiento. Un proveedor sin
+ * filas (Groq, OpenAI…) sale con «—» y con su estado de clave, para que la lista sea la de APIs y no
+ * solo la de quien ya gastó. Las fuentes gratuitas del motor no aparecen aquí: no hay proveedor.
+ */
+export function providerBreakdown(rows: SourceRow[], providers: ProviderInput[]): ProviderRow[] {
+  const out = new Map<string, ProviderRow>();
+  const base = (provider: string): ProviderRow => {
+    const found = out.get(provider);
+    if (found) return found;
+    const meta = providers.find(p => p.provider === provider);
+    const created: ProviderRow = {
+      provider, name: meta?.name ?? provider, configured: meta?.configured ?? false,
+      cost_usd: null, cost_eur: null, cost_partial: false, cost_reason: null,
+      sources: 0, ingested: null, sent: 0, responded: 0, interviews: 0, offers: 0,
+      per_send_eur: null, per_interview_eur: null,
+    };
+    out.set(provider, created);
+    return created;
+  };
+  for (const provider of providers) base(provider.provider);
+
+  for (const row of rows) {
+    if (row.unlinked) continue;
+    const provider = providerOfSource(row.source);
+    if (!provider) continue;
+    const target = base(provider);
+    target.sources += 1;
+    target.sent += row.sent;
+    target.responded += row.responded;
+    target.interviews += row.interviews;
+    target.offers += row.offers;
+    if (row.ingested !== null) target.ingested = (target.ingested ?? 0) + row.ingested;
+    if (row.cost_usd !== null) target.cost_usd = money((target.cost_usd ?? 0) + row.cost_usd, 6);
+    if (row.cost_eur !== null) target.cost_eur = money((target.cost_eur ?? 0) + row.cost_eur);
+    if (row.cost_partial) target.cost_partial = true;
+  }
+
+  const list = [...out.values()].map(item => ({
+    ...item,
+    cost_reason: item.cost_usd === null ? 'sin_coste' as const : item.cost_eur === null ? 'sin_tipo_de_cambio' as const : null,
+    per_send_eur: item.cost_eur === null || item.sent === 0 ? null : money(item.cost_eur / item.sent),
+    per_interview_eur: item.cost_eur === null || item.interviews === 0 ? null : money(item.cost_eur / item.interviews),
+  }));
+  // Primero quien tiene gasto medido (más gasto arriba), luego quien tiene actividad, y al final los
+  // proveedores sin dato: la tabla se lee de lo que se puede decidir a lo que solo informa.
+  list.sort((a, b) => (b.cost_eur ?? -1) - (a.cost_eur ?? -1)
+    || (b.sent + b.interviews) - (a.sent + a.interviews)
+    || a.name.localeCompare(b.name));
+  return list;
+}
+
+/** Totales por proveedor para el rótulo: solo suma importes existentes; si no hay ninguno, «—». */
+export function providerTotals(rows: ProviderRow[]) {
+  const withCost = rows.filter(row => row.cost_eur !== null);
+  const usd = rows.filter(row => row.cost_usd !== null);
+  const cost_eur = withCost.length ? money(withCost.reduce((total, row) => total + (row.cost_eur ?? 0), 0)) : null;
+  const cost_usd = usd.length ? money(usd.reduce((total, row) => total + (row.cost_usd ?? 0), 0), 6) : null;
+  const sent = rows.reduce((total, row) => total + row.sent, 0);
+  const interviews = rows.reduce((total, row) => total + row.interviews, 0);
+  return {
+    providers: rows.length,
+    funded: usd.length,
+    cost_usd, cost_eur,
+    sent, interviews,
+    per_send_eur: cost_eur === null || sent === 0 ? null : money(cost_eur / sent),
+    per_interview_eur: cost_eur === null || interviews === 0 ? null : money(cost_eur / interviews),
+    cost_partial: rows.some(row => row.cost_partial),
+  };
+}
+
 /** Totales de la tabla, para el rótulo de arriba. */
 export function scorecardTotals(rows: SourceRow[]) {
   const sum = (pick: (row: SourceRow) => number) => rows.reduce((total, row) => total + pick(row), 0);
