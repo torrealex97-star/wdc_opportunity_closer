@@ -1041,7 +1041,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, surfaceLimits, serveSurfaceRanked, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -11805,6 +11805,38 @@ function classifyRole(p, text) {
 // Menos de esto no es «texto que podamos leer»: 40 caracteres es un titular, no un anuncio.
 const MIN_BODY_CHARS = 40;
 
+// Límites de la superficie de alumna, ajustables por entorno (sin variables, estos valores).
+// `scan` es cuántas filas publicadas vigentes se recorren para puntuar y filtrar; `perSource`
+// y `serve` recortan lo que se DEVUELVE, no lo que se puede encontrar: el tope por fuente evita
+// que una sola fuente de teleoperadores ocupe la lista.
+function surfaceLimits(env = {}) {
+  const int = (value, fallback, min, max) => {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+  };
+  return {
+    scan: int(env.SURFACE_SCAN_LIMIT, 3000, 800, 10000),
+    perSource: int(env.SURFACE_SOURCE_CAP, 40, 1, 5000),
+    serve: int(env.SURFACE_MAX_ITEMS, 400, 10, 10000),
+  };
+}
+
+// Recorte de lo servido: conserva el orden del ranking y declara el corte (`truncated`),
+// como cualquier otro límite del motor. Un ítem sin código de fuente no se descarta.
+function serveSurfaceRanked(ranked, { perSource, serve }) {
+  const used = new Map();
+  const items = [];
+  for (const offer of ranked) {
+    const code = offer.source_code ?? 'sin_fuente';
+    const seen = used.get(code) ?? 0;
+    if (seen >= perSource) continue;
+    used.set(code, seen + 1);
+    items.push(offer);
+    if (items.length >= serve) break;
+  }
+  return { items, truncated: items.length < ranked.length };
+}
+
 // Remoto accesible desde España (decisión del propietario, 2026-11-18): una remota de una empresa
 // que contrata en Europa/EMEA/global no se descarta por no escribir «España». Se sigue rechazando
 // cuando la ubicación nombra otro país o cuando el anuncio limita el remoto a otro mercado.
@@ -11843,13 +11875,26 @@ function exclusionReason(payload, { market = 'ES', includeBilingual = false } = 
 async function studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles, editorialOnly = true }) {
   const db = env.DB;
 
-  const rows = await db.prepare(`
+  // La ventana de la vista de alumna ya no es «las 800 entradas de catálogo más recientes»:
+  // eso dejaba fuera las publicadas con `first_seen_at` antiguo (1.852 de 2.061). Ahora se
+  // recorre exactamente lo que puede servirse —aprobadas y publicadas, sin caducar—, así que
+  // ninguna publicada queda fuera por antigüedad en el catálogo, y se dejan de leer las
+  // retiradas y los borradores (9.823 filas → ~1.753). El diagnóstico del embudo (editorialOnly
+  // false) conserva su consulta de catálogo: mide el pool, no la superficie.
+  const rows = editorialOnly
+    ? await db.prepare(`
+    SELECT j.id AS job_id, j.starred AS starred, p.payload AS payload, p.source AS source, c.expires_at
+    FROM opportunities o
+    JOIN jobs j ON j.org_id=o.org_id AND j.id=o.job_id
+    JOIN job_postings p ON p.org_id=j.org_id AND p.id=j.posting_id
+    JOIN catalog_entries c ON c.org_id=o.org_id AND c.job_id=o.job_id
+    WHERE o.org_id=? AND o.editorial_status IN ('approved','published') AND c.expires_at > ?
+    ORDER BY c.first_seen_at DESC, j.id LIMIT ?`).bind(ORG, now(), surfaceLimits(env).scan).all()
+    : await db.prepare(`
     SELECT j.id AS job_id, j.starred AS starred, p.payload AS payload, p.source AS source, c.expires_at
     FROM catalog_entries c
     JOIN jobs j ON j.org_id=c.org_id AND j.id=c.job_id
     JOIN job_postings p ON p.org_id=j.org_id AND p.id=j.posting_id
-    ${editorialOnly ? `JOIN opportunities o ON o.org_id=c.org_id AND o.job_id=c.job_id
-      AND o.editorial_status IN ('approved','published')` : ''}
     WHERE c.org_id=? AND c.expires_at > ?
     ORDER BY c.first_seen_at DESC, j.id LIMIT 800`).bind(ORG, now()).all();
 
@@ -11924,7 +11969,12 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
     }
     const workText = fold(`${p.title ?? ''} ${p.location ?? ''} ${description.slice(0, 4000)}`);
     const modality = modalityOf(workText, p.location);
-    const ages = p.posted_at ? (Date.now() - Date.parse(p.posted_at)) / 86400000 : null;
+    // La frescura se mide desde la FECHA del anuncio, no desde el reloj del bucle: con
+    // `Date.now() - ages * día` dos ofertas del mismo anuncio diferían por milisegundos según
+    // el orden en que se parseaban, y ese salto adelantaba a un teleoperador sobre un closer
+    // con score, fecha y perfil idénticos. `published_ts` es ahora el instante publicado.
+    const postedTs = p.posted_at ? Date.parse(p.posted_at) : NaN;
+    const ages = Number.isFinite(postedTs) ? (Date.now() - postedTs) / 86400000 : null;
     if (ages !== null && Number.isFinite(ages) && ages > days) continue;
     items.push({
       id: row.job_id,
@@ -11954,7 +12004,7 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
     quality[row.job_id] = {
       es: spainSignal(p) ? 0 : 1,
       score: (titleHit ? 50 : 25) + (ages !== null && ages <= 3 ? 20 : 10) + (pay !== 'Importe no publicado' ? 1 : 0),
-      published_ts: ages !== null ? Date.now() - ages * 86400000 : 0,
+      published_ts: Number.isFinite(postedTs) ? postedTs : 0,
       role: derivedRole,
     };
   }
@@ -11994,7 +12044,10 @@ async function handleStudentSearch(request, env) {
   // clave, el comportamiento es el de la alumna, no el del operador.
   const includeExtraRoles = body?.include_extra_roles === true;
   const { ranked, total, selectionTotal } = await studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles });
-  return Response.json({ items: ranked, total, selection_total: selectionTotal }, { headers: corsHeaders(request) });
+  // Se sirve el mejor tramo con tope por fuente; `total` declara cuántas pasaron las puertas
+  // (no cuántas se devuelven) y `truncated` que la lista va recortada.
+  const { items, truncated } = serveSurfaceRanked(ranked, surfaceLimits(env));
+  return Response.json({ items, total, selection_total: selectionTotal, truncated }, { headers: corsHeaders(request) });
 }
 
 async function handleStar(request, env, jobId) {
