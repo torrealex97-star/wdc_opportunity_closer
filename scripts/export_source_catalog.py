@@ -13,6 +13,7 @@ no vuelva a «des-verificar» lo medido en producción:
                          JobToday, Get on Board, ProductHackers, openradar, Fever, Qonto).
   · `CLOUD_RETIRED`      tableros retirados del cloud por cero elegibles en dos mediciones (sesión 176) que
                          el backend todavía lista en su watchlist.
+  · `CLOUD_CODE`         el código del backend local frente al que cruza el panel (`sourceFamilies.catalogCodeFor`).
 
 `apps/api/career/sources.py` sigue describiendo el backend local (sus conectores y su watchlist) y **no se
 toca** para esto. El JSON del panel es el resultado de este script: no se edita a mano; cualquier hecho
@@ -38,9 +39,10 @@ CLOUD_OPERATIONAL = {
                   'note': 'Remoto con filtro por país: se recoge del feed público del motor, sin clave.', 'upstream_filters': []},
     'jobtoday-comercial': {'acquisition_method': 'Listado embebido (NEXT_DATA)', 'validation_status': 'Conector operativo', 'upstream_filters': []},
     'jobtoday-ventas': {'acquisition_method': 'Listado embebido (NEXT_DATA)', 'validation_status': 'Conector operativo', 'upstream_filters': []},
-    'getonbrd': {'requires': 'none', 'acquisition_method': 'API por categoría', 'validation_status': 'Conector operativo',
-                 'upstream_filters': ['Categoría ventas'],
-                 'note': 'No admite todos los filtros WDC en origen; idioma y modalidad se comprueban al importar.'},
+    'getonbrd-public': {'name': 'Get on Board', 'category': 'LATAM', 'website': 'https://www.getonbrd.com',
+                        'requires': 'none', 'acquisition_method': 'API por categoría', 'validation_status': 'Conector operativo',
+                        'upstream_filters': ['Categoría ventas'],
+                        'note': 'API/feed público. Cobertura española variable; atribución y enlace original conservados.'},
     'ats-teamtailor-producthackers': {'name': 'ProductHackers · Teamtailor'},
 }
 
@@ -58,6 +60,11 @@ CLOUD_ADDED = [
      'validation_status': 'Conector operativo', 'requires': 'none', 'note': ATS_NOTE, 'upstream_filters': []},
 ]
 
+# El backend local lo llama `getonbrd`; el motor cloud emite ese mismo código y el panel lo cruza con
+# `getonbrd-public` (ALIAS de sourceFamilies.ts). Dos filas del mismo portal es justo el fallo que dejaba el
+# portal como «fuera del cloud», así que el catálogo usa el código que el panel sabe cruzar, una sola vez.
+CLOUD_CODE = {'getonbrd': 'getonbrd-public'}
+
 # Retirados del cloud: 0 elegibles en dos mediciones (STATUS sesión 176). El backend local aún los lista.
 CLOUD_RETIRED = {
     'ats-greenhouse-typeform', 'ats-greenhouse-wallapop', 'ats-recruitee-livestorm', 'ats-teamtailor-monestcapital',
@@ -70,8 +77,19 @@ def build():
     from career.sources import source_infos
     initialize()
     rows = [i if isinstance(i, dict) else i.model_dump() for i in source_infos(org())]
-    catalog = [{k: r.get(k) for k in FIELDS} for r in rows if r.get('code') not in CLOUD_RETIRED]
-    by_code = {row['code']: row for row in catalog}
+    catalog, by_code = [], {}
+    for r in rows:
+        if r.get('code') in CLOUD_RETIRED:
+            continue
+        row = {k: (CLOUD_CODE.get(r.get('code'), r.get('code')) if k == 'code' else r.get(k)) for k in FIELDS}
+        seen = by_code.get(row['code'])
+        if seen is None:
+            by_code[row['code']] = row
+            catalog.append(row)
+            continue
+        # Dos filas del mismo portal (REGISTRY y catálogo de pendientes): se funden en una, sin pisar
+        # lo que ya está declarado.
+        seen.update({k: v for k, v in row.items() if seen.get(k) in (None, '', [])})
     for code, facts in CLOUD_OPERATIONAL.items():
         if code in by_code:
             by_code[code].update(facts)

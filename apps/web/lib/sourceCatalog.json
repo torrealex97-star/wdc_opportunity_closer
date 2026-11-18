@@ -326,19 +326,6 @@
   "upstream_filters": []
  },
  {
-  "code": "getonbrd",
-  "name": "Get on Board",
-  "category": "LATAM",
-  "website": "https://www.getonbrd.com",
-  "acquisition_method": "API por categoría",
-  "validation_status": "Conector operativo",
-  "requires": "none",
-  "note": "No admite todos los filtros WDC en origen; idioma y modalidad se comprueban al importar.",
-  "upstream_filters": [
-   "Categoría ventas"
-  ]
- },
- {
   "code": "linkedin",
   "name": "LinkedIn Jobs",
   "category": "España · LATAM · Europa",
