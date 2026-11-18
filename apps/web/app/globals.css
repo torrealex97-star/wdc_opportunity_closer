@@ -662,3 +662,50 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .scorecard-table td{font-variant-numeric:tabular-nums;color:var(--ink)}
 .scorecard-table tbody tr:last-child th,.scorecard-table tbody tr:last-child td{border-bottom:0}
 .scorecard-table tr.is-unlinked th,.scorecard-table tr.is-unlinked td{color:var(--secondary);font-style:italic}
+
+/* Panel visual del marcador (2026-11-18): cuatro cifras grandes y barras comparables por fuente.
+   La barra no sustituye a la tabla: la resume. Todo con tokens y con el número escrito al lado. */
+.source-dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:12px;margin:0 0 20px}
+.dash-kpi{border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet);padding:16px 18px;display:grid;gap:4px;min-width:0}
+.dash-kpi strong{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.dash-kpi p{font-size:11px;color:var(--secondary);margin:0;overflow-wrap:anywhere}
+.dash-kpi.is-money{background:var(--inset)}
+.dash-bars{border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet);padding:16px 18px;margin:0 0 22px;display:grid;gap:14px}
+.dash-bars-head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}
+.dash-bar{display:grid;gap:5px;min-width:0}
+.dash-bar-name{display:flex;justify-content:space-between;gap:12px;font-size:12px;min-width:0}
+.dash-bar-name strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-bar-name span{color:var(--secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dash-bar-track{position:relative;display:grid;gap:3px;background:var(--inset);border-radius:4px;padding:3px;min-height:16px}
+.dash-bar-track>span{display:block;height:5px;border-radius:3px;background:var(--sage)}
+.dash-bar-track>span.is-interview{background:var(--accent)}
+.dash-bar-values{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.dash-legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:10.5px;color:var(--secondary);margin:0}
+.dash-legend .key{width:10px;height:10px;border-radius:2px;display:inline-block;background:var(--sage)}
+.dash-legend .key.is-interview{background:var(--accent);margin-left:8px}
+
+/* Guía de conexión de una fuente: modal con pasos numerados, enlace oficial y atajo a las claves. */
+.source-setup-open{margin-top:8px;font-size:11px;min-height:30px;padding:4px 10px;border:1px solid var(--line);background:var(--sheet);color:var(--accent);border-radius:6px}
+.source-setup-open:hover{background:var(--inset)}
+.setup-guide{border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);color:var(--ink);padding:0;max-width:min(680px,calc(100vw - 32px));width:100%;box-shadow:0 18px 50px color-mix(in srgb,var(--ink) 22%,transparent)}
+.setup-guide::backdrop{background:color-mix(in srgb,var(--ink) 45%,transparent)}
+.setup-guide-body{padding:24px 26px;display:grid;gap:12px}
+.setup-guide-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.setup-guide h2{font-family:'Libre Caslon Display',Georgia,serif;font-size:26px;font-weight:400;margin:0;line-height:1.15}
+.setup-guide-need{margin:0;font-size:13px;line-height:1.6}
+.setup-guide-steps{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:10px}
+.setup-guide-steps li{display:grid;grid-template-columns:24px 1fr;gap:10px;font-size:13px;line-height:1.55;align-items:start}
+.setup-guide-num{width:22px;height:22px;border-radius:99px;background:var(--accent);color:var(--sheet);font-size:11px;font-weight:650;display:grid;place-items:center}
+.setup-guide-cost{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--secondary);background:var(--inset);border-radius:8px;padding:10px 12px;margin:0}
+.setup-guide-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.setup-guide-actions a,.setup-guide-actions button{min-height:38px;font-size:12px}
+.setup-guide-foot{font-size:10.5px;color:var(--secondary);margin:0}
+@media(max-width:560px){.setup-guide-body{padding:20px 18px}.setup-guide h2{font-size:22px}.setup-guide-actions>*{flex:1 1 auto;justify-content:center}}
+
+/* Banner de oferta publicada con avisos: se ve en la tarjeta y en el detalle. No oculta la oferta; avisa. */
+.offer-caution{display:flex;gap:8px;align-items:flex-start;background:var(--warning-soft);border-left:3px solid var(--warning);border-radius:6px;padding:8px 10px;font-size:11px;line-height:1.5;color:var(--ink);margin:0 0 12px}
+.offer-caution svg{flex-shrink:0;margin-top:1px;color:var(--warning)}
+.offer-caution .link-button{font-size:11px;padding:0;min-height:0;text-decoration:underline}
+.offer-caution.is-detail{margin:12px 0 0;font-size:12.5px;padding:12px 14px;gap:10px}
+.offer-caution.is-detail ul{margin:8px 0;padding-left:18px;display:grid;gap:4px}
+.offer-caution.is-detail p{margin:0;color:var(--secondary);font-size:11.5px}

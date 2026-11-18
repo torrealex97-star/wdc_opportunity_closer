@@ -46,6 +46,17 @@ step('un via que no es texto no rompe la tarjeta', () => {
   assert.equal(o.source_name, 'google.com');
 });
 
+step('una oferta con avisos lleva banner; una limpia no, y lo crítico nunca', () => {
+  const warned = toOpportunity({ ...base, auto_review: { why: 'cumple_reglas_con_aviso', flags: ['COMMISSION_ONLY'] } }, 'closer');
+  assert.equal(warned.caution.title, 'Publicada con avisos');
+  assert.match(warned.caution.flags[0], /comisión/i, 'el banner habla en claro, no en códigos');
+  assert.equal(warned.caution.flags.length, 1);
+  const clean = toOpportunity({ ...base, description: 'Buscamos closer con experiencia en ventas. Sueldo fijo 1.400 € al mes más comisiones.' }, 'closer');
+  assert.equal(clean.caution, null, 'sin señales no se inventa un aviso');
+  const critical = toOpportunity({ ...base, description: 'Debes pagar una licencia para empezar.', auto_review: { flags: ['ADVANCE_PAYMENT_DETECTED'] } }, 'closer');
+  assert.equal(critical.caution, null, 'lo crítico no se publica ni con banner');
+});
+
 step('sin fecha en la fuente: se declara desconocida, no se inventa', () => {
   const o = toOpportunity({ ...base, url: googleUrl, raw: { site: 'BeBee' } }, 'closer');
   assert.equal(o.published_at, null);

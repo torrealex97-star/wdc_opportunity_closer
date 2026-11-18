@@ -55,6 +55,11 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
   if (!data) return <p className="muted"><LoaderCircle size={14} className="spin" /> Cruzando candidaturas con fuentes…</p>;
 
   const fx = data.cost.fx;
+  // Barras comparativas: el máximo de cada serie es la referencia para que una fuente con 3 envíos no
+  // parezca igual de grande que una con 300. Sin envíos no se dibuja nada: se dice que aún no hay dato.
+  const peakSent = Math.max(1, ...data.rows.map(row => row.sent));
+  const peakInterviews = Math.max(1, ...data.rows.map(row => row.interviews));
+  const topRows = [...data.rows].sort((a, b) => b.interviews - a.interviews || b.sent - a.sent).slice(0, 6);
   return <section aria-label="Resultados por fuente" data-testid="source-scorecard">
     <p className="card-meta">Denominador: <strong>{data.basis}</strong>. Una raya (—) significa que no hay denominador o que no hay dato, no que el resultado sea cero. Nada se retira solo: la decisión sigue siendo tuya.</p>
     <div className="scorecard-totals">
@@ -69,6 +74,26 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
       <span><strong>{unit(data.totals.per_interview_eur)}</strong> por entrevista</span>
     </div>
     {data.truncated && <p className="inline-hint">Se leyó hasta el tope de candidaturas: las cifras son un mínimo, no el total.</p>}
+    <div className="source-dashboard" data-testid="source-dashboard">
+      <article className="dash-kpi"><span className="eyebrow">ANUNCIOS VIVOS</span><strong>{data.totals.ingested.toLocaleString('es')}</strong><p>{data.totals.sources} fuentes con actividad · {data.totals.conclusive_sources} comparables (≥30 envíos)</p></article>
+      <article className="dash-kpi"><span className="eyebrow">ENVIADAS</span><strong>{data.totals.sent.toLocaleString('es')}</strong><p>{data.totals.prepared.toLocaleString('es')} candidaturas preparadas en el tablero</p></article>
+      <article className="dash-kpi"><span className="eyebrow">ENTREVISTAS</span><strong>{data.totals.interviews.toLocaleString('es')}</strong><p>{data.totals.responded.toLocaleString('es')} respuestas · {data.totals.offers.toLocaleString('es')} ofertas</p></article>
+      <article className="dash-kpi is-money"><span className="eyebrow">GASTO REGISTRADO</span><strong>{money(data.totals.cost_eur)}{data.totals.cost_partial ? '*' : ''}</strong><p>{unit(data.totals.per_send_eur)} por envío · {unit(data.totals.per_interview_eur)} por entrevista</p></article>
+    </div>
+    <div className="dash-bars" data-testid="scorecard-bars">
+      <div className="dash-bars-head"><span className="eyebrow">RENDIMIENTO POR FUENTE</span><span className="card-meta">Envíos y entrevistas en la misma escala; el importe es el coste ya registrado de esa fuente.</span></div>
+      {!data.totals.sent && !data.totals.interviews
+        ? <p className="card-meta">Todavía no hay envíos ni entrevistas que comparar: las barras aparecerán en cuanto las alumnas empiecen a enviar candidaturas.</p>
+        : topRows.map(row => <div className="dash-bar" key={`bar-${row.source}`}>
+          <div className="dash-bar-name"><strong>{row.source}</strong><span>{row.cost_eur === null ? 'coste sin datos' : `${money(row.cost_eur)}${row.cost_partial ? '*' : ''}`}</span></div>
+          <div className="dash-bar-track" role="img" aria-label={`${row.source}: ${row.sent} envíos, ${row.interviews} entrevistas`}>
+            <span className="is-sent" style={{ width: `${Math.max(row.sent ? 2 : 0, (row.sent / peakSent) * 100)}%` }} />
+            <span className="is-interview" style={{ width: `${Math.max(row.interviews ? 2 : 0, (row.interviews / peakInterviews) * 100)}%` }} />
+          </div>
+          <div className="dash-bar-values"><span>{row.sent} enviadas</span><span>{row.interviews} entrevistas</span><span>{unit(row.per_interview_eur)} / entrevista</span></div>
+        </div>)}
+      <p className="dash-legend"><span className="key is-sent" />Enviadas <span className="key is-interview" />Entrevistas (incluye ofertas)</p>
+    </div>
     <div className="scorecard-scroll">
       <table className="scorecard-table">
         <caption>Estados del tablero de cada alumna cruzados con la fuente del anuncio. Entrevistas incluye las ofertas recibidas. El coste es el registrado en Apify y en el respaldo de SerpApi, no una estimación.</caption>

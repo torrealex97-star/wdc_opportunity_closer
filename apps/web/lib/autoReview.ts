@@ -16,7 +16,9 @@ import { config as aiConfig, runAiReview, type ReviewSummary } from './aiReview'
 export const DAILY_CAP = 100;
 export const MIN_SCORE = 55;
 
-export type RuleVerdict = { decision: 'approve' | 'human' | 'withdraw'; why: string; market: Market | null; basis: string };
+// `flags`: avisos que la oferta lleva y que la alumna verá en un banner. Solo viajan cuando la regla aprueba
+// CON aviso (`cumple_reglas_con_aviso`): lo crítico nunca se publica sola.
+export type RuleVerdict = { decision: 'approve' | 'human' | 'withdraw'; why: string; market: Market | null; basis: string; flags?: string[] };
 type Row = Pick<ExternalOffer, 'title' | 'company' | 'description' | 'location' | 'salary' | 'role' | 'score' | 'spain' | 'verified_result' | 'market' | 'market_basis' | 'url'> & { red_flags?: string[] | null };
 
 // Páginas de resultados de un portal, no anuncios: «Ofertas de trabajo de Closer de ventas» con 737
@@ -56,19 +58,23 @@ export function judgeOffer(row: Row): RuleVerdict {
   const us = US_STATE.test(row.location ?? '');
   const market: Market | null = us ? 'US_LATINO' : (row.market as Market | null | undefined) ?? computed.market;
   const basis = us ? 'ubicacion_estados_unidos' : row.market_basis ?? computed.basis;
-  const verdict = (decision: RuleVerdict['decision'], why: string): RuleVerdict => ({ decision, why, market, basis });
+  const verdict = (decision: RuleVerdict['decision'], why: string, flags?: string[]): RuleVerdict => ({ decision, why, market, basis, ...(flags?.length ? { flags } : {}) });
   const retire = withdrawalReason(row);
   if (retire) return verdict('withdraw', retire);
   if (!row.role) return verdict('human', 'sin_perfil');
   if (!market) return verdict('human', 'sin_mercado');
   if (row.spain === false && market === 'ES') return verdict('human', 'mercado_dudoso');
   if ((row.red_flags ?? []).length) return verdict('human', 'banderas_rojas');
-  // Texto del anuncio con señales de estafa o condiciones dudosas: nunca entra sola, la revisa una persona.
+  // Texto del anuncio con señales de condiciones dudosas. Lo CRÍTICO (pago previo, multinivel, ingresos
+  // irreales) sigue sin publicarse solo. Lo que solo AVISA (solo comisión, publicidad a su cargo, sin
+  // entrevista, contacto por WhatsApp, cifras altas) sí entra, pero marcado: la alumna ve el banner y decide.
   const risk = assessOffer(row);
-  if (risk.risk_level !== 'SAFE') return verdict('human', risk.risk_level === 'BLOCKED' ? 'oferta_peligrosa' : 'oferta_con_avisos');
+  const flags = risk.detected_flags.map(flag => flag.code);
+  if (risk.risk_level === 'BLOCKED') return verdict('human', 'oferta_peligrosa');
   if ((row.score ?? 0) < MIN_SCORE) return verdict('human', 'score_bajo');
   const words = spanishWords(`${row.title ?? ''} ${row.description ?? ''}`);
   if (words < 3) return verdict('human', 'idioma_dudoso');
+  if (flags.length) return verdict('approve', 'cumple_reglas_con_aviso', flags);
   return verdict('approve', 'cumple_reglas');
 }
 
@@ -106,7 +112,9 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
   const rows = response.ok ? await response.json().catch(() => null) : null;
   if (!Array.isArray(rows)) return { ...summary, truncated: true };
 
+  // Aprobadas separadas por cómo se aprueban: las limpias y las que llevan aviso (con sus banderas).
   const clear: string[] = [];
+  const caution = new Map<string, { ids: string[]; flags: string[] }>();
   // Lo que las reglas no cierran se agrupa por motivo: una escritura por motivo, no una por oferta.
   const human = new Map<string, string[]>();
   const retired = new Map<string, string[]>();
@@ -115,7 +123,14 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
     summary.checked++;
     const verdict = judgeOffer(row);
     if (verdict.decision === 'approve') {
-      if (clear.length + summary.approved < remaining) { clear.push(row.id); continue; }
+      const room = clear.length + [...caution.values()].reduce((n, g) => n + g.ids.length, 0) + summary.approved < remaining;
+      if (room && verdict.flags?.length) {
+        const key = verdict.flags.join(',');
+        const group = caution.get(key) ?? { ids: [], flags: verdict.flags };
+        group.ids.push(row.id); caution.set(key, group);
+        continue;
+      }
+      if (room) { clear.push(row.id); continue; }
       // Cumple las reglas pero no cabe en el tope de hoy: se queda en borrador para mañana;
       // mandarla a la cola humana sería pedirle a una persona trabajo que la máquina ya sabe hacer.
       summary.exceptions++;
@@ -142,6 +157,17 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
     else summary.approved += n;
   }
 
+  // Aprobadas CON aviso: misma guarda y mismo cupo, pero el motivo y las banderas quedan guardados para
+  // que la vista de alumna enseñe el banner y el panel pueda auditar qué se publicó con reservas.
+  for (const group of caution.values()) {
+    for (let i = 0; i < group.ids.length; i += 100) {
+      const batch = group.ids.slice(i, i + 100);
+      const n = await approveByRule(batch, { decision: 'approve', why: 'cumple_reglas_con_aviso', rule: 'reglas_v1', at: now, flags: group.flags });
+      if (n === null) summary.failed_writes = (summary.failed_writes ?? 0) + batch.length;
+      else summary.approved += n;
+    }
+  }
+
   // Retiradas: misma guarda de estado (solo borradores) y se cuenta lo que confirma la base.
   for (const [reason, ids] of retired) {
     for (let i = 0; i < ids.length; i += 100) {
@@ -162,6 +188,8 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
       else summary.moved = (summary.moved ?? 0) + n;
     }
   }
+
+  if (caution.size) summary.by_reason.cumple_reglas_con_aviso = [...caution.values()].reduce((n, g) => n + g.ids.length, 0);
 
   // Desempate: solo si hay hueco, la IA está en vivo y queda presupuesto. Su cupo es lo que queda del tope
   // diario —`remaining` ya cuenta sus aprobaciones de hoy, no solo las de las reglas— y viaja como ENTORNO

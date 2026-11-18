@@ -60,11 +60,14 @@ await step('con acentos o sin ellos, igual; es determinista', () => {
   const a = assessOffer({ description: 'Pago inicial: inversión previa' }); const b = assessOffer({ description: 'PAGO INICIAL: INVERSION PREVIA' });
   assert.deepEqual(a, b);
 });
-await step('la cualificación automática no aprueba ofertas con señales', () => {
+await step('la cualificación automática no publica lo crítico y publica lo leve CON aviso', () => {
   const base = { title: 'Closer high ticket', description: 'Buscamos closer con experiencia en ventas para nuestra empresa de formación en España. Requisitos y funciones.', location: 'Madrid, España', salary: null, role: 'closer', score: 80, spain: true, verified_result: null };
   assert.equal(judgeOffer(base).decision, 'approve');
   assert.equal(judgeOffer({ ...base, description: base.description + ' Debes pagar una licencia.' }).why, 'oferta_peligrosa');
-  assert.equal(judgeOffer({ ...base, description: base.description + ' Trabajo 100% a comisión.' }).why, 'oferta_con_avisos');
+  const warned = judgeOffer({ ...base, description: base.description + ' Trabajo 100% a comisión.' });
+  assert.equal(warned.decision, 'approve', 'un aviso no impide publicar: la alumna decide con el banner delante');
+  assert.equal(warned.why, 'cumple_reglas_con_aviso');
+  assert.deepEqual(warned.flags, ['COMMISSION_ONLY'], 'las banderas viajan para que la tarjeta sepa qué avisar');
 });
 
 for (const [s, n, m] of results) console.log(s, ' ', n, m ?? '');

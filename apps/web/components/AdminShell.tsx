@@ -13,7 +13,8 @@ import SourceScorecard from './SourceScorecard';
 import SummaryTab from './SummaryTab';
 import sourceCatalog from '../lib/sourceCatalog.json';
 import { catalogCodeFor, groupByFamily } from '../lib/sourceFamilies';
-import { setupFor } from '../lib/sourceSetup';
+import { setupFor, type Setup } from '../lib/sourceSetup';
+import SourceSetupGuide from './SourceSetupGuide';
 
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
@@ -83,7 +84,8 @@ type CloudSource = Overview['sources'][number];
 type Filter = 'all' | 'cloud' | 'failed' | 'local';
 
 // Catálogo completo (todas las fuentes que conoce la app) cruzado con el estado real del motor cloud.
-function SourceCatalog({ sources, external = [], paused = [], engineDown = false }: { sources: CloudSource[]; external?: ExtSource[]; paused?: string[]; engineDown?: boolean }) {
+function SourceCatalog({ sources, external = [], paused = [], engineDown = false, onOpenApis }: { sources: CloudSource[]; external?: ExtSource[]; paused?: string[]; engineDown?: boolean; onOpenApis?: () => void }) {
+  const [guide, setGuide] = useState<{ name: string; code: string; setup: Setup } | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [category, setCategory] = useState('');
   const [text, setText] = useState('');
@@ -125,23 +127,18 @@ function SourceCatalog({ sources, external = [], paused = [], engineDown = false
       <tbody>{shown.slice(0, limit).map(r => <tr key={r.code}>
         <td className="primary-cell"><strong>{r.website ? <a href={r.website} target="_blank" rel="noopener noreferrer">{r.name}</a> : r.name}</strong><span>{r.code}</span>
           {r.cloud?.warning && <span style={{ color: 'var(--warning)' }}>{r.cloud.warning}</span>}{!r.cloud && r.note && <span>{r.note}</span>}
-          {/* «Requiere configurar» sin decir qué falta obligaba a adivinar. Aquí va el requisito y los
-              pasos concretos, con enlace al proveedor cuando existe. */}
-          {!r.cloud && !r.ext && r.requires === 'input' && (() => {
-            const setup = setupFor(r);
-            return <details className="source-setup"><summary>Qué falta y cómo se conecta</summary>
-              <p className="source-setup-need">{setup.requirement}</p>
-              <ol>{setup.steps.map(s => <li key={s}>{s}</li>)}</ol>
-              {setup.link && <a href={setup.link.href} target="_blank" rel="noopener noreferrer">{setup.link.label}</a>}
-            </details>;
-          })()}</td>
+          {/* «Requiere configurar» sin decir qué falta obligaba a adivinar. Ahora abre la guía completa:
+              requisito, pasos numerados, documentación oficial y atajo a las claves. */}
+          {!r.cloud && !r.ext && r.requires === 'input' && <button type="button" className="source-setup-open"
+            aria-haspopup="dialog" onClick={() => setGuide({ name: r.name, code: r.code, setup: setupFor(r) })}>Cómo conectarla · guía paso a paso</button>}</td>
         <td>{r.category ?? '—'}</td><td>{r.acquisition_method ?? '—'}{r.validation_status && <span className="sub">{r.validation_status}</span>}</td>
         <td>{cell(r)}</td><td className="num">{r.cloud?.fetched ?? '—'}</td><td className="num">{r.cloud?.catalog ?? '—'}</td><td className="num">{r.cloud?.eligible ?? '—'}</td></tr>)}</tbody></table></div>}
     {shown.length > limit && <p className="card-meta" style={{ marginTop: 12 }}><button onClick={() => setLimit(n => n + 25)}>Mostrar {Math.min(25, shown.length - limit)} más</button> <span aria-live="polite">Mostrando {limit} de {shown.length}</span></p>}
+    {guide && <SourceSetupGuide name={guide.name} code={guide.code} setup={guide.setup} onClose={() => setGuide(null)} onOpenApis={onOpenApis} />}
   </>;
 }
 
-function SourcesTab({ onSessionLost }: { onSessionLost: () => void }) {
+function SourcesTab({ onSessionLost, onOpenApis }: { onSessionLost: () => void; onOpenApis: () => void }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
@@ -164,7 +161,7 @@ function SourcesTab({ onSessionLost }: { onSessionLost: () => void }) {
       <div className="card-grid">{[...data.connections, ...data.paid].map(c => <article className="source-card" key={c.id}>
         <div className="card-head"><h3>{c.name}</h3><span className={statusClass(c.status)}>{CONN[c.status]}</span></div>
         <p className="card-meta">{c.detail}{c.ms ? ` · ${c.ms} ms` : ''}</p></article>)}</div>
-      <SourceCatalog sources={data.sources} external={data.external?.sources} paused={data.external?.paused} engineDown={data.engine === null} />
+      <SourceCatalog sources={data.sources} external={data.external?.sources} paused={data.external?.paused} engineDown={data.engine === null} onOpenApis={onOpenApis} />
       <h2 className="section-title">Auditoría de enlaces JobToday{data.audit ? ` · ${data.audit.day}` : ''}</h2>
       {!data.audit ? <p className="muted">Sin auditoría disponible hoy.</p> : <div className="table-wrap"><table className="data-table">
         <thead><tr><th>Fuente</th><th>Enlace</th><th>Estado</th><th className="num">HTTP</th></tr></thead>
@@ -301,7 +298,7 @@ export default function AdminShell() {
         {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}
         {tab === 'review' && <CloudAdminPanel onSessionLost={lost} />}
         {tab === 'catalog' && <CatalogTab onSessionLost={lost} />}
-        {tab === 'sources' && <SourcesTab onSessionLost={lost} />}
+        {tab === 'sources' && <SourcesTab onSessionLost={lost} onOpenApis={() => go('apis')} />}
         {tab === 'apis' && <ApisTab owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'scorecard' && <SourceScorecard onSessionLost={lost} />}
         {tab === 'students' && <StudentsTab owner={me.role === 'owner'} onSessionLost={lost} />}

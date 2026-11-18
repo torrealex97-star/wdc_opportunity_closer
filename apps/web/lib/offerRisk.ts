@@ -58,6 +58,9 @@ const RULES: Rule[] = [
     test: t => /\b(?:escribe|contacta|escribenos|envia(?:nos)?(?:\s+un)?\s+mensaje)\b.{0,30}\b(?:whatsapp|telegram)\b/.test(t) && !/@|\bwww\.|https?:/.test(t) },
 ];
 
+/** Texto humano de una bandera, para el banner de la alumna. Solo cubre las banderas que este archivo conoce. */
+export const FLAG_TEXT: Record<string, string> = Object.fromEntries(RULES.map(rule => [rule.code, rule.description]));
+
 /** Evalúa una oferta con el texto que trae. Determinista: el mismo texto da siempre el mismo resultado. */
 export function assessOffer(offer: RiskInput): RiskAssessment {
   const text = fold(`${offer.title ?? ''}\n${offer.description ?? ''}\n${offer.salary ?? ''}`);

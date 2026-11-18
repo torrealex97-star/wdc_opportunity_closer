@@ -1,6 +1,7 @@
 import { spanishWords } from './offerScore';
 import { listOffers, pausedSourcesStrict, type ExternalOffer } from './external';
 import { marketFor, type Market } from './market';
+import { assessOffer, FLAG_TEXT } from './offerRisk';
 import { spainSignal } from './esPlaces';
 import { fold, roleFromTitle, ROLE_LABELS, type RoleFamily } from './vocabulary';
 
@@ -59,6 +60,25 @@ function declared(raw: Record<string, unknown> | undefined) {
   return out;
 }
 
+// Aviso que ve la alumna. Las reglas aprueban sola la oferta que lleva avisos (solo comisión, publicidad a su
+// cargo, sin entrevista, cifras altas…) porque el resto encaja; el banner es la contrapartida: se publica, pero
+// se dice qué mirar. Lo CRÍTICO sigue sin publicarse (ni aquí ni en la regla), así que nunca llega a este punto.
+export function cautionOf(o: ExternalOffer) {
+  const stored = Array.isArray(o.auto_review?.flags)
+    ? (o.auto_review.flags as unknown[]).filter((f): f is string => typeof f === 'string')
+    : [];
+  const risk = assessOffer(o);
+  if (risk.risk_level === 'BLOCKED') return null;
+  const codes = stored.length ? stored : risk.risk_level === 'WARNING' ? risk.detected_flags.map(flag => flag.code) : [];
+  const flags = [...new Set(codes.map(code => FLAG_TEXT[code]).filter((text): text is string => typeof text === 'string'))].slice(0, 3);
+  if (!flags.length) return null;
+  return {
+    title: 'Publicada con avisos',
+    flags,
+    note: 'La publicación automática la aceptó porque el resto encaja (perfil, mercado y español), pero el anuncio tiene señales que conviene comprobar. Pide las condiciones por escrito y confirma el fijo y las comisiones antes de avanzar.',
+  };
+}
+
 export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
   let host = 'fuente externa';
   try { host = new URL(o.url).hostname.replace(/^www\./, ''); } catch { /* url ya validada al guardar */ }
@@ -83,6 +103,7 @@ export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
     modality: declared(o.raw).modality ?? 'Modalidad no indicada', location: o.location || 'Ubicación no indicada', language: 'Anuncio en español', experience: 'Experiencia no indicada', schedule: declared(o.raw).schedule ?? 'Jornada no indicada', contract: declared(o.raw).contract ?? 'Contrato no indicado',
     description: o.description || 'Consulta el anuncio original para ver las condiciones completas.',
     published_at: o.posted_at, expires_at: o.expires_at, source_name: sourceName, source_url: o.url, also_seen: alsoSeen, starred: false, excellence_rank: null, is_selected: false,
+    caution: cautionOf(o),
   };
 }
 

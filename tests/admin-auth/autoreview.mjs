@@ -203,4 +203,21 @@ assert.equal(after.used_before, 3, 'las retiradas no consumen el cupo de aprobac
 assert.equal(after.checked, 0, 'y no queda nada por clasificar');
 console.log('PASS  listados y enlaces cerrados se retiran sin gastar cupo ni ensuciar la cola');
 
+// 9) Publicar con aviso: lo que solo avisa (solo comisión, publicidad a su cargo…) sí entra, con sus banderas
+// guardadas para que la alumna vea el banner. Lo crítico (pago previo, multinivel) sigue en la cola humana.
+seed();
+rows.set(uuid(20), offer(20, { description: offer(20).description + ' Trabajo 100% a comisión.' }));
+rows.set(uuid(21), offer(21, { description: 'Debes pagar una licencia para empezar.' }));
+const aviso = await run({ cap: 100 });
+assert.equal(aviso.checked, 10, 'se miran los dos nuevos');
+assert.equal(aviso.approved, 4, 'las tres claras y la del aviso');
+assert.equal(face(20).editorial_status, 'approved', 'el aviso se publica');
+assert.equal(face(20).auto_review.why, 'cumple_reglas_con_aviso');
+assert.deepEqual(face(20).auto_review.flags, ['COMMISSION_ONLY'], 'la bandera queda guardada para el banner');
+assert.equal(aviso.by_reason.cumple_reglas_con_aviso, 1, 'el panel puede contarlas');
+assert.equal(face(21).editorial_status, 'needs_review', 'lo crítico no se publica solo');
+assert.equal(face(21).auto_review.why, 'oferta_peligrosa');
+assert.equal(aviso.by_reason.oferta_peligrosa, 1);
+console.log('PASS  lo leve se publica con aviso y lo crítico sigue esperando a una persona');
+
 server.close();
