@@ -900,7 +900,7 @@ export interface components {
             /** Job Ids */
             job_ids: string[];
             /** Role */
-            role?: ("digital_sales" | "sales" | "closer" | "setter" | "cold_caller" | "account_executive" | "sdr" | "custom") | null;
+            role?: ("digital_sales" | "sales" | "closer" | "setter" | "cold_caller" | "management" | "account_executive" | "sdr" | "custom") | null;
             /**
              * Retry Failed
              * @default false
@@ -1214,7 +1214,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "closer" | "setter" | "cold_caller" | "account_executive" | "sdr";
+            role: "closer" | "setter" | "cold_caller" | "management" | "account_executive" | "sdr";
             /** Role Label */
             role_label: string;
             /** Original Title */
@@ -1279,7 +1279,7 @@ export interface components {
         /** OpportunityQuery */
         OpportunityQuery: {
             /** Role */
-            role?: ("closer" | "setter" | "cold_caller" | "account_executive" | "sdr") | null;
+            role?: ("closer" | "setter" | "cold_caller" | "management" | "account_executive" | "sdr") | null;
             /**
              * Market
              * @default any
@@ -1426,7 +1426,7 @@ export interface components {
              * @default sales
              * @enum {string}
              */
-            role: "digital_sales" | "sales" | "closer" | "setter" | "cold_caller" | "sdr" | "account_executive" | "custom";
+            role: "digital_sales" | "sales" | "closer" | "setter" | "cold_caller" | "management" | "sdr" | "account_executive" | "custom";
             /**
              * Keywords
              * @default

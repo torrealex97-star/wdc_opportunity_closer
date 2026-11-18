@@ -20,6 +20,9 @@ assert.deepEqual(ROLE_OPTIONS.map(o => o.value), [...ROLE_EVAL_ORDER]);
 assert.deepEqual(ROLE_OPTIONS.map(o => o.label), ROLE_EVAL_ORDER.map(role => ROLE_LABELS[role]));
 
 // Donde el panel promete encontrar un BDR es setter, y la etiqueta lo dice sin ambigüedad.
+assert.equal(ROLE_LABELS.management, 'Mando comercial');
+assert.ok(ROLE_OPTIONS.some(option => option.value === 'management' && option.label === 'Mando comercial'), 'el selector de la alumna ofrece Mando comercial');
+assert.equal(roleFromTitle('Sales Manager'), 'management', 'el mando no se disfraza de ejecutivo comercial');
 assert.match(ROLE_LABELS.setter, /ADR/, 'setter nombra ADR');
 assert.match(ROLE_LABELS.setter, /BDR/, 'setter nombra BDR');
 assert.doesNotMatch(ROLE_LABELS.sdr, /BDR/, 'sdr ya no promete BDR');

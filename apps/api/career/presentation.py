@@ -58,6 +58,9 @@ def professional_role(title, description):
         return 'setter'
     if hits('closer'):
         return 'closer'
+    # Antes que account_executive: «Jefe de equipo comercial» contiene «comercial».
+    if hits('management'):
+        return 'management'
     if hits('account_executive'):
         return 'account_executive'
     if hits('sdr'):

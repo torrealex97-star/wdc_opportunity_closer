@@ -81,7 +81,7 @@ def profile_terms():
         return head + rest
     return {"roles": {role: {'label': ROLE_LABELS.get(role, role), 'terms': ordered(role)}
                       for role in ('digital_sales', 'closer', 'setter', 'cold_caller',
-                                   'account_executive', 'sdr')}}
+                                   'management', 'account_executive', 'sdr')}}
 
 
 @app.get("/v1/search-goal")

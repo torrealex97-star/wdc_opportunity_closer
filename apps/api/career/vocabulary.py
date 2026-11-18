@@ -61,6 +61,25 @@ ROLE_FAMILIES = {
         'cold caller', 'cold calling', 'llamadas en frio', 'llamadas en frio',
         'prospector telefonico', 'prospectora telefonica', 'prospeccion telefonica',
     ],
+    # Puestos de mando (decisión del propietario, 2026-11-18): perfil propio, nunca
+    # etiquetados como «Ejecutivo comercial». Mismo bloque que el motor y la web.
+    'management': [
+        'sales manager', 'manager of sales', 'sales team manager', 'sales team lead', 'team lead sales',
+        'head of sales', 'head of business development', 'head of revenue',
+        'sales director', 'director of sales', 'director of business development',
+        'vp of sales', 'vp sales', 'vice president of sales', 'chief revenue officer', 'chief sales officer',
+        'jefe de ventas', 'jefa de ventas', 'jefe comercial', 'jefa comercial',
+        'jefe de equipo comercial', 'jefa de equipo comercial',
+        'responsable de ventas', 'responsable comercial', 'responsable de equipo comercial',
+        'responsable de equipos comerciales', 'responsable de desarrollo de negocio',
+        'director de ventas', 'directora de ventas', 'director comercial', 'directora comercial',
+        'director de desarrollo de negocio', 'directora de desarrollo de negocio',
+        'director de business development', 'directora de business development',
+        'gerente de ventas', 'gerente comercial', 'gerente regional de ventas',
+        'supervisor de ventas', 'supervisora de ventas', 'supervisor comercial', 'supervisora comercial',
+        'lider de ventas', 'lider comercial', 'lider de equipo comercial',
+        'vicepresidente de ventas', 'vicepresidenta de ventas',
+    ],
     'account_executive': [
         'account executive', 'ejecutivo de cuentas', 'ejecutiva de cuentas',
         'account manager', 'sales executive', 'sales consultant', 'sales advisor',
@@ -127,6 +146,7 @@ ROLE_LABELS = {
     'closer': 'Closer de ventas',
     'setter': 'Appointment setter',
     'cold_caller': 'Cold Caller',
+    'management': 'Mando comercial',
     'account_executive': 'Account executive',
     'sdr': 'SDR / BDR',
     'sales': 'Ventas · búsqueda amplia',

@@ -62,7 +62,7 @@ def test_unknown_title_enters_queue_and_completes_with_evidence(api):
     assert asyncio.run(process_one())
     detail = client.get('/v1/ai/classifications/' + job).json()
     assert detail['status'] == 'completed'
-    assert detail['result']['role_family'] in {'closer', 'setter', 'cold_caller', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
+    assert detail['result']['role_family'] in {'closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
     # Una sola llamada HTTP al proveedor, sin reintentos.
     posts = [c for c in state['calls'] if c[0] == 'POST' and c[1].endswith('/chat/completions')]
     assert len(posts) == 1 and posts[0][2] == 'Bearer fake-classification-secret'
@@ -236,7 +236,7 @@ def test_classifications_listing_shows_state_result_and_evidence(api):
     item = items[0]
     assert item['job_id'] == job and item['status'] == 'completed'
     assert item['title'] == 'Revenue Officer' and item['company'] == 'Empresa de prueba'
-    assert item['result']['role_family'] in {'closer', 'setter', 'cold_caller', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
+    assert item['result']['role_family'] in {'closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
     assert item['result']['evidence'] == 'comercial'
     assert 'content' not in item and 'raw_output' not in item  # sin crudo del proveedor
     # Fallo visible con su error, nunca oculto.
@@ -253,5 +253,5 @@ def test_schema_contract_is_strict_and_evidence_bounded():
     schema = RoleClassification.model_json_schema()
     assert schema['additionalProperties'] is False
     families = schema['properties']['role_family']['enum']
-    assert set(families) == {'closer', 'setter', 'cold_caller', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
+    assert set(families) == {'closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr', 'not_sales', 'uncertain'}
     assert 'evidence' in INSTRUCTIONS.lower() or 'cita' in INSTRUCTIONS.lower()

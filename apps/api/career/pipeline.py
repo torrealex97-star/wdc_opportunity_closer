@@ -19,10 +19,11 @@ ALIASES = {role: list(dict.fromkeys(terms + VOCAB_ALIASES.get(role, [])))
     "closer": ["closer", "cerrador", "cerradora", "venta de alto valor", "ventas de alto valor", "closing specialist", "enrollment advisor", "enrollment specialist", "sales consultant"],
     "setter": ["appointment setter", "appoitment setter", "appointment setting", "agendador", "agendadora", "booking specialist", "lead qualifier", "dm setter", "outbound setter", "setter"],
     "sdr": ["sdr", "bdr", "sales development", "business development representative", "cold caller"],
+    "management": ["sales manager", "head of sales", "jefe de ventas", "jefa de ventas", "director comercial", "directora comercial", "gerente de ventas", "responsable comercial"],
     "account_executive": ["account executive", "ejecutivo comercial", "ejecutivo de ventas", "comercial digital", "asesor comercial", "asesora comercial"],
 }.items()}
 ALIASES["sales"] = list(dict.fromkeys(sum(ALIASES.values(), []) + ["sales", "ventas", "comercial", "business development", "telemarketing", "televentas"]))
-ALIASES["digital_sales"] = list(dict.fromkeys(ALIASES["closer"] + ALIASES["setter"] + ALIASES["cold_caller"] + ALIASES["account_executive"] + ALIASES["sdr"] + VOCAB_ALIASES["digital_sales"] + ["comercial", "asesor de ventas", "asesora de ventas", "agente de ventas", "ejecutivo de ventas", "ejecutiva de ventas", "representante de ventas", "sales executive", "ejecutiva comercial", "televentas", "telemarketing", "televendedor", "televendedora"]))
+ALIASES["digital_sales"] = list(dict.fromkeys(ALIASES["closer"] + ALIASES["setter"] + ALIASES["cold_caller"] + ALIASES["management"] + ALIASES["account_executive"] + ALIASES["sdr"] + VOCAB_ALIASES["digital_sales"] + ["comercial", "asesor de ventas", "asesora de ventas", "agente de ventas", "ejecutivo de ventas", "ejecutiva de ventas", "representante de ventas", "sales executive", "ejecutiva comercial", "televentas", "telemarketing", "televendedor", "televendedora"]))
 # El vocabulario canonico incluye 'ventas'/'sales'/'comercial' como terminos genericos;
 # aqui solo cuentan los perfiles y equivalentes del vocabulario (los genericos ya estaban).
 LATAM = {"mexico", "méxico", "argentina", "colombia", "chile", "peru", "perú", "ecuador", "uruguay", "paraguay", "bolivia", "venezuela", "costa rica", "panama", "panamá", "guatemala", "honduras", "el salvador", "nicaragua", "dominican republic", "república dominicana", "brazil", "brasil", "latin america", "latam"}

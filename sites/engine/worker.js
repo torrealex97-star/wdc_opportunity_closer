@@ -185,8 +185,8 @@ function planRun(sources, lastSources, day, envBudget, ceiling = PLATFORM_SUBREQ
 // Cada candidato ingerido cuesta 6 escrituras de D1 (raw, posting, job, catálogo, oportunidad y
 // versión) y el ruido NUNCA puede salir a la alumna, así que se descarta ANTES de escribir.
 //
-// Qué se queda: las familias del perfil WDC (closer, setter, cold caller, sdr). La familia
-// `account_executive` NO entra por aquí: ya llega abundante por el barrido por categoría de
+// Qué se queda: las familias del perfil (closer, setter, cold caller, management, account_executive,
+// sdr). La familia `account_executive` no necesitaba el barrido por categoría de
 // FreeHire (medido 2026-10-26: 278 candidatos por pasada, 851 en catálogo, 19 elegibles y
 // **0 closers**) y duplicarla gastaría la cuota mensual de escrituras de D1 sin aportar closers.
 //
@@ -198,7 +198,7 @@ function planRun(sources, lastSources, day, envBudget, ceiling = PLATFORM_SUBREQ
 // comercial», «Sales Executive», «Vendedor/a» y «Comercial» a secas, y suponía 5.402 candidatas
 // descartadas en la medición de ese día. Incluye retail y temporales por decisión expresa; el panel
 // sigue pudiendo separarlas con el filtro de perfil y la alumna con su selector.
-const PROFILE_FAMILIES = new Set(['closer', 'setter', 'cold_caller', 'account_executive', 'sdr']);
+const PROFILE_FAMILIES = new Set(['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr']);
 // Motivos del descarte (2026-11-16). Antes era un solo contador —«sin perfil comercial
 // reconocible»— y no decía DÓNDE se cae el embudo. Esto solo DIAGNOSTICA: qué entra lo sigue
 // decidiendo la familia de `classifyRole`, exactamente igual que antes.
@@ -2009,7 +2009,7 @@ async function handleAdminActivate(request, env) {
   // presupuesto de escritura pequeño, el orden decide qué se publica. Primero closer, después el
   // resto de familias comerciales; dentro de cada perfil, España antes que cualquier mercado y lo
   // más antiguo antes que lo nuevo, para que el atraso no se quede al final de la cola para siempre.
-  const ROLE_RANK = { closer: 0, setter: 1, cold_caller: 2, account_executive: 3, sdr: 4 };
+  const ROLE_RANK = { closer: 0, setter: 1, cold_caller: 2, management: 3, account_executive: 4, sdr: 5 };
   const prepared = rows.results.map(row => {
     let p = null;
     try { p = JSON.parse(row.posting_payload); } catch { p = null; }
@@ -2611,6 +2611,27 @@ const ROLE_KEYWORDS = {
     'televenta', 'televentas', 'operador telefonico', 'operadora telefonica',
     'cold caller', 'cold calling', 'llamadas en frio',
     'prospector telefonico', 'prospectora telefonica', 'prospeccion telefonica',
+  ],
+  // Puestos de mando (decisión del propietario, 2026-11-18): dirigen un equipo comercial, así que
+  // son un perfil PROPIO. No se etiquetan como «Ejecutivo comercial» aunque el anuncio diga
+  // «sales»: la alumna que busca mando ve mando, y la que busca venta no lo recibe mezclado.
+  // Se evalúa antes que account_executive: «Jefe de equipo comercial» contiene «comercial».
+  management: [
+    'sales manager', 'manager of sales', 'sales team manager', 'sales team lead', 'team lead sales',
+    'head of sales', 'head of business development', 'head of revenue',
+    'sales director', 'director of sales', 'director of business development',
+    'vp of sales', 'vp sales', 'vice president of sales', 'chief revenue officer', 'chief sales officer',
+    'jefe de ventas', 'jefa de ventas', 'jefe comercial', 'jefa comercial',
+    'jefe de equipo comercial', 'jefa de equipo comercial',
+    'responsable de ventas', 'responsable comercial', 'responsable de equipo comercial',
+    'responsable de equipos comerciales', 'responsable de desarrollo de negocio',
+    'director de ventas', 'directora de ventas', 'director comercial', 'directora comercial',
+    'director de desarrollo de negocio', 'directora de desarrollo de negocio',
+    'director de business development', 'directora de business development',
+    'gerente de ventas', 'gerente comercial', 'gerente regional de ventas',
+    'supervisor de ventas', 'supervisora de ventas', 'supervisor comercial', 'supervisora comercial',
+    'lider de ventas', 'lider comercial', 'lider de equipo comercial',
+    'vicepresidente de ventas', 'vicepresidenta de ventas',
   ],
   account_executive: [
     'account executive', 'ejecutivo de cuentas', 'ejecutiva de cuentas',
@@ -11515,9 +11536,11 @@ async function handleOffers(request, env, url) {
 // La etiqueta dice dónde vive cada título: desde 2026-11-13 ADR/BDR son setter, no sdr, así que
 // «SDR / BDR» prometía una búsqueda que ya no los devuelve. Mismo texto que apps/web/lib/vocabulary.ts.
 const ROLE_LABELS = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller',
-  account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
-const ROLE_PRIORITY = { closer: 0, setter: 1, cold_caller: 2, account_executive: 9, sdr: 10 };
-const EXTRA_ROLES = new Set(['account_executive', 'sdr']);
+  management: 'Mando comercial', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
+const ROLE_PRIORITY = { closer: 0, setter: 1, cold_caller: 2, management: 8, account_executive: 9, sdr: 10 };
+// Mando comparte con AE/SDR la regla de «no protagoniza la lista general»: aparece al elegir su
+// perfil en el selector o con include_extra_roles, nunca disfrazado dentro de otra familia.
+const EXTRA_ROLES = new Set(['account_executive', 'management', 'sdr']);
 const TOP_TARGET = 20;
 // Nombres de ciudad que TAMBIÉN existen en España o son palabras corrientes: solo cuentan como LatAm sin señal de España.
 const LATAM_AMBIGUOUS = new Set(['guadalajara', 'puebla', 'rosario', 'medellin', 'monterrey', 'mendoza', 'cali', 'santo domingo',
@@ -11705,7 +11728,7 @@ function foreignCountry(p) {
 function spainSignal(p) { return ES_HINTS.some(k => `${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`.toLowerCase().includes(k)) || placeInSpain(p.location); }
 function nonSpain(p) { return NON_ES_HINTS.some(k => `${p.title ?? ''} ${p.location ?? ''}`.toLowerCase().includes(k)); }
 
-const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'];
+const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr'];
 // Coincidencia por PALABRA completa (2026-10-26). `includes` metía «…bring online stores'
 // inventory closer to their customers» (una vacante de Java) en la familia closer: el 30 % de los
 // closers de una medición eran ofertas de ingeniería. Se exige frontera a ambos lados y se admite

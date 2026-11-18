@@ -20,6 +20,7 @@ const ROLES: Array<{ role: Role; label: string; test: RegExp }> = [
   // ADR/BDR son setter (2026-11-13): la frase tiene que llevar a la misma familia que el desplegable.
   { role: 'setter', label: `perfil ${ROLE_LABELS.setter}`, test: /\bsetters?\b|\b(?:a|b)dr\b|\bbusiness development representatives?\b|\baccount development representatives?\b/ },
   { role: 'cold_caller', label: `perfil ${ROLE_LABELS.cold_caller}`, test: /\bcold ?callers?\b|\bllamadas frias\b|\bteleoperador(?:a|as|es)?\b/ },
+  { role: 'management', label: `perfil ${ROLE_LABELS.management}`, test: /\bsales managers?\b|\bhead of sales\b|\bsales directors?\b|\bjef[ea]s? (?:de )?(?:ventas|comercial)\b|\bdirector(?:a|as|es)? (?:de )?(?:ventas|comercial)\b|\bgerentes? (?:de )?(?:ventas|comercial)\b/ },
   { role: 'account_executive', label: `perfil ${ROLE_LABELS.account_executive}`, test: /\baccount executives?\b|\bejecutiv[oa]s? comercial(?:es)?\b|\basesor(?:a|as|es)? comercial(?:es)?\b/ },
   { role: 'sdr', label: `perfil ${ROLE_LABELS.sdr}`, test: /\bsdr\b/ },
 ];

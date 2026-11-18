@@ -52,7 +52,7 @@ No es una garantía. Los conectores pueden devolver menos.
 ## Query expansion (ADR-010)
 
 El orquestador genera consultas por source a partir de:
-- **vocabulario canónico de perfiles** (`apps/api/career/vocabulary.py`, ADR-010): familias closer/setter/cold_caller/account_executive/sdr + agregado digital_sales, con equivalentes (asesor de admisiones, sales advisor, patient coordinator…) y errores ortográficos observados;
+- **vocabulario canónico de perfiles** (`apps/api/career/vocabulary.py`, ADR-010): familias closer/setter/cold_caller/management/account_executive/sdr + agregado digital_sales, con equivalentes (asesor de admisiones, sales advisor, patient coordinator…) y errores ortográficos observados;
 - keywords del usuario;
 - idioma/mercado;
 - señales de calidad (leads cualificados, fijo más comisiones…) que suben el score;

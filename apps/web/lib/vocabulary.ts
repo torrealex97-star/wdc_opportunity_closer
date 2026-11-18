@@ -67,6 +67,25 @@ export const ROLE_KEYWORDS: Record<string, string[]> = {
     'cold caller', 'cold calling', 'llamadas en frio',
     'prospector telefonico', 'prospectora telefonica', 'prospeccion telefonica',
   ],
+  // Mismo bloque que el motor (parity.mjs lo compara palabra por palabra): los puestos de mando
+  // son un perfil propio, no «Ejecutivo comercial» con otro nombre.
+  management: [
+    'sales manager', 'manager of sales', 'sales team manager', 'sales team lead', 'team lead sales',
+    'head of sales', 'head of business development', 'head of revenue',
+    'sales director', 'director of sales', 'director of business development',
+    'vp of sales', 'vp sales', 'vice president of sales', 'chief revenue officer', 'chief sales officer',
+    'jefe de ventas', 'jefa de ventas', 'jefe comercial', 'jefa comercial',
+    'jefe de equipo comercial', 'jefa de equipo comercial',
+    'responsable de ventas', 'responsable comercial', 'responsable de equipo comercial',
+    'responsable de equipos comerciales', 'responsable de desarrollo de negocio',
+    'director de ventas', 'directora de ventas', 'director comercial', 'directora comercial',
+    'director de desarrollo de negocio', 'directora de desarrollo de negocio',
+    'director de business development', 'directora de business development',
+    'gerente de ventas', 'gerente comercial', 'gerente regional de ventas',
+    'supervisor de ventas', 'supervisora de ventas', 'supervisor comercial', 'supervisora comercial',
+    'lider de ventas', 'lider comercial', 'lider de equipo comercial',
+    'vicepresidente de ventas', 'vicepresidenta de ventas',
+  ],
   account_executive: [
     'account executive', 'ejecutivo de cuentas', 'ejecutiva de cuentas',
     'account manager', 'sales executive', 'sales consultant', 'sales advisor',
@@ -111,12 +130,12 @@ export const ROLE_KEYWORDS: Record<string, string[]> = {
 export const ES_HINTS = ['españa', 'spain', 'madrid', 'barcelona', 'valencia', 'sevilla', 'málaga', 'malaga', 'bilbao', 'zaragoza', 'remoto', 'europa'];
 export const NON_ES_HINTS = ['florida', 'texas', 'california', 'new york', 'london', 'londres', 'oklahoma', 'mississippi', 'georgia', 'st. petersburg', 'atlanta', 'nashville', 'dallas', 'okc'];
 
-export const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'] as const;
+export const ROLE_EVAL_ORDER = ['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr'] as const;
 // Opciones de desplegable derivadas de las dos listas de arriba: una sola fuente para la alumna,
 // el catálogo, la revisión y las clasificaciones, para que una etiqueta no se quede atrás en copias.
 export type RoleFamily = (typeof ROLE_EVAL_ORDER)[number];
 // ADR/BDR son setter desde 2026-11-13: la etiqueta lo dice y «SDR» deja de prometerlos.
-export const ROLE_LABELS: Record<RoleFamily, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
+export const ROLE_LABELS: Record<RoleFamily, string> = { closer: 'Closer', setter: 'Setter / ADR-BDR', cold_caller: 'Cold Caller', management: 'Mando comercial', account_executive: 'Ejecutivo comercial', sdr: 'SDR' };
 export const ROLE_OPTIONS: ReadonlyArray<{ value: RoleFamily; label: string }> = ROLE_EVAL_ORDER.map(value => ({ value, label: ROLE_LABELS[value] }));
 
 export const fold = (text: string | null | undefined) => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

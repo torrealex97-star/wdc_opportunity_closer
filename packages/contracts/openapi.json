@@ -2660,6 +2660,7 @@
                   "closer",
                   "setter",
                   "cold_caller",
+                  "management",
                   "account_executive",
                   "sdr",
                   "custom"
@@ -3375,6 +3376,7 @@
               "closer",
               "setter",
               "cold_caller",
+              "management",
               "account_executive",
               "sdr"
             ],
@@ -3581,6 +3583,7 @@
                   "closer",
                   "setter",
                   "cold_caller",
+                  "management",
                   "account_executive",
                   "sdr"
                 ]
@@ -3847,6 +3850,7 @@
               "closer",
               "setter",
               "cold_caller",
+              "management",
               "sdr",
               "account_executive",
               "custom"

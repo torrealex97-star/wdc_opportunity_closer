@@ -28,18 +28,20 @@ def _role_for(item, job_id, organization):
     return None, None
 
 router = APIRouter(prefix='/v1/opportunities')
-Role = Literal['closer', 'setter', 'cold_caller', 'account_executive', 'sdr']
+Role = Literal['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr']
 LABELS = {'closer': 'Closer', 'setter': 'Setter', 'cold_caller': 'Cold Caller',
+          'management': 'Mando comercial',
           'account_executive': 'Ejecutivo comercial', 'sdr': 'SDR / BDR'}
-# account_executive y sdr son vocabulario canónico real: si la alumna elige Closer
-# y la oferta es solo AE/SDR, no compiten por el mismo hueco.
+# account_executive, management y sdr son vocabulario canónico real: si la alumna elige Closer
+# y la oferta es solo AE/mando/SDR, no compiten por el mismo hueco.
 ROLE_FILTER_MAP = {'closer': {'closer'}, 'setter': {'setter'}, 'cold_caller': {'cold_caller'},
+                   'management': {'management'},
                    'account_executive': {'account_executive'}, 'sdr': {'sdr'}}
 # Selección de excelencia (SPEC-002): el catálogo puede traer cientos de elegibles;
 # la alumna ve primero las 10-20 que mejor cumplen los requisitos del día.
 TOP_TARGET = 20
 ROLE_PRIORITY = {'closer': 0, 'setter': 1, 'cold_caller': 2}
-EXTRA_ROLES = {'account_executive', 'sdr'}
+EXTRA_ROLES = {'account_executive', 'management', 'sdr'}
 COUNTRIES = {'united states': 'Estados Unidos', 'usa': 'Estados Unidos', 'spain': 'España',
              'mexico': 'México', 'germany': 'Alemania', 'france': 'Francia', 'italy': 'Italia',
              'united kingdom': 'Reino Unido', 'europe': 'Europa', 'worldwide': 'Todo el mundo',

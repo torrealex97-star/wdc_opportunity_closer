@@ -10,7 +10,7 @@ test('student sees three profiles and decision facts without operational control
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Elige tu próxima oportunidad.' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Perfil profesional' }).locator('option')).toHaveText(['Todos los perfiles', 'Closer', 'Setter / ADR-BDR', 'Cold Caller', 'Ejecutivo comercial', 'SDR']);
+  await expect(page.getByRole('combobox', { name: 'Perfil profesional' }).locator('option')).toHaveText(['Todos los perfiles', 'Closer', 'Setter / ADR-BDR', 'Cold Caller', 'Mando comercial', 'Ejecutivo comercial', 'SDR']);
   // El titular es el puesto real del anuncio, no la familia de rol con la que lo clasificamos.
   await expect(page.getByRole('heading', { name: offer.original_title, exact: true })).toBeVisible();
   await expect(page.getByText(offer.compensation, { exact: true })).toBeVisible();
@@ -63,7 +63,9 @@ test('student filters survive a reload via the URL', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Perfil profesional' }).selectOption('');
   await page.getByRole('button', { name: 'Ver oportunidades', exact: true }).click();
   await expect.poll(() => requests.at(-1)?.role).toBeNull();
-  expect(new URL(page.url()).search).toBe('');
+  // El inglés viene marcado por defecto (sesión 209): la URL conserva esa elección aunque no haya
+  // rol ni mercado. Sin `bilingual` la alumna perdería su preferencia al recargar.
+  expect(new URL(page.url()).search).toBe('?bilingual=1');
 });
 
 test('student saves an opportunity and bilingual notices are an explicit choice', async ({ page }) => {
@@ -118,7 +120,8 @@ test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, ro
   await expect(page.getByText('3 con tu filtro · 13 más del catálogo con tu mercado')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Oportunidades para explorar/ }).locator('span')).toHaveText('16');
   // El relleno solo relaja el rol: sigue en español, no aparece ni una tarjeta en inglés.
-  const widerBody = bodies.find(b => b.role === null) as { include_bilingual?: boolean } | undefined;
+  // La ÚLTIMA petición sin rol es el relleno: la primera es la carga inicial de la página.
+  const widerBody = bodies.filter(b => b.role === null).at(-1) as { include_bilingual?: boolean } | undefined;
   expect(widerBody?.include_bilingual).toBe(false);
   await expect(page.locator('.wider-bucket').getByText('Anuncio en inglés')).toHaveCount(0);
   await expect(page.getByText('Sales development representative')).toHaveCount(0);

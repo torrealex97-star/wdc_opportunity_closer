@@ -15,7 +15,7 @@
 import { pathToFileURL } from 'node:url';
 import { currentEngine, assertSelectOnly, query } from './vocabulary-audit.mjs';
 
-const ROLE_FILTERS = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'];
+const ROLE_FILTERS = ['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr'];
 const MARKETS = ['any', 'ES', 'EU', 'LATAM', 'US'];
 const DAYS = [1, 3, 7, 10];
 const BILINGUAL = [false, true];

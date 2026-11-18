@@ -25,10 +25,20 @@ assert.equal(role('Comercial telefónico'), 'account_executive');
 assert.equal(role('Closer de ventas high ticket'), 'closer');
 assert.equal(role('Setter y Closer de ventas'), 'closer');
 assert.equal(role('Asesor/a de Ventas'), 'account_executive');
-// Los puestos que NO son del perfil siguen fuera: ni retail, ni análisis, ni gestión.
+// Los puestos que NO son del perfil siguen fuera (análisis y venta de tienda sin mando).
 assert.equal(role('Sales Planning Sr Analyst'), null);
 assert.equal(role('Retail Sales Associate'), null);
-assert.equal(role('Gerente Regional de Ventas (Retail)'), null);
+// Mando: perfil propio (2026-11-18), no «Ejecutivo comercial».
+assert.equal(role('Sales Manager'), 'management');
+assert.equal(role('Head of Sales'), 'management');
+assert.equal(role('Sales Director'), 'management');
+assert.equal(role('Jefe de ventas'), 'management');
+assert.equal(role('Jefe de equipo comercial'), 'management');
+assert.equal(role('Responsable comercial'), 'management');
+assert.equal(role('Director Comercial'), 'management');
+assert.equal(role('Gerente Regional de Ventas (Retail)'), 'management');
+assert.equal(role('VP of Sales'), 'management');
+assert.equal(role('Team Lead Sales'), 'management');
 
 // ---- Business Developer = cierre ----
 assert.equal(role('Business Developer'), 'closer');
@@ -36,8 +46,8 @@ assert.equal(role('Business Developer B2B (remoto)'), 'closer');
 assert.equal(role('Business Developers High Ticket'), 'closer');
 // Y no se traga al mando: «development» no es «developer», hasWord exige palabra completa.
 assert.equal(role('Business Development Manager'), 'account_executive');
-assert.equal(role('Head of Business Development'), null);
-assert.equal(role('Director de Business Development'), null);
+assert.equal(role('Head of Business Development'), 'management');
+assert.equal(role('Director de Business Development'), 'management');
 
 // ---- ADR/BDR = setter (abren la reunión, no cierran) ----
 assert.equal(role('ADR'), 'setter');
@@ -69,11 +79,12 @@ assert.equal(role('Closer de Ventas / Admisiones'), 'closer');
 assert.equal(role('Customer Success Manager'), null);
 assert.equal(role('Customer Success Specialist'), null);
 assert.equal(role('Customer Success Representative'), null);
-assert.equal(role('Sales Manager'), null);
+// «Account Manager» sigue siendo AE: el mando exige dirigir ventas, no gestionar cuentas.
 assert.equal(role('Key Account Manager'), 'account_executive', 'cuentas sí; «manager» no lo salva de ser venta');
+assert.equal(role('Account Manager'), 'account_executive');
 
 // La evidencia en el cuerpo sigue funcionando para las palabras nuevas.
 assert.equal(classifyRole({ title: 'Gestor de cuentas' }, 'buscamos business developer para cerrar ventas high ticket'), 'closer');
 assert.equal(classifyRole({ title: 'Gestor de cuentas' }, 'equipo de bdr y adr para agendar demos'), 'setter');
 
-console.log('PASS  categorías de rol (38 casos)');
+console.log('PASS  categorías de rol (incluye el perfil de mando)');

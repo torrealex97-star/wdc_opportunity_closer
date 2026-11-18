@@ -18,9 +18,13 @@ const payload = (title, extra = {}) => ({ title, url: 'https://x.test/1', locati
 // ── Motivos de rol ──────────────────────────────────────────────────────────────────────────
 assert.equal(t.discardReason(payload('Closer de ventas')), null, 'un closer entra');
 assert.equal(t.discardReason(payload('Setter y Closer de ventas')), null);
-assert.equal(t.discardReason(payload('Sales Manager')), 'mando');
-assert.equal(t.discardReason(payload('Head of Sales')), 'mando');
-assert.equal(t.discardReason(payload('Supervisor de Ventas')), 'mando');
+// Decisión del propietario (2026-11-18): los puestos de mando son un perfil propio y se ingieren.
+assert.equal(t.discardReason(payload('Sales Manager')), null, 'el mando comercial entra como management');
+assert.equal(t.discardReason(payload('Head of Sales')), null);
+assert.equal(t.discardReason(payload('Supervisor de Ventas')), null);
+// «Mando» sigue siendo el motivo de un jefe que NO es de ventas: no se disfraza de perfil comercial.
+assert.equal(t.discardReason(payload('Customer Success Manager')), 'mando');
+assert.equal(t.discardReason(payload('Team Lead de Operaciones')), 'mando');
 assert.equal(t.discardReason(payload('Java Engineer')), 'no_comercial');
 assert.equal(t.discardReason(payload('Senior Data Analyst')), 'no_comercial');
 assert.equal(t.discardReason(payload('Recepcionista')), 'sin_palabra_de_rol');
@@ -32,7 +36,7 @@ assert.equal(t.exclusionReason(payload('Closer de ventas', { url: null }), { mar
 // El motivo no cambia qué entra: la familia manda igual que antes.
 assert.equal(t.isProfileCandidate(payload('Closer de ventas')), true);
 assert.equal(t.isProfileCandidate(payload('Account Executive')), true, 'la familia comercial genérica entra');
-assert.equal(t.isProfileCandidate(payload('Sales Manager')), false);
+assert.equal(t.isProfileCandidate(payload('Sales Manager')), true, 'el mando comercial es del perfil, con su familia');
 
 // Mando ya DENTRO del perfil (el caso que se ve en producción): se puede medir sin tocar la regla.
 assert.equal(t.leadershipTitle({ title: 'Supervisor de Ventas, La Plata' }), true);
@@ -66,9 +70,9 @@ globalThis.fetch = async input => {
 
 t.resetExtractFiltered();
 const out = await t.sourceFreehire({ code: 'freehire-closer', region: 'es', terms: true, termsPerRun: 1 });
-assert.equal(out.length, 1, 'solo el closer entra');
-assert.deepEqual(t.filteredByReasonOf('freehire-closer'), { mando: 1, no_comercial: 1, sin_palabra_de_rol: 1 });
-assert.equal(t.filteredOf('freehire-closer'), 3, 'el total de siempre sigue cuadrando con la suma de motivos');
+assert.equal(out.length, 2, 'entran el closer y el mando comercial');
+assert.deepEqual(t.filteredByReasonOf('freehire-closer'), { no_comercial: 1, sin_palabra_de_rol: 1 });
+assert.equal(t.filteredOf('freehire-closer'), 2, 'el total de siempre sigue cuadrando con la suma de motivos');
 t.resetExtractFiltered();
 assert.deepEqual(t.filteredByReasonOf('freehire-closer'), {}, 'se reinicia por ejecución');
 

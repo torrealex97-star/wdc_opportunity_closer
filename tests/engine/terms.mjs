@@ -53,7 +53,7 @@ step('el filtro del origen se queda con las familias del perfil y usa el clasifi
   assert.equal(t.isProfileCandidate({ title: 'Consultor educativo', raw: { description: 'Buscamos cerrador de ventas high ticket' } }), true);
   // Sin lista paralela: la familia es exactamente la del clasificador del motor.
   assert.equal(t.familyOf({ title: 'Setter y Closer de Ventas' }), t.classifyRole({ title: 'Setter y Closer de Ventas' }, ''));
-  assert.deepEqual([...t.PROFILE_FAMILIES].sort(), ['account_executive', 'closer', 'cold_caller', 'sdr', 'setter']);
+  assert.deepEqual([...t.PROFILE_FAMILIES].sort(), ['account_executive', 'closer', 'cold_caller', 'management', 'sdr', 'setter']);
 });
 
 step('la rotación reparte por familia: cada pasada con 2+ huecos lleva sdr y cold caller', () => {

@@ -31,7 +31,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WORKER = join(ROOT, 'sites/engine/worker.js');
 const SNAPSHOT = join(ROOT, '.local/vocab-audit/snapshot.json');
 const REVIEWED = new Set(['approved', 'published']);
-const FAMILIES = ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr'];
+const FAMILIES = ['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr'];
 
 // ── utilidades puras (las prueba tests/vocabulary-audit.mjs) ────────────────────────────────
 export const fold = text => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

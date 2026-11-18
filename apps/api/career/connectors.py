@@ -83,6 +83,7 @@ class Himalayas:
             "closer": ["closer", "cerrador", "venta de alto valor", "closers", "closer de ventas"],
             "setter": ["appointment setter", "appointment setting"],
             "sdr": ["sales development", "business development representative"],
+            "management": ["sales manager", "head of sales", "jefe de ventas", "director comercial"],
             "account_executive": ["account executive", "ejecutivo comercial"],
             "sales": ["closer", "setter", "comercial digital", "ventas"],
             "custom": [query.keywords],

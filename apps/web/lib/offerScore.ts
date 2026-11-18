@@ -10,7 +10,7 @@ export type Scorable = { title: string; company?: string | null; location?: stri
 export type Enrichment = { role: string | null; spain: boolean | null; score: number; fingerprint: string | null; market: Market | null; market_basis: MarketBasis; currency: Currency | null };
 
 
-const ROLE_POINTS: Record<string, number> = { closer: 40, setter: 30, cold_caller: 25, account_executive: 20, sdr: 18 };
+const ROLE_POINTS: Record<string, number> = { closer: 40, setter: 30, cold_caller: 25, management: 22, account_executive: 20, sdr: 18 };
 const VERTICAL = /high.?ticket|alto ticket|infoproduct|coaching|mentor[ií]a|formaci[oó]n|academia|educaci[oó]n|bootcamp|programa de/i;
 
 export function fingerprintOf(c: Scorable): string | null {

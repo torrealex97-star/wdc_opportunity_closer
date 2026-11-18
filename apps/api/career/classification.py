@@ -50,7 +50,7 @@ que respalde role_family; si no hay cita que la respalde, usa uncertain. No inve
 
 class RoleClassification(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    role_family: Literal['closer', 'setter', 'cold_caller', 'account_executive', 'sdr',
+    role_family: Literal['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr',
                          'not_sales', 'uncertain']
     confidence: Literal['baja', 'media', 'alta']
     reason: str = Field(max_length=400)
@@ -60,7 +60,7 @@ class RoleClassification(BaseModel):
 class ClassifyRequest(BaseModel):
     job_ids: list[str] = Field(min_length=1, max_length=50)
     role: Literal['digital_sales', 'sales', 'closer', 'setter', 'cold_caller',
-                  'account_executive', 'sdr', 'custom'] | None = None
+                  'management', 'account_executive', 'sdr', 'custom'] | None = None
     # Reintento manual del operador (acción explícita, nunca automática): permite volver a
     # encolar filas failed por 429 o por cita sin respaldo. Sigue respetando límite diario.
     retry_failed: bool = False

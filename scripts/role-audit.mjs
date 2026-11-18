@@ -114,7 +114,7 @@ const uniqueTitles = rows => {
 const sourceTable = (rows, view) => {
   const table = new Map();
   const entryFor = key => {
-    if (!table.has(key)) table.set(key, { source: key, rows: 0, titles: new Set(), visibles: 0, sdr: 0, cold: 0, closer: 0, setter: 0, ae: 0 });
+    if (!table.has(key)) table.set(key, { source: key, rows: 0, titles: new Set(), visibles: 0, sdr: 0, cold: 0, closer: 0, setter: 0, mando: 0, ae: 0 });
     return table.get(key);
   };
   for (const row of rows) {
@@ -129,6 +129,7 @@ const sourceTable = (rows, view) => {
     else if (card.role === 'cold_caller') entry.cold += 1;
     else if (card.role === 'closer') entry.closer += 1;
     else if (card.role === 'setter') entry.setter += 1;
+    else if (card.role === 'management') entry.mando += 1;
     else if (card.role === 'account_executive') entry.ae += 1;
   }
   return [...table.values()]
@@ -224,7 +225,7 @@ async function main() {
 
   const esCounts = roleCounts(esView.cards);
   const anyCounts = roleCounts(anyView.cards);
-  const famLine = counts => ['closer', 'setter', 'cold_caller', 'account_executive', 'sdr']
+  const famLine = counts => ['closer', 'setter', 'cold_caller', 'management', 'account_executive', 'sdr']
     .map(role => `${role} ${num(counts[role] ?? 0)}`).join(' · ');
   console.log(`\nVISTA DE ESPAÑA (studentSurface, roles extra incluidos): ${num(esView.cards.length)} tarjetas`);
   console.log(`  ${famLine(esCounts)}`);
@@ -232,9 +233,9 @@ async function main() {
   console.log(`  ${famLine(anyCounts)}`);
 
   console.log('\n== QUIÉN TRAE HOY SDR Y COLD CALLER (tarjetas visibles en España) ==');
-  console.log(`${pad('fuente', 34)}${pad('anuncios', 10)}${pad('títulos', 9)}${pad('visibles', 9)}${pad('sdr', 6)}${pad('cold', 6)}${pad('closer', 8)}${pad('setter', 8)}AE`);
+  console.log(`${pad('fuente', 34)}${pad('anuncios', 10)}${pad('títulos', 9)}${pad('visibles', 9)}${pad('sdr', 6)}${pad('cold', 6)}${pad('closer', 8)}${pad('setter', 8)}${pad('mando', 8)}AE`);
   for (const row of sources.slice(0, 20)) {
-    console.log(`${pad(row.source, 34)}${pad(num(row.rows), 10)}${pad(num(row.titles), 9)}${pad(num(row.visibles), 9)}${pad(num(row.sdr), 6)}${pad(num(row.cold), 6)}${pad(num(row.closer), 8)}${pad(num(row.setter), 8)}${num(row.ae)}`);
+    console.log(`${pad(row.source, 34)}${pad(num(row.rows), 10)}${pad(num(row.titles), 9)}${pad(num(row.visibles), 9)}${pad(num(row.sdr), 6)}${pad(num(row.cold), 6)}${pad(num(row.closer), 8)}${pad(num(row.setter), 8)}${pad(num(row.mando), 8)}${num(row.ae)}`);
   }
   const rest = sources.slice(20).reduce((n, row) => n + row.visibles, 0);
   if (rest) console.log(`${pad('(otras fuentes)', 34)}${pad('', 10)}${pad('', 9)}${pad(num(rest), 9)}`);

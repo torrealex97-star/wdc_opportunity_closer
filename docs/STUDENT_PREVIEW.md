@@ -12,7 +12,7 @@ La compensación muestra contexto publicado, cifras y unidad solo cuando constan
 
 ## API
 
-POST /v1/opportunities/search: role (closer/setter/cold_caller, null para guardadas), market, days (1–10), include_bilingual y starred_only. Respuesta allowlist OpportunityList: sin proveedores técnicos, score o raw. La atribución con enlace permanece visible en cada tarjeta. El CTA abre la publicación original y no envía candidaturas ni presupone acuerdo WDC.
+POST /v1/opportunities/search: role (closer/setter/cold_caller/management, null para guardadas), market, days (1–10), include_bilingual y starred_only. Respuesta allowlist OpportunityList: sin proveedores técnicos, score o raw. La atribución con enlace permanece visible en cada tarjeta. El CTA abre la publicación original y no envía candidaturas ni presupone acuerdo WDC.
 
 Se reutiliza la acción local de marcadores y el catálogo de diez días. No se crean búsquedas históricas al cargar esta vista ni llamadas al proveedor. Es un preview monousuario: no hay login de alumnas, protección por rol entre rutas ni bookmarks individuales todavía. Sigue prohibido publicar este modo local en internet.
 
