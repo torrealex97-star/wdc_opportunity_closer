@@ -1,5 +1,15 @@
 # Estado
 
+## El orden de la vista de alumna usa sus cuatro criterios (sesión 215) — 2026-11-18
+
+- **Petición del propietario**: arreglar el orden de la vista de alumna del motor —el comparador solo usaba el primer criterio, así que no se aplicaban puntuación, frescura ni prioridad de perfil—, dejar prueba que falle si vuelve a ignorarlos y desplegar.
+- **La causa**: el `sort` de [worker.js](../sites/engine/worker.js) construía un array con los cuatro criterios y devolvía `[qa.es - qb.es, …][0]`, es decir **solo España/no España**; el resto de comparaciones se descartaban y, dentro del mismo mercado, el orden era el del catálogo (`first_seen_at DESC`). El núcleo [opportunities.py](../apps/api/career/opportunities.py) sí encadenaba los cuatro, así que el dominio y la vista local servían órdenes distintos.
+- **El arreglo**: un comparador `compareStudentRank(a, b, quality)` que encadena con `||` mercado (España primero), puntuación descendente, frescura descendente y prioridad de perfil (closer → setter → cold caller), con `?? 9` para un perfil fuera de la tabla (un `NaN` en el comparador deja el orden a merced del motor sin fallar). El `sort` ahora es una línea que lo usa; no cambia ningún filtro, ni la selección top-20, ni la ventana de 800.
+- **Prueba nueva** [tests/engine/rankorder.mjs](../tests/engine/rankorder.mjs), sobre `studentSurface` real con shim de D1 (sin red): (1) puntuación y frescura —tres closers insertados de vieja a fresca salen fresca, media, vieja—; (2) prioridad de perfil a igualdad de score y fecha —closer antes que cold caller—; (3) España sigue siendo el primer criterio; (4) el comparador no devuelve `NaN` con un perfil desconocido; (5) guardia de fuente contra el patrón `[qa.es - qb.es, …][0]`. **Verificada por mutación**: con el comparador viejo restaurado en una copia, el bloque 1 falla con `['vieja','media','fresca']`; con el nuevo, PASS.
+- **Desplegado (verified)**: `closer-engine` Version ID `be2244cc-70e3-49a3-a757-505f06fc28c3`. En el dominio real, `POST /v1/opportunities/search {market:"any",days:10}` devuelve 124 ofertas y el orden ya es España primero y, dentro de eso, la más fresca y puntuada: 18/11, 16/11 y 14/11 en las tres primeras (dos closers y un cold caller), y después el resto por puntuación (la oferta de México con sueldo publicado entra en el puesto 5, por delante de cold callers de Perú más antiguos). `https://app.womendigitalclosers.com/alumna` → 200.
+- **Comprobado también**: `tests/engine/bucket.mjs`, `activate.mjs`, `roles.mjs` y `npm run handoff` en verde. No se ha abierto la vista con sesión de alumna ni se ha mirado visualmente; lo comprobado es la respuesta del motor y el código servido.
+- **Límites**: la ventana de 800 y el tope por empresa siguen igual, así que el arreglo cambia el orden de lo que ya se servía, no cuántas llegan; y las 1.852 publicadas fuera de la ventana siguen fuera.
+
 ## Aplicado el límite de gasto guardado: el panel manda de verdad (sesión 214) — 2026-11-18
 
 - **Petición del propietario**: aplicar `supabase/migrations/20261118_paid_budget.sql` y dejar documentado qué cambia en el control de gasto de la app.

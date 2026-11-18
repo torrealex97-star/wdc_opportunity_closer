@@ -1041,7 +1041,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -11542,6 +11542,17 @@ const ROLE_PRIORITY = { closer: 0, setter: 1, cold_caller: 2, management: 8, acc
 // perfil en el selector o con include_extra_roles, nunca disfrazado dentro de otra familia.
 const EXTRA_ROLES = new Set(['account_executive', 'management', 'sdr']);
 const TOP_TARGET = 20;
+// Orden de la vista de alumna: España primero y, dentro de eso, puntuación, frescura y
+// prioridad de perfil, criterio a criterio con `||`. Devolver un array y leer su `[0]`
+// dejaba el orden en manos del catálogo (solo España/no España) e ignoraba los otros tres.
+function compareStudentRank(a, b, quality) {
+  const qa = quality[a.id] ?? {};
+  const qb = quality[b.id] ?? {};
+  return ((qa.es ?? 1) - (qb.es ?? 1))
+    || ((qb.score ?? 0) - (qa.score ?? 0))
+    || ((qb.published_ts ?? 0) - (qa.published_ts ?? 0))
+    || ((ROLE_PRIORITY[qa.role] ?? 9) - (ROLE_PRIORITY[qb.role] ?? 9));
+}
 // Nombres de ciudad que TAMBIÉN existen en España o son palabras corrientes: solo cuentan como LatAm sin señal de España.
 const LATAM_AMBIGUOUS = new Set(['guadalajara', 'puebla', 'rosario', 'medellin', 'monterrey', 'mendoza', 'cali', 'santo domingo',
   'san salvador', 'asuncion', 'la plata', 'heredia', 'santa marta', 'sucre', 'pereira', 'toluca', 'cancun']);
@@ -11950,11 +11961,7 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
 
   // Ranking España-primero (sin interpretar remoto como worldwide) y selección top-20:
   // el mismo comportamiento que la vista local, para que el dominio no Romance estilos distintos.
-  const ranked = [...items].sort((a, b) => {
-    const qa = quality[a.id]; const qb = quality[b.id];
-    return [qa.es - qb.es, qb.score - qa.score, qb.published_ts - qa.published_ts,
-      ROLE_PRIORITY[qa.role] - ROLE_PRIORITY[qb.role]][0];
-  });
+  const ranked = [...items].sort((a, b) => compareStudentRank(a, b, quality));
   const selected = [];
   const counts = {};
   for (const offer of ranked) {
