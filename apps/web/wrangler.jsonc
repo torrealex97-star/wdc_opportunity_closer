@@ -36,6 +36,10 @@
   // «invalid api key»), así que revocar las legacy en Supabase no rompe nada de este despliegue.
   "vars": {
     "ADMIN_PUBLIC_URL": "https://app.womendigitalclosers.com",
-    "CAREER_ENGINE_URL": "https://closer-engine.women-digital-closers.workers.dev"
+    "CAREER_ENGINE_URL": "https://closer-engine.women-digital-closers.workers.dev",
+    // La IA de desempate decide (no solo anota) desde la sesión 209, por decisión del propietario.
+    // Sigue gastando el cupo diario de 100 aprobaciones y su propio tope de llamadas; sin clave de
+    // Groq el revisor se declara «sin clave» y las reglas siguen mandando.
+    "AI_REVIEW_MODE": "live"
   }
 }

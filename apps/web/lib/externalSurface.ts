@@ -1,6 +1,6 @@
 import { spanishWords } from './offerScore';
 import { listOffers, pausedSourcesStrict, type ExternalOffer } from './external';
-import { marketFor, type Market } from './market';
+import { englishWords, marketFor, type Market } from './market';
 import { assessOffer, FLAG_TEXT } from './offerRisk';
 import { spainSignal } from './esPlaces';
 import { fold, roleFromTitle, ROLE_LABELS, type RoleFamily } from './vocabulary';
@@ -155,8 +155,11 @@ export async function externalForStudent(q: Query) {
     // Con descripción, hacen falta 3 palabras españolas; sin ella (p. ej. LinkedIn sin detalle), basta una en el
     // título más ubicación en España explícita: el idioma se asume solo cuando el resto de señales cuadra.
     const words = spanishWords(text);
-    const enough = o.description ? words >= 3 : words >= 1 && spainSignal(o.title, o.location) === true;
-    if (!q.include_bilingual && !enough) continue;
+    const spanish = o.description ? words >= 3 : words >= 1 && spainSignal(o.title, o.location) === true;
+    // El opt-in bilingüe añade inglés, no cualquier idioma (decisión del propietario, 2026-11-18):
+    // un anuncio alemán no entra aunque la alumna marque «también bilingües».
+    const english = o.description ? englishWords(text) >= 5 : englishWords(text) >= 2;
+    if (!spanish && !(q.include_bilingual && english)) continue;
     out.push(toOpportunity(o, role));
   }
   return out;

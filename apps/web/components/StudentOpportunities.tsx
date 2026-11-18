@@ -20,7 +20,9 @@ type Query = components['schemas']['OpportunityQuery'];
 // `degraded` solo lo añade el proxy web cuando el motor no responde y sirve las
 // externas aprobadas a solas: no forma parte del contrato del motor.
 type Results = components['schemas']['OpportunityList'] & { degraded?: 'motor' };
-const defaults: Query = { role: null, market: 'any', days: 10, include_bilingual: false, starred_only: false, include_extra_roles: false };
+// El inglés se ofrece por defecto (decisión del propietario, 2026-11-18): la casilla de abajo lo
+// apaga si la alumna solo quiere castellano, así que el filtro sigue siendo suyo y está a la vista.
+const defaults: Query = { role: null, market: 'any', days: 10, include_bilingual: true, starred_only: false, include_extra_roles: false };
 // Una sola lista de familias y etiquetas (lib/vocabulary): el desplegable y la frase no pueden
 // decir cosas distintas de lo que filtra el motor.
 const ROLES = ROLE_EVAL_ORDER;
@@ -39,7 +41,7 @@ function queryFromUrl(): Query | null {
     role: ROLES.includes(role as typeof ROLES[number]) ? role as Query['role'] : null,
     market: MARKETS.includes(market as typeof MARKETS[number]) ? market as Query['market'] : 'any',
     days: [1, 3, 7, 10].includes(days) ? days : 10,
-    include_bilingual: params.get('bilingual') === '1',
+    include_bilingual: params.get('bilingual') !== '0',
     starred_only: false,
     include_extra_roles: true,
   };
@@ -49,7 +51,7 @@ function urlFromQuery(query: Query): string {
   if (query.role) params.set('role', query.role);
   if (query.market !== 'any') params.set('market', query.market);
   if (query.days !== 10) params.set('days', String(query.days));
-  if (query.include_bilingual) params.set('bilingual', '1');
+  params.set('bilingual', query.include_bilingual ? '1' : '0');
   const qs = params.toString();
   return qs ? `?${qs}` : window.location.pathname;
 }

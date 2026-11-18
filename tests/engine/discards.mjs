@@ -24,12 +24,14 @@ assert.equal(t.discardReason(payload('Supervisor de Ventas')), 'mando');
 assert.equal(t.discardReason(payload('Java Engineer')), 'no_comercial');
 assert.equal(t.discardReason(payload('Senior Data Analyst')), 'no_comercial');
 assert.equal(t.discardReason(payload('Recepcionista')), 'sin_palabra_de_rol');
-assert.equal(t.discardReason(payload('Account Executive')), 'familia_extra', 'AE es venta, pero no la familia que se ingiere');
+// Decisión del propietario (2026-11-18): el ejecutivo comercial también se ingiere.
+assert.equal(t.discardReason(payload('Account Executive')), null, 'AE es venta y entra desde la sesión 209');
 assert.equal(t.discardReason(payload('Closer de ventas', { url: null })), null, 'la URL se exige al ingerir, no en el motivo de rol');
 assert.equal(t.exclusionReason(payload('Closer de ventas', { url: null }), { market: 'ES' }), 'sin_url');
 
 // El motivo no cambia qué entra: la familia manda igual que antes.
 assert.equal(t.isProfileCandidate(payload('Closer de ventas')), true);
+assert.equal(t.isProfileCandidate(payload('Account Executive')), true, 'la familia comercial genérica entra');
 assert.equal(t.isProfileCandidate(payload('Sales Manager')), false);
 
 // Mando ya DENTRO del perfil (el caso que se ve en producción): se puede medir sin tocar la regla.

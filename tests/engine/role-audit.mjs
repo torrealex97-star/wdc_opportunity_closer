@@ -26,10 +26,9 @@ const rows = [
   { source: 'arbeitnow', title: 'Account Executive', location: 'Madrid, España', body: 'We are looking for an account executive to close deals with our clients in the US. Full time, commissions and training.' },
 ];
 
-// El gate de ingesta sigue diciendo que el AE «no toca»: ese era el motivo del informe equivocado.
+// El AE ya entra por el gate de ingesta (sesión 209); la vista sigue siendo la que decide visibilidad.
 const aePayload = { title: 'Account Executive', location: 'Barcelona, España', url: 'https://x.test/ae', raw: { description: spanishBody } };
-const ingest = t.discardReason(aePayload);
-assert.ok(ingest, `el gate de ingesta descarta el AE (motivo: ${ingest})`);
+assert.equal(t.discardReason(aePayload), null, 'el gate de ingesta ya no descarta el AE');
 
 const es = await viewOf(t, rows, { market: 'ES' });
 const esTitles = [...es.titles];

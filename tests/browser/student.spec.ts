@@ -17,7 +17,8 @@ test('student sees three profiles and decision facts without operational control
   await expect(page.getByText(offer.schedule)).toBeVisible();
   await expect(page.getByText(offer.experience)).toBeVisible();
   await expect(page.getByText(offer.language)).toBeVisible();
-  expect(requests[0].include_bilingual).toBe(false);
+  // El inglés se ofrece por defecto desde la sesión 209; la casilla permite quedarse solo en español.
+  expect(requests[0].include_bilingual).toBe(true);
   await expect(page.getByText(/scraper|Apify|presupuesto|para tus alumnas|encaje \/100/i)).toHaveCount(0);
   await page.getByRole('combobox', { name: 'Perfil profesional' }).selectOption('cold_caller');
   await page.getByRole('button', { name: 'Ver oportunidades', exact: true }).click();
@@ -106,6 +107,10 @@ test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, ro
   });
   await page.goto('/');
   expect(new URL(page.url()).search).toBe('');
+  // Este caso comprueba el relleno en español: se apaga el inglés, que ahora viene marcado por defecto.
+  const bilingualBox = page.getByLabel('También oportunidades bilingües español / inglés');
+  await expect(bilingualBox).toBeChecked();
+  await bilingualBox.uncheck();
   await page.getByRole('combobox', { name: 'Perfil profesional' }).selectOption('closer');
   await page.getByRole('combobox', { name: 'Desde dónde quieres trabajar' }).selectOption('ES');
   await page.getByRole('button', { name: 'Ver oportunidades', exact: true }).click();

@@ -1,6 +1,5 @@
 import { ORG, approvalsToday, approveByRule, markForReview, withdrawByRule, type ExternalOffer } from './external';
-import { marketFor, type Market } from './market';
-import { spanishWords } from './offerScore';
+import { isSpanishOrEnglish, marketFor, type Market } from './market';
 import { assessOffer } from './offerRisk';
 import { serviceRest } from './supabaseAuth';
 import { timeLeft } from './cronBudget';
@@ -61,8 +60,11 @@ export function judgeOffer(row: Row): RuleVerdict {
   const verdict = (decision: RuleVerdict['decision'], why: string, flags?: string[]): RuleVerdict => ({ decision, why, market, basis, ...(flags?.length ? { flags } : {}) });
   const retire = withdrawalReason(row);
   if (retire) return verdict('withdraw', retire);
-  if (!row.role) return verdict('human', 'sin_perfil');
-  if (!market) return verdict('human', 'sin_mercado');
+  // Lo que la máquina no puede arreglar NO se manda a una persona (decisión del propietario,
+  // 2026-11-18): sin perfil, sin mercado o sin idioma reconocible se retira con su motivo. La cola
+  // humana queda para el riesgo real (banderas rojas, oferta peligrosa) y la duda de mercado.
+  if (!row.role) return verdict('withdraw', 'sin_perfil');
+  if (!market) return verdict('withdraw', 'sin_mercado');
   if (row.spain === false && market === 'ES') return verdict('human', 'mercado_dudoso');
   if ((row.red_flags ?? []).length) return verdict('human', 'banderas_rojas');
   // Texto del anuncio con señales de condiciones dudosas. Lo CRÍTICO (pago previo, multinivel, ingresos
@@ -71,9 +73,10 @@ export function judgeOffer(row: Row): RuleVerdict {
   const risk = assessOffer(row);
   const flags = risk.detected_flags.map(flag => flag.code);
   if (risk.risk_level === 'BLOCKED') return verdict('human', 'oferta_peligrosa');
-  if ((row.score ?? 0) < MIN_SCORE) return verdict('human', 'score_bajo');
-  const words = spanishWords(`${row.title ?? ''} ${row.description ?? ''}`);
-  if (words < 3) return verdict('human', 'idioma_dudoso');
+  if ((row.score ?? 0) < MIN_SCORE) return verdict('withdraw', 'score_bajo');
+  // Español o inglés (2026-11-18). El inglés se publica igual que el castellano; la alumna lo
+  // separa con su filtro de idioma. Cualquier otro idioma no se puede ofrecer y se retira.
+  if (!isSpanishOrEnglish(`${row.title ?? ''} ${row.description ?? ''}`)) return verdict('withdraw', 'idioma_dudoso');
   if (flags.length) return verdict('approve', 'cumple_reglas_con_aviso', flags);
   return verdict('approve', 'cumple_reglas');
 }

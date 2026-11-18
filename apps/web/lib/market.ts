@@ -4,6 +4,11 @@ import { fold } from './vocabulary';
 // Criterio de «está en español»: el mismo que usan la puntuación, la revisión automática y la vista de alumna.
 const SPANISH = /\b(?:de|la|el|los|las|para|con|en|y|que|una|un|experiencia|ventas|empresa|buscamos|incorporar|comercial|trabajo|oferta|requisitos|funciones|salario|jornada)\b/g;
 export const spanishWords = (text: string) => (fold(text).match(SPANISH) ?? []).length;
+// Mismo criterio que `englishBodyGate` del motor (sites/engine/worker.js): 5+ lexemas corrientes
+// del inglés. Una palabra suelta («team», «sales») también aparece en anuncios en español.
+const ENGLISH = /\b(?:the|and|with|for|you|your|our|we|are|will|have|has|this|that|from|who|what|their|they|can|sales|team|customers?|clients?|experience|company|position|role|responsibilities|requirements|salary|remote|business|opportunity|work|apply|years)\b/g;
+export const englishWords = (text: string) => (fold(text).match(ENGLISH) ?? []).length;
+export const isSpanishOrEnglish = (text: string) => spanishWords(text) >= 3 || englishWords(text) >= 5;
 
 // Mercado de una oferta externa. Dos señales, en este orden:
 // 1) la ubicación que publica el anuncio manda;

@@ -44,17 +44,16 @@ step('la clasificación no confunde el comparativo inglés ni subcadenas con el 
 
 step('el filtro del origen se queda con las familias del perfil y usa el clasificador del motor', () => {
   // Entra el perfil WDC, sea cual sea el término que lo encontró…
-  for (const title of ['Closer de ventas High-Ticket', 'Setter y Closer de Ventas', 'Appointment Setter', 'Inside Sales / Closer (SaaS)', 'Cold Caller B2B', 'SDR B2B'])
+  for (const title of ['Closer de ventas High-Ticket', 'Setter y Closer de Ventas', 'Appointment Setter', 'Inside Sales / Closer (SaaS)', 'Cold Caller B2B', 'SDR B2B', 'Inside Sales Representative', 'Asesor/a Comercial'])
     assert.equal(t.isProfileCandidate({ title }), true, `debería entrar: ${title}`);
-  // …y se descarta el ruido que nunca podría salir a la alumna. La familia AE pura también se
-  // descarta aquí: ya la trae el barrido por categoría y cada candidato cuesta 6 escrituras.
-  for (const title of ['Data Engineer', 'Sales Assistant - 30h/s Temporal', 'Becario de marketing', 'Recepcionista', 'Inside Sales Representative', 'Asesor/a Comercial'])
+  // …y se descarta el ruido que nunca podría salir a la alumna.
+  for (const title of ['Data Engineer', 'Sales Assistant - 30h/s Temporal', 'Becario de marketing', 'Recepcionista'])
     assert.equal(t.isProfileCandidate({ title }), false, `debería descartarse: ${title}`);
   // El texto de la oferta cuenta cuando el título no lo dice: una oferta real de cierre no se pierde.
   assert.equal(t.isProfileCandidate({ title: 'Consultor educativo', raw: { description: 'Buscamos cerrador de ventas high ticket' } }), true);
   // Sin lista paralela: la familia es exactamente la del clasificador del motor.
   assert.equal(t.familyOf({ title: 'Setter y Closer de Ventas' }), t.classifyRole({ title: 'Setter y Closer de Ventas' }, ''));
-  assert.deepEqual([...t.PROFILE_FAMILIES].sort(), ['closer', 'cold_caller', 'sdr', 'setter']);
+  assert.deepEqual([...t.PROFILE_FAMILIES].sort(), ['account_executive', 'closer', 'cold_caller', 'sdr', 'setter']);
 });
 
 step('la rotación reparte por familia: cada pasada con 2+ huecos lleva sdr y cold caller', () => {
@@ -227,11 +226,14 @@ await aStep('Himalayas: una búsqueda por término del día y sin repetir la mis
   t.resetExtractFiltered();
   const out = await t.sourceHimalayas({ code: 'himalayas-closer', terms: true, termsPerRun: 3 });
   assert.deepEqual(calls.map(u => new URL(u).searchParams.get('q')), today);
-  assert.equal(out.length, 1, 'la oferta de cierre compartida entra una sola vez');
-  assert.equal(out[0].payload.location, 'Guatemala,Mexico');
+  // El ejecutivo comercial entró al perfil en la sesión 209: ahora suma una ficha por término.
+  assert.equal(out.length, today.length + 1, 'el closer compartido entra una sola vez y cada AE entra');
+  assert.equal(out.filter(o => o.payload.title.includes('High-Ticket')).length, 1, 'la oferta de cierre compartida no se duplica');
+  assert.ok(out.some(o => o.payload.location === 'Guatemala,Mexico'));
+  assert.ok(out.some(o => /Asesor comercial/.test(o.payload.title)), 'el AE también se ingiere');
   assert.ok(!out.some(o => /Data Engineer/.test(o.payload.title)), 'los roles no comerciales no se ingieren');
-  // Dos descartes por término: el rol técnico y la vacante AE (ya llega por el barrido por categoría).
-  assert.equal(t.filteredOf('himalayas-closer'), today.length * 2, 'se declaran los descartes del run');
+  // Un descarte por término: el rol técnico.
+  assert.equal(t.filteredOf('himalayas-closer'), today.length, 'se declaran los descartes del run');
 });
 
 await aStep('si un término falla, los demás siguen: el fallo no esconde lo bueno', async () => {

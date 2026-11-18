@@ -68,7 +68,7 @@ const seed = () => {
   rows.set(uuid(1), offer(1));                                               // clara
   rows.set(uuid(2), offer(2));                                               // clara
   rows.set(uuid(3), offer(3));                                               // clara
-  rows.set(uuid(4), offer(4, { title: 'Senior Sales Closer', description: 'We are hiring a closer for our growing team in Madrid.' })); // idioma dudoso
+  rows.set(uuid(4), offer(4, { title: 'Senior Sales Closer', description: 'Wir suchen einen Closer für unser Team in Madrid und bieten ein gutes Gehalt.' })); // idioma no ofrecible
   rows.set(uuid(5), offer(5, { red_flags: ['pide_inversion'] }));            // bandera roja
   rows.set(uuid(6), offer(6, { score: 30 }));                                // puntuación baja
   rows.set(uuid(7), offer(7, { role: null }));                               // sin perfil
@@ -79,12 +79,19 @@ const run = (deps = {}) => runAutoReview({ deadline: Date.now() + 60_000, ...dep
 
 // 1) La regla, caso por caso: aprueba lo comprobable, remite lo dudoso y RETIRA lo que no es un anuncio.
 assert.equal(judgeOffer(offer(1)).decision, 'approve');
-for (const [row, why] of [
-  [offer(4, { title: 'Senior Sales Closer', description: 'We are hiring a closer for our growing team in Madrid.' }), 'idioma_dudoso'],
-  [offer(5, { red_flags: ['pide_inversion'] }), 'banderas_rojas'],
-  [offer(6, { score: 30 }), 'score_bajo'],
-  [offer(7, { role: null }), 'sin_perfil'],
-]) assert.equal(judgeOffer(row).why, why, why);
+for (const [row, why, decision] of [
+  [offer(4, { title: 'Senior Sales Closer', description: 'Wir suchen einen Closer für unser Team in Madrid und bieten ein gutes Gehalt.' }), 'idioma_dudoso', 'withdraw'],
+  [offer(5, { red_flags: ['pide_inversion'] }), 'banderas_rojas', 'human'],
+  [offer(6, { score: 30 }), 'score_bajo', 'withdraw'],
+  [offer(7, { role: null }), 'sin_perfil', 'withdraw'],
+]) {
+  assert.equal(judgeOffer(row).why, why, why);
+  // Decisión del propietario (2026-11-18): lo que la máquina no puede arreglar no ocupa la cola humana.
+  assert.equal(judgeOffer(row).decision, decision, `${why} → ${decision}`);
+}
+// El inglés SÍ se publica: antes se retiraba por «idioma dudoso» y era el 59 % del pool de LatAm.
+const english = offer(30, { title: 'Senior Sales Closer', description: 'We are hiring a closer for our growing team in Madrid. You will work with clients and the sales team.' });
+assert.equal(judgeOffer(english).decision, 'approve', 'un anuncio en inglés se aprueba como uno en español');
 // Una página de resultados de un portal no es una oferta: ni se aprueba ni ocupa la cola humana.
 const index = judgeOffer(offer(9, { title: 'Ofertas de trabajo de Closer', company: null, url: 'https://www.infojobs.net/ofertas-trabajo/closer' }));
 assert.equal(index.decision, 'withdraw');
@@ -110,24 +117,27 @@ seed();
 const r = await run();
 assert.equal(r.checked, 8, 'se miran los ocho borradores');
 assert.equal(r.approved, 3, 'tres claras');
-assert.equal(r.withdrawn, 1, 'el enlace cerrado se retira');
-assert.equal(r.exceptions, 4, 'cuatro necesitan criterio');
-assert.equal(r.moved, 4, 'y las cuatro se mueven de verdad a la cola');
+assert.equal(r.withdrawn, 4, 'idioma, puntuación, perfil y enlace cerrado se retiran');
+assert.equal(r.exceptions, 1, 'solo el riesgo real necesita criterio');
+assert.equal(r.moved, 1, 'y esa sí se mueve a la cola');
 assert.equal(r.failed_writes, undefined, 'sin escrituras fallidas');
 for (const n of [1, 2, 3]) {
   assert.equal(face(n).editorial_status, 'approved', `clara ${n}`);
   assert.equal(face(n).reviewed_by, 'auto-reglas');
 }
-for (const n of [4, 5, 6, 7]) {
-  assert.equal(face(n).editorial_status, 'needs_review', `excepción ${n} en la cola humana`);
-  assert.equal(face(n).reviewed_by, 'auto-excepcion', 'no consume el tope de aprobaciones');
+assert.equal(face(5).editorial_status, 'needs_review', 'la bandera roja sí llega a una persona');
+assert.equal(face(5).reviewed_by, 'auto-excepcion', 'no consume el tope de aprobaciones');
+assert.equal(typeof face(5).auto_review?.why, 'string', 'con su motivo guardado');
+for (const n of [4, 6, 7]) {
+  assert.equal(face(n).editorial_status, 'withdrawn', `lo irrecuperable ${n} se retira`);
+  assert.equal(face(n).reviewed_by, 'auto-retira');
   assert.equal(typeof face(n).auto_review?.why, 'string', 'con su motivo guardado');
 }
 assert.equal(face(4).auto_review.why, 'idioma_dudoso');
 assert.equal(face(8).editorial_status, 'withdrawn', 'un enlace cerrado sale del catálogo');
 assert.equal(face(8).reviewed_by, 'auto-retira', 'retirar no gasta cupo de aprobaciones');
 assert.equal(face(8).auto_review.why, 'enlace_cerrado');
-console.log('PASS  lo dudoso llega a la cola humana con motivo; lo que no es una oferta se retira');
+console.log('PASS  solo el riesgo real llega a la cola humana; lo irrecuperable se retira con motivo');
 
 // 3) Guarda de estado: solo se escriben borradores (una persona pudo mover la oferta mientras se decidía).
 for (const p of patches) assert.match(p.query, /editorial_status=eq\.draft/, 'la escritura no pisa lo que ya movió alguien');
@@ -139,15 +149,15 @@ const capped = await run({ cap: 2 });
 assert.equal(capped.approved, 2);
 assert.ok([1, 2, 3].some(n => face(n).editorial_status === 'draft'), 'la que no cabe sigue en borrador');
 assert.equal(capped.by_reason.tope_diario, 1);
-assert.equal(capped.withdrawn, 1, 'la retirada no depende del cupo de aprobaciones');
-assert.equal(capped.moved, 4, 'las excepciones se mueven igual: no dependen del cupo de aprobaciones');
+assert.equal(capped.withdrawn, 4, 'las retiradas no dependen del cupo de aprobaciones');
+assert.equal(capped.moved, 1, 'las excepciones se mueven igual: no dependen del cupo de aprobaciones');
 console.log('PASS  el tope diario no manda a una persona lo que la máquina sabía cerrar');
 
 // 5) Escritura fallida: se declara y no se cuenta como hecha.
 seed(); failWrites = true;
 const failed = await run();
 assert.equal(failed.moved, undefined, 'nada confirmado');
-assert.equal(failed.failed_writes, 8, 'las 3 aprobaciones, las 4 excepciones y la retirada se declaran fallidas');
+assert.equal(failed.failed_writes, 8, 'las 3 aprobaciones, la excepción y las 4 retiradas se declaran fallidas');
 for (const n of [1, 4]) assert.equal(face(n).editorial_status, 'draft', 'sin escritura no hay cambio');
 console.log('PASS  si la base falla, se declara y nada se da por hecho');
 
@@ -191,10 +201,10 @@ rows.set(uuid(10), offer(10, { title: 'Empleos de closer en España', company: n
 const mixed = await run({ cap: 100 });
 assert.equal(mixed.checked, 10, 'se miran los diez borradores');
 assert.equal(mixed.approved, 3, 'solo las tres claras se aprueban');
-assert.equal(mixed.withdrawn, 3, 'los dos listados y el enlace cerrado');
+assert.equal(mixed.withdrawn, 6, 'los dos listados y las cuatro irrecuperables');
 assert.equal(mixed.by_reason.no_es_oferta, 2);
 assert.equal(mixed.by_reason.enlace_cerrado, 1);
-assert.equal(mixed.exceptions, 4, 'la cola humana no se llena con lo que no es revisable');
+assert.equal(mixed.exceptions, 1, 'la cola humana no se llena con lo que no es revisable');
 assert.equal(face(9).editorial_status, 'withdrawn');
 assert.equal(face(9).reviewed_by, 'auto-retira');
 assert.ok(face(9).reviewed_at, 'queda registrado cuándo se retiró');

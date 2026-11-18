@@ -709,7 +709,7 @@ await step('seguridad: cabeceras en todas las respuestas', async () => {
   assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin'); assert.match(res.headers.get('permissions-policy'), /camera=\(\)/);
   assert.equal(res.headers.get('x-powered-by'), null);
 });
-await step('cualificación automática: aprueba lo claro por reglas, deja lo dudoso y declara su tope', async () => {
+await step('cualificación automática: aprueba lo claro, retira lo irrecuperable y deja el riesgo real', async () => {
   const today = new Date().toISOString();
   const mk = (id, extra) => state.external.set(`au|${id}`, {
     id: crypto.randomUUID(), source: 'au', external_id: id, title: 'Closer de ventas', company: 'Acme',
@@ -721,7 +721,7 @@ await step('cualificación automática: aprueba lo claro por reglas, deja lo dud
   // El cron de pasos anteriores ya gastó el tope del día: se simula el día siguiente.
   const yesterday = new Date(Date.now() - 864e5).toISOString();
   for (const o of state.external.values()) if (o.reviewed_by === 'auto-reglas') o.reviewed_at = yesterday;
-  mk('ok1', {}); mk('ok2', {}); mk('dudoso', { role: null });
+  mk('ok1', {}); mk('ok2', {}); mk('irrecuperable', { role: null }); mk('riesgo', { red_flags: ['pide_inversion'] });
   const before = await call('/api/admin/external?status=draft&page_size=100');
   assert.ok(before.json.total > 0, `el panel ve ${before.json.total} borradores y el mock ${[...state.external.values()].filter(o => o.editorial_status === 'draft').length}`);
   const r = await call('/api/admin/external', { method: 'POST', body: { action: 'auto_review' } });
@@ -731,11 +731,16 @@ await step('cualificación automática: aprueba lo claro por reglas, deja lo dud
   assert.equal(state.external.get('au|ok1').editorial_status, 'approved');
   assert.equal(state.external.get('au|ok1').reviewed_by, 'auto-reglas');
   assert.equal(state.external.get('au|ok1').auto_review.why, 'cumple_reglas');
-  // Lo dudoso no se aprueba solo y tampoco se queda en borrador: va a la cola humana con su motivo.
-  assert.equal(state.external.get('au|dudoso').editorial_status, 'needs_review', 'lo dudoso no se aprueba solo');
-  assert.equal(state.external.get('au|dudoso').reviewed_by, 'auto-excepcion');
-  assert.equal(state.external.get('au|dudoso').auto_review.why, 'sin_perfil');
+  // Sin perfil no se puede arreglar desde una cola humana: se retira con su motivo (sesión 209).
+  assert.equal(state.external.get('au|irrecuperable').editorial_status, 'withdrawn', 'lo irrecuperable sale del catálogo');
+  assert.equal(state.external.get('au|irrecuperable').reviewed_by, 'auto-retira');
+  assert.equal(state.external.get('au|irrecuperable').auto_review.why, 'sin_perfil');
+  // El riesgo real sí llega a una persona, con su motivo.
+  assert.equal(state.external.get('au|riesgo').editorial_status, 'needs_review', 'el riesgo real no se aprueba solo');
+  assert.equal(state.external.get('au|riesgo').reviewed_by, 'auto-excepcion');
+  assert.equal(state.external.get('au|riesgo').auto_review.why, 'banderas_rojas');
   assert.ok((r.json.moved ?? 0) >= 1, `la base confirma ${r.json.moved} fila(s) movidas a la cola`);
+  assert.ok((r.json.withdrawn ?? 0) >= 1, `la base confirma ${r.json.withdrawn} retirada(s)`);
   const listed = await call('/api/admin/external?status=draft');
   assert.equal(listed.status, 200); assert.equal(typeof listed.json.auto.cap, 'number');
 });

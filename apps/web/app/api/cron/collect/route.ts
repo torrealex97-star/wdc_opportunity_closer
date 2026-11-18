@@ -75,7 +75,9 @@ export async function GET(request: NextRequest) {
   // retira con su motivo en vez de esperar a una persona. Sin motor configurado devuelve null y el
   // panel ya lo declara; un fallo no tumba el resto de la recogida.
   const motor = budget.remaining() >= MIN_STEP_MS
-    ? await activateEngine({ passes: 3, deadline: budget.deadline(40_000) }).catch(failed('engine', null))
+    // De 3 a 8 pasadas (sesión 209): el motor tenía miles de borradores y publicaba ~25 por pasada.
+    // El reloj sigue mandando: si no queda tiempo, `activateEngine` corta y lo declara.
+    ? await activateEngine({ passes: 8, deadline: budget.deadline(40_000) }).catch(failed('engine', null))
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;

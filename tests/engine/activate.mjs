@@ -119,17 +119,16 @@ const withdrawals = db => writes(db).filter(entry => /SET editorial_status='with
   const db = fakeDb(pool);
   const { status, body } = await activate(db, { dry_run: false, verify: false, market: 'any' });
   assert.equal(status, 200);
-  assert.equal(body.counts.published, 1, 'el closer abierto y en español se publica solo');
-  assert.equal(body.counts.withdrawn, 4, 'los cuatro descartes dejan de estar en el pool');
+  // El anuncio en inglés se publica desde la sesión 209 (decisión del propietario); antes se retiraba.
+  assert.equal(body.counts.published, 2, 'el closer en español y el closer en inglés se publican solos');
+  assert.equal(body.counts.withdrawn, 3, 'los tres descartes dejan de estar en el pool');
   assert.equal(body.counts.needs_review, 0);
 
   const retiradas = withdrawals(db);
-  assert.equal(retiradas.length, 3, 'una escritura por motivo (3 motivos), no una por oferta (4 ofertas)');
+  assert.equal(retiradas.length, 2, 'una escritura por motivo (2 motivos), no una por oferta (3 ofertas)');
   const sinPerfil = retiradas.find(entry => entry.args[0].includes('sin perfil comercial reconocible'));
   assert.ok(sinPerfil, 'el motivo viaja escrito en la fila');
   assert.deepEqual(sinPerfil.args.slice(3).sort(), ['opp-recepcion-1', 'opp-recepcion-2'].sort());
-  const porIdioma = retiradas.find(entry => entry.args[0].includes('no está en español'));
-  assert.deepEqual(porIdioma.args.slice(3), ['opp-ingles']);
   for (const entry of retiradas) {
     assert.match(entry.args[0], /^clasificación automática: /, 'la razón dice que la puso la máquina');
     assert.match(entry.sql, /editorial_status='draft'/, 'nunca pisa una oferta que una persona ya movió');
@@ -153,7 +152,8 @@ const withdrawals = db => writes(db).filter(entry => /SET editorial_status='with
   assert.equal(retiradas[1].args.length - 3, 1);
 }
 
-// 4) Una oferta sin descripción (la fuente no trajo cuerpo) NO se retira por «no está en español»: se salta y sigue como estaba.
+// 4) Una oferta sin descripción (la fuente no trajo cuerpo) no se puede comprobar ni arreglar desde una
+// cola humana: se retira con su motivo en vez de quedarse para siempre en el pool (sesión 209).
 {
   const pool = [
     row('opp-sin-cuerpo', offer('Closer de ventas', 'Madrid, España', '')),
@@ -162,8 +162,9 @@ const withdrawals = db => writes(db).filter(entry => /SET editorial_status='with
   const db = fakeDb(pool);
   const { status, body } = await activate(db, { dry_run: false, verify: false, market: 'any' });
   assert.equal(status, 200);
-  assert.equal(body.counts.withdrawn, 0, 'sin cuerpo no hay evidencia de idioma: no se retira');
-  assert.equal(withdrawals(db).length, 0);
+  assert.equal(body.counts.withdrawn, 1, 'sin cuerpo no hay evidencia de idioma y no se puede revisar');
+  const retirada = withdrawals(db)[0];
+  assert.match(retirada.args[0], /sin descripción/);
   assert.equal(body.counts.published, 1, 'la que sí tiene cuerpo en español se publica');
 }
 

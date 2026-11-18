@@ -194,7 +194,11 @@ function planRun(sources, lastSources, day, envBudget, ceiling = PLATFORM_SUBREQ
 // closer → setter → cold_caller → account_executive → sdr), así que clasificador y filtro no
 // pueden divergir. Lo descartado se cuenta y se publica en el estado del run (`filtered`), para
 // que «leídas» no se lea como «no había nada».
-const PROFILE_FAMILIES = new Set(['closer', 'setter', 'cold_caller', 'sdr']);
+// `account_executive` entra desde 2026-11-18 (decisión del propietario): es la familia de «Ejecutivo
+// comercial», «Sales Executive», «Vendedor/a» y «Comercial» a secas, y suponía 5.402 candidatas
+// descartadas en la medición de ese día. Incluye retail y temporales por decisión expresa; el panel
+// sigue pudiendo separarlas con el filtro de perfil y la alumna con su selector.
+const PROFILE_FAMILIES = new Set(['closer', 'setter', 'cold_caller', 'account_executive', 'sdr']);
 // Motivos del descarte (2026-11-16). Antes era un solo contador —«sin perfil comercial
 // reconocible»— y no decía DÓNDE se cae el embudo. Esto solo DIAGNOSTICA: qué entra lo sigue
 // decidiendo la familia de `classifyRole`, exactamente igual que antes.
@@ -233,8 +237,8 @@ const leadershipTitle = payload => LEADERSHIP_WORDS.test(fold(payload?.title ?? 
 function discardReason(payload) {
   const family = familyOf(payload);
   if (family && PROFILE_FAMILIES.has(family)) return null;
-  // account_executive es venta real, pero no la familia que se ingiere: llega por el barrido por
-  // categoría. Se cuenta aparte para no confundirlo con «no es comercial».
+  // Cualquier otra familia comercial (hoy ninguna: cuenta ejecutiva, sdr y el resto de perfiles ya
+  // se ingieren) se cuenta aparte para no confundirla con «no es comercial».
   if (family) return 'familia_extra';
   const title = fold(payload.title ?? '');
   if (LEADERSHIP_WORDS.test(title)) return 'mando';
@@ -2001,25 +2005,44 @@ async function handleAdminActivate(request, env) {
     rejects.set(reason, group);
     items.push({ id, action: 'withdraw', reason });
   };
-  for (const row of rows.results) {
+  // Prioridad de la pasada (decisión del propietario, 2026-11-18): con miles de borradores y un
+  // presupuesto de escritura pequeño, el orden decide qué se publica. Primero closer, después el
+  // resto de familias comerciales; dentro de cada perfil, España antes que cualquier mercado y lo
+  // más antiguo antes que lo nuevo, para que el atraso no se quede al final de la cola para siempre.
+  const ROLE_RANK = { closer: 0, setter: 1, cold_caller: 2, account_executive: 3, sdr: 4 };
+  const prepared = rows.results.map(row => {
+    let p = null;
+    try { p = JSON.parse(row.posting_payload); } catch { p = null; }
+    const description = p ? descriptionOf(p) : '';
+    const derivedRole = p ? classifyRole(p, fold(`${p.title ?? ''} ${p.location ?? ''} ${description}`)) : null;
+    const spain = p ? spainSignal(p) : false;
+    return { row, p, description, derivedRole, spain };
+  }).sort((a, b) =>
+    (ROLE_RANK[a.derivedRole] ?? 9) - (ROLE_RANK[b.derivedRole] ?? 9) ||
+    Number(b.spain === true) - Number(a.spain === true) ||
+    String(a.row.first_seen_at).localeCompare(String(b.row.first_seen_at)));
+
+  for (const { row, p, description, derivedRole } of prepared) {
     // Identidad de la oportunidad con los MISMOS nombres de campo que espera el PATCH
     // (row.id/row.job_id): las dos rutas de escritura, applyReview y runVerification,
     // reciben este objeto. El SELECT de aquí usa o.id AS opportunity_id, y bindear un
     // undefined dio 500 en la primera ejecución real (workerd 2026-10-16).
     const opp = { id: row.opportunity_id, job_id: row.job_id, posting_id: row.posting_id,
       current_version_id: row.current_version_id, source: row.source };
-    const p = JSON.parse(row.posting_payload);
-    const description = descriptionOf(p);
-    const derivedRole = classifyRole(p, fold(`${p.title ?? ''} ${p.location ?? ''} ${description}`));
     const skip = reason => { counters.skipped += 1; items.push({ id: row.opportunity_id, job_id: row.job_id, action: 'skipped', reason }); };
+    // Un payload que no se puede leer no se arregla desde una cola humana: se retira y se declara.
+    if (!p) { reject(row.opportunity_id, 'payload ilegible'); continue; }
     if (!derivedRole) { reject(row.opportunity_id, 'sin perfil comercial reconocible'); continue; }
     if (role && derivedRole !== role) { skip(`perfil ${derivedRole} distinto del pedido (${role})`); continue; }
-    if (market === 'ES' && (nonSpain(p) || !spainSignal(p))) { reject(row.opportunity_id, 'sin señal de mercado España'); continue; }
-    // Sin texto no hay evidencia de idioma: no es «no está en español». Se deja en borrador (como antes)
-    // en vez de retirar en bloque, con un motivo falso, todo lo que llega sin descripción.
-    if (!description.trim()) { skip('sin descripción: no se puede comprobar el idioma'); continue; }
+    if (market === 'ES' && marketRejects(p, 'ES')) { reject(row.opportunity_id, 'sin señal de mercado España'); continue; }
+    // Sin texto no se puede comprobar el idioma y una persona no puede arreglarlo: se retira en vez
+    // de quedarse para siempre en el pool de borradores (decisión del propietario, 2026-11-18).
+    if (!description.trim()) { reject(row.opportunity_id, 'sin descripción: no se puede comprobar el idioma'); continue; }
     const lang = spanishBodyGate(description, false);
-    if (!lang.ok) { reject(row.opportunity_id, 'el anuncio no está en español'); continue; }
+    // Decisión del propietario (2026-11-18): se aceptan anuncios en inglés en todos los mercados,
+    // con la condición de que la alumna pueda separarlos por idioma. El filtro ya existe
+    // (`include_bilingual`); lo que faltaba era dejar de retirar el 59 % del pool por no ser castellano.
+    if (!lang.ok && !englishBodyGate(description).ok) { reject(row.opportunity_id, 'el anuncio no está en español ni en inglés'); continue; }
     const ages = p.posted_at ? (Date.now() - Date.parse(p.posted_at)) / 86400000 : null;
     if (ages !== null && Number.isFinite(ages) && ages > days) { reject(row.opportunity_id, `publicado hace más de ${days} días`); continue; }
     const url = typeof p.url === 'string' && /^https:\/\//.test(p.url) ? p.url : null;
@@ -2035,7 +2058,7 @@ async function handleAdminActivate(request, env) {
       why_it_may_be_interesting: [],
       compensation_summary: typeof p.salary === 'string' && p.salary.trim() ? p.salary.trim().slice(0, 300) : 'No especificado',
       location_summary: asText(p.location) ?? 'No especificado',
-      language_requirements: lang.langES ? ['Español'] : ['Anuncio en inglés', 'Español exigido'],
+      language_requirements: lang.langES ? ['Español'] : ['Anuncio en inglés'],
       experience_summary: 'No especificado',
       application_type: applicationType,
       application_url: url,
@@ -2075,16 +2098,24 @@ async function handleAdminActivate(request, env) {
     // Sin URL no se publica: una tarjeta sin destino no se puede abrir y su CTA
     // nacería apagado. `application_type` conocido no sustituye al enlace.
     const publisher = Boolean(url) && applicationType !== 'unknown' && (!verify || verification?.result === 'open');
+    // Lo que no se puede publicar NI arreglar una persona se retira con su motivo (decisión del
+    // propietario, 2026-11-18): antes llenaba la cola de excepciones con tarjetas sin destino.
+    // La verificación `unknown` (el portal bloquea o no responde) SÍ va a la cola: alguien puede
+    // comprobar el enlace a mano; un 404 o un listado cerrado, no.
+    const hopeless = !url || applicationType === 'unknown' || verification?.result === 'closed';
+    if (hopeless) {
+      reject(row.opportunity_id, !url ? 'sin URL del anuncio: no se publica una tarjeta sin destino'
+        : applicationType === 'unknown' ? 'modalidad de candidatura indeterminada'
+        : 'enlace cerrado');
+      continue;
+    }
     const status = publisher ? 'published' : 'needs_review';
     const applied = await applyReview(db, opp, payload, status, 'es', reviewedBy ?? 'admin-activate', invokedBy);
     counters[status] += 1;
     items.push({ id: row.opportunity_id, job_id: row.job_id, action: status, role: derivedRole, version: applied.version,
       application_type: applicationType, application_url: url,
       verification: verification ? { result: verification.result, reason_code: verification.reason_code, valid_until: verification.valid_until ?? null } : null,
-      reason: publisher ? null
-        : !url ? 'sin URL del anuncio: no se publica una tarjeta sin destino'
-        : applicationType === 'unknown' ? 'modalidad de candidatura indeterminada'
-        : verification?.status_reason ?? 'sin verificación' });
+      reason: publisher ? null : verification?.status_reason ?? 'sin verificación' });
   }
   // Retirada en bloque de lo descartado (solo en ejecución real). Una escritura por motivo;
   // guarda `editorial_status='draft'` para no pisar lo que una persona movió entretanto.
@@ -11632,7 +11663,21 @@ function spanishBodyGate(description, includeBilingual = false) {
   const langES = (hayES.match(LANG_ES) || []).length >= 3;
   const enRequired = Boolean(hayES.match(LANG_EN)) && Boolean(hayES.match(LANG_EN_REQ));
   const enRequiresSpanish = !langES && !portuguese && LANG_ES_DEMANDED.test(hayES);
-  return { ok: !portuguese && (includeBilingual || (langES && !enRequired) || enRequiresSpanish), portuguese, langES, enRequired, enRequiresSpanish };
+  // El opt-in bilingüe significa español O inglés, no «cualquier idioma»: un anuncio alemán o
+  // francés no entra por el filtro de la alumna (decisión del propietario, 2026-11-18).
+  const english = includeBilingual && englishBodyGate(description).ok;
+  return { ok: !portuguese && ((langES && !enRequired) || enRequiresSpanish || english), portuguese, langES, enRequired, enRequiresSpanish, english };
+}
+
+// Anuncio en inglés (decisión del propietario, 2026-11-18: se acepta en todos los mercados y la
+// alumna lo separa con `include_bilingual`). Se exigen 5+ lexemas corrientes del inglés y nada de
+// portugués: una palabra suelta («team», «sales») también aparece en anuncios en español y no basta.
+const ENGLISH_WORDS = /\b(?:the|and|with|for|you|your|our|we|are|will|have|has|this|that|from|who|what|their|they|can|sales|team|customers?|clients?|experience|company|position|role|responsibilities|requirements|salary|remote|business|opportunity|work|apply|years)\b/g;
+function englishBodyGate(description) {
+  const hay = fold(description);
+  const portuguese = PORTUGUESE_TEXT.test(hay);
+  const words = (hay.match(ENGLISH_WORDS) || []).length;
+  return { ok: !portuguese && words >= 5, words, portuguese };
 }
 
 // España EXPLÍCITA (ciudad o país), sin contar «remoto»/«europa», que no son un lugar.
@@ -11726,8 +11771,19 @@ function classifyRole(p, text) {
 // Menos de esto no es «texto que podamos leer»: 40 caracteres es un titular, no un anuncio.
 const MIN_BODY_CHARS = 40;
 
+// Remoto accesible desde España (decisión del propietario, 2026-11-18): una remota de una empresa
+// que contrata en Europa/EMEA/global no se descarta por no escribir «España». Se sigue rechazando
+// cuando la ubicación nombra otro país o cuando el anuncio limita el remoto a otro mercado.
+const REMOTE_ACCESS = /\b(?:remoto|remota|remote|teletrabajo|home ?office|a distancia|emea|europa|europe|worldwide|anywhere|global)\b/;
+const REMOTE_ONLY_ELSEWHERE = /\b(?:remote (?:us|usa|uk|canada|latam|india)|us only|uk only|only us|only in (?:the )?(?:us|usa|uk|canada|latam)|solo (?:en )?(?:ee\.? ?uu\.?|usa|uk|latam|mexico|colombia|argentina|brasil|brazil))\b/;
+function remoteAccessibleFromSpain(p) {
+  const hay = fold(`${p.title ?? ''} ${p.location ?? ''}`);
+  if (!REMOTE_ACCESS.test(hay) || REMOTE_ONLY_ELSEWHERE.test(hay)) return false;
+  return !foreignCountry(p) && !nonSpain(p);
+}
+
 function marketRejects(p, market) {
-  if (market === 'ES') return Boolean(foreignCountry(p) || nonSpain(p) || !spainSignal(p));
+  if (market === 'ES') return Boolean(foreignCountry(p) || nonSpain(p) || (!spainSignal(p) && !remoteAccessibleFromSpain(p)));
   if (market === 'any') return false;
   // Mercados sin cobertura propia del motor: se exponen solo los que traen país explícito.
   const hay = fold(`${p.title ?? ''} ${p.location ?? ''} ${p.description ?? ''}`);
