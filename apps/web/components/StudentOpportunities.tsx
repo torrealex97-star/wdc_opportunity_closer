@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Clock3, Compass, FileText, Globe2, GraduationCap, HeartHandshake, Languages, Laptop, LoaderCircle, MapPin, MessageSquare, Search, ShieldAlert, TrendingUp, Users, X } from 'lucide-react';
+import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Clock3, Compass, FileText, Globe2, GraduationCap, HeartHandshake, Inbox, Languages, Laptop, LoaderCircle, MapPin, MessageSquare, PhoneOutgoing, Search, ShieldAlert, TrendingUp, Users, X } from 'lucide-react';
 import OpportunityRadar from './OpportunityRadar';
 import StudentPractice from './StudentPractice';
 import StudentProgress from './StudentProgress';
@@ -22,12 +22,16 @@ type Query = components['schemas']['OpportunityQuery'];
 type Results = components['schemas']['OpportunityList'] & { degraded?: 'motor' };
 // El inglés se ofrece por defecto (decisión del propietario, 2026-11-18): la casilla de abajo lo
 // apaga si la alumna solo quiere castellano, así que el filtro sigue siendo suyo y está a la vista.
-const defaults: Query = { role: null, market: 'any', days: 10, include_bilingual: true, starred_only: false, include_extra_roles: false };
+const defaults: Query = { role: null, market: 'any', days: 10, include_bilingual: true, starred_only: false, include_extra_roles: false, modality: 'any', sales_motion: 'any' };
 // Una sola lista de familias y etiquetas (lib/vocabulary): el desplegable y la frase no pueden
 // decir cosas distintas de lo que filtra el motor.
 const ROLES = ROLE_EVAL_ORDER;
 const label = (role: NonNullable<Query['role']>): string => `las del perfil ${ROLE_LABELS[role]}`;
 const MARKETS = ['any', 'ES', 'EU', 'LATAM', 'US'] as const;
+// Idioma, modalidad y prospección se eligen por separado: la modalidad la declara el anuncio y la
+// prospección solo consta cuando el anuncio la menciona, así que ninguna se supone.
+const MODALITIES = ['any', 'remote', 'hybrid', 'onsite'] as const;
+const MOTIONS = ['any', 'outbound', 'inbound'] as const;
 // La alumna conserva su contexto: los filtros aplicados viven en la URL (compartible/recargable),
 // validados contra las opciones reales del desplegable para no inventar estados.
 function queryFromUrl(): Query | null {
@@ -37,6 +41,8 @@ function queryFromUrl(): Query | null {
   const role = params.get('role') ?? '';
   const market = params.get('market') ?? 'any';
   const days = Number(params.get('days'));
+  const modality = params.get('modality') ?? 'any';
+  const motion = params.get('motion') ?? 'any';
   return {
     role: ROLES.includes(role as typeof ROLES[number]) ? role as Query['role'] : null,
     market: MARKETS.includes(market as typeof MARKETS[number]) ? market as Query['market'] : 'any',
@@ -44,6 +50,8 @@ function queryFromUrl(): Query | null {
     include_bilingual: params.get('bilingual') !== '0',
     starred_only: false,
     include_extra_roles: true,
+    modality: MODALITIES.includes(modality as (typeof MODALITIES)[number]) ? modality as Query['modality'] : 'any',
+    sales_motion: MOTIONS.includes(motion as (typeof MOTIONS)[number]) ? motion as Query['sales_motion'] : 'any',
   };
 }
 function urlFromQuery(query: Query): string {
@@ -52,6 +60,8 @@ function urlFromQuery(query: Query): string {
   if (query.market !== 'any') params.set('market', query.market);
   if (query.days !== 10) params.set('days', String(query.days));
   params.set('bilingual', query.include_bilingual ? '1' : '0');
+  if (query.modality !== 'any') params.set('modality', query.modality);
+  if (query.sales_motion !== 'any') params.set('motion', query.sales_motion);
   const qs = params.toString();
   return qs ? `?${qs}` : window.location.pathname;
 }
@@ -85,6 +95,8 @@ const modalityBadge = (modality: string) => {
   return { text: 'Sin indicar', tone: '' };
 };
 const rank = (offer: Offer) => offer.is_selected && offer.excellence_rank && offer.excellence_rank <= 3 ? String(offer.excellence_rank) : '';
+// Prospección: la palabra que se enseña es la del anuncio, no una clasificación nuestra.
+const motionText = (motion: Offer['sales_motion']) => motion === 'outbound' ? 'Prospección en frío' : motion === 'inbound' ? 'Leads entrantes' : '';
 // El titular de la tarjeta es el PUESTO que anuncia la empresa, no la familia de rol:
 // 'Teleoperador comercial (H/M/X)' dice qué buscan; 'Setter' solo dice cómo lo clasificamos.
 const jobTitle = (offer: Offer) => (offer.original_title ?? '').trim() || 'Puesto no especificado en el anuncio';
@@ -144,6 +156,7 @@ function OfferCard({ offer, starred, saving, onStar, onOpen, compact = false }: 
     <div className="opp-badges">
       {showLocation && <span className="opp-badge"><MapPin size={12} aria-hidden="true" />{offer.location}</span>}
       {showModality && <span className={`opp-badge ${modality.tone}`}><Laptop size={12} aria-hidden="true" />{modality.text}</span>}
+      {offer.sales_motion && <span className="opp-badge">{offer.sales_motion === 'outbound' ? <PhoneOutgoing size={12} aria-hidden="true" /> : <Inbox size={12} aria-hidden="true" />}{motionText(offer.sales_motion)}</span>}
       <span className={`opp-freshness ${freshTone(offer.published_at)}`}><Clock3 size={12} aria-hidden="true" />{freshness(offer.published_at)}</span>
     </div>
     {offer.caution && <p className="offer-caution" role="note"><ShieldAlert size={13} /><span><strong>{offer.caution.title}.</strong> {offer.caution.flags[0]} <button type="button" className="link-button" onClick={onOpen}>Ver por qué</button></span></p>}
@@ -298,8 +311,12 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
           </form>
           {phraseNote && <p className="phrase-note" role="status">{phraseNote}</p>}
           <form onSubmit={e => { e.preventDefault(); setApplied({ ...query }); history.replaceState(null, '', urlFromQuery(query)); setPhraseNote(''); }}>
-          <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option>{ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label><button className="primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}Ver oportunidades</button></div>
-          <div className="student-preferences"><span>En español · remoto o híbrido</span><label className="check-label"><input type="checkbox" checked={query.include_bilingual} onChange={e => setQuery({ ...query, include_bilingual: e.target.checked })} />También oportunidades bilingües español / inglés</label></div>
+          <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option>{ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label></div>
+          <div className="student-preferences">
+            <label className="pref-field"><span>Modalidad</span><select value={query.modality} onChange={e => setQuery({ ...query, modality: e.target.value as Query['modality'] })}><option value="any">Cualquier modalidad</option><option value="remote">Remoto</option><option value="hybrid">Híbrido</option><option value="onsite">Presencial</option></select></label>
+            <label className="pref-field"><span>Prospección</span><select value={query.sales_motion} onChange={e => setQuery({ ...query, sales_motion: e.target.value as Query['sales_motion'] })}><option value="any">Cualquiera</option><option value="outbound">En frío (outbound)</option><option value="inbound">Leads entrantes (inbound)</option></select><small>Solo cuando el anuncio lo menciona.</small></label>
+            <label className="check-label"><input type="checkbox" checked={query.include_bilingual} onChange={e => setQuery({ ...query, include_bilingual: e.target.checked })} />También oportunidades bilingües español / inglés</label>
+            <button className="primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}Ver oportunidades</button></div>
           </form>
         </div>}
         {error && <p className="alert error" role="alert">{error}</p>}
@@ -307,7 +324,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         {!saved && <OpportunityRadar offers={[...visible, ...(wider ?? [])]} busy={busy} role={applied.role ?? null} onRole={next => applyQuery({ ...applied, role: next })} />}
         <section className="student-results" aria-busy={busy}><div className="results-heading"><h2>{saved ? 'Tus oportunidades guardadas' : 'Oportunidades para explorar'} <span>{busy ? '…' : visible.length + (wider?.length ?? 0)}</span></h2><span className="student-freshness">Actualización diaria</span></div>
           {!saved && !busy && selectionTotal > 0 && <p className="selection-note">Selección del día: las {selectionTotal} que mejor cumplen los requisitos van primero. Puedes explorar el resto del catálogo debajo.</p>}
-          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <div key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}><OfferCard offer={offer}
+          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : applied.modality !== 'any' || applied.sales_motion !== 'any' ? 'Solo enseñamos las que declaran lo que pides. Quita la modalidad o la prospección para ver el catálogo completo, o elige otro perfil o mercado.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <div key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}><OfferCard offer={offer}
               starred={isStarred(offer)} saving={saving === offer.id}
               onStar={() => void star(offer)} onOpen={() => setDetail(offer)} /></div>)}</div>}
           {!saved && !busy && wider?.length ? <div className="wider-bucket">
@@ -322,6 +339,6 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         </>}
       </main>
     </div>
-    <dialog ref={dialog} onClose={() => setDetail(null)} onClick={e => { if (e.target === dialog.current) dialog.current.close(); }}>{detail && <div className="detail"><div className="detail-top"><span className="eyebrow">TU SIGUIENTE PASO</span><button className="icon-button" aria-label="Cerrar oportunidad" onClick={() => dialog.current?.close()}><X size={20} /></button></div><p className="job-company">{detail.company}</p><h2>{jobTitle(detail)}</h2><p className="role-chip detail-role">{detail.role_label}</p>{detail.caution && <div className="offer-caution is-detail" role="note"><ShieldAlert size={16} /><div><strong>{detail.caution.title}</strong><ul>{detail.caution.flags.map(flag => <li key={flag}>{flag}</li>)}</ul><p>{detail.caution.note}</p></div></div>}<PayBlock offer={detail} /><p>{detail.modality} · {detail.location} · {detail.language}</p><h3>Lo que cuenta la empresa</h3><div className="description">{detail.description}</div><div className="provenance"><span>Publicada: {date(detail.published_at)}</span><span>Publicación de {detail.source_name}. Confirma que el proceso siga abierto antes de enviar tu candidatura.</span></div><div className="detail-actions"><a className="primary" href={applyTo(detail)} target="_blank" rel="noopener noreferrer">Aplicar en {hostOf(applyTo(detail))}<ArrowUpRight size={16} /></a>{detail.company_url && <a className="link-button" href={detail.company_url} target="_blank" rel="noopener noreferrer">Web publicada en el anuncio ({hostOf(detail.company_url)})<ArrowUpRight size={14} /></a>}<button disabled={saving === detail.id} onClick={() => void star(detail)}><Bookmark size={16} />{isStarred(detail) ? 'Quitar de guardadas' : 'Guardar oportunidad'}</button></div>{(detail.contact?.emails?.length || detail.contact?.phones?.length) ? <div className="contact-published"><h3>Contacto publicado en el anuncio</h3>{!!detail.contact?.emails?.length && <p>Email: {detail.contact.emails.join(' · ')}</p>}{!!detail.contact?.phones?.length && <p>Teléfono: {detail.contact.phones.join(' · ')}</p>}<p className="inline-hint">Tal como lo publica la empresa en el anuncio. WDC no lo completa ni lo verifica.</p></div> : null}<p className="inline-hint">Abrir el enlace no envía tu candidatura: se envía en el portal o en la web de la empresa.</p></div>}</dialog>
+    <dialog ref={dialog} onClose={() => setDetail(null)} onClick={e => { if (e.target === dialog.current) dialog.current.close(); }}>{detail && <div className="detail"><div className="detail-top"><span className="eyebrow">TU SIGUIENTE PASO</span><button className="icon-button" aria-label="Cerrar oportunidad" onClick={() => dialog.current?.close()}><X size={20} /></button></div><p className="job-company">{detail.company}</p><h2>{jobTitle(detail)}</h2><p className="role-chip detail-role">{detail.role_label}</p>{detail.caution && <div className="offer-caution is-detail" role="note"><ShieldAlert size={16} /><div><strong>{detail.caution.title}</strong><ul>{detail.caution.flags.map(flag => <li key={flag}>{flag}</li>)}</ul><p>{detail.caution.note}</p></div></div>}<PayBlock offer={detail} /><p>{detail.modality} · {detail.location} · {detail.language}{detail.sales_motion ? ` · ${motionText(detail.sales_motion)}` : ''}</p><h3>Lo que cuenta la empresa</h3><div className="description">{detail.description}</div><div className="provenance"><span>Publicada: {date(detail.published_at)}</span><span>Publicación de {detail.source_name}. Confirma que el proceso siga abierto antes de enviar tu candidatura.</span></div><div className="detail-actions"><a className="primary" href={applyTo(detail)} target="_blank" rel="noopener noreferrer">Aplicar en {hostOf(applyTo(detail))}<ArrowUpRight size={16} /></a>{detail.company_url && <a className="link-button" href={detail.company_url} target="_blank" rel="noopener noreferrer">Web publicada en el anuncio ({hostOf(detail.company_url)})<ArrowUpRight size={14} /></a>}<button disabled={saving === detail.id} onClick={() => void star(detail)}><Bookmark size={16} />{isStarred(detail) ? 'Quitar de guardadas' : 'Guardar oportunidad'}</button></div>{(detail.contact?.emails?.length || detail.contact?.phones?.length) ? <div className="contact-published"><h3>Contacto publicado en el anuncio</h3>{!!detail.contact?.emails?.length && <p>Email: {detail.contact.emails.join(' · ')}</p>}{!!detail.contact?.phones?.length && <p>Teléfono: {detail.contact.phones.join(' · ')}</p>}<p className="inline-hint">Tal como lo publica la empresa en el anuncio. WDC no lo completa ni lo verifica.</p></div> : null}<p className="inline-hint">Abrir el enlace no envía tu candidatura: se envía en el portal o en la web de la empresa.</p></div>}</dialog>
   </div>;
 }

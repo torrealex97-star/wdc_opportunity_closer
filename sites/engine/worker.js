@@ -1041,7 +1041,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, surfaceLimits, serveSurfaceRanked, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, surfaceLimits, serveSurfaceRanked, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf, salesMotionOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -1651,6 +1651,29 @@ function modalityOf(text, location) {
   if (REMOTE_WORDS.test(hay) || REMOTE_LOCATION.test(fold(locationText(location) ?? ''))) return 'Remoto';
   if (ONSITE_WORDS.test(hay)) return 'Presencial';
   return 'Modalidad no indicada';
+}
+// Lo que el filtro llama `remote|hybrid|onsite` → lo que la ficha declara. «Modalidad no indicada»
+// no entra en ninguna: pedir presencial no puede traer una oferta que no dice dónde se trabaja.
+const MODALITY_FILTER_KEYS = { Remoto: 'remote', 'Híbrido': 'hybrid', Presencial: 'onsite' };
+// Prospección: ninguna fuente publica un campo «outbound». Se declara solo cuando el anuncio lo
+// dice, y la negación cuenta al contrario («sin llamadas en frío» no es prospección en frío).
+const OUTBOUND_WORDS = /\b(?:outbound|cold ?call(?:s|ing)?|llamada fria|llamadas frias|prospeccion en frio|prospeccion telefonica|puerta fria)\b/g;
+const INBOUND_WORDS = /\b(?:inbound|leads? entrantes?|incoming leads|leads? inbound|leads? proporcionados)\b/g;
+// La negación vale dentro de la misma cláusula: en «sin llamadas en frío, leads entrantes» el
+// «sin» no niega lo entrante (por eso la coma corta), y «no hay llamadas en frío» sí lo niega.
+const NEGATED_BEFORE = /\b(?:sin|no|nunca|ni|without|not)\b[^,.;:\n]{0,25}$/;
+function mentionsUnnegated(text, pattern) {
+  for (const match of text.matchAll(pattern)) {
+    const before = text.slice(Math.max(0, match.index - 40), match.index);
+    if (!NEGATED_BEFORE.test(before)) return true;
+  }
+  return false;
+}
+function salesMotionOf(text) {
+  const hay = fold(text ?? '');
+  if (mentionsUnnegated(hay, OUTBOUND_WORDS)) return 'outbound';
+  if (mentionsUnnegated(hay, INBOUND_WORDS)) return 'inbound';
+  return null;
 }
 async function checkTarget(url, title, company) {
   let status = null, body = null;
@@ -11961,7 +11984,7 @@ function exclusionReason(payload, { market = 'ES', includeBilingual = false } = 
   return null;
 }
 
-async function studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles, editorialOnly = true }) {
+async function studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles, editorialOnly = true, modalityFilter = 'any', motionFilter = 'any' }) {
   const db = env.DB;
 
   // La ventana de la vista de alumna ya no es «las 800 entradas de catálogo más recientes»:
@@ -12060,6 +12083,11 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
     }
     const workText = fold(`${p.title ?? ''} ${p.location ?? ''} ${description.slice(0, 4000)}`);
     const modality = modalityOf(workText, p.location);
+    // Filtros separados del idioma: modalidad declarada y prospección declarada. Se aplican antes
+    // del ranking para que la selección del día y su recuento midan la misma lista que se sirve.
+    if (modalityFilter !== 'any' && MODALITY_FILTER_KEYS[modality] !== modalityFilter) continue;
+    const motion = salesMotionOf(fold(`${p.title ?? ''} ${description}`));
+    if (motionFilter !== 'any' && motion !== motionFilter) continue;
     // La frescura se mide desde la FECHA del anuncio, no desde el reloj del bucle: con
     // `Date.now() - ages * día` dos ofertas del mismo anuncio diferían por milisegundos según
     // el orden en que se parseaban, y ese salto adelantaba a un teleoperador sobre un closer
@@ -12076,6 +12104,7 @@ async function studentSurface(env, { role, market, days, includeBilingual, starr
       compensation: pay,
       compensation_note: note,
       modality,
+      sales_motion: motion,
       location: locationLabel(p.location),
       // Etiqueta explícita: quien lee la tarjeta sabe que el anuncio está en inglés y que pide español.
       language: langES ? 'Anuncio en español' : (language.enRequiresSpanish ? 'Anuncio en inglés · exige español' : 'Anuncio original en inglés'),
@@ -12150,7 +12179,11 @@ async function handleStudentSearch(request, env) {
   // El default del contrato es false (OpportunityQuery.include_extra_roles): sin la
   // clave, el comportamiento es el de la alumna, no el del operador.
   const includeExtraRoles = body?.include_extra_roles === true;
-  const { ranked, total, selectionTotal } = await studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles });
+  // Un valor fuera de la lista cae al defecto (regla de presupuesto del motor): no se convierte
+  // en «sin resultados» ni en un filtro inventado.
+  const modalityFilter = ['remote', 'hybrid', 'onsite'].includes(body?.modality) ? body.modality : 'any';
+  const motionFilter = ['outbound', 'inbound'].includes(body?.sales_motion) ? body.sales_motion : 'any';
+  const { ranked, total, selectionTotal } = await studentSurface(env, { role, market, days, includeBilingual, starredOnly, includeExtraRoles, modalityFilter, motionFilter });
   // Se sirve el mejor tramo con tope por fuente; `total` declara cuántas pasaron las puertas
   // (no cuántas se devuelven) y `truncated` que la lista va recortada.
   const { items, truncated } = serveSurfaceRanked(ranked, surfaceLimits(env));

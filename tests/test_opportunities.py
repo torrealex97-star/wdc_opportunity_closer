@@ -184,3 +184,57 @@ def test_variantes_con_barra_e_inmobiliarias_pliegan_en_account_executive():
     assert professional_role('Asesor/a de Admisiones y Ventas', 'venta consultiva y cierre de matrículas') == 'closer'
     # Ambiguos honestos sin familia (no se inventa):
     assert professional_role('Asesor/a', 'gimnasio y fitness') is None
+
+
+def test_modality_is_declared_and_filterable(api):
+    """El modo local publicaba «Remoto» toda oferta que no dijera «híbrido»: una invención que
+    además escondía las presenciales. Ahora se declara lo que dice el anuncio y el filtro es suyo."""
+    from career.pipeline import normalize
+    client, _ = api
+
+    class Source:
+        name, provider, code = 'Fuente sin modalidad', 'fixture', 'custom'
+
+        def normalize(self, row):
+            item = normalize('himalayas', row)
+            item['work_mode'] = ''  # la fuente no la declara: decide el texto del anuncio
+            return item
+
+    for identity, text in [
+        ('presencial', 'Buscamos closer para nuestra oficina de Madrid. Puesto presencial. Jornada completa.'),
+        ('remoto', 'Buscamos closer para nuestro equipo. Trabajo 100% remoto desde cualquier ciudad. Jornada completa.'),
+        ('sin-indicar', 'Buscamos closer para nuestro equipo de ventas. Jornada completa, salario y comisiones.'),
+    ]:
+        ingest(Candidate(identity, {'guid': f'https://example.com/{identity}', 'title': 'Closer de ventas',
+                      'companyName': identity, 'description': text, 'pubDate': now(),
+                      'locationRestrictions': ['Spain']}), Source(),
+               SearchQuery(role='digital_sales', days=10, work_mode='any'), None, 'org-test')
+
+    offers = {o['source_url'].rsplit('/', 1)[-1]: o for o in client.post('/v1/opportunities/search', json={}).json()['items']}
+    assert offers['presencial']['modality'] == 'Presencial'
+    assert offers['remoto']['modality'] == 'Remoto'
+    assert offers['sin-indicar']['modality'] == 'Modalidad no indicada'
+
+    # Pedir una modalidad no trae lo que no la declara.
+    assert client.post('/v1/opportunities/search', json={'modality': 'onsite'}).json()['items'][0]['modality'] == 'Presencial'
+    assert client.post('/v1/opportunities/search', json={'modality': 'onsite'}).json()['total'] == 1
+    assert client.post('/v1/opportunities/search', json={'modality': 'remote'}).json()['total'] == 1
+    assert client.post('/v1/opportunities/search', json={'modality': 'hybrid'}).json()['total'] == 0
+
+
+def test_sales_motion_is_declared_and_negation_counts(api):
+    """`outbound`/`inbound` no son campos de ninguna fuente: solo constan cuando el anuncio los
+    menciona, y «sin llamadas en frío» es lo contrario de prospección en frío."""
+    client, _ = api
+    add('Buscamos closer para prospección en frío y llamadas en frío. Jornada completa. Salario base.', identity='frio')
+    add('Buscamos closer para nuestro equipo. No hay llamadas en frío: recibirás leads entrantes cualificados. Jornada completa y salario.', identity='entrantes')
+    add('Buscamos closer para nuestro equipo. Jornada completa, salario y comisiones.', identity='sin-mencion')
+
+    offers = {o['source_url'].rsplit('/', 1)[-1]: o for o in client.post('/v1/opportunities/search', json={}).json()['items']}
+    assert offers['frio']['sales_motion'] == 'outbound'
+    assert offers['entrantes']['sales_motion'] == 'inbound'
+    assert offers['sin-mencion']['sales_motion'] is None
+
+    outbound = client.post('/v1/opportunities/search', json={'sales_motion': 'outbound'}).json()
+    assert [(o['source_url'].rsplit('/', 1)[-1], o['sales_motion']) for o in outbound['items']] == [('frio', 'outbound')]
+    assert client.post('/v1/opportunities/search', json={'sales_motion': 'inbound'}).json()['total'] == 1

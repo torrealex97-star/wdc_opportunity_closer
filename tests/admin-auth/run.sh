@@ -95,6 +95,8 @@ node --experimental-strip-types tests/engine/catalog.mjs
 # Forma de escritura del catálogo (índices incluidos): coste medido por candidato, índices de lectura intactos y migración reanudable.
 node --experimental-strip-types tests/engine/writeshape.mjs
 node --experimental-strip-types tests/engine/latam.mjs
+# Filtros separados de la vista de alumna: modalidad (incluida presencial) y prospección declarada.
+node --experimental-strip-types tests/engine/filters.mjs
 node --experimental-strip-types tests/engine/location.mjs
 node --experimental-strip-types tests/engine/roles.mjs
 node --experimental-strip-types tests/engine/activationquota.mjs

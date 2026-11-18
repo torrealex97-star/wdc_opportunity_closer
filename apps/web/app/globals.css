@@ -785,3 +785,15 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 @media(max-width:700px){.practice-card-top{flex-wrap:wrap}.practice-rooms{display:grid;grid-template-columns:1fr}}
 /* Los dos nombres de sala son largos: a 12 px caben en la barra sin partirse. */
 .student-shell .sidebar .nav{font-size:12px;gap:10px}
+
+/* --- Filtros separados de la superficie de alumna (2026-11-18) ---
+   Idioma, modalidad y prospección son ejes distintos: la línea «En español · remoto o híbrido»
+   los juntaba en una frase y afirmaba una modalidad que el catálogo no siempre cumple. La
+   modalidad la declara el anuncio; la prospección solo consta cuando el anuncio la menciona. */
+.student-preferences{align-items:flex-end;justify-content:flex-start;gap:16px 28px}
+.student-preferences .pref-field{min-width:190px;flex:0 1 220px}
+.student-preferences .pref-field small{font-weight:400;line-height:1.45;color:var(--secondary)}
+.student-preferences .check-label{flex-direction:row;align-items:center;align-self:center;gap:8px;max-width:320px}
+@media(max-width:700px){.student-preferences .pref-field{flex:1 1 100%;min-width:0}}
+.student-preferences .primary{margin-left:auto}
+@media(max-width:700px){.student-preferences .primary{width:100%;margin-left:0}}

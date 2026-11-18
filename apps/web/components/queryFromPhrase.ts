@@ -39,6 +39,19 @@ const WINDOWS: Array<{ days: number; label: string; test: RegExp }> = [
   { days: 10, label: 'últimos 10 días', test: /\b10 dias\b|\bdiez dias\b/ },
 ];
 
+const MODALITIES: Array<{ modality: Query['modality']; label: string; test: RegExp }> = [
+  { modality: 'onsite', label: 'presencial', test: /\bpresencial(?:es)?\b/ },
+  { modality: 'hybrid', label: 'híbrido', test: /\bhibrid[oa]s?\b/ },
+  { modality: 'remote', label: 'remoto', test: /\bremot[oa]s?\b|\bteletrabajo\b/ },
+];
+
+// La prospección se filtra por lo que el anuncio menciona. «Llamadas frías» se queda como perfil
+// (cold caller): es una familia de rol real y la frase no debe activar dos filtros a la vez.
+const MOTIONS: Array<{ motion: Query['sales_motion']; label: string; test: RegExp }> = [
+  { motion: 'outbound', label: 'prospección en frío (outbound)', test: /\boutbound\b|\bprospeccion en frio\b/ },
+  { motion: 'inbound', label: 'leads entrantes (inbound)', test: /\binbound\b|\bleads? entrantes?\b/ },
+];
+
 export function parsePhrase(text: string, base: Query): PhraseResult {
   const value = norm(text).trim();
   const matched: string[] = [];
@@ -55,7 +68,11 @@ export function parsePhrase(text: string, base: Query): PhraseResult {
   if (window) { query.days = window.days; matched.push(window.label); }
   if (/\bbilingues?\b|\bingles\b|\benglish\b/.test(value)) { query.include_bilingual = true; matched.push('también bilingües'); }
   else if (/\bsolo (en )?espanol\b/.test(value)) { query.include_bilingual = false; matched.push('solo en español'); }
-  if (/\bremot[oa]s?\b|\bpresencial(?:es)?\b|\bhibrid[oa]s?\b/.test(value)) unsupported.push('la modalidad: cada oferta ya indica si es remota, híbrida o presencial');
+  // Modalidad y prospección son filtros propios (no una etiqueta de la oferta): la frase los aplica.
+  const modality = MODALITIES.find(candidate => candidate.test.test(value));
+  if (modality) { query.modality = modality.modality; matched.push(modality.label); }
+  const motion = MOTIONS.find(candidate => candidate.test.test(value));
+  if (motion) { query.sales_motion = motion.motion; matched.push(motion.label); }
   if (/\bayer\b|\bmes\b|\b30 dias\b/.test(value)) unsupported.push('ese periodo: el catálogo filtra por 24 horas, 3, 7 o 10 días');
   return { query, matched, unsupported, saved };
 }

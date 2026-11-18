@@ -71,6 +71,49 @@ def professional_role(title, description):
     return None
 
 
+# Modalidad declarada, no supuesta. Antes, todo anuncio sin «híbrido» se publicaba como «Remoto»:
+# una invención que además escondía las presenciales. Las palabras son las mismas que usa el motor
+# (worker.js, `modalityOf`) para que el modo local y el dominio digan lo mismo de la misma oferta.
+HYBRID_WORDS = re.compile(r'\b(?:hybrid|hibrid[oa]s?|semi[ -]?presencial|mixt[oa])\b')
+REMOTE_WORDS = re.compile(r'\b(?:remote|remot[oa]s?|teletrabajo|home[ -]?office|work from home|en remoto|100[ %]*remoto)\b')
+ONSITE_WORDS = re.compile(r'\b(?:presencial(?:es)?|on[ -]?site|in[ -]?office|en oficina|acude a la oficina)\b')
+
+
+def declared_modality(description, work_mode=''):
+    hay = fold(f'{work_mode or ""} {description or ""}')
+    if HYBRID_WORDS.search(hay):
+        return 'Híbrido'
+    if REMOTE_WORDS.search(hay):
+        return 'Remoto'
+    if ONSITE_WORDS.search(hay):
+        return 'Presencial'
+    return 'Modalidad no indicada'
+
+
+# Prospección: no es un campo que ninguna fuente publique. Se declara solo cuando el anuncio lo
+# dice («llamadas en frío», «outbound», «leads entrantes») y la negación cuenta al contrario
+# («sin llamadas en frío» no es una oferta de prospección en frío).
+OUTBOUND_WORDS = re.compile(r'\b(?:outbound|cold[ -]?call(?:s|ing)?|llamada fria|llamadas frias|prospeccion en frio|prospeccion telefonica|puerta fria)\b')
+INBOUND_WORDS = re.compile(r'\b(?:inbound|leads? entrantes?|incoming leads|leads? inbound|leads? proporcionados)\b')
+# La negación vale dentro de la misma cláusula: en «sin llamadas en frío, leads entrantes» el
+# «sin» no niega lo entrante (la coma corta), y «no hay llamadas en frío» sí lo niega.
+NEGATION = re.compile(r'\b(?:sin|no|nunca|ni|without|not)\b[^,.;:\n]{0,25}$')
+
+
+def sales_motion(text):
+    hay = fold(text or '')
+    def mentioned(pattern):
+        for match in pattern.finditer(hay):
+            if not NEGATION.search(hay[max(0, match.start() - 40):match.start()]):
+                return True
+        return False
+    if mentioned(OUTBOUND_WORDS):
+        return 'outbound'
+    if mentioned(INBOUND_WORDS):
+        return 'inbound'
+    return None
+
+
 def explicitly_closed(title, description):
     """Only standalone affirmative status markers, not sales-closing duties."""
     text = fold(title + '\n' + description)

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from .catalog import collection_query
 from .db import connect, now, org
 from .pipeline import match
-from .presentation import fold, language_evidence, professional_role
+from .presentation import declared_modality, fold, language_evidence, professional_role, sales_motion
 from .sources import source_infos
 
 
@@ -42,6 +42,8 @@ ROLE_FILTER_MAP = {'closer': {'closer'}, 'setter': {'setter'}, 'cold_caller': {'
 TOP_TARGET = 20
 ROLE_PRIORITY = {'closer': 0, 'setter': 1, 'cold_caller': 2}
 EXTRA_ROLES = {'account_executive', 'management', 'sdr'}
+# Nombre del filtro → lo que declara la ficha. «Modalidad no indicada» no es ninguna de las tres.
+MODALITY_KEYS = {'Remoto': 'remote', 'Híbrido': 'hybrid', 'Presencial': 'onsite'}
 COUNTRIES = {'united states': 'Estados Unidos', 'usa': 'Estados Unidos', 'spain': 'España',
              'mexico': 'México', 'germany': 'Alemania', 'france': 'Francia', 'italy': 'Italia',
              'united kingdom': 'Reino Unido', 'europe': 'Europa', 'worldwide': 'Todo el mundo',
@@ -55,6 +57,10 @@ class OpportunityQuery(BaseModel):
     include_bilingual: bool = False
     starred_only: bool = False
     include_extra_roles: bool = False
+    # Filtros separados: la modalidad y la prospección son ejes distintos del idioma. `any` es
+    # «no filtres»; una oferta que no declara modalidad no entra en «presencial» ni en «remoto».
+    modality: Literal['any', 'remote', 'hybrid', 'onsite'] = 'any'
+    sales_motion: Literal['any', 'outbound', 'inbound'] = 'any'
 
 
 class Contact(BaseModel):
@@ -72,6 +78,8 @@ class Opportunity(BaseModel):
     compensation: str
     compensation_note: str
     modality: str
+    # Prospección declarada por el anuncio; `None` cuando no lo dice (no se supone inbound).
+    sales_motion: Literal['outbound', 'inbound'] | None = None
     location: str
     language: str
     experience: str
@@ -165,7 +173,10 @@ def _search_result(body: OpportunityQuery, organization=None):
     consulta por defecto, para que sus contadores midan exactamente las mismas puertas
     que verá la alumna. Nunca se consultan proveedores ni IA: solo BD local."""
     organization = org() if organization is None else organization
-    query = collection_query().model_copy(update={'market': body.market, 'days': body.days})
+    # La vista no vuelve a exigir remoto/híbrido: eso es una preferencia de búsqueda, no una puerta
+    # del catálogo. Con `remote_hybrid` aquí, una presencial aprobada no llegaba nunca a la alumna
+    # aunque el anuncio la declarara; ahora se sirve con su modalidad y ella filtra por ella.
+    query = collection_query().model_copy(update={'market': body.market, 'days': body.days, 'work_mode': 'any'})
     names = {s['code']: s['name'] for s in source_infos(organization)}
     with connect() as db:
         rows = db.execute('''SELECT j.id,j.starred,p.payload,p.source,c.expires_at
@@ -198,10 +209,10 @@ def _search_result(body: OpportunityQuery, organization=None):
         # Bilingual English notices stay opt-in; summaries/labels always use Spanish.
         spanish = language['spanish_text']
         details = item['description'] if spanish else ''
-        work = fold(item.get('work_mode', '') + ' ' + item['description'])
         offer = Opportunity(id=row['id'], role=role, role_label=LABELS[role], original_title=item['title'],
             company=item['company'], compensation=pay if spanish or item.get('salary_min') is not None else 'Importe no publicado en campos estructurados',
-            compensation_note=note, modality='Híbrido' if re.search(r'\b(?:hybrid|hibrid[oa])\b', work) else 'Remoto',
+            compensation_note=note, modality=declared_modality(item['description'], item.get('work_mode', '')),
+            sales_motion=sales_motion(f"{item['title']} {item['description']}"),
             location=', '.join(COUNTRIES.get(fold(place), place) for place in item['locations']) or 'Ubicación admitida por confirmar',
             language='Español e inglés requeridos' if language['english_required'] else 'Español requerido · anuncio original en inglés' if not spanish else 'Anuncio en español',
             experience=excerpt(details, r'\bexperiencia\b', 'Experiencia no especificada'),
@@ -215,6 +226,12 @@ def _search_result(body: OpportunityQuery, organization=None):
                                 ' · IA (revisar)')
             offer.description = (item['description'] +
                                  f"\n\n[Clasificación IA {llm['confidence']}: {llm['reason']}]").strip()[:40000]
+        # Se filtra por lo declarado, nunca por lo que falta: con «presencial» no aparece una
+        # oferta sin modalidad, y con «outbound» no aparece una que no lo menciona.
+        if body.modality != 'any' and MODALITY_KEYS.get(offer.modality) != body.modality:
+            continue
+        if body.sales_motion != 'any' and offer.sales_motion != body.sales_motion:
+            continue
         items.append(offer)
         # Calidad determinista para la selección: score de match() (término del perfil,
         # frescura, ubicación, señales de proceso comercial real) + compensación publicada

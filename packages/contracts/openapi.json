@@ -3406,6 +3406,21 @@
             "type": "string",
             "title": "Modality"
           },
+          "sales_motion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "outbound",
+                  "inbound"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Motion"
+          },
           "location": {
             "type": "string",
             "title": "Location"
@@ -3627,6 +3642,27 @@
             "type": "boolean",
             "title": "Include Extra Roles",
             "default": false
+          },
+          "modality": {
+            "type": "string",
+            "enum": [
+              "any",
+              "remote",
+              "hybrid",
+              "onsite"
+            ],
+            "title": "Modality",
+            "default": "any"
+          },
+          "sales_motion": {
+            "type": "string",
+            "enum": [
+              "any",
+              "outbound",
+              "inbound"
+            ],
+            "title": "Sales Motion",
+            "default": "any"
           }
         },
         "type": "object",

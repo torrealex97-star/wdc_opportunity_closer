@@ -1227,6 +1227,8 @@ export interface components {
             compensation_note: string;
             /** Modality */
             modality: string;
+            /** Sales Motion */
+            sales_motion?: ("outbound" | "inbound") | null;
             /** Location */
             location: string;
             /** Language */
@@ -1306,6 +1308,18 @@ export interface components {
              * @default false
              */
             include_extra_roles: boolean;
+            /**
+             * Modality
+             * @default any
+             * @enum {string}
+             */
+            modality: "any" | "remote" | "hybrid" | "onsite";
+            /**
+             * Sales Motion
+             * @default any
+             * @enum {string}
+             */
+            sales_motion: "any" | "outbound" | "inbound";
         };
         /** PrepareSource */
         PrepareSource: {

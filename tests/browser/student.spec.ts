@@ -177,10 +177,40 @@ test('la leyenda del radar filtra por perfil y lo no reconocido no inventa filtr
   await legend.getByRole('button', { name: /^Setter/ }).click();
   await expect.poll(() => requests.some(r => r.role === 'setter')).toBe(true);
   await expect(legend.getByRole('button', { name: /^Setter/ })).toHaveAttribute('aria-pressed', 'true');
-  // «remoto» no es un filtro del catálogo: se dice y no se toca la búsqueda.
-  const before = new URL(page.url()).search;
+  // «remoto» ya es un filtro propio: se aplica y se dice, en vez de rechazarse.
   await page.getByLabel('Pídelo en una frase').fill('algo en remoto');
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(page.getByText(/No puedo filtrar por la modalidad/)).toBeVisible();
+  await expect(page.getByText('He aplicado remoto.')).toBeVisible();
+  await expect.poll(() => requests.some(r => r.modality === 'remote')).toBe(true);
+  expect(new URL(page.url()).searchParams.get('modality')).toBe('remote');
+  // Lo que el catálogo no puede filtrar se declara y no toca la búsqueda.
+  const before = new URL(page.url()).search;
+  await page.getByLabel('Pídelo en una frase').fill('ofertas de ayer');
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await expect(page.getByText(/No puedo filtrar por ese periodo/)).toBeVisible();
   expect(new URL(page.url()).search).toBe(before);
+});
+
+test('modalidad y prospección son filtros propios y viajan a la búsqueda', async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route('**/api/backend/opportunities/search', route => {
+    bodies.push(route.request().postDataJSON());
+    return route.fulfill({ json: { items: [{ ...offer, modality: 'Presencial', sales_motion: 'outbound' }], total: 1 } });
+  });
+  await page.goto('/');
+  // El idioma ya no afirma la modalidad: cada eje se elige aparte.
+  await expect(page.getByText('En español · remoto o híbrido')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Modalidad' }).selectOption('onsite');
+  await page.getByRole('combobox', { name: 'Prospección' }).selectOption('outbound');
+  await page.getByRole('button', { name: 'Ver oportunidades', exact: true }).click();
+  await expect.poll(() => bodies.some(b => b.modality === 'onsite' && b.sales_motion === 'outbound')).toBe(true);
+  // La tarjeta dice la prospección con la palabra del anuncio, no con una clasificación nuestra.
+  await expect(page.getByText('Prospección en frío')).toBeVisible();
+  const url = new URL(page.url());
+  expect(url.searchParams.get('modality')).toBe('onsite');
+  expect(url.searchParams.get('motion')).toBe('outbound');
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Modalidad' })).toHaveValue('onsite');
+  await expect(page.getByRole('combobox', { name: 'Prospección' })).toHaveValue('outbound');
+  await expect.poll(() => bodies.filter(b => b.modality === 'onsite').length).toBeGreaterThan(1);
 });

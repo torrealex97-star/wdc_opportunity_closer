@@ -69,8 +69,8 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     // «no hay ofertas»; se sirven solas y la vista lo declara (`degraded`).
     if (engine && !upstream.ok && path.join('/') === 'opportunities/search' && request.method === 'POST') {
       try {
-        const body = JSON.parse(requestBody) as { role?: string | null; market?: string; days?: number; include_bilingual?: boolean; starred_only?: boolean };
-        const extra = await externalForStudent({ role: body.role ?? null, market: body.market ?? 'any', days: Number(body.days) || 10, include_bilingual: Boolean(body.include_bilingual), starred_only: Boolean(body.starred_only) });
+        const body = JSON.parse(requestBody) as { role?: string | null; market?: string; days?: number; include_bilingual?: boolean; starred_only?: boolean; modality?: 'any' | 'remote' | 'hybrid' | 'onsite'; sales_motion?: 'any' | 'outbound' | 'inbound' };
+        const extra = await externalForStudent({ role: body.role ?? null, market: body.market ?? 'any', days: Number(body.days) || 10, include_bilingual: Boolean(body.include_bilingual), starred_only: Boolean(body.starred_only), modality: body.modality ?? 'any', sales_motion: body.sales_motion ?? 'any' });
         if (extra.length) return Response.json({ items: extra, total: extra.length, selection_total: 0, degraded: 'motor' }, { headers: jsonHeaders });
       } catch { /* sin externas no hay nada que servir: se devuelve el fallo del motor, pero explicado */ }
       // Sin externas que ofrecer, el fallo del motor se declara en JSON con su causa. Reenviar el cuerpo tal cual
@@ -88,9 +88,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     // Hosted: la búsqueda de alumna suma las ofertas externas aprobadas a las del motor (sin duplicar enlaces).
     if (engine && upstream.ok && path.join('/') === 'opportunities/search' && request.method === 'POST') {
       try {
-        const body = JSON.parse(requestBody) as { role?: string | null; market?: string; days?: number; include_bilingual?: boolean; starred_only?: boolean };
+        const body = JSON.parse(requestBody) as { role?: string | null; market?: string; days?: number; include_bilingual?: boolean; starred_only?: boolean; modality?: 'any' | 'remote' | 'hybrid' | 'onsite'; sales_motion?: 'any' | 'outbound' | 'inbound' };
         const mine = await upstream.clone().json() as { items: StudentSearchItem[]; total: number };
-        const extra = await externalForStudent({ role: body.role ?? null, market: body.market ?? 'any', days: Number(body.days) || 10, include_bilingual: Boolean(body.include_bilingual), starred_only: Boolean(body.starred_only) }).catch(() => []);
+        const extra = await externalForStudent({ role: body.role ?? null, market: body.market ?? 'any', days: Number(body.days) || 10, include_bilingual: Boolean(body.include_bilingual), starred_only: Boolean(body.starred_only), modality: body.modality ?? 'any', sales_motion: body.sales_motion ?? 'any' }).catch(() => []);
         // Sin duplicados, y sin reconstruir las externas: el aviso (`caution`) viaja dentro de cada oferta.
         const items = mergeStudentSearch(mine.items, extra);
         return Response.json({ ...mine, items, total: items.length }, { headers });

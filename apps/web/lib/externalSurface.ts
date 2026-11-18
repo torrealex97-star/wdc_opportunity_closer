@@ -8,7 +8,49 @@ import { fold, roleFromTitle, ROLE_LABELS, type RoleFamily } from './vocabulary'
 // Ofertas externas aprobadas, con el contrato Opportunity de la vista de alumna. Nada se inventa: lo que la
 // fuente no dice sale como «no indicado». Mismas puertas básicas que el motor: perfil por título, España por
 // señal explícita, antigüedad y español (salvo que la alumna pida bilingüe).
-type Query = { role: string | null; market: string; days: number; include_bilingual: boolean; starred_only: boolean };
+type Query = {
+  role: string | null; market: string; days: number; include_bilingual: boolean; starred_only: boolean;
+  // Filtros separados (mismos nombres que el contrato). Opcionales aquí para no romper a quien ya
+  // llamaba con la consulta de antes: sin ellos, no filtran.
+  modality?: 'any' | 'remote' | 'hybrid' | 'onsite';
+  sales_motion?: 'any' | 'outbound' | 'inbound';
+};
+
+// Modalidad y prospección declaradas por el anuncio. Mismo criterio que el motor
+// (`modalityOf` / `salesMotionOf`): lo que la fuente marca como remoto y, si no, las palabras del
+// propio anuncio. Nada se supone, y «no indicada» no entra en ningún filtro concreto.
+const HYBRID_WORDS = /\b(?:hybrid|hibrid[oa]s?|semi[ -]?presencial|mixt[oa])\b/;
+const REMOTE_WORDS = /\b(?:remote|remot[oa]s?|teletrabajo|home[ -]?office|work from home|en remoto|100[ %]*remoto)\b/;
+const ONSITE_WORDS = /\b(?:presencial(?:es)?|on[ -]?site|in[ -]?office|en oficina|acude a la oficina)\b/;
+const OUTBOUND_WORDS = /\b(?:outbound|cold ?call(?:s|ing)?|llamada fria|llamadas frias|prospeccion en frio|prospeccion telefonica|puerta fria)\b/g;
+const INBOUND_WORDS = /\b(?:inbound|leads? entrantes?|incoming leads|leads? inbound|leads? proporcionados)\b/g;
+// La negación vale dentro de la misma cláusula (la coma corta): «sin llamadas en frío, leads
+// entrantes» niega la prospección en frío, no los leads entrantes.
+const NEGATED_BEFORE = /\b(?:sin|no|nunca|ni|without|not)\b[^,.;:\n]{0,25}$/;
+const MODALITY_FILTER_KEYS: Record<string, string> = { Remoto: 'remote', 'Híbrido': 'hybrid', Presencial: 'onsite' };
+
+export function salesMotionOf(text: string): 'outbound' | 'inbound' | null {
+  const folded = fold(text);
+  const mentioned = (pattern: RegExp) => {
+    for (const match of folded.matchAll(pattern)) {
+      const before = folded.slice(Math.max(0, (match.index ?? 0) - 40), match.index ?? 0);
+      if (!NEGATED_BEFORE.test(before)) return true;
+    }
+    return false;
+  };
+  if (mentioned(OUTBOUND_WORDS)) return 'outbound';
+  if (mentioned(INBOUND_WORDS)) return 'inbound';
+  return null;
+}
+
+export function declaredModality(o: ExternalOffer) {
+  const flagged = o.raw?.is_remote === true ? ' remote ' : '';
+  const hay = fold(`${o.title ?? ''} ${o.location ?? ''} ${flagged} ${o.description ?? ''}`);
+  if (HYBRID_WORDS.test(hay)) return 'Híbrido';
+  if (flagged || REMOTE_WORDS.test(hay)) return 'Remoto';
+  if (ONSITE_WORDS.test(hay)) return 'Presencial';
+  return 'Modalidad no indicada';
+}
 
 const PORTUGUESE = /\b(?:vendas|voce|comissoes|portugues|brasil)\b/;
 const isGoogleUrl = (u: string) => /^https?:\/\/(www\.)?google\./i.test(u);
@@ -54,8 +96,7 @@ const JOB_TYPES: Record<string, ['schedule' | 'contract', string]> = {
   permanent: ['contract', 'Indefinido'], contract: ['contract', 'Por contrato'], temporary: ['contract', 'Temporal'], internship: ['contract', 'Prácticas'],
 };
 function declared(raw: Record<string, unknown> | undefined) {
-  const out: { modality?: string; schedule?: string; contract?: string } = {};
-  if (raw?.is_remote === true) out.modality = 'Remoto';
+  const out: { schedule?: string; contract?: string } = {};
   for (const part of String(raw?.job_type ?? '').toLowerCase().split(/[,\s]+/)) { const hit = JOB_TYPES[part]; if (hit && !out[hit[0]]) out[hit[0]] = hit[1]; }
   return out;
 }
@@ -100,7 +141,8 @@ export function toOpportunity(o: ExternalOffer, role: RoleFamily) {
     apply_url: o.apply_url || o.url, company_url: o.company_url ?? null, contact: o.contact ?? null,
     market: (o.market as Market | null | undefined) ?? marketFor(o).market,
     compensation: o.salary || 'Importe no publicado', compensation_note: o.salary ? 'Tal como figura en el anuncio original.' : 'Pregunta por el fijo y las comisiones antes de avanzar.',
-    modality: declared(o.raw).modality ?? 'Modalidad no indicada', location: o.location || 'Ubicación no indicada', language: 'Anuncio en español', experience: 'Experiencia no indicada', schedule: declared(o.raw).schedule ?? 'Jornada no indicada', contract: declared(o.raw).contract ?? 'Contrato no indicado',
+    modality: declaredModality(o), sales_motion: salesMotionOf(`${o.title ?? ''} ${o.description ?? ''}`),
+    location: o.location || 'Ubicación no indicada', language: 'Anuncio en español', experience: 'Experiencia no indicada', schedule: declared(o.raw).schedule ?? 'Jornada no indicada', contract: declared(o.raw).contract ?? 'Contrato no indicado',
     description: o.description || 'Consulta el anuncio original para ver las condiciones completas.',
     published_at: o.posted_at, expires_at: o.expires_at, source_name: sourceName, source_url: o.url, also_seen: alsoSeen, starred: false, excellence_rank: null, is_selected: false,
     caution: cautionOf(o),
@@ -160,7 +202,12 @@ export async function externalForStudent(q: Query) {
     // un anuncio alemán no entra aunque la alumna marque «también bilingües».
     const english = o.description ? englishWords(text) >= 5 : englishWords(text) >= 2;
     if (!spanish && !(q.include_bilingual && english)) continue;
-    out.push(toOpportunity(o, role));
+    const offer = toOpportunity(o, role);
+    // Los mismos filtros separados del motor, aplicados a la oferta ya construida: la alumna no
+    // recibe una presencial cuando pidió remoto, ni una sin prospección declarada cuando pidió outbound.
+    if ((q.modality ?? 'any') !== 'any' && MODALITY_FILTER_KEYS[offer.modality] !== q.modality) continue;
+    if ((q.sales_motion ?? 'any') !== 'any' && offer.sales_motion !== q.sales_motion) continue;
+    out.push(offer);
   }
   return out;
 }
