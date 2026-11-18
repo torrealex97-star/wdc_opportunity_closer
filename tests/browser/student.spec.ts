@@ -136,12 +136,10 @@ test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, ro
   expect(new URL(page.url()).searchParams.get('market')).toBe('ES');
 });
 
-test('el radar cuenta el catálogo real y una frase aplica los filtros', async ({ page }) => {
-  const requests: Record<string, unknown>[] = [];
+test('el radar cuenta el catálogo real de la búsqueda', async ({ page }) => {
   const setter = { ...offer, id: 'student-setter', role: 'setter', role_label: 'Setter', original_title: 'Setter comercial', company: 'Otra empresa', compensation: 'Importe no publicado' };
   await page.route('**/api/backend/opportunities/search', async route => {
     const body = route.request().postDataJSON();
-    requests.push(body);
     // Retardo real: deja ver el barrido del radar antes de que lleguen las ofertas.
     await new Promise(resolve => setTimeout(resolve, 250));
     const items = body.role === 'setter' ? [setter] : [offer, setter];
@@ -155,14 +153,12 @@ test('el radar cuenta el catálogo real y una frase aplica los filtros', async (
   await expect(page.locator('.radar-center b')).toHaveText('2');
   await expect(page.locator('.radar-stats div').nth(0).locator('b')).toHaveText('1');
   await expect(page.locator('.radar-stats div').nth(2).locator('b')).toHaveText('2');
-  await page.getByLabel('Pídelo en una frase').fill('closer en españa esta semana');
-  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(page.getByText('He aplicado perfil Closer · España · últimos 7 días.')).toBeVisible();
-  await expect.poll(() => requests.some(r => r.role === 'closer' && r.market === 'ES' && r.days === 7)).toBe(true);
-  expect(new URL(page.url()).searchParams.get('days')).toBe('7');
+  // Sin campo de frase: la búsqueda sale de los desplegables, no de una promesa de comprensión.
+  await expect(page.getByLabel('Pídelo en una frase')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Buscar', exact: true })).toHaveCount(0);
 });
 
-test('la leyenda del radar filtra por perfil y lo no reconocido no inventa filtros', async ({ page }) => {
+test('la leyenda del radar filtra por perfil', async ({ page }) => {
   const requests: Record<string, unknown>[] = [];
   const setter = { ...offer, id: 'student-setter', role: 'setter', role_label: 'Setter', original_title: 'Setter comercial', company: 'Otra empresa' };
   await page.route('**/api/backend/opportunities/search', route => {
@@ -177,18 +173,6 @@ test('la leyenda del radar filtra por perfil y lo no reconocido no inventa filtr
   await legend.getByRole('button', { name: /^Setter/ }).click();
   await expect.poll(() => requests.some(r => r.role === 'setter')).toBe(true);
   await expect(legend.getByRole('button', { name: /^Setter/ })).toHaveAttribute('aria-pressed', 'true');
-  // «remoto» ya es un filtro propio: se aplica y se dice, en vez de rechazarse.
-  await page.getByLabel('Pídelo en una frase').fill('algo en remoto');
-  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(page.getByText('He aplicado remoto.')).toBeVisible();
-  await expect.poll(() => requests.some(r => r.modality === 'remote')).toBe(true);
-  expect(new URL(page.url()).searchParams.get('modality')).toBe('remote');
-  // Lo que el catálogo no puede filtrar se declara y no toca la búsqueda.
-  const before = new URL(page.url()).search;
-  await page.getByLabel('Pídelo en una frase').fill('ofertas de ayer');
-  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(page.getByText(/No puedo filtrar por ese periodo/)).toBeVisible();
-  expect(new URL(page.url()).search).toBe(before);
 });
 
 test('modalidad y prospección son filtros propios y viajan a la búsqueda', async ({ page }) => {

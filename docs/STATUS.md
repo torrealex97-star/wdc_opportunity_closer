@@ -1,5 +1,13 @@
 # Estado
 
+## Se retira «Pídelo en una frase»: se elige en los filtros (sesión 224) — 2026-11-18
+
+- **Petición del propietario**: «Quita esta parte que al final son pocas opciones es mejor que los seleccione» (sobre el campo «Pídelo en una frase» del buscador de alumnas).
+- **Qué se ha quitado**: el formulario de frase y su nota de «he aplicado…» en [StudentOpportunities.tsx](../apps/web/components/StudentOpportunities.tsx), su estado, su manejador, el parseo determinista (el parser de la frase, eliminado), sus estilos (`.phrase-search`, `.phrase-note`) y la mención en [DESIGN.md](DESIGN.md). Quedan como única puerta los desplegables de perfil, mercado, publicación, modalidad, prospección y el interruptor de bilingües, con el botón «Ver oportunidades»; el radar sigue aplicando el perfil al pulsar su leyenda.
+- **Por qué**: con el catálogo real que hay, el campo obligaba a aprender una gramática («closer presencial», «setter outbound») para un resultado que se consigue en dos desplegables, y prometía una comprensión que el propio parser tenía que rechazar en casos («ofertas de ayer»). Menos superficie, menos promesas: el filtro es el que se ve.
+- **Probado** (`tested`): `npm run typecheck` y `npm run build` PASS; `npm run test:web` **46/46** pasos backend con `roleui.mjs` reescrito sin la frase (sigue atando la etiqueta del motor con la del desplegable) y **13/13** pasos de interfaz; `npm run design` OK (sin hex nuevos); `npm run handoff` OK. `tests/browser/student.spec.ts` conserva el radar y la leyenda, y ahora comprueba de forma explícita que el campo y el botón «Buscar» **no existen**.
+- **Límites honestos**: la URL sigue guardando los filtros (`role`, `market`, `days`, `modality`, `motion`, `bilingual`); lo único que desaparece es la forma de escribirlos en lenguaje natural. No se ha cambiado el contrato del motor ni el comportamiento de búsqueda. No hay revisión visual con captura en esta sesión.
+
 ## El admin abre la ficha de una alumna, no el agregado (sesión 223) — 2026-11-18
 
 - **Petición del propietario**: «haz que el admin pueda abrir el progreso de una alumna y ver prácticamente lo mismo que ella ve en “Mi progreso” (prácticas, notas, evolución), reutilizando StudentProgress y lib/studentActivity en vez de duplicar la lectura» y «deja prueba de que el admin ve la ficha de una alumna concreta y no solo el agregado».

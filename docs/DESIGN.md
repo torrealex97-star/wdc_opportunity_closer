@@ -42,7 +42,7 @@ La modalidad es la que **declara el anuncio**; una oferta que no dice dónde se 
 
 ## Radar de oportunidades
 
-Panel de resumen sobre los resultados: disco de anillos con barrido terracota sobre papel, un punto por oferta real (color por perfil, nunca solo color: la leyenda escribe el perfil y su recuento), contador central y tres lecturas verificables (con importe publicado, publicadas en 3 días, perfiles distintos). Barre mientras se espera la respuesta; no simula progreso por fuente ni inventa actividad. La leyenda filtra por perfil. El campo «Pídelo en una frase» declara los filtros que aplica y, si no entiende, no busca. Movimiento limitado por `prefers-reduced-motion`.
+Panel de resumen sobre los resultados: disco de anillos con barrido terracota sobre papel, un punto por oferta real (color por perfil, nunca solo color: la leyenda escribe el perfil y su recuento), contador central y tres lecturas verificables (con importe publicado, publicadas en 3 días, perfiles distintos). Barre mientras se espera la respuesta; no simula progreso por fuente ni inventa actividad. La leyenda filtra por perfil. No hay campo de frase: los filtros del formulario son la única puerta, porque con pocas ofertas reales elegir en un desplegable es más rápido y no promete una comprensión que el catálogo no siempre puede cumplir. Movimiento limitado por `prefers-reduced-motion`.
 
 ## Ficha de una alumna en el panel
 

@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Clock3, Compass, FileText, Globe2, GraduationCap, HeartHandshake, Inbox, Languages, Laptop, LoaderCircle, MapPin, MessageSquare, PhoneOutgoing, Search, ShieldAlert, TrendingUp, Users, X } from 'lucide-react';
 import OpportunityRadar from './OpportunityRadar';
 import StudentPractice from './StudentPractice';
 import StudentProgress from './StudentProgress';
 import StudentTraining from './StudentTraining';
 import { hasPay } from './offerFacts';
-import { parsePhrase } from './queryFromPhrase';
 import { ROLE_EVAL_ORDER, ROLE_LABELS, ROLE_OPTIONS } from '../lib/vocabulary';
 import { request } from './client';
 import type { components } from '../../../packages/contracts/api';
@@ -189,8 +188,6 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   const [degraded, setDegraded] = useState(false);
   const [detail, setDetail] = useState<Offer | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [phrase, setPhrase] = useState('');
-  const [phraseNote, setPhraseNote] = useState('');
   // Modo hospedado: guardar es un marcador de ESTE navegador (fix audit run-1
   // finding 2 — sin credencial individual todavía, la vista alumna no muta el
   // catálogo compartido del operador). El motor admin mantiene su marcador propio.
@@ -248,24 +245,10 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   useEffect(() => {
     if (detail && dialog.current && !dialog.current.open) dialog.current.showModal();
   }, [detail]);
-  // Una sola puerta de aplicación: formulario, frase y radar escriben el mismo estado real.
+  // Una sola puerta de aplicación: el formulario y el radar escriben el mismo estado real.
   function applyQuery(next: Query) {
     setQuery(next); setApplied(next);
     history.replaceState(null, '', urlFromQuery(next));
-  }
-  // Traducción determinista de la frase a filtros del catálogo: si no entiende, lo dice.
-  function applyPhrase(event: FormEvent) {
-    event.preventDefault();
-    const result = parsePhrase(phrase, query);
-    if (result.saved) { setPhrase(''); setPhraseNote('He abierto tus guardadas.'); setSaved(true); return; }
-    if (!result.matched.length) {
-      setPhraseNote(result.unsupported.length
-        ? `No puedo filtrar por ${result.unsupported.join(' ni por ')}.`
-        : 'No he reconocido ningún filtro. Prueba: «closer en España», «setter esta semana», «SDR en LATAM», «bilingüe», «guardadas».');
-      return;
-    }
-    applyQuery(result.query);
-    setPhraseNote(`He aplicado ${result.matched.join(' · ')}.` + (result.unsupported.length ? ` No filtro por ${result.unsupported.join(' ni por ')}.` : ''));
   }
   const isStarred = (offer: Offer) => hosted ? localSaves.includes(offer.id) : offer.starred;
   async function star(offer: Offer) {
@@ -305,12 +288,9 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         {progress ? <StudentProgress /> : training ? <StudentTraining /> : practice ? <StudentPractice track={practice} onTrackChange={setPractice} /> : <>
         <div className="page-heading"><div><span className="eyebrow">EMPRESAS QUE BUSCAN TALENTO COMERCIAL</span><h1>{saved ? 'Las que te interesan.' : 'Elige tu próxima oportunidad.'}</h1><p>{saved ? 'Vuelve a comparar sus condiciones y decide tu siguiente paso.' : 'WDC reúne oportunidades en español para que encuentres dónde quieres crecer.'}</p></div><span className="heading-icon"><Compass size={30} strokeWidth={1.2} /></span></div>
         {!saved && <div className="search-panel student-search">
-          <form className="phrase-search" onSubmit={applyPhrase}>
-            <label htmlFor="student-phrase">Pídelo en una frase<input id="student-phrase" value={phrase} onChange={e => { setPhrase(e.target.value); setPhraseNote(''); }} placeholder="closer en España de esta semana" autoComplete="off" /></label>
-            <button type="submit" className="primary">Buscar</button>
-          </form>
-          {phraseNote && <p className="phrase-note" role="status">{phraseNote}</p>}
-          <form onSubmit={e => { e.preventDefault(); setApplied({ ...query }); history.replaceState(null, '', urlFromQuery(query)); setPhraseNote(''); }}>
+          {/* Sin campo de frase: con pocas opciones reales, elegir en los desplegables es más rápido y no promete
+              una comprensión que el catálogo no siempre puede cumplir. Los filtros son la única puerta. */}
+          <form onSubmit={e => { e.preventDefault(); setApplied({ ...query }); history.replaceState(null, '', urlFromQuery(query)); }}>
           <div className="search-grid"><label>Perfil profesional<select value={query.role || ''} onChange={e => setQuery({ ...query, role: (e.target.value || null) as Query['role'] })}><option value="">Todos los perfiles</option>{ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Desde dónde quieres trabajar<select value={query.market} onChange={e => setQuery({ ...query, market: e.target.value as Query['market'] })}><option value="any">Todos los mercados</option><option value="ES">España</option><option value="EU">Europa</option><option value="LATAM">Latinoamérica</option><option value="US">Estados Unidos</option></select></label><label>Publicación<select value={query.days} onChange={e => setQuery({ ...query, days: Number(e.target.value) })}><option value={1}>Últimas 24 horas</option><option value={3}>Últimos 3 días</option><option value={7}>Últimos 7 días</option><option value={10}>Últimos 10 días</option></select></label></div>
           <div className="student-preferences">
             <label className="pref-field"><span>Modalidad</span><select value={query.modality} onChange={e => setQuery({ ...query, modality: e.target.value as Query['modality'] })}><option value="any">Cualquier modalidad</option><option value="remote">Remoto</option><option value="hybrid">Híbrido</option><option value="onsite">Presencial</option></select></label>
