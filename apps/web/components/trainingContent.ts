@@ -3,7 +3,7 @@
 // se revisan con reglas sobre el texto (trainingCheck) y el examen es determinista.
 // Las cifras del ejercicio de Venta Lógica son ficticias y se rotulan como tales.
 
-export type TrainingId = 'precall' | 'logica' | 'freezing' | 'yellows' | 'star' | 'cierres' | 'descubrimiento' | 'entrevista' | 'certificacion';
+export type TrainingId = 'precall' | 'logica' | 'freezing' | 'yellows' | 'star' | 'cierres' | 'descubrimiento' | 'objeciones' | 'entrevista' | 'certificacion';
 
 export type TrainingModule = {
   id: TrainingId;
@@ -62,6 +62,13 @@ export const TRAINING_MODULES: TrainingModule[] = [
     summary: 'De la situación a la repetición, en orden y con una frase de ejemplo. Después, cinco frases: ¿a qué paso pertenece cada una?',
     tag: 'Durante la llamada',
     minutes: 12,
+  },
+  {
+    id: 'objeciones',
+    title: 'Las siete objeciones',
+    summary: 'Precio, «lo pienso», pareja o socio, tiempo, miedo a que no funcione, comparación y «envíamelo». Para cada una: cómo averiguar qué hay detrás, un ejemplo con huecos y los errores típicos. Después, cinco frases: ¿qué objeción es?',
+    tag: 'Durante la llamada',
+    minutes: 18,
   },
   {
     id: 'entrevista',
@@ -454,6 +461,78 @@ export const DISCOVERY_BANK: BankQuestion[] = [
   { id: 'd3', prompt: '«Déjame ver si lo entiendo: quieres llegar a X, pero Y te lo impide, y si no lo resuelves, Z pasará.»', options: [step(6), step(8), step(2), step(4)], answer: step(6) },
   { id: 'd4', prompt: '«Suena como que te sientes frustrado con tu situación actual.»', options: [step(7), step(6), step(3), step(9)], answer: step(7) },
   { id: 'd5', prompt: '«¿Es eso correcto? ¿Me dejo algo?»', options: [step(8), step(5), step(7), step(1)], answer: step(8) },
+];
+
+// ---- Módulo 10: las siete objeciones ----------------------------------------
+// Repertorio del método propio, reescrito: sin cifras de oferta (van como [hueco]), sin promesas de resultado
+// ni de garantía, y sin afirmar qué incluye un programa concreto. Cada ejemplo es una forma posible de abrir la
+// respuesta, no un guion: lo primero siempre es averiguar qué hay detrás de la frase.
+export type ObjectionGuide = {
+  id: string;
+  name: string;
+  /** Lo que dice el cliente, con sus palabras. */
+  quote: string;
+  /** Qué suele haber detrás (hipótesis para comprobar, no un diagnóstico). */
+  behind: string;
+  formula: string;
+  example: string;
+  steps: string[];
+  mistakes: string[];
+};
+
+export const OBJECTION_GUIDES: ObjectionGuide[] = [
+  { id: 'precio', name: 'Es caro / no tengo el dinero ahora', quote: '«Me parece muy caro y ahora mismo no tengo esa cantidad.»',
+    behind: 'Puede ser falta de liquidez o falta de valor percibido. Se responden distinto, por eso se separan antes de contestar.',
+    formula: 'Agradecer la sinceridad → aislar si es liquidez o valor → resolver solo esa.',
+    example: 'Gracias por decírmelo claro, [nombre]. Cuando dices que es caro, ¿es que hoy no te cuadra el pago, o que no ves todavía que te compense? Si el dinero no fuera el problema, ¿empezarías?',
+    steps: ['Agradece la sinceridad y no justifiques el precio.', 'Pregunta si es liquidez o valor.', 'Si es liquidez: opciones de pago reales de tu oferta, sin inventarlas ni rebajar el precio por reflejo.', 'Si es valor: vuelve a lo que ella dijo que quería y a lo que le cuesta seguir igual, con sus palabras.'],
+    mistakes: ['Bajar el precio antes de saber qué objeción es.', 'Defender el precio con tono ofendido.', 'Aceptar «ya veré» sin preguntar qué parte pesa.'] },
+  { id: 'pensarlo', name: 'Lo tengo que pensar', quote: '«Me gusta, pero es una decisión importante. Lo pienso y te escribo.»',
+    behind: 'Casi nunca es «pensar»: suele ser una duda concreta que no se ha dicho, o que no lo ve para ella.',
+    formula: 'Validar la prudencia → preguntar qué falta para decidir → resolver ese dato o aceptar el no con claridad.',
+    example: 'Me parece sensato pensarlo, [nombre]. Normalmente es porque algo no está claro o porque no lo ves para ti. ¿Cuál de las dos es en tu caso?',
+    steps: ['Valida que quiera pensarlo.', 'Ofrece las dos razones habituales y pregunta cuál es.', 'Si hay un dato concreto, resuélvelo en caliente.', 'Si es un no, acéptalo con respeto: es mejor que una espera sin fecha.'],
+    mistakes: ['Colgar con «piénsalo» y sin fecha de seguimiento.', 'Preguntar «¿pero qué te falta?» con presión.', 'Mandar información sin haber descubierto la duda.'] },
+  { id: 'tercero', name: 'Lo hablo con mi pareja o socio', quote: '«Tengo que consultarlo con mi pareja; las decisiones de dinero las tomamos juntos.»',
+    behind: 'A veces es un acuerdo real; a veces es un escudo para no decir «no estoy segura». Se distingue preguntando por su propia opinión.',
+    formula: 'Validar el acuerdo → averiguar qué opina ella → prepararla para esa conversación.',
+    example: 'Me parece bien que lo habléis juntos. Pregunta mía: si tu pareja te dijera que adelante, ¿tú querrías entrar? ¿Y qué te gustaría poder contarle esta noche?',
+    steps: ['Respeta la decisión compartida.', 'Pregunta qué opina ella, sin hablar por su pareja.', 'Si quiere entrar: ayúdala a preparar los puntos que tendrá que explicar.', 'Si duda: la objeción real es suya; vuelve al descubrimiento.'],
+    mistakes: ['Colgar sin saber qué opina ella.', 'Cuestionar la relación («decídelo tú»).', 'No darle nada que contar en casa.'] },
+  { id: 'tiempo', name: 'No tengo tiempo', quote: '«Estoy con mil cosas entre el trabajo y la familia; no sé de dónde sacaría horas.»',
+    behind: 'Puede ser agenda real o prioridad baja. La pregunta útil es cuánto le cuesta seguir como está.',
+    formula: 'Empatizar → preguntar qué le quita tiempo hoy → conectar el cambio con ese coste, sin prometer horas concretas que no controlas.',
+    example: 'Te entiendo, [nombre]. Cuéntame qué se te lleva más tiempo ahora mismo, y cómo sería tu semana si eso cambiara. Después vemos si encaja y cómo.',
+    steps: ['Reconoce el agobio sin quitarle importancia.', 'Pregunta qué consume su tiempo hoy.', 'Pregunta qué cambiaría si lo resolviera.', 'Explica con honestidad la dedicación real de tu oferta: [dedicación real].'],
+    mistakes: ['Soltar «solo son [x] minutos» sin escuchar.', 'Presentar el tiempo como excusa en vez de como dato.', 'Aceptar «ya te aviso» sin dejar fecha.'] },
+  { id: 'miedo', name: 'Miedo a que no me funcione', quote: '«Ya hice otras formaciones y no me sirvieron. Tengo miedo de tirar el dinero otra vez.»',
+    behind: 'Una experiencia anterior dolió. No se convence: se escucha qué falló y se dice con honestidad qué es distinto y qué no se puede garantizar.',
+    formula: 'Empatía → preguntar qué le faltó antes → decir qué ofreces de distinto, sin prometer resultados.',
+    example: 'Siento que te haya pasado. ¿Qué crees que le faltó a aquello? Lo pregunto porque [lo que de verdad ofreces] puede encajar o no, y prefiero que lo veamos juntas antes de que decidas.',
+    steps: ['Escucha la historia entera sin interrumpir.', 'Pregunta qué faltó: te dice qué necesita oír.', 'Cuenta qué es distinto con hechos de tu oferta real.', 'No prometas resultados ni garantías que tu oferta no tenga por escrito.'],
+    mistakes: ['Hablar mal de las formaciones anteriores.', 'Prometer que «esta vez sí».', 'Diferenciar antes de saber qué falló.'] },
+  { id: 'competencia', name: 'Estoy mirando otra opción', quote: '«He visto otro curso parecido más barato; quiero comparar.»',
+    behind: 'Comparar es sano. La pregunta es con qué criterios compara: si solo es el precio, falta valor; si hay otros, se puede hablar de ellos.',
+    formula: 'Valorar que compare → preguntar qué criterios usa → hablar de tu diferencia real sin criticar al otro.',
+    example: 'Está bien que compares. ¿Qué es lo que más te importa de cada opción, además del precio? Así te digo con honestidad si lo mío encaja o si te conviene más la otra.',
+    steps: ['Apoya la comparación.', 'Pregunta los criterios.', 'Habla solo de lo que puedes demostrar de tu oferta: [tu diferencial real].', 'Si la otra opción le conviene más, dilo: da credibilidad.'],
+    mistakes: ['Criticar al competidor.', 'Entrar en una guerra de descuentos.', 'No preguntar con qué compara.'] },
+  { id: 'enviamelo', name: 'Envíamelo y luego lo miro', quote: '«Mándame la información por WhatsApp y si me interesa te escribo.»',
+    behind: 'Suele ser una salida amable. Un PDF no resuelve su caso, y quedarse sin siguiente paso casi siempre termina en silencio.',
+    formula: 'Aceptar enviarlo → proponer resolver lo principal ahora → si se va, cerrar una cita concreta.',
+    example: 'Claro, te lo mando. Antes, ¿repasamos los dos puntos que más te importan para que lo que leas responda a tu caso? Y si prefieres verlo con calma, ¿te llamo el [día] a las [hora]?',
+    steps: ['No te niegues a enviarlo.', 'Propón resolver lo principal en dos minutos.', 'Si se va, fija día y hora de revisión antes de colgar.', 'Envía solo lo que responde a lo que dijo, no todo el material.'],
+    mistakes: ['Mandar el PDF y colgar sin cita.', 'Negarte a enviarlo de forma brusca.', 'No dejar fecha de seguimiento.'] },
+];
+
+const guide = (id: string) => OBJECTION_GUIDES.find(item => item.id === id)!.name;
+
+export const OBJECTION_BANK: BankQuestion[] = [
+  { id: 'o1', prompt: '«Me encanta, pero lo comento esta noche con mi socio, siempre decidimos juntos.»', options: [guide('tercero'), guide('pensarlo'), guide('precio'), guide('enviamelo')], answer: guide('tercero') },
+  { id: 'o2', prompt: '«Mándame todo por correo y ya te digo algo.»', options: [guide('enviamelo'), guide('competencia'), guide('tiempo'), guide('miedo')], answer: guide('enviamelo') },
+  { id: 'o3', prompt: '«El año pasado pagué otro programa y acabé sola, no quiero repetirlo.»', options: [guide('miedo'), guide('precio'), guide('tercero'), guide('tiempo')], answer: guide('miedo') },
+  { id: 'o4', prompt: '«He visto uno parecido que sale la mitad; voy a comparar antes de decidir.»', options: [guide('competencia'), guide('precio'), guide('pensarlo'), guide('enviamelo')], answer: guide('competencia') },
+  { id: 'o5', prompt: '«Entre el trabajo y los niños no llego a nada, no sé cuándo estudiaría.»', options: [guide('tiempo'), guide('miedo'), guide('pensarlo'), guide('precio')], answer: guide('tiempo') },
 ];
 
 // ---- Módulo 9: banco de preguntas de entrevista ----------------------------

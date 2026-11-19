@@ -199,6 +199,72 @@ test('el dictado añade lo reconocido al borrador sin enviarlo y el orbe marca e
   await expect(page.locator('.practice-turn.is-mine')).toHaveCount(0);
 });
 
+test('hablar mientras el interlocutor lee lo interrumpe, pero su propio eco no', async ({ page }) => {
+  await page.addInitScript(() => {
+    const scope = window as unknown as { __cancels: number; __script: Array<{ text: string; final: boolean }> };
+    scope.__cancels = 0;
+    scope.__script = [];
+    // Síntesis simulada: cuenta los cortes y arranca al instante.
+    const synth = { cancel() { scope.__cancels += 1; }, speak(utterance: { onstart?: () => void }) { utterance.onstart?.(); } };
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synth });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { lang = ''; onstart?: () => void; onend?: () => void; onerror?: () => void; constructor(public text: string) {} } });
+    class FakeRecognition {
+      lang = ''; interimResults = false; continuous = false;
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        const step = scope.__script.shift();
+        if (!step) return;
+        setTimeout(() => {
+          const result = [{ transcript: step.text }] as Array<{ transcript: string }> & { isFinal?: boolean };
+          result.isFinal = step.final;
+          this.onresult?.({ resultIndex: 0, results: [result] });
+        }, 150);
+        // Como el navegador real con continuous=false: la sesión termina sola tras el resultado.
+        setTimeout(() => this.onend?.(), 400);
+      }
+      stop() { this.onend?.(); }
+      abort() { /* nada */ }
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition });
+    Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: FakeRecognition });
+  });
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.goto('/');
+  await openRoom(page);
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  const opening = (await page.locator('.practice-turn.is-them .practice-bubble').first().innerText()).replace(/\s+/g, ' ');
+  const cancels = () => page.evaluate(() => (window as unknown as { __cancels: number }).__cancels);
+  const echoWords = opening.split(' ').slice(0, 6).join(' ');
+
+  // 1) El micrófono capta la propia voz del interlocutor: ni se corta ni se añade al borrador.
+  await page.evaluate(text => { (window as unknown as { __script: unknown[] }).__script.push({ text, final: true }); }, echoWords);
+  await page.getByRole('button', { name: 'Escuchar' }).first().click();
+  await expect(page.locator('.jarvis-orb')).toHaveAttribute('data-state', 'speaking');
+  const before = await cancels();
+  await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
+  await page.waitForTimeout(500);
+  expect(await cancels()).toBe(before);
+  await expect(page.getByLabel('Tu respuesta')).toHaveValue('');
+  await expect(page.locator('.jarvis-orb')).toHaveAttribute('data-state', 'speaking');
+
+  // 2) La alumna habla por encima con palabras propias: la locución se corta y el dictado se añade.
+  await page.evaluate(() => { (window as unknown as { __script: unknown[] }).__script.push({ text: 'espera, déjame hacerte una pregunta antes', final: true }); });
+  await expect(page.getByRole('button', { name: 'Dictar la respuesta' })).toBeVisible();
+  await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
+  await expect(page.getByLabel('Tu respuesta')).toHaveValue(/déjame hacerte una pregunta/);
+  expect(await cancels()).toBeGreaterThan(before);
+  await expect(page.locator('.jarvis-orb')).not.toHaveAttribute('data-state', 'speaking');
+
+  // 3) Escribir también calla la locución (y nada se envía solo).
+  await page.getByRole('button', { name: 'Escuchar' }).first().click();
+  await expect(page.locator('.jarvis-orb')).toHaveAttribute('data-state', 'speaking');
+  await page.getByLabel('Tu respuesta').press('x');
+  await expect(page.locator('.jarvis-orb')).not.toHaveAttribute('data-state', 'speaking');
+  await expect(page.locator('.practice-turn.is-mine')).toHaveCount(0);
+});
+
 test('sin reconocimiento de voz no se ofrece el micrófono y se puede escribir', async ({ page }) => {
   await page.addInitScript(() => {
     const scope = window as unknown as Record<string, unknown>;

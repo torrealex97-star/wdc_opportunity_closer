@@ -16,10 +16,10 @@ test('la formación recorre lección, corrige, reintenta y consolida el progreso
   await page.goto('/');
   await page.getByRole('button', { name: 'Formación' }).click();
 
-  // Frase del día y ruta: cuatro módulos, doce lecciones y los nueve módulos de método debajo.
+  // Frase del día y ruta: cuatro módulos, doce lecciones y los diez módulos de método debajo.
   await expect(page.getByRole('heading', { name: 'De cero a tu primera candidatura, paso a paso.' })).toBeVisible();
   await expect(page.locator('.curriculum-module')).toHaveCount(4);
-  await expect(page.locator('.training-grid .training-card')).toHaveCount(9);
+  await expect(page.locator('.training-grid .training-card')).toHaveCount(10);
   await expect(page.locator('.daily-quote blockquote')).toContainText(/\S/);
   await expect(page.getByText('Racha actual:')).toContainText('3');
   await page.getByRole('button', { name: 'Guardar' }).click();

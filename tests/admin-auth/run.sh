@@ -57,6 +57,7 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/training-curriculum.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/training.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/activity.mjs
+node --experimental-strip-types tests/admin-auth/voiceecho.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/dashboard.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/studentmetrics.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/retention.mjs

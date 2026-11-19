@@ -4,7 +4,7 @@ import {
   freezingFalls, gradeExam, moralFor, parseAmount, reviewCloseLine, reviewFreezing,
   reviewFreezingReply, reviewLogica, reviewPreCall, reviewYellows, yellowMistakes,
 } from '../../apps/web/components/trainingCheck';
-import { CLOSE_BANK, DISCOVERY_BANK, DISCOVERY_STEPS, EXACT_CLOSES, FINAL_EXAM, LOGICA, PRE_CALL_STEPS } from '../../apps/web/components/trainingContent';
+import { CLOSE_BANK, DISCOVERY_BANK, DISCOVERY_STEPS, EXACT_CLOSES, FINAL_EXAM, LOGICA, OBJECTION_BANK, OBJECTION_GUIDES, PRE_CALL_STEPS } from '../../apps/web/components/trainingContent';
 import { gradeBank, reviewInterviewAnswer } from '../../apps/web/components/trainingCheck';
 import { INTERVIEW_FLAGS, INTERVIEW_QUESTIONS } from '../../apps/web/components/trainingContent';
 
@@ -152,3 +152,21 @@ console.log('PASS  formación: diez cierres, nueve pasos y bancos corregibles po
   assert.equal(ok('porque-tu', 'Cierro todo lo que me ponen delante, soy la mejor y siempre cierro el 100 % de las llamadas en las que entro.').criteria.find(c => c.id === 'inflada').ok, false);
 }
 console.log('PASS  formación: banco de preguntas de entrevista con banderas rojas corregibles');
+
+// Las siete objeciones: contenido completo, sin cifras ni promesas de resultado, y banco corregible por clave.
+assert.equal(OBJECTION_GUIDES.length, 7); assert.equal(new Set(OBJECTION_GUIDES.map(o => o.id)).size, 7, 'ids únicos');
+for (const o of OBJECTION_GUIDES) {
+  for (const field of ['name', 'quote', 'behind', 'formula', 'example']) assert.ok(o[field]?.trim(), `${o.id} sin ${field}`);
+  assert.ok(o.steps.length >= 3 && o.mistakes.length >= 3, `${o.id}: pasos y errores típicos`);
+  const text = [o.example, ...o.steps, ...o.mistakes].join(' ');
+  assert.ok(!/\d[\d.,]*\s?(€|%|euros|minutos|horas)/i.test(text), `${o.id}: sin cifras ni importes inventados`);
+  assert.ok(!/garant[ií]a|garantizad|resultados? asegurad|acompa[nñ]amiento 1 a 1/i.test(text.replace(/no prometas[^.]*\./gi, '').replace(/no prometer[^.]*/gi, '').replace(/prometer que[^.]*/gi, '')), `${o.id}: sin promesas de resultado ni garantías`);
+}
+assert.ok(OBJECTION_GUIDES.some(o => o.example.includes('[nombre]')) && OBJECTION_GUIDES.some(o => /\[(tu diferencial real|dedicación real|día)\]/.test(o.steps.join(' ') + o.example)), 'ejemplos con huecos');
+assert.equal(OBJECTION_BANK.length, 5); assert.equal(new Set(OBJECTION_BANK.map(q => q.id)).size, 5);
+const objectionNames = new Set(OBJECTION_GUIDES.map(o => o.name));
+for (const q of OBJECTION_BANK) { assert.ok(q.options.includes(q.answer), `${q.id}: la clave está entre las opciones`); assert.ok(q.options.every(o => objectionNames.has(o)), `${q.id}: opciones = objeciones del módulo`); assert.equal(new Set(q.options).size, q.options.length); }
+const objKey = Object.fromEntries(OBJECTION_BANK.map(q => [q.id, q.answer]));
+assert.deepEqual(gradeBank(OBJECTION_BANK, objKey), { correct: 5, total: 5, wrong: [] });
+assert.equal(gradeBank(OBJECTION_BANK, {}).correct, 0, 'sin respuestas no hay aciertos inventados');
+console.log('PASS  formación: siete objeciones sin cifras ni promesas y banco corregible por clave');

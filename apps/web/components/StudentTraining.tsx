@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   BELIEF_LADDER, CERTIFICATION_WEEKS, CLOSE_BANK, DISCOVERY_BANK, DISCOVERY_STEPS, EXACT_CLOSES, FINAL_EXAM, FREEZING, IDENTITY_FRAMES, LOGICA,
-  INTERVIEW_QUESTIONS, PRE_CALL_STEPS, SHOW_RATE_RULES, STAR_CRITERIA, STAR_RULE, TRAINING_MODULES,
+  INTERVIEW_QUESTIONS, OBJECTION_BANK, OBJECTION_GUIDES, PRE_CALL_STEPS, SHOW_RATE_RULES, STAR_CRITERIA, STAR_RULE, TRAINING_MODULES,
   YELLOW_LEADS, YELLOW_RULE,
 } from './trainingContent';
 import type { BankQuestion, TrainingId } from './trainingContent';
@@ -514,7 +514,7 @@ function Certification() {
 // ---- Módulos 6 y 7: biblioteca de cierres y pasos de descubrimiento ----------
 
 // Banco de situaciones corregido por clave: sin IA ni texto libre. Solo se guarda el número de aciertos.
-function Bank({ bank, refId, legend, verb }: { bank: BankQuestion[]; refId: 'cierres' | 'descubrimiento'; legend: string; verb: string }) {
+function Bank({ bank, refId, legend, verb }: { bank: BankQuestion[]; refId: 'cierres' | 'descubrimiento' | 'objeciones'; legend: string; verb: string }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ReturnType<typeof gradeBank> | null>(null);
   function submit() {
@@ -574,6 +574,25 @@ function Discovery() {
   </div>;
 }
 
+function Objections() {
+  return <div className="training-module">
+    <div className="training-intro">
+      <ShieldAlert size={18} />
+      <div><h2>Las siete objeciones</h2><p>Una objeción casi nunca es lo que dice. Primero se averigua qué hay detrás y después se responde solo a eso. Los ejemplos llevan [huecos]: rellénalos con datos reales de tu oferta, nunca con promesas ni cifras ajenas.</p></div>
+    </div>
+    <ol className="training-ladder">{OBJECTION_GUIDES.map(item => <li key={item.id}>
+      <strong>{item.name}</strong>
+      <blockquote>{item.quote}</blockquote>
+      <em>Qué suele haber detrás: {item.behind}</em>
+      <p>{item.formula}</p>
+      <ul className="plain-list">{item.steps.map(step => <li key={step}>{step}</li>)}</ul>
+      <blockquote>{item.example}</blockquote>
+      <p className="training-note">Errores típicos: {item.mistakes.join(' · ')}</p>
+    </li>)}</ol>
+    <Bank bank={OBJECTION_BANK} refId="objeciones" legend="¿Qué objeción es?" verb="Corregir mis respuestas" />
+  </div>;
+}
+
 const BODIES: Record<TrainingId, ComponentType> = {
   precall: PreCall,
   logica: Logica,
@@ -582,11 +601,12 @@ const BODIES: Record<TrainingId, ComponentType> = {
   star: Star,
   cierres: Closes,
   descubrimiento: Discovery,
+  objeciones: Objections,
   entrevista: InterviewBank,
   certificacion: Certification,
 };
 
-// Formación comercial: nueve módulos de método y un examen. Todo se corrige en el
+// Formación comercial: diez módulos de método y un examen. Todo se corrige en el
 // navegador con reglas; nada se envía a un proveedor ni evalúa a la alumna.
 export default function StudentTraining() {
   const [open, setOpen] = useState<TrainingId | null>(null);
@@ -607,14 +627,14 @@ export default function StudentTraining() {
       <div>
         <span className="eyebrow">FORMACIÓN COMERCIAL</span>
         <h1>Aprende el método antes de improvisar.</h1>
-        <p>Una ruta corta por módulos, lecciones, recursos y tests, más nueve módulos de método para practicar las partes de la conversación que se pueden entrenar: antes de la llamada, la brecha, la presión, los leads difíciles, la calificación, los diez cierres, el descubrimiento, las preguntas de entrevista y el examen final.</p>
+        <p>Una ruta corta por módulos, lecciones, recursos y tests, más diez módulos de método para practicar las partes de la conversación que se pueden entrenar: antes de la llamada, la brecha, la presión, los leads difíciles, la calificación, los diez cierres, el descubrimiento, las siete objeciones, las preguntas de entrevista y el examen final.</p>
       </div>
       <span className="training-icon"><GraduationCap size={28} strokeWidth={1.4} /></span>
     </div>
     <TrainingCurriculum onOpenMethod={id => setOpen(id)} />
     <div className="training-method-head">
       <span className="eyebrow">MÉTODO COMPLETO</span>
-      <h2>Los nueve módulos de siempre</h2>
+      <h2>Los diez módulos de siempre</h2>
     </div>
     <div className="training-grid">
       {TRAINING_MODULES.map(item => <article className="training-card" key={item.id}>

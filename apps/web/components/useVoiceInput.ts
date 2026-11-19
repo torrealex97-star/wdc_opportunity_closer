@@ -28,7 +28,14 @@ const MESSAGES: Record<string, string> = {
   aborted: '',
 };
 
-export function useVoiceInput(onFinal: (text: string) => void) {
+type VoiceOptions = {
+  /** Se llama con lo que se va oyendo (provisional); sirve para interrumpir la locución del interlocutor. */
+  onHeard?: (text: string) => void;
+  /** Si devuelve `false`, el texto final se descarta (eco de la propia locución). */
+  accept?: (text: string) => boolean;
+};
+
+export function useVoiceInput(onFinal: (text: string) => void, options: VoiceOptions = {}) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
@@ -36,6 +43,8 @@ export function useVoiceInput(onFinal: (text: string) => void) {
   const recognition = useRef<RecognitionLike | null>(null);
   const answer = useRef(onFinal);
   answer.current = onFinal;
+  const opts = useRef(options);
+  opts.current = options;
 
   useEffect(() => {
     const scope = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
@@ -66,9 +75,14 @@ export function useVoiceInput(onFinal: (text: string) => void) {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const text = result?.[0]?.transcript ?? '';
-        if (result?.isFinal) { if (text.trim()) answer.current(text.trim()); } else partial += text;
+        if (result?.isFinal) {
+          const finalText = text.trim();
+          if (finalText) { opts.current.onHeard?.(finalText); if (opts.current.accept?.(finalText) !== false) answer.current(finalText); }
+        } else partial += text;
       }
-      setInterim(partial.trim());
+      const heard = partial.trim();
+      if (heard) opts.current.onHeard?.(heard);
+      setInterim(heard);
     };
     session.onerror = event => {
       const key = event.error ?? '';

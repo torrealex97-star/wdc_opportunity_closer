@@ -10,6 +10,7 @@ import CallReview from './CallReview';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
+import { isEcho } from '../lib/voiceEcho';
 import { MIN_AXIS_SAMPLES, nextPractice, type NextPracticeChoice } from '../lib/nextPractice';
 import { AXIS_LABELS } from '../lib/practiceAxes';
 import { BANT_LABELS, DECISION_LABELS, type PracticeBant } from '../lib/practiceRubrics';
@@ -153,10 +154,23 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [challenges, setChallenges] = useState<AssignedChallenge[]>([]);
   const [labels, setLabels] = useState<Record<string, string>>(AXIS_LABELS);
   const [speaking, setSpeaking] = useState(false);
+  // Lo que el interlocutor está leyendo ahora: sirve para distinguir una interrupción real del eco de sus altavoces.
+  const spoken = useRef<string | null>(null);
+  const currentUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+  function stopSpeaking() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    currentUtterance.current = null;
+    window.speechSynthesis.cancel();
+    spoken.current = null;
+    setSpeaking(false);
+  }
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
   // Si en esta sesión ha dictado algo, la práctica se registra como «voz»: el modo es el que usó, no el que tocaba.
   const usedVoice = useRef(false);
-  const voice = useVoiceInput(text => { usedVoice.current = true; setDraft(current => current.trim() ? `${current.trimEnd()} ${text}` : text); });
+  const voice = useVoiceInput(text => { usedVoice.current = true; setDraft(current => current.trim() ? `${current.trimEnd()} ${text}` : text); }, {
+    onHeard: heard => { if (spoken.current && !isEcho(heard, spoken.current)) stopSpeaking(); },
+    accept: heard => !isEcho(heard, spoken.current),
+  });
   const chat = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
 
@@ -217,7 +231,8 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const studentTurns = useMemo(() => turns.filter(turn => turn.role === 'user').length, [turns]);
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const atLimit = turns.length >= TURN_LIMIT;
-  const orb: OrbState = voice.listening ? 'listening' : busy ? 'thinking' : speaking ? 'speaking' : 'idle';
+  // Quien tiene la palabra manda: si el interlocutor está leyendo, el orbe dice «hablando» aunque el micrófono esté abierto para interrumpir.
+  const orb: OrbState = speaking ? 'speaking' : voice.listening ? 'listening' : busy ? 'thinking' : 'idle';
 
   function saveHistory(next: Stored[]) {
     setHistory(next);
@@ -228,12 +243,18 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'es-ES';
     utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
+    // El fin de una locución cancelada llega tarde: solo cuenta si sigue siendo la actual.
+    const done = () => { if (currentUtterance.current !== utterance) return; currentUtterance.current = null; spoken.current = null; setSpeaking(false); };
+    utterance.onend = done;
+    utterance.onerror = done;
+    currentUtterance.current = null;
     window.speechSynthesis.cancel();
+    currentUtterance.current = utterance;
+    spoken.current = text;
     window.speechSynthesis.speak(utterance);
   }
   function begin(item: PracticeScenario, offer: OfferSession | null = null) {
+    stopSpeaking();
     setError('');
     setScenario(item);
     setOfferSession(offer);
@@ -325,7 +346,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           <form className="practice-composer" onSubmit={send}>
             <label htmlFor="practice-reply" className="sr-only">Tu respuesta</label>
             {voice.supported && <button type="button" className="practice-mic" data-listening={voice.listening} aria-pressed={voice.listening} onClick={() => voice.listening ? voice.stop() : voice.start()} disabled={busy || atLimit} aria-label={voice.listening ? 'Parar el dictado' : 'Dictar la respuesta'} title={voice.listening ? 'Parar el dictado' : 'Dictar la respuesta'}>{voice.listening ? <MicOff size={17} /> : <Mic size={17} />}</button>}
-            <textarea ref={composer} id="practice-reply" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) void send(event); }} placeholder={atLimit ? 'La conversación ha llegado a su final.' : voice.interim || (voiceRoom ? 'Habla y dicta tu respuesta, o escríbela como lo dirías…' : 'Escribe como en WhatsApp: un mensaje, una pregunta…')} rows={2} maxLength={800} disabled={busy || atLimit} />
+            <textarea ref={composer} id="practice-reply" value={draft} onChange={event => { if (spoken.current) stopSpeaking(); setDraft(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) void send(event); }} placeholder={atLimit ? 'La conversación ha llegado a su final.' : voice.interim || (voiceRoom ? 'Habla y dicta tu respuesta, o escríbela como lo dirías…' : 'Escribe como en WhatsApp: un mensaje, una pregunta…')} rows={2} maxLength={800} disabled={busy || atLimit} />
             <button className="primary" type="submit" disabled={busy || atLimit || !draft.trim()} aria-label="Enviar respuesta">{busy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}Enviar</button>
           </form>
           <div className="practice-finish">
