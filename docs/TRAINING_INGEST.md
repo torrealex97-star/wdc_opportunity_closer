@@ -1,7 +1,7 @@
 # Formación importable, tests y gamificación
 
 Esta pieza añade a **Formación** una ruta curricular que el equipo puede mantener en Excel/CSV, un hub
-de recursos y tests con feedback inmediato. Reutiliza lo que ya existía: los nueve módulos de método
+de recursos y tests con feedback inmediato. Reutiliza lo que ya existía: los diez módulos de método
 siguen debajo, `student_activity` sigue siendo la señal que da XP, rachas y logros, y las candidaturas
 siguen viviendo en `student_applications`.
 

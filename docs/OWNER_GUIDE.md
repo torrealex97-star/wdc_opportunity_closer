@@ -100,7 +100,7 @@ git push origin --delete \
   spike/voice-roleplay
 ```
    Dejé fuera las 6 del otro agente con menos de 12 h (`feat/cola-contador`, `feat/cola-excepciones-real`, `feat/ext-abre-excepciones`, `feat/ext-fuentes-donde-hay-trabajo`, `feat/motor-clasifica-solo`, `docs/produccion-verificada`). Mi entorno bloquea borrar ramas remotas, por eso lo haces tú.
-3. **No borres a ciegas** `feat/formacion-progreso` ni `claude/cloud-student-view` (versiones antiguas divergentes; la primera guarda `tests/db/test_student_activity.sql` y `tests/browser/progress.spec.ts`). Si no los quieres: `git push origin --delete feat/formacion-progreso claude/cloud-student-view`.
+3. **Ramas antiguas: ya cerradas** (2026-11-19). `feat/formacion-progreso` y `claude/cloud-student-view` se borraron tras verificar que `main` ya tenía su trabajo reconstruido; lo único rescatable de `claude/beautiful-fermat-acaj61` (eco de voz y módulo 10) está en `ad0bb7b`. No hay nada más que borrar a mano.
 
 ## 4. Pruebas de BD con escrituras · 10 min
 **Qué consigues**: confirmar con la base real que restricciones y RLS funcionan (todo se deshace solo).
