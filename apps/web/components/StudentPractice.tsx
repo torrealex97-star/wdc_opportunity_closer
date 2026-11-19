@@ -8,6 +8,24 @@ import type { PracticePersona, PracticeScenario, PracticeTrack } from './practic
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
+import { MIN_AXIS_SAMPLES, nextPractice, type NextPracticeChoice } from '../lib/nextPractice';
+import { AXIS_LABELS } from '../lib/practiceAxes';
+import type { Progress } from '../lib/studentActivity';
+
+// Por qué esa práctica y no otra: los tres criterios salen de sus datos (eje flojo, categoría menos
+// practicada y días sin practicar), sin azar y sin IA.
+function nextReason(choice: NextPracticeChoice): string {
+  const parts: string[] = [];
+  parts.push(choice.days === null ? 'Todavía no has hecho ninguna práctica.'
+    : choice.days === 0 ? 'Hoy ya has practicado, pero esta es la que más te conviene ahora.'
+    : `Llevas ${choice.days} ${choice.days === 1 ? 'día' : 'días'} sin practicar.`);
+  parts.push(choice.weakest
+    ? `Tu eje más flojo es «${AXIS_LABELS[choice.weakest.axis] ?? choice.weakest.axis}» (${choice.weakest.avg}/100 en ${choice.weakest.count} prácticas).`
+    : `Aún no hay ${MIN_AXIS_SAMPLES} prácticas con nota por eje: empieza por lo que menos has tocado.`);
+  const label = categoriesFor(choice.track).find(item => item.id === choice.category)?.label ?? choice.category;
+  parts.push(choice.categoryCount === 0 ? `«${label}» todavía no la has practicado.` : `«${label}» es la que menos has practicado (${choice.categoryCount} ${choice.categoryCount === 1 ? 'vez' : 'veces'}).`);
+  return parts.join(' ');
+}
 
 type Turn = { role: 'user' | 'coach'; content: string };
 type Axis = { id: string; label: string; score: number; note: string; quote: string };
@@ -96,6 +114,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [canUseProfile, setCanUseProfile] = useState(false);
   const [useProfile, setUseProfile] = useState(false);
   const [offerSession, setOfferSession] = useState<OfferSession | null>(null);
+  const [next, setNext] = useState<NextPracticeChoice<PracticeScenario> | null>(null);
   const [speaking, setSpeaking] = useState(false);
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
   // Si en esta sesión ha dictado algo, la práctica se registra como «voz»: el modo es el que usó, no el que tocaba.
@@ -121,6 +140,19 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     fetch('/api/student/application-profile', { cache: 'no-store' })
       .then(response => response.ok ? response.json() : null)
       .then((data: { profile?: { autofill_consent_at?: string | null } | null } | null) => setCanUseProfile(Boolean(data?.profile?.autofill_consent_at)))
+      .catch(() => undefined);
+    // «Tu siguiente práctica»: se calcula con su progreso real. Sin sesión o sin lectura no se muestra;
+    // nunca se rellena con una recomendación inventada.
+    fetch('/api/student/progress?days=90', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { progress?: Progress; metrics?: { mastery?: { ref: string; count: number }[] } } | null) => {
+        if (!data?.progress) return;
+        setNext(nextPractice(PRACTICE_SCENARIOS, {
+          axes: data.progress.axes ?? [],
+          mastery: data.metrics?.mastery ?? [],
+          lastPracticeAt: data.progress.last_practice_at ?? null,
+        }));
+      })
       .catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -329,6 +361,10 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         {item === 'llamada' ? <Phone size={16} /> : <Users size={16} />}{TRACK_TEXT[item].nav}
       </button>)}
     </div>
+    {next && <section className="practice-prepared practice-next-card" aria-label="Tu siguiente práctica">
+      <div className="practice-prepared-head"><Sparkles size={18} /><div><span className="eyebrow">TU SIGUIENTE PRÁCTICA</span><h2>{next.scenario.title}</h2><p>{nextReason(next)}</p></div></div>
+      <div className="practice-prepared-actions"><button type="button" className="primary" onClick={() => { onTrackChange(next.track); begin(next.scenario); }}><Play size={15} />Practicar esta</button></div>
+    </section>}
     {prepared.length > 0 && <section className="practice-prepared" aria-label="Practica una candidatura tuya">
       <div className="practice-prepared-head"><BriefcaseBusiness size={18} /><div><span className="eyebrow">CON UNA CANDIDATURA TUYA</span><h2>Ensaya la conversación de una oferta real</h2><p>Elige una candidatura de tu tablero y practica con el anuncio que estás trabajando, no con un caso genérico.</p></div></div>
       <div className="practice-prepared-form">

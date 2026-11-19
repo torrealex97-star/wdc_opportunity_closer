@@ -64,15 +64,16 @@ const week = summarize(rows, 7, now);
 assert.equal(week.sessions, 1, 'solo la entrada de la semana');
 assert.equal(week.practice.count, 2); assert.equal(week.practice.avg, 70); assert.equal(week.practice.best, 80);
 assert.equal(week.training.examBest, 100); assert.equal(week.training.examPassed, true, 'el mejor intento cuenta');
-assert.deepEqual(week.axes, [{ axis: 'empatia', avg: 80, track: null }, { axis: 'cierre', avg: 70, track: null }], 'un escenario desconocido no se atribuye a ninguna sala');
+assert.deepEqual(week.axes, [{ axis: 'empatia', avg: 80, track: null, count: 2 }, { axis: 'cierre', avg: 70, track: null, count: 1 }], 'un escenario desconocido no se atribuye a ninguna sala');
+assert.equal(week.last_practice_at, '2026-10-23T09:00:00Z', 'la última práctica va aparte de la última entrada');
 // «objeciones» existe en las dos salas: la media de cada una va por separado, no promediada entre ambas.
 const split = summarize([
   row('practice', '2026-10-24T10:00:00Z', { ref: 'llamada-completa', score: 80, detail: { axes: { objecion: 90, cierre: 70 } } }),
   row('practice', '2026-10-24T09:00:00Z', { ref: 'entrevista-closer', score: 60, detail: { axes: { objecion: 50, encaje: 65 } } }),
 ], 7, new Date('2026-10-25T12:00:00Z'));
 assert.deepEqual(split.axes, [
-  { axis: 'objecion', avg: 90, track: 'llamada' }, { axis: 'cierre', avg: 70, track: 'llamada' },
-  { axis: 'objecion', avg: 50, track: 'entrevista' }, { axis: 'encaje', avg: 65, track: 'entrevista' },
+  { axis: 'objecion', avg: 90, track: 'llamada', count: 1 }, { axis: 'cierre', avg: 70, track: 'llamada', count: 1 },
+  { axis: 'objecion', avg: 50, track: 'entrevista', count: 1 }, { axis: 'encaje', avg: 65, track: 'entrevista', count: 1 },
 ], 'objeciones de llamada y de entrevista no se mezclan');
 assert.equal(week.recent[0].kind, 'training_exam'); assert.equal(week.recent[0].score, 33, 'lo más reciente primero');
 const all = summarize(rows, 90, now);

@@ -145,7 +145,9 @@ export type Progress = {
   streak: { current: number; best: number };
   weekly: { week: string; avg: number | null; count: number }[];
   // Los ejes se agrupan por sala: «objeciones» existe en la llamada y en la entrevista y no son la misma competencia.
-  axes: { axis: string; avg: number; track: 'llamada' | 'entrevista' | null }[];
+  // `count` viaja para no presentar una media de una sola práctica como tendencia.
+  axes: { axis: string; avg: number; track: 'llamada' | 'entrevista' | null; count: number }[];
+  last_practice_at: string | null;
   recent: ActivityRow[];
   lifetime: Totals & { achievements: Achievement[] };
 };
@@ -174,7 +176,9 @@ export function summarize(rows: ActivityRow[], days: number, now = new Date(), t
     sessions: windowed.filter(row => row.kind === 'session').length,
     last_seen: rows[0]?.created_at ?? null,
     ...totals(windowed), streak, weekly,
-    axes: [...byAxis.values()].map(entry => ({ axis: entry.axis, track: entry.track, avg: Math.round(entry.values.reduce((a, b) => a + b, 0) / entry.values.length) })),
+    axes: [...byAxis.values()].map(entry => ({ axis: entry.axis, track: entry.track, avg: Math.round(entry.values.reduce((a, b) => a + b, 0) / entry.values.length), count: entry.values.length })),
+    // La última práctica de siempre (no la última entrada): sirve para «días sin practicar» sin deducirlo de «recent».
+    last_practice_at: rows.find(row => row.kind === 'practice')?.created_at ?? null,
     recent: windowed.slice(0, 20),
     lifetime: { ...life, achievements: achievements(life, streak) },
   };

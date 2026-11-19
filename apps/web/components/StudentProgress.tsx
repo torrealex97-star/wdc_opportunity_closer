@@ -7,6 +7,8 @@ import { scenarioById } from './practiceScenarios';
 import type { Progress } from '../lib/studentActivity';
 import type { AppFunnel, Mastery, XpResult } from '../lib/studentMetrics';
 import type { DirectReview, Goal, IdleNudge } from '../lib/studentRetention';
+import { AXIS_LABELS } from '../lib/practiceAxes';
+import { MIN_AXIS_SAMPLES } from '../lib/nextPractice';
 
 // Progreso de la alumna (adaptado del panel «Mis métricas» de closer-ai-coach): solo datos reales de su actividad.
 // Un periodo sin datos es «—», nunca 0; una carga fallida no se pinta como vacío; cada gráfico trae su tabla.
@@ -16,8 +18,6 @@ type State = { kind: 'loading' } | { kind: 'login' } | { kind: 'error'; message:
 const PERIODS = [7, 30, 90] as const;
 const REVIEW_LABELS: Record<string, string> = Object.fromEntries(TRAINING_MODULES.map(m => [m.id, m.title]));
 const KIND_LABELS: Record<string, string> = { session: 'Entrada', training_review: 'Formación', training_exam: 'Examen de egreso', practice: 'Sala de práctica' };
-// Ejes de la sala de práctica (venta y entrevista); un eje desconocido se muestra con su identificador.
-const AXIS_LABELS: Record<string, string> = { apertura: 'Apertura y marco', descubrimiento: 'Descubrimiento', objecion: 'Objeciones', cierre: 'Cierre', confianza: 'Confianza y autoridad', claridad: 'Claridad y estructura', evidencia: 'Evidencia y cifras', encaje: 'Encaje', iniciativa: 'Cierre e iniciativa' };
 const number = new Intl.NumberFormat('es');
 const dateFmt = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' });
 const weekLabel = (iso: string) => dateFmt.format(new Date(`${iso}T12:00:00Z`));
@@ -28,7 +28,11 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds
 function AxisGroup({ title, rows }: { title: string; rows: Progress['axes'] }) {
   if (!rows.length) return null;
   return <section className="axis-room"><h3>{title}</h3><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Eje</th><th scope="col">Nota</th></tr></thead><tbody>
-    {rows.map(a => <tr key={`${a.track ?? 'sin'}:${a.axis}`}><th scope="row">{AXIS_LABELS[a.axis] ?? a.axis}</th><td><div className="meter" role="progressbar" aria-label={`${AXIS_LABELS[a.axis] ?? a.axis} en ${title.toLowerCase()}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={a.avg}><span style={{ width: `${a.avg}%` }} /></div><span className="num">{a.avg}/100</span></td></tr>)}
+    {rows.map(a => <tr key={`${a.track ?? 'sin'}:${a.axis}`}><th scope="row">{AXIS_LABELS[a.axis] ?? a.axis}</th><td>
+      {a.count < MIN_AXIS_SAMPLES
+        ? <><span className="num">—</span> <small>menos de {MIN_AXIS_SAMPLES} prácticas ({a.count})</small></>
+        : <><div className="meter" role="progressbar" aria-label={`${AXIS_LABELS[a.axis] ?? a.axis} en ${title.toLowerCase()}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={a.avg}><span style={{ width: `${a.avg}%` }} /></div><span className="num">{a.avg}/100</span> <small>{a.count} prácticas</small></>}
+    </td></tr>)}
   </tbody></table></div></section>;
 }
 
@@ -119,7 +123,7 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
       <article className="progress-card"><h2>Evolución semanal</h2><p className="card-meta">Nota media de tus prácticas por semana (de lunes a domingo, hora de Madrid). Una semana sin prácticas se queda en «—».</p>
         <WeeklyBars weekly={p.weekly} />
         <details><summary>Ver como tabla</summary><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Semana del</th><th scope="col" className="num">Prácticas</th><th scope="col" className="num">Nota media</th></tr></thead><tbody>{p.weekly.map(w => <tr key={w.week}><th scope="row">{weekLabel(w.week)}</th><td className="num">{w.count}</td><td className="num">{dash(w.avg)}</td></tr>)}</tbody></table></div></details></article>
-      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en los últimos {p.days} días. La llamada y la entrevista van por separado: un eje con el mismo nombre no mezcla las dos salas.</p>
+      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en los últimos {p.days} días. La llamada y la entrevista van por separado y, con menos de {MIN_AXIS_SAMPLES} prácticas en un eje, se muestra «—»: dos datos no son una tendencia.</p>
         {p.axes.length ? <div className="axis-rooms">
           <AxisGroup title="Llamada" rows={p.axes.filter(a => a.track === 'llamada')} />
           <AxisGroup title="Entrevista" rows={p.axes.filter(a => a.track === 'entrevista')} />
