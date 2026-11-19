@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, CircleAlert, LoaderCircle, Plus, RotateCcw, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleAlert, History, LoaderCircle, Plus, RotateCcw, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import {
-  BANT_LABELS, DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, MAX_AXES, ROOMS,
+  BANT_LABELS, DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, ROOMS,
   type BantConfig, type BantLetter, type PracticeRoom, type RoomRubrics, type RubricAxis,
 } from '../lib/practiceRubrics';
 
@@ -13,23 +13,24 @@ import {
 // siguen usando los valores por defecto (nunca se finge que el cambio está aplicado).
 
 type Config = { rubrics: RoomRubrics; priorities: string[]; bant: BantConfig };
+type Version = { version: number; at: string; by: string; note?: string; config: Config };
 type RoomMeta = { id: PracticeRoom; label: string; note: string };
-type Payload = {
-  config: Config;
-  defaults: Config;
-  rooms: RoomMeta[];
+type Meta = {
   backend: 'supabase' | 'local';
   source: 'db' | 'defaults';
   reason: string | null;
   updated_at: string | null;
   updated_by: string | null;
+  version: number;
+  history: Version[];
 };
+type Payload = { config: Config; defaults: Config; rooms: RoomMeta[] } & Meta;
 
 const clone = (value: Config): Config => JSON.parse(JSON.stringify(value)) as Config;
 
 export default function PracticeSettings({ onSessionLost }: { onSessionLost: () => void }) {
   const [config, setConfig] = useState<Config>({ rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT });
-  const [meta, setMeta] = useState<Omit<Payload, 'config' | 'defaults' | 'rooms'>>({ backend: 'supabase', source: 'defaults', reason: null, updated_at: null, updated_by: null });
+  const [meta, setMeta] = useState<Meta>({ backend: 'supabase', source: 'defaults', reason: null, updated_at: null, updated_by: null, version: 0, history: [] });
   const [rooms, setRooms] = useState<RoomMeta[]>(ROOMS);
   const [room, setRoom] = useState<PracticeRoom>('venta');
   const [busy, setBusy] = useState(true);
@@ -48,7 +49,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       })
       .then(data => {
         setConfig(clone(data.config));
-        setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+        setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by, version: data.version ?? 0, history: data.history ?? [] });
         if (data.rooms?.length) setRooms(data.rooms);
         setDirty(false);
       })
@@ -59,22 +60,16 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
   useEffect(load, [load]);
 
   const axes = config.rubrics[room];
-  const weight = axes.reduce((sum, axis) => sum + axis.weight, 0);
+  const activeAxes = axes.filter(axis => axis.enabled);
+  const weight = activeAxes.reduce((sum, axis) => sum + axis.weight, 0);
 
   function edit(next: Config) { setConfig(next); setDirty(true); setNotice(''); }
   function patchAxis(id: string, patch: Partial<RubricAxis>) {
     edit({ ...config, rubrics: { ...config.rubrics, [room]: axes.map(axis => axis.id === id ? { ...axis, ...patch } : axis) } });
   }
-  function addAxis() {
-    if (axes.length >= MAX_AXES) return;
-    const used = new Set(axes.map(axis => axis.id));
-    let n = 1;
-    while (used.has(`extra_${n}`)) n += 1;
-    const axis: RubricAxis = { id: `extra_${n}`, label: 'Nuevo criterio', guide: 'Qué debe demostrar la alumna en este criterio.', weight: 5 };
-    edit({ ...config, rubrics: { ...config.rubrics, [room]: [...axes, axis] } });
-  }
   function removeAxis(id: string) {
-    if (axes.length <= 3) return;
+    const target = axes.find(axis => axis.id === id);
+    if (!target || (target.enabled && activeAxes.length <= 3)) return;
     edit({ ...config, rubrics: { ...config.rubrics, [room]: axes.filter(axis => axis.id !== id) } });
   }
   function setPriority(index: number, value: string) {
@@ -106,7 +101,8 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo guardar.');
-      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+      if (data.config) setConfig(clone(data.config));
+      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by, version: data.version ?? 0, history: data.history ?? [] });
       setDirty(false);
       setNotice('Criterios guardados. La próxima práctica y el próximo feedback ya los usan.');
     } catch (err) { setError((err as Error).message); }
@@ -121,9 +117,28 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo restaurar.');
       setConfig(clone(data.config));
-      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by, version: 0, history: [] });
       setDirty(false);
       setNotice('Restaurados los criterios por defecto (los de las skills).');
+    } catch (err) { setError((err as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  async function restore(version: number) {
+    if (!window.confirm(`¿Restaurar la versión ${version}? Se guarda como una versión nueva; el historial no se reescribe.`)) return;
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const response = await fetch('/api/admin/practice', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restore_version: version }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo restaurar la versión.');
+      if (data.config) setConfig(clone(data.config));
+      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by, version: data.version ?? 0, history: data.history ?? [] });
+      setDirty(false);
+      setNotice(`Versión ${version} restaurada como versión ${data.version ?? ''}.`);
     } catch (err) { setError((err as Error).message); }
     finally { setSaving(false); }
   }
@@ -144,9 +159,9 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
 
     <div className="stat-strip">
       <span><strong>{rooms.length}</strong>rúbricas por sala</span>
-      <span><strong>{config.rubrics[room].length}</strong>criterios en esta sala</span>
-      <span><strong>{weight}</strong>peso total (se normaliza)</span>
-      <span><strong>{Object.values(config.bant).filter(Boolean).length}</strong>salas con BANT</span>
+      <span><strong>{activeAxes.length}/{axes.length}</strong>criterios activos en esta sala</span>
+      <span><strong>{weight}</strong>peso activo (se normaliza)</span>
+      <span><strong>{meta.version || '—'}</strong>versión guardada</span>
     </div>
     <p className="card-meta" style={{ marginBottom: backendNote ? 4 : 20 }}>{saved}</p>
     {backendNote && <p className="card-meta" style={{ marginBottom: 20 }}>{backendNote}</p>}
@@ -159,8 +174,13 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
 
     <div className="table-wrap" style={{ marginTop: 16 }}>
       <table className="data-table rubric-table">
-        <thead><tr><th scope="col">Criterio</th><th scope="col" className="num">Peso</th><th scope="col">Qué debe demostrar (lo lee la IA)</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
+        <thead><tr><th scope="col">Activo</th><th scope="col">Criterio</th><th scope="col" className="num">Peso</th><th scope="col">Qué debe demostrar (lo lee la IA)</th><th scope="col">Fuente en la skill</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{axes.map(axis => <tr key={axis.id}>
+          <td>
+            <label className="check-label" title={axis.enabled ? 'Se puntúa y se envía a la IA' : 'No se puntúa ni se envía a la IA'}>
+              <input type="checkbox" checked={axis.enabled} onChange={event => patchAxis(axis.id, { enabled: event.target.checked })} aria-label={`Activar ${axis.label}`} />
+            </label>
+          </td>
           <td className="primary-cell">
             <label htmlFor={`axis-${axis.id}`} className="sr-only">Nombre del criterio {axis.id}</label>
             <input id={`axis-${axis.id}`} value={axis.label} maxLength={60} onChange={event => patchAxis(axis.id, { label: event.target.value })} />
@@ -176,15 +196,23 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
             <textarea id={`guide-${axis.id}`} rows={Math.min(9, Math.max(3, Math.ceil(axis.guide.length / 42)))} maxLength={400} value={axis.guide}
               onChange={event => patchAxis(axis.id, { guide: event.target.value })} />
           </td>
+          <td>
+            <label htmlFor={`source-${axis.id}`} className="sr-only">Skill de {axis.label}</label>
+            <select id={`source-${axis.id}`} value={axis.source} onChange={event => patchAxis(axis.id, { source: event.target.value as RubricAxis['source'] })}>
+              <option value="analisis-llamadas-ventas">analisis-llamadas-ventas</option>
+              <option value="scalix-ventas">scalix-ventas</option>
+            </select>
+            <label htmlFor={`ref-${axis.id}`} className="sr-only">Sección de la skill de {axis.label}</label>
+            <input id={`ref-${axis.id}`} className="rubric-id" value={axis.source_ref} maxLength={160} onChange={event => patchAxis(axis.id, { source_ref: event.target.value })} />
+          </td>
           <td style={{ textAlign: 'right' }}>
-            <button type="button" onClick={() => removeAxis(axis.id)} disabled={axes.length <= 3} aria-label={`Quitar ${axis.label}`} title={axes.length <= 3 ? 'Cada rúbrica necesita al menos 3 criterios' : 'Quitar'}><Trash2 size={14} /></button>
+            <button type="button" onClick={() => removeAxis(axis.id)} disabled={axis.enabled && activeAxes.length <= 3} aria-label={`Quitar ${axis.label}`} title={axis.enabled && activeAxes.length <= 3 ? 'Cada rúbrica necesita al menos 3 criterios activos' : 'Quitar'}><Trash2 size={14} /></button>
           </td>
         </tr>)}</tbody>
       </table>
     </div>
     <div className="rubric-actions">
-      <button type="button" onClick={addAxis} disabled={axes.length >= MAX_AXES}><Plus size={15} /> Añadir criterio</button>
-      <span className="card-meta">{weight !== 100 ? `Los pesos suman ${weight}. La nota se normaliza igual, pero 100 mantiene la escala de la skill.` : 'Los pesos suman 100: la nota se lee como la de la skill.'}</span>
+      <span className="card-meta">Los criterios no se crean desde el panel: cada uno declara la skill y la sección de donde sale. Puedes editar, ponderar, activar/desactivar y restaurar versiones. {weight !== 100 ? `Los pesos activos suman ${weight}; la nota se normaliza igual.` : 'Los pesos activos suman 100: la nota se lee como la de la skill.'}</span>
     </div>
 
     <h2 className="section-title">Cualificación BANT</h2>
@@ -221,5 +249,15 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       {dirty && <span className="status"><CircleAlert size={14} /> Cambios sin guardar</span>}
       <span className="card-meta"><SlidersHorizontal size={14} /> Se aplica a la próxima réplica y al próximo feedback.</span>
     </div>
+
+    <h2 className="section-title">Versiones guardadas</h2>
+    <p className="card-meta" style={{ marginBottom: 12 }}>Cada guardado crea una versión con la rúbrica completa. Restaurar una versión la guarda como una versión nueva: el historial no se reescribe. Se conservan las últimas 20.</p>
+    {meta.history.length === 0 ? <p className="card-meta">— Todavía no hay versiones: la configuración activa son los criterios por defecto de las skills.</p> : <ul className="rubric-versions">
+      {[...meta.history].reverse().map(item => <li key={item.version}>
+        <span className="rubric-version-id"><History size={14} /> v{item.version}</span>
+        <span>{item.note ?? 'Guardado'} · {item.by || 'operador'} · {item.at ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(item.at)) : 'sin fecha'}</span>
+        <button type="button" onClick={() => void restore(item.version)} disabled={saving}>Restaurar</button>
+      </li>)}
+    </ul>}
   </section>;
 }

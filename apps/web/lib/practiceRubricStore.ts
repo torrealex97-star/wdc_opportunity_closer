@@ -11,10 +11,18 @@ import {
 } from './practiceRubrics';
 
 const TABLE = 'practice_rubrics';
-const COLUMNS = 'rubrics,priorities,bant,updated_at,updated_by';
+const COLUMNS = 'rubrics,priorities,bant,updated_at,updated_by,version,history';
 const TTL_MS = 20_000;
 
 export type PracticeConfig = { rubrics: RoomRubrics; priorities: string[]; bant: BantConfig };
+/** Una versión guardada completa. Restaurar crea una versión nueva; no reescribe el historial. */
+export type PracticeVersion = {
+  version: number;
+  at: string;
+  by: string;
+  note?: string;
+  config: PracticeConfig;
+};
 export type LoadedPracticeConfig = PracticeConfig & {
   /** De dónde salen y a dónde van los criterios. `local` = SQLite de desarrollo, nunca producción. */
   backend: 'supabase' | 'local';
@@ -23,6 +31,8 @@ export type LoadedPracticeConfig = PracticeConfig & {
   reason: string | null;
   updated_at: string | null;
   updated_by: string | null;
+  version: number;
+  history: PracticeVersion[];
 };
 
 export const DEFAULT_CONFIG: PracticeConfig = { rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT };
@@ -33,7 +43,32 @@ export const usesLocalPracticeStore = () => !allowlistConfigured() && process.en
 
 const backend = (): 'supabase' | 'local' => usesLocalPracticeStore() ? 'local' : 'supabase';
 const defaults = (reason: string | null): LoadedPracticeConfig =>
-  ({ ...DEFAULT_CONFIG, backend: backend(), source: 'defaults', reason, updated_at: null, updated_by: null });
+  ({ ...DEFAULT_CONFIG, backend: backend(), source: 'defaults', reason, updated_at: null, updated_by: null, version: 0, history: [] });
+
+// El historial es un dato de lectura del panel, no la fuente de verdad. Una entrada corrupta se
+// descarta (no se sirve a medias) y el resto sigue disponible.
+function parseHistory(value: unknown): PracticeVersion[] {
+  if (!Array.isArray(value)) return [];
+  const out: PracticeVersion[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    if (typeof row.version !== 'number' || !row.config || typeof row.config !== 'object') continue;
+    const config = row.config as Record<string, unknown>;
+    const rubrics = validateRubrics(config.rubrics);
+    const priorities = validatePriorities(config.priorities);
+    const bant = validateBant(config.bant);
+    if (!rubrics.ok || !priorities.ok || !bant.ok) continue;
+    out.push({
+      version: row.version,
+      at: typeof row.at === 'string' ? row.at : '',
+      by: typeof row.by === 'string' ? row.by : '',
+      ...(typeof row.note === 'string' && row.note ? { note: row.note.slice(0, 200) } : {}),
+      config: { rubrics: rubrics.value, priorities: priorities.value, bant: bant.value },
+    });
+  }
+  return out.slice(-20);
+}
 
 let cache: { at: number; value: LoadedPracticeConfig } | null = null;
 
@@ -81,6 +116,8 @@ export async function loadPracticeConfig(force = false): Promise<LoadedPracticeC
     reason: null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
+    version: typeof row.version === 'number' ? row.version : 0,
+    history: parseHistory(row.history),
   };
   cache = { at: Date.now(), value };
   return value;
@@ -121,10 +158,13 @@ function loadLocal(): LoadedPracticeConfig {
     cache = { at: Date.now(), value };
     return value;
   }
+  let history: unknown = [];
+  try { history = JSON.parse(read.row.history); } catch { history = []; }
   const value: LoadedPracticeConfig = {
     rubrics: rubrics.value, priorities: priorities.value, bant: bant.value,
     backend: 'local', source: 'db', reason: null,
     updated_at: read.row.updated_at, updated_by: read.row.updated_by,
+    version: read.row.version, history: parseHistory(history),
   };
   cache = { at: Date.now(), value };
   return value;
@@ -135,15 +175,35 @@ export type SaveResult = { ok: true; config: LoadedPracticeConfig } | { ok: fals
 export async function savePracticeConfig(input: unknown, updatedBy: string): Promise<SaveResult> {
   if (!input || typeof input !== 'object') return { ok: false, detail: 'Falta la configuración.', status: 422 };
   const body = input as Record<string, unknown>;
-  const rubrics = validateRubrics(body.rubrics);
+  // Restaurar una versión: se valida la copia guardada y se escribe como versión nueva. El historial
+  // nunca se reescribe hacia atrás.
+  const current = await loadPracticeConfig(true);
+  let source: Record<string, unknown> = body;
+  let note: string | undefined;
+  if (body.restore_version !== undefined) {
+    const version = typeof body.restore_version === 'number' ? body.restore_version : NaN;
+    const target = current.history.find(entry => entry.version === version);
+    if (!target) return { ok: false, detail: `La versión ${String(body.restore_version)} no está en el historial.`, status: 404 };
+    source = target.config as unknown as Record<string, unknown>;
+    note = `Restaurada la versión ${version}`;
+  }
+  const rubrics = validateRubrics(source.rubrics);
   if (!rubrics.ok) return { ok: false, detail: rubrics.detail, status: 422 };
-  const priorities = validatePriorities(body.priorities);
+  const priorities = validatePriorities(source.priorities);
   if (!priorities.ok) return { ok: false, detail: priorities.detail, status: 422 };
-  const bant = validateBant(body.bant);
+  const bant = validateBant(source.bant);
   if (!bant.ok) return { ok: false, detail: bant.detail, status: 422 };
 
+  const savedConfig: PracticeConfig = { rubrics: rubrics.value, priorities: priorities.value, bant: bant.value };
+  const at = new Date().toISOString();
+  const version = current.version + 1;
+  const history: PracticeVersion[] = [
+    ...current.history,
+    { version, at, by: updatedBy.slice(0, 200), ...(note ? { note } : {}), config: savedConfig },
+  ].slice(-20);
+
   if (usesLocalPracticeStore()) {
-    const written = writeLocalConfig(ORG, { rubrics: rubrics.value, priorities: priorities.value, bant: bant.value }, updatedBy);
+    const written = writeLocalConfig(ORG, savedConfig, updatedBy, { version, history });
     if (!written.ok) return { ok: false, detail: written.reason, status: 503 };
     cache = null;
     return { ok: true, config: await loadPracticeConfig(true) };
@@ -154,11 +214,13 @@ export async function savePracticeConfig(input: unknown, updatedBy: string): Pro
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({
       org_id: ORG,
-      rubrics: rubrics.value,
-      priorities: priorities.value,
-      bant: bant.value,
-      updated_at: new Date().toISOString(),
+      rubrics: savedConfig.rubrics,
+      priorities: savedConfig.priorities,
+      bant: savedConfig.bant,
+      updated_at: at,
       updated_by: updatedBy.slice(0, 200),
+      version,
+      history,
     }),
   }).catch(() => null);
   if (!response) return { ok: false, detail: 'No se pudo contactar con la base de datos: los cambios no se han guardado.', status: 503 };
@@ -169,7 +231,7 @@ export async function savePracticeConfig(input: unknown, updatedBy: string): Pro
       ok: false,
       status: 503,
       detail: missing
-        ? 'No se pudo guardar: falta aplicar la migración `20261119_practice_rubrics.sql` en Supabase. Los criterios por defecto siguen funcionando.'
+        ? 'No se pudo guardar: falta aplicar las migraciones `20261119_practice_rubrics.sql` y `20261119_practice_rubrics_versions.sql` en Supabase. Los criterios por defecto siguen funcionando.'
         : `No se pudo guardar la configuración (HTTP ${response.status}). Inténtalo otra vez; no se ha cambiado nada.`,
     };
   }

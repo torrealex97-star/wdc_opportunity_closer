@@ -59,7 +59,7 @@ export function localDb(): Database | null {
   }
 }
 
-export type LocalRow = { rubrics: string; priorities: string; bant: string; updated_at: string; updated_by: string | null };
+export type LocalRow = { rubrics: string; priorities: string; bant: string; updated_at: string; updated_by: string | null; version: number; history: string };
 export type LocalRead =
   | { ok: true; row: LocalRow | null }
   | { ok: false; reason: string };
@@ -68,7 +68,7 @@ export function readLocalConfig(orgId: string): LocalRead {
   const db = localDb();
   if (!db) return { ok: false, reason: 'Este entorno no puede usar la base local (node:sqlite no disponible).' };
   try {
-    const row = db.prepare('select rubrics, priorities, bant, updated_at, updated_by from practice_rubrics where org_id = ?').get(orgId);
+    const row = db.prepare('select rubrics, priorities, bant, updated_at, updated_by, version, history from practice_rubrics where org_id = ?').get(orgId);
     if (!row) return { ok: true, row: null };
     return {
       ok: true,
@@ -78,6 +78,8 @@ export function readLocalConfig(orgId: string): LocalRead {
         bant: String(row.bant),
         updated_at: String(row.updated_at),
         updated_by: row.updated_by === null || row.updated_by === undefined ? null : String(row.updated_by),
+        version: Number(row.version ?? 0),
+        history: String(row.history ?? '[]'),
       },
     };
   } catch (error) {
@@ -85,15 +87,21 @@ export function readLocalConfig(orgId: string): LocalRead {
   }
 }
 
-export function writeLocalConfig(orgId: string, config: { rubrics: unknown; priorities: unknown; bant: unknown }, updatedBy: string): { ok: true } | { ok: false; reason: string } {
+export function writeLocalConfig(
+  orgId: string,
+  config: { rubrics: unknown; priorities: unknown; bant: unknown },
+  updatedBy: string,
+  meta: { version: number; history: unknown },
+): { ok: true } | { ok: false; reason: string } {
   const db = localDb();
   if (!db) return { ok: false, reason: 'Este entorno no puede usar la base local (node:sqlite no disponible).' };
   try {
-    db.prepare(`insert into practice_rubrics (org_id, rubrics, priorities, bant, updated_at, updated_by)
-      values (?, ?, ?, ?, ?, ?)
+    db.prepare(`insert into practice_rubrics (org_id, rubrics, priorities, bant, updated_at, updated_by, version, history)
+      values (?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(org_id) do update set rubrics = excluded.rubrics, priorities = excluded.priorities,
-        bant = excluded.bant, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
-      .run(orgId, JSON.stringify(config.rubrics), JSON.stringify(config.priorities), JSON.stringify(config.bant), new Date().toISOString(), updatedBy.slice(0, 200));
+        bant = excluded.bant, updated_at = excluded.updated_at, updated_by = excluded.updated_by,
+        version = excluded.version, history = excluded.history`)
+      .run(orgId, JSON.stringify(config.rubrics), JSON.stringify(config.priorities), JSON.stringify(config.bant), new Date().toISOString(), updatedBy.slice(0, 200), meta.version, JSON.stringify(meta.history));
     return { ok: true };
   } catch (error) {
     return { ok: false, reason: `No se pudo guardar en la base local (${(error as Error).message}).` };

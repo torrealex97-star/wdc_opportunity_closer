@@ -535,6 +535,7 @@ export function debriefInstructions(
   priorities: string[] = DEFAULT_PRIORITIES,
   bantConfig: BantConfig = DEFAULT_BANT,
 ) {
+  const review = scenario.rubric === 'llamada';
   const definitions = axesFor(scenario, rubrics);
   const axes = definitions
     .map(axis => `- ${axis.id}: ${axis.guide} (peso ${axis.weight}%)`)
@@ -548,11 +549,13 @@ export function debriefInstructions(
 - Vara: ${(['budget', 'authority', 'need', 'timing'] as const).map(letter => `${BANT_LABELS[letter]}: ${BANT_HELP[letter]}`).join(' ')}
 - decision: lo que hizo la alumna, una de estas cinco: correcto_avanzar (todo ✓), avanzar_sin_cualificar (algún ~ o ? y ningún ✗), no_debio_avanzar (algún ✗ y avanzó), correcto_parar (algún ✗ y paró), paro_demasiado_pronto (ningún ✗ y paró). Un «lo pienso», «mándame info» o «te llamo yo» cuenta como parar. Agendar la siguiente llamada no es timing.
 ` : '';
-  return `Evalúas una práctica de conversación de una alumna de Women Digital Closer. Devuelve feedback breve en español de España.
+  return `${review
+    ? 'Evalúas la transcripción de una llamada de venta real de una closer de Women Digital Closer con la rúbrica de analisis-llamadas-ventas. Devuelve feedback breve en español de España.'
+    : 'Evalúas una práctica de conversación de una alumna de Women Digital Closer. Devuelve feedback breve en español de España.'}
 
 Reglas:
 - Mide la EJECUCIÓN, no el resultado: una venta cerrada con mala ejecución sigue siendo mala ejecución y una llamada perdida con buena ejecución puede ser un lead inviable. No premies el desenlace.
-- Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.
+- ${review ? 'La persona evaluada es la VENDEDORA: solo puedes citar frases literales de sus intervenciones. El CLIENTE es el interlocutor; sus palabras son el hecho para BANT y para entender qué pasó, no para puntuar a la vendedora. Si una intervención no demuestra el criterio, deja quote vacío; nunca la inventes.' : 'Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.'}
 - No inventes resultados, cifras, empresas ni contrataciones. No atribuyas logros que no estén en la conversación.
 - Puntúa los ${count} ejes de 0 a 100 como estimación docente: 0-40 ausente o contraproducente, 41-60 parcial, 61-80 correcto, 81-100 sólido. No regales puntuaciones altas.
 - focus: LA CORRECCIÓN PRIORITARIA, una sola, en una frase. Elígela con el orden de abajo y no des una lista de fallos.
@@ -560,6 +563,7 @@ Reglas:
 - model: una forma posible de decir mejor una de sus frases, con sus propias palabras y sin inventar datos. No es «la respuesta correcta».
 - next: una sola tarea para las próximas 24 horas, concreta y comprobable (qué hacer, cuántas veces y con qué situación de la sala), ligada a la habilidad de «focus». No propongas varias cosas a la vez.
 - Tono directo y respetuoso, sin elogios vacíos. Si la práctica fue buena, dilo y no inventes defectos.
+- ${review ? 'Si la transcripción no cubre una fase (por ejemplo, no hay apertura), marca ese eje como no evaluable sin inventar evidencia: la nota se normaliza solo con los ejes que la llamada demuestra. No puntúes una llamada sin discovery: responde que no hay nada que puntuar.' : ''}
 - Apoya cada note en el método cuando venga al caso, nombrando la regla (por ejemplo «ley del pero» o «regla del silencio»). No inventes reglas ni teoría propia.
 
 Orden de impacto para elegir la corrección prioritaria (manda la primera que aplique; si hay un fallo de adherencia al método o de lead, ese manda sobre la lista y lo dices):
@@ -571,7 +575,7 @@ ${METHOD_ANCHORS[scenario.kind].map(rule => `- ${rule}`).join('\n')}
 Ejes (puntúa los ${count}, con el id exacto y el peso que se indica):
 ${axes}
 ${bantBlock}
-Situación practicada: ${scenario.title} (${scenario.kind}). Objetivos: ${scenario.objectives.join('; ')}.${context ? `\n\nLa práctica va sobre una candidatura concreta: ${context.offer.title}${context.offer.company ? ` en ${context.offer.company}` : ''}. Valora el encaje con ese puesto usando solo el anuncio y la conversación; no inventes requisitos, condiciones ni procesos que no aparezcan.` : ''}`;
+Situación ${review ? 'revisada' : 'practicada'}: ${scenario.title} (${scenario.kind}). Objetivos: ${scenario.objectives.join('; ')}.${context ? `\n\nLa práctica va sobre una candidatura concreta: ${context.offer.title}${context.offer.company ? ` en ${context.offer.company}` : ''}. Valora el encaje con ese puesto usando solo el anuncio y la conversación; no inventes requisitos, condiciones ni procesos que no aparezcan.` : ''}`;
 }
 
 export const needsBant = (scenario: PracticeScenario, bantConfig: BantConfig = DEFAULT_BANT) => bantConfig[roomOf(scenario.kind, scenario.rubric)];

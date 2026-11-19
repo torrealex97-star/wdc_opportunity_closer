@@ -104,26 +104,21 @@ test('el personaje sube de nivel con las respuestas y una situación suave cede 
   expect(stageFor(dura, 14)).toBe(3);
 });
 
-test('la entrevista por perfil puntúa seis criterios y pesa la nota, no hace media simple', () => {
+test('la entrevista puntúa los cuatro criterios de scalix-ventas §7 y pesa la nota', () => {
   const scenario = scenarioById('perfil-exigente')!;
   const axes = [
-    { id: 'confianza', score: 80, note: '', quote: '' },
-    { id: 'claridad', score: 80, note: '', quote: '' },
-    { id: 'evidencia', score: 40, note: '', quote: '' },
-    { id: 'objecion', score: 60, note: '', quote: '' },
-    { id: 'encaje', score: 60, note: '', quote: '' },
-    { id: 'iniciativa', score: 100, note: '', quote: '' },
+    { id: 'tres_p', score: 80, note: '', quote: '' },
+    { id: 'inteligencia', score: 80, note: '', quote: '' },
+    { id: 'etica_trabajo', score: 40, note: '', quote: '' },
+    { id: 'humildad', score: 100, note: '', quote: '' },
   ];
   const base = { summary: 'Entrevista senior.', focus: 'Cifras.', strengths: [], improvements: [], model: '', next: 'Repite.' };
   const debrief = cleanDebrief(JSON.stringify({ ...base, axes }), [say('Hola.')], scenario)!;
-  expect(debrief.axes.map(axis => axis.id)).toEqual(['confianza', 'claridad', 'evidencia', 'objecion', 'encaje', 'iniciativa']);
-  // 25/20/20/15/10/10 → 20+16+8+9+6+10 = 69; la media simple habría dado 70.
-  expect(debrief.score).toBe(69);
+  expect(debrief.axes.map(axis => axis.id)).toEqual(['tres_p', 'inteligencia', 'etica_trabajo', 'humildad']);
+  // 30/25/25/20 → 24+20+10+20 = 74; la media simple habría dado 75.
+  expect(debrief.score).toBe(74);
   // Un eje de menos no se acepta: nunca se inventa un feedback parcial.
-  expect(cleanDebrief(JSON.stringify({ ...base, axes: axes.slice(0, 5) }), [say('Hola.')], scenario)).toBeNull();
-  // La entrevista sin perfil usa su propia rúbrica de cinco criterios, no la WDC de seis.
-  const generica = scenarioById('entrevista-closer')!;
-  expect(cleanDebrief(JSON.stringify({ ...base, axes }), [say('Hola.')], generica)).toBeNull();
+  expect(cleanDebrief(JSON.stringify({ ...base, axes: axes.slice(0, 3) }), [say('Hola.')], scenario)).toBeNull();
 });
 
 test('la nota se acota a 0-100 y un feedback sin todos los ejes no se acepta', () => {
@@ -139,16 +134,15 @@ test('la nota se acota a 0-100 y un feedback sin todos los ejes no se acepta', (
   const clamped = cleanDebrief(JSON.stringify({
     ...base,
     axes: [
-      { id: 'evidencia', score: -20, note: '', quote: '' },
-      { id: 'criterio', score: 55, note: '', quote: '' },
-      { id: 'claridad', score: 140, note: '', quote: '' },
-      { id: 'objecion', score: 75, note: '', quote: '' },
-      { id: 'iniciativa', score: 75, note: '', quote: '' },
+      { id: 'tres_p', score: -20, note: '', quote: '' },
+      { id: 'inteligencia', score: 55, note: '', quote: '' },
+      { id: 'etica_trabajo', score: 140, note: '', quote: '' },
+      { id: 'humildad', score: 75, note: '', quote: '' },
     ],
   }), [say('Hola.')], scenario)!;
-  expect(clamped.axes.map(axis => axis.score)).toEqual([0, 55, 100, 75, 75]);
-  // 25/25/20/15/15 → 0 + 13,75 + 20 + 11,25 + 11,25 = 56,25 → 56.
-  expect(clamped.score).toBe(56);
+  expect(clamped.axes.map(axis => axis.score)).toEqual([0, 55, 100, 75]);
+  // 30/25/25/20 → 0 + 13,75 + 25 + 15 = 53,75 → 54.
+  expect(clamped.score).toBe(54);
 
   const incomplete = cleanDebrief(JSON.stringify({
     ...base,

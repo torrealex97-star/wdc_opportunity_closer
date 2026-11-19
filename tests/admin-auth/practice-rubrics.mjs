@@ -10,6 +10,7 @@ import { axesFor, debriefInstructions, debriefSchema, needsBant } from '../../ap
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief.ts';
 import { analyzeSignals } from '../../apps/web/app/api/practice/signals.ts';
 import { scenarioById } from '../../apps/web/components/practiceScenarios.ts';
+import { CALL_REVIEW_SCENARIO, parseCallTranscript } from '../../apps/web/lib/callReview.ts';
 
 const results = [];
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message.split('\n')[0]]); } };
@@ -27,18 +28,25 @@ await step('las cinco rúbricas son válidas y los pesos suman 100', () => {
     const axes = DEFAULT_RUBRICS[room.id];
     assert.ok(axes.length >= 3 && axes.length <= MAX_AXES, room.id);
     assert.equal(axes.reduce((sum, axis) => sum + axis.weight, 0), 100, `${room.id}: pesos`);
-    for (const axis of axes) assert.ok(axis.label && axis.guide && axis.weight >= 1, `${room.id}/${axis.id}`);
+    for (const axis of axes) {
+      assert.ok(axis.label && axis.guide && axis.weight >= 1, `${room.id}/${axis.id}`);
+      assert.equal(axis.enabled, true, `${room.id}/${axis.id}: activo por defecto`);
+      assert.ok(['scalix-ventas', 'analisis-llamadas-ventas'].includes(axis.source), `${room.id}/${axis.id}: fuente`);
+      assert.ok(axis.source_ref, `${room.id}/${axis.id}: sección de la skill`);
+    }
   }
 });
 
 await step('el closer usa las fases y pesos de la skill (10/25/10/15/30/5/5)', () => {
   assert.deepEqual(weights('venta'), { apertura: 10, descubrimiento: 25, pitch: 10, control: 15, objecion: 30, siguiente: 5, etica: 5 });
   assert.equal(roomOf('venta'), 'venta');
-  assert.equal(roomOf('entrevista', 'wdc-entrevista'), 'wdc-entrevista');
+  assert.equal(roomOf('venta', 'llamada'), 'llamada');
   // Setter, frío y entrevista se reasignan según rubrica.md §1 (no se recicla la rúbrica del closer).
   assert.deepEqual(weights('setter'), { apertura: 15, cualificacion: 30, agenda: 25, control: 15, traspaso: 10, etica: 5 });
   assert.deepEqual(weights('frio'), { apertura: 35, control: 15, siguiente: 30, objecion: 15, etica: 5 });
-  assert.equal(DEFAULT_RUBRICS.entrevista.length, 5);
+  assert.equal(DEFAULT_RUBRICS.entrevista.length, 4);
+  assert.deepEqual(weights('entrevista'), { tres_p: 30, inteligencia: 25, etica_trabajo: 25, humildad: 20 });
+  assert.deepEqual(weights('llamada'), { apertura: 10, descubrimiento: 25, pitch: 10, control: 15, objecion: 30, siguiente: 5, etica: 5 });
 });
 
 await step('la validación rechaza una rúbrica rota en vez de arreglarla a medias', () => {
@@ -56,6 +64,13 @@ await step('la validación rechaza una rúbrica rota en vez de arreglarla a medi
   assert.equal(validateRubrics({ ...DEFAULT_RUBRICS, venta: [] }).ok, false);
   const badId = clone(DEFAULT_RUBRICS); badId.venta[0].id = 'Apertura!';
   assert.equal(validateRubrics(badId).ok, false);
+  const badSource = clone(DEFAULT_RUBRICS); badSource.venta[0].source = 'opinion-propia';
+  assert.equal(validateRubrics(badSource).ok, false);
+  const noRef = clone(DEFAULT_RUBRICS); noRef.venta[0].source_ref = ' ';
+  assert.equal(validateRubrics(noRef).ok, false);
+  const tooFewActive = clone(DEFAULT_RUBRICS);
+  tooFewActive.venta.forEach((axis, index) => { axis.enabled = index < 2; });
+  assert.equal(validateRubrics(tooFewActive).ok, false);
   assert.equal(validateBant({ venta: true }).ok, false);
   assert.equal(validatePriorities(['']).ok, false);
   assert.equal(validatePriorities(['a', 'a']).ok, false);
@@ -79,7 +94,10 @@ await step('lo que edita el panel entra en el prompt y en el esquema', () => {
   custom.venta[0].label = 'Apertura con prueba social';
   custom.venta[0].weight = 13;
   custom.venta[0].guide = 'Abre con una prueba de un caso idéntico y pide permiso.';
+  custom.venta[6].enabled = false;
   const axis = axesFor(closer, custom);
+  assert.equal(axis.length, 6);
+  assert.ok(!axis.some(item => item.id === 'etica'));
   assert.equal(axis[0].label, 'Apertura con prueba social');
   const instructions = debriefInstructions(closer, null, custom, ['Regla propia del panel.']);
   assert.match(instructions, /Abre con una prueba de un caso idéntico/);
@@ -87,11 +105,16 @@ await step('lo que edita el panel entra en el prompt y en el esquema', () => {
   assert.match(instructions, /1\. Regla propia del panel\./);
   const schema = debriefSchema(closer, custom);
   assert.ok(schema.properties.axes.items.properties.id.enum.includes('apertura'));
+  assert.ok(!schema.properties.axes.items.properties.id.enum.includes('etica'));
   assert.ok(!debriefSchema(closer, custom).properties.axes.items.properties.id.enum.includes('marco'));
+  // Desactivar no borra el criterio del panel, pero lo saca del prompt, del esquema y de la nota.
+  assert.ok(custom.venta.some(item => item.id === 'etica' && item.enabled === false));
+  const score = weightedScore(DEFAULT_RUBRICS.venta.map(item => ({ id: item.id, score: 100 })), custom.venta);
+  assert.equal(score, 100);
 });
 
 await step('BANT solo se pide en las salas de venta y el prompt explica la vara', () => {
-  assert.ok(needsBant(closer) && needsBant(setter) && needsBant(frio));
+  assert.ok(needsBant(closer) && needsBant(setter) && needsBant(frio) && needsBant(CALL_REVIEW_SCENARIO));
   assert.equal(needsBant(interview), false);
   assert.ok(debriefSchema(closer).required.includes('bant'));
   assert.ok(!debriefSchema(interview).required.includes('bant'));
@@ -166,22 +189,37 @@ await step('una cita inventada se borra; una decisión o un estado fuera de la t
   assert.equal(cleanDebrief(JSON.stringify(missing), turns, closer), null);
 });
 
-await step('una entrevista no exige BANT y conserva sus cinco criterios', () => {
+await step('la entrevista no exige BANT y puntúa los cuatro criterios de scalix-ventas §7', () => {
   const generic = scenarioById('entrevista-closer');
   const interviewPayload = JSON.parse(payload());
   delete interviewPayload.bant;
   interviewPayload.axes = DEFAULT_RUBRICS.entrevista.map(axis => ({ id: axis.id, score: 70, note: '', quote: '' }));
-  const debrief = cleanDebrief(JSON.stringify(interviewPayload), turns, generic);
+  const genericDebrief = cleanDebrief(JSON.stringify(interviewPayload), turns, generic);
+  assert.ok(genericDebrief);
+  assert.equal(genericDebrief.bant, undefined);
+  assert.equal(genericDebrief.axes.length, 4);
+  assert.equal(genericDebrief.score, 70);
+  const profileDebrief = cleanDebrief(JSON.stringify(interviewPayload), turns, interview);
+  assert.ok(profileDebrief);
+  assert.equal(profileDebrief.axes.length, 4);
+  assert.equal(profileDebrief.bant, undefined);
+});
+
+await step('una llamada real se evalúa con la rúbrica `llamada`, BANT y solo evidencia de la vendedora', () => {
+  const parsed = parseCallTranscript('VENDEDOR: Hola, te llamo por el formulario. ¿Te importa que te haga una pregunta?\nCLIENTE: Dime, tengo cinco minutos.\nVENDEDOR: ¿Qué te hizo buscar una solución ahora?');
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.detail);
+  assert.equal(parsed.turns[0].role, 'user');
+  assert.equal(parsed.turns[1].role, 'coach');
+  assert.equal(parsed.turns.length, 3);
+  const review = JSON.parse(payload());
+  review.axes = DEFAULT_RUBRICS.llamada.map((axis, index) => ({ id: axis.id, score: index === 0 ? 100 : 0, note: '', quote: '' }));
+  const debrief = cleanDebrief(JSON.stringify(review), parsed.turns, CALL_REVIEW_SCENARIO);
   assert.ok(debrief);
-  assert.equal(debrief.bant, undefined);
-  assert.equal(debrief.axes.length, 5);
-  // La variante WDC mantiene sus seis criterios con peso.
-  const wdc = JSON.parse(payload());
-  wdc.axes = DEFAULT_RUBRICS['wdc-entrevista'].map(axis => ({ id: axis.id, score: 70, note: '', quote: '' }));
-  const wdcDebrief = cleanDebrief(JSON.stringify(wdc), turns, interview);
-  assert.ok(wdcDebrief);
-  assert.equal(wdcDebrief.axes.length, 6);
-  assert.equal(wdcDebrief.bant, undefined);
+  assert.equal(debrief.axes.length, 7);
+  assert.equal(debrief.score, 10);
+  assert.equal(debrief.scenario, CALL_REVIEW_SCENARIO.title);
+  assert.equal(parsed.ok && parseCallTranscript('Sin etiquetas').ok, false);
+  assert.equal(parseCallTranscript('VENDEDOR: Hola.').ok, false);
 });
 
 await step('las señales nuevas miden ratio de habla y precio antes de descubrir', () => {
@@ -207,6 +245,7 @@ await step('el mapa de etiquetas cubre los ejes de todas las rúbricas', () => {
   const labels = allAxisLabels();
   for (const room of ROOMS) for (const axis of DEFAULT_RUBRICS[room.id]) assert.ok(labels[axis.id], `${room.id}/${axis.id}`);
   assert.equal(axesForRoom('venta')[0].id, 'apertura');
+  assert.equal(axesForRoom('llamada').length, 7);
 });
 
 for (const [status, name, detail] of results) console.log(status, ' ', name, detail ?? '');

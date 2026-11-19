@@ -57,6 +57,9 @@ await step('guardar en el backend local persiste y se relee (sobrevive a una ins
   assert.equal(reloaded.source, 'db');
   assert.equal(reloaded.rubrics.venta[0].weight, 100);
   assert.equal(reloaded.rubrics.venta[0].label, 'Apertura con prueba social');
+  assert.equal(reloaded.version, 1);
+  assert.equal(reloaded.history.length, 1);
+  assert.equal(reloaded.history[0].config.rubrics.venta[0].weight, 100);
 });
 
 await step('la puntuación usa el peso guardado: 100 de apertura sobre 190 → 53', async () => {
@@ -66,6 +69,22 @@ await step('la puntuación usa el peso guardado: 100 de apertura sobre 190 → 5
   assert.ok(debrief);
   assert.equal(debrief.score, 53);
   assert.equal(debrief.axes[0].label, 'Apertura con prueba social');
+});
+
+await step('cada guardado crea una versión y restaurar una anterior crea otra (no reescribe el historial)', async () => {
+  const rubrics = clone(DEFAULT_RUBRICS);
+  rubrics.venta[0] = { ...rubrics.venta[0], weight: 20 };
+  const second = await savePracticeConfig({ rubrics, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT }, 'owner@local');
+  assert.ok(second.ok, second.ok ? '' : second.detail);
+  assert.equal((await loadPracticeConfig(true)).version, 2);
+  const restored = await savePracticeConfig({ restore_version: 1 }, 'owner@local');
+  assert.ok(restored.ok, restored.ok ? '' : restored.detail);
+  const config = await loadPracticeConfig(true);
+  assert.equal(config.version, 3);
+  assert.equal(config.rubrics.venta[0].weight, 100);
+  assert.equal(config.history.length, 3);
+  assert.match(config.history[2].note, /Restaurada la versión 1/);
+  assert.equal((await savePracticeConfig({ restore_version: 99 }, 'owner@local')).ok, false);
 });
 
 await step('restaurar borra lo guardado y devuelve los pesos y la nota a la skill (10 → 10)', async () => {

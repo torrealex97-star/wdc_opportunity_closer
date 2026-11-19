@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
     reason: config.reason,
     updated_at: config.updated_at,
     updated_by: config.updated_by,
+    version: config.version,
+    history: config.history,
   });
 }
 
@@ -47,6 +49,8 @@ export async function PUT(request: NextRequest) {
     reason: result.config.reason,
     updated_at: result.config.updated_at,
     updated_by: result.config.updated_by,
+    version: result.config.version,
+    history: result.config.history,
   });
 }
 
@@ -63,5 +67,7 @@ export async function DELETE(request: NextRequest) {
     reason: null,
     updated_at: null,
     updated_by: null,
+    version: 0,
+    history: [],
   });
 }

@@ -22,4 +22,12 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
     `,
   },
+  {
+    id: '20261119_practice_rubrics_versions',
+    // Equivalente local de `supabase/migrations/20261119_practice_rubrics_versions.sql`.
+    sql: `
+      alter table practice_rubrics add column version integer not null default 0 check (version >= 0);
+      alter table practice_rubrics add column history text not null default '[]' check (json_valid(history) and json_type(history) = 'array');
+    `,
+  },
 ];

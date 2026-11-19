@@ -5,8 +5,18 @@
 // `analisis-llamadas-ventas` (instaladas en `.agents/skills/`), que a su vez se apoyan en el Ultimate
 // Sales Blueprint. Pesos por tipo de llamada: rubrica.md §1. El feedback termina siempre en UNA
 // corrección prioritaria (§Paso 4) porque «de 28 cosas mal en una llamada, solo una mueve el cierre».
-export type PracticeRoom = 'venta' | 'setter' | 'frio' | 'entrevista' | 'wdc-entrevista';
-export type RubricAxis = { id: string; label: string; guide: string; weight: number };
+export type PracticeRoom = 'venta' | 'setter' | 'frio' | 'entrevista' | 'llamada';
+export type RubricSkill = 'scalix-ventas' | 'analisis-llamadas-ventas';
+/** Cada criterio declara de qué skill y sección sale: el panel no puede inventar uno sin fuente. */
+export type RubricAxis = {
+  id: string;
+  label: string;
+  guide: string;
+  weight: number;
+  enabled: boolean;
+  source: RubricSkill;
+  source_ref: string;
+};
 export type RoomRubrics = Record<PracticeRoom, RubricAxis[]>;
 export type BantConfig = Record<PracticeRoom, boolean>;
 export type BantLetter = 'budget' | 'authority' | 'need' | 'timing';
@@ -25,8 +35,8 @@ export const ROOMS: Array<{ id: PracticeRoom; label: string; note: string }> = [
   { id: 'venta', label: 'Closer · llamada de cierre', note: 'Rúbrica completa del Ultimate Sales Blueprint (rubrica.md §1-§8).' },
   { id: 'setter', label: 'Setter · cualificación y agenda', note: 'Peso en BANT, edificación del closer y cita con dos huecos.' },
   { id: 'frio', label: 'Llamada en frío', note: 'Peso en apertura y gancho, y en el paso a cita; el objetivo no es vender.' },
-  { id: 'entrevista', label: 'Entrevista · criterios generales', note: 'Criterios de contratación de closers (scalix-ventas §7): números, criterio y 3 P.' },
-  { id: 'wdc-entrevista', label: 'Entrevista · rúbrica WDC', note: 'Seis criterios con peso, para las entrevistas por perfil.' },
+  { id: 'entrevista', label: 'Entrevista · contratación', note: 'Criterios de contratación de closers (scalix-ventas §7): las tres P, inteligencia, ética de trabajo y humildad.' },
+  { id: 'llamada', label: 'Evaluación de llamadas', note: 'Puntúa la transcripción de una llamada real con la rúbrica de analisis-llamadas-ventas (fases, BANT y evidencia).' },
 ];
 
 export const MIN_AXES = 3;
@@ -37,7 +47,44 @@ const AXIS_ID = /^[a-z][a-z0-9_]{1,29}$/;
 // Pesos y criterios copiados de `analisis-llamadas-ventas/references/rubrica.md`.
 // 0/1/2 por criterio se estima aquí en 0-100 para que la alumna vea una escala continua; el prompt
 // traduce las bandas (0-40 ausente o dañino, 41-60 parcial, 61-80 correcto, 81-100 sólido).
-export const DEFAULT_RUBRICS: RoomRubrics = {
+type AxisSeed = Omit<RubricAxis, 'enabled' | 'source' | 'source_ref'>;
+type RubricSeed = Record<PracticeRoom, AxisSeed[]>;
+
+// Fuente y sección de cada criterio. Un id sin esta tabla no se puede guardar: así ningún criterio
+// propio del producto se cuela como si viniera de las skills.
+const TRACE: Record<string, Pick<RubricAxis, 'source' | 'source_ref'>> = {
+  'venta:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §2 (A1-A2)' },
+  'venta:descubrimiento': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §3 (B1-B5)' },
+  'venta:pitch': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §4 (C1-C3)' },
+  'venta:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
+  'venta:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §6 (E1-E7)' },
+  'venta:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §7 (F1-F2)' },
+  'venta:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
+  'setter:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 (setter) + §2 A1' },
+  'setter:cualificacion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §3 B5' },
+  'setter:agenda': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §7 F1' },
+  'setter:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
+  'setter:traspaso': { source: 'scalix-ventas', source_ref: 'SKILL.md §5 (handoff y notas de seis líneas)' },
+  'setter:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
+  'frio:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 (cold call) + §2 A1' },
+  'frio:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
+  'frio:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §7 F1' },
+  'frio:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §6 (E1-E7)' },
+  'frio:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
+  'entrevista:tres_p': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (las tres P: prospecto, proceso, producto)' },
+  'entrevista:inteligencia': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (inteligencia: velocidad de aprendizaje)' },
+  'entrevista:etica_trabajo': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (ética de trabajo)' },
+  'entrevista:humildad': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (humildad)' },
+  'llamada:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §2 (A1-A2)' },
+  'llamada:descubrimiento': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §3 (B1-B5)' },
+  'llamada:pitch': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §4 (C1-C3)' },
+  'llamada:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
+  'llamada:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §6 (E1-E7)' },
+  'llamada:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §7 (F1-F2)' },
+  'llamada:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
+};
+
+const BASE_RUBRICS: RubricSeed = {
   venta: [
     {
       id: 'apertura', label: 'Apertura y agenda', weight: 10,
@@ -118,35 +165,63 @@ export const DEFAULT_RUBRICS: RoomRubrics = {
   ],
   entrevista: [
     {
-      id: 'evidencia', label: 'Evidencia y cifras', weight: 25,
-      guide: 'Usa un caso concreto con resultado (STAR) y cifras propias. Si algo no lo medía, lo dice y explica cómo lo mediría ahora; no infla datos.',
+      id: 'tres_p', label: 'Las tres P', weight: 30,
+      guide: 'Demuestra al menos dos de las tres P (prospecto, proceso, producto) y, si es posible, haber vendido al mismo tipo de prospecto. Da un caso verificable, no una promesa.',
     },
     {
-      id: 'criterio', label: 'Criterio comercial', weight: 25,
-      guide: 'Razona sobre métricas, cualificación y escalabilidad en vez de recitar frameworks. Conecta lo que hizo con la métrica que movía y propone una hipótesis propia.',
+      id: 'inteligencia', label: 'Velocidad de aprendizaje', weight: 25,
+      guide: 'Aprende con el coaching en tiempo real: incorpora una corrección en la misma conversación y mejora la siguiente respuesta. No repite el error después de señalado.',
     },
     {
-      id: 'claridad', label: 'Claridad y estructura', weight: 20,
-      guide: 'Responde directo y ordenado, sin rodeos ni relleno. Una respuesta de treinta segundos con estructura vale más que tres minutos de contexto.',
+      id: 'etica_trabajo', label: 'Ética de trabajo', weight: 25,
+      guide: 'Llega preparada, conoce el script y el producto, hace preguntas de calidad y explica cómo hace seguimiento. La preparación se nota en lo que pregunta, no en lo que promete.',
     },
     {
-      id: 'objecion', label: 'Objeciones y encaje', weight: 15,
-      guide: 'Reconoce la pega (experiencia, sector, huecos) sin ponerse a la defensiva y responde con un plan de rampa concreto y una prueba transferible.',
-    },
-    {
-      id: 'iniciativa', label: 'Iniciativa y cierre', weight: 15,
-      guide: 'Hace preguntas de negocio y propone un siguiente paso con fecha. Demuestra que entiende cómo trabaja esa empresa, no que quiere cualquier trabajo.',
+      id: 'humildad', label: 'Humildad', weight: 20,
+      guide: 'Acepta el feedback sin defenderse, reconoce lo que no sabe o no midió y asume su parte en los resultados. No culpa al lead, al mercado ni a otros equipos.',
     },
   ],
-  'wdc-entrevista': [
-    { id: 'confianza', label: 'Confianza y autoridad', weight: 25, guide: 'Proyecta seguridad sin arrogancia; controla el tono y el ritmo.' },
-    { id: 'claridad', label: 'Claridad y estructura', weight: 20, guide: 'Responde directo y ordenado, sin divagar.' },
-    { id: 'evidencia', label: 'Evidencia y cifras', weight: 20, guide: 'Respalda con datos propios y casos reales; no infla lo que no puede justificar.' },
-    { id: 'objecion', label: 'Manejo de objeciones', weight: 15, guide: 'Convierte la pregunta difícil o la desconfianza en una oportunidad, sin defenderse.' },
-    { id: 'encaje', label: 'Encaje', weight: 10, guide: 'Demuestra que entiende cómo trabaja esa empresa y que no es un trabajo más.' },
-    { id: 'iniciativa', label: 'Cierre e iniciativa', weight: 10, guide: 'Termina con una pregunta poderosa o un siguiente paso concreto.' },
+  llamada: [
+    {
+      id: 'apertura', label: 'Apertura y agenda', weight: 10,
+      guide: 'La transcripción muestra agenda en 15-20 segundos con prueba, promesa y plan, y uso de las notas previas sin hacer repetir al prospecto. Si el transcript no cubre la apertura, marca NE y excluye el peso.',
+    },
+    {
+      id: 'descubrimiento', label: 'Clarify, label y pain cycle', weight: 25,
+      guide: 'Aclaró por qué estaba ahí, resumió el hueco y obtuvo confirmación; sacó historial y cuantificó el coste antes de presentar. Si no hubo descubrimiento, la skill indica no puntuar la llamada.',
+    },
+    {
+      id: 'pitch', label: 'Pitch', weight: 10,
+      guide: 'Presentó como máximo tres pilares conectados con lo que falló antes, con una metáfora o analogía y foco en el resultado, no en características.',
+    },
+    {
+      id: 'control', label: 'Control con preguntas', weight: 15,
+      guide: 'El prospecto habló alrededor de dos tercios, devolvió pregunta ante detalles y no discutió. La ratio de habla se estima solo si la transcripción permite contar palabras o turnos.',
+    },
+    {
+      id: 'objecion', label: 'Objeciones y cierre', weight: 30,
+      guide: 'Aisló la objeción antes de rebatir, usó AAA, pidió la venta, volvió a pedir tras el primer no y no bajó el precio. Distingue ejecución de resultado.',
+    },
+    {
+      id: 'siguiente', label: 'Handshake y siguiente paso', weight: 5,
+      guide: 'Si no compró, dejó BAMFAM con día y hora; si compró, hizo el handshake con la persona siguiente y el contexto. «Te mando información» no es un siguiente paso.',
+    },
+    {
+      id: 'etica', label: 'Rapport y ética', weight: 5,
+      guide: 'Puso al prospecto en el centro, no inventó escasez ni resultados y descalificó con claridad a quien no encajaba. Una mala práctica grave se reporta aparte.',
+    },
   ],
 };
+
+const traceOf = (room: PracticeRoom, id: string) => TRACE[`${room}:${id}`];
+
+// Los valores por defecto se enriquecen con la fuente y quedan activos. El panel puede desactivar un
+// criterio, pero no crear uno nuevo sin fuente: cada uno sigue siendo rastreable a una skill.
+export const DEFAULT_RUBRICS: RoomRubrics = Object.fromEntries(ROOMS.map(room => [room.id, BASE_RUBRICS[room.id].map(axis => ({
+  ...axis,
+  enabled: true,
+  ...(traceOf(room.id, axis.id) ?? { source: 'analisis-llamadas-ventas' as const, source_ref: 'references/rubrica.md' }),
+}))])) as RoomRubrics;
 
 // Orden de impacto de `analisis-llamadas-ventas` §Paso 4.3. El feedback elige UNA y no recorre la lista.
 export const DEFAULT_PRIORITIES: string[] = [
@@ -162,7 +237,7 @@ export const DEFAULT_PRIORITIES: string[] = [
 
 // Entrevista: la skill de análisis de llamadas no puntúa entrevistas (no hay discovery de venta).
 // No se pide BANT en una entrevista; pedirlo convertiría una conversación de selección en un interrogatorio.
-export const DEFAULT_BANT: BantConfig = { venta: true, setter: true, frio: true, entrevista: false, 'wdc-entrevista': false };
+export const DEFAULT_BANT: BantConfig = { venta: true, setter: true, frio: true, entrevista: false, llamada: true };
 
 export const BANT_LABELS: Record<BantLetter, string> = {
   budget: 'Presupuesto',
@@ -197,8 +272,8 @@ export const BANT_STATUSES: BantStatus[] = ['✓', '~', '✗', '?'];
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown, max: number) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
-export const roomOf = (kind: 'venta' | 'setter' | 'frio' | 'entrevista', rubric?: 'wdc-entrevista'): PracticeRoom =>
-  rubric === 'wdc-entrevista' ? 'wdc-entrevista' : kind;
+export const roomOf = (kind: Exclude<PracticeRoom, 'llamada'>, rubric?: PracticeRoom): PracticeRoom =>
+  rubric ?? kind;
 
 /** Valida una rúbrica completa. Devuelve el valor normalizado o el motivo exacto, sin arreglarla a medias. */
 export function validateRubrics(value: unknown): { ok: true; value: RoomRubrics } | { ok: false; detail: string } {
@@ -217,18 +292,29 @@ export function validateRubrics(value: unknown): { ok: true; value: RoomRubrics 
       const label = text(item.label, 60);
       const guide = text(item.guide, 400);
       const weight = typeof item.weight === 'number' ? Math.round(item.weight) : NaN;
+      const enabled = item.enabled === undefined ? true : item.enabled;
       if (!AXIS_ID.test(id)) return { ok: false, detail: `${room.label}: el id «${id || '(vacío)'}» no es válido (minúsculas, números y guion bajo).` };
       if (ids.has(id)) return { ok: false, detail: `${room.label}: el criterio «${id}» está repetido.` };
       if (!label) return { ok: false, detail: `${room.label}: el criterio «${id}» no tiene nombre.` };
       if (!guide) return { ok: false, detail: `${room.label}: el criterio «${label}» no tiene guía.` };
+      if (typeof enabled !== 'boolean') return { ok: false, detail: `${room.label}: «${label}» debe indicar si está activo.` };
       if (!Number.isFinite(weight) || weight < 1 || weight > MAX_AXIS_WEIGHT) {
         return { ok: false, detail: `${room.label}: el peso de «${label}» debe estar entre 1 y ${MAX_AXIS_WEIGHT}.` };
       }
+      const fallback = traceOf(room.id, id);
+      const source = item.source === undefined ? fallback?.source : item.source;
+      const sourceRef = item.source_ref === undefined ? fallback?.source_ref : text(item.source_ref, 160);
+      if (source !== 'scalix-ventas' && source !== 'analisis-llamadas-ventas') {
+        return { ok: false, detail: `${room.label}: «${label}» no declara una fuente de las skills.` };
+      }
+      if (!sourceRef) return { ok: false, detail: `${room.label}: «${label}» no declara la sección de la skill de la que sale.` };
       ids.add(id);
-      axes.push({ id, label, guide, weight });
+      axes.push({ id, label, guide, weight, enabled, source, source_ref: sourceRef });
     }
-    const total = axes.reduce((sum, axis) => sum + axis.weight, 0);
-    if (total < MIN_AXES) return { ok: false, detail: `${room.label}: la suma de pesos es demasiado baja (${total}).` };
+    const enabledAxes = axes.filter(axis => axis.enabled);
+    if (enabledAxes.length < MIN_AXES) return { ok: false, detail: `${room.label}: debe tener al menos ${MIN_AXES} criterios activos (tiene ${enabledAxes.length}).` };
+    const total = enabledAxes.reduce((sum, axis) => sum + axis.weight, 0);
+    if (total < MIN_AXES) return { ok: false, detail: `${room.label}: la suma de pesos activos es demasiado baja (${total}).` };
     out[room.id] = axes;
   }
   return { ok: true, value: out };
@@ -253,11 +339,11 @@ export function validateBant(value: unknown): { ok: true; value: BantConfig } | 
   return { ok: true, value: out };
 }
 
-export const axesForRoom = (room: PracticeRoom, rubrics: RoomRubrics = DEFAULT_RUBRICS): RubricAxis[] => rubrics[room];
+export const axesForRoom = (room: PracticeRoom, rubrics: RoomRubrics = DEFAULT_RUBRICS): RubricAxis[] => rubrics[room].filter(axis => axis.enabled);
 
 /** Media ponderada por los pesos de la rúbrica; se normaliza, así los pesos no tienen que sumar 100. */
 export function weightedScore(axes: Array<{ id: string; score: number }>, rubric: RubricAxis[]): number {
-  const weights = new Map(rubric.map(axis => [axis.id, axis.weight]));
+  const weights = new Map(rubric.filter(axis => axis.enabled !== false).map(axis => [axis.id, axis.weight]));
   let sum = 0;
   let total = 0;
   for (const axis of axes) {

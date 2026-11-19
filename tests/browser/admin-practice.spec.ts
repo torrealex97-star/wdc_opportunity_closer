@@ -68,8 +68,12 @@ test.beforeAll(async () => {
     let body = '';
     request.on('data', chunk => { body += String(chunk); });
     request.on('end', () => {
+      // La sala pide una réplica en la conversación y el feedback con esquema. La réplica debe ser
+      // corta: devolver el JSON de debrief como si fuera un turno rompe el límite de 800 caracteres.
+      const payload = (() => { try { return JSON.parse(body) as { response_format?: unknown }; } catch { return {}; } })();
+      const content = payload.response_format ? JSON.stringify(modelDebrief) : 'Entiendo. ¿Y cómo lo estaríais midiendo?';
       response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(modelDebrief) } }] }));
+      response.end(JSON.stringify({ choices: [{ message: { content } }] }));
     });
   });
   await new Promise<void>(resolve => model!.listen(modelPort, '127.0.0.1', resolve));
@@ -111,8 +115,10 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (next?.pid) { try { process.kill(-next.pid, 'SIGTERM'); } catch { /* ya cerrado */ } }
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
+  await sleep(500);
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
-  if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true });
+  // El caché de Turbopack puede seguir escribiendo al recibir SIGTERM; no es parte del resultado.
+  try { if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true }); } catch { /* caché de prueba */ }
 });
 
 async function score(): Promise<{ score: number; label: string }> {
@@ -137,7 +143,14 @@ async function score(): Promise<{ score: number; label: string }> {
 
 test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la nota y el feedback', async ({ page }) => {
   const consoleErrors: string[] = [];
-  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    // La home intenta el motor local, que en esta prueba está apagado a propósito (CAREER_ENGINE_URL
+    // apunta a un puerto cerrado). El 503 es un fallo de red esperado y la app lo declara; no es un
+    // error de JavaScript del panel.
+    if (/Failed to load resource: the server responded with a status of 503/.test(message.text())) return;
+    consoleErrors.push(message.text());
+  });
   page.on('pageerror', error => consoleErrors.push(error.message));
 
   await page.goto(`${base}/admin#practice`);
@@ -145,13 +158,14 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.getByText(/Base local de desarrollo/)).toBeVisible();
 
   // 1) Las cinco salas y los pesos de la skill.
-  for (const room of ['Closer · llamada de cierre', 'Setter · cualificación y agenda', 'Llamada en frío', 'Entrevista · criterios generales', 'Entrevista · rúbrica WDC']) {
+  for (const room of ['Closer · llamada de cierre', 'Setter · cualificación y agenda', 'Llamada en frío', 'Entrevista · contratación', 'Evaluación de llamadas']) {
     await expect(page.getByRole('tab', { name: room })).toBeVisible();
   }
   // Se localizan por id: al cambiar el nombre, las etiquetas accesibles («Peso de …») cambian con él.
   const weight = page.locator('#weight-apertura');
   await expect(weight).toHaveValue('10');
-  await expect(page.getByText(/Los pesos suman 100/)).toBeVisible();
+  await expect(page.getByText(/Los pesos activos suman 100/)).toBeVisible();
+  await expect(page.locator('#source-apertura')).toHaveValue('analisis-llamadas-ventas');
 
   // 2) Editar nombre, peso y guía; el aviso de cambios sin guardar aparece.
   const name = page.locator('#axis-apertura');
@@ -160,10 +174,12 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await weight.fill('100');
   await guide.fill('Abre con una prueba de un caso idéntico y pide permiso antes de preguntar.');
   await expect(page.getByText('Cambios sin guardar')).toBeVisible();
-  await expect(page.getByText(/Los pesos suman 190/)).toBeVisible();
+  await expect(page.getByText(/Los pesos activos suman 190/)).toBeVisible();
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
+  await expect(page.getByText('Versiones guardadas')).toBeVisible();
+  await expect(page.locator('.rubric-versions li').filter({ hasText: 'v1' })).toBeVisible();
 
   // 3) Recarga real: los tres campos siguen ahí.
   await page.reload();
@@ -178,29 +194,46 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   expect(changed.score).toBe(53);
   expect(changed.label).toBe('Apertura con prueba social');
 
-  // 5) Añadir hasta el límite de 8; el botón se bloquea y quitar devuelve la rúbrica a 7.
-  await page.getByRole('button', { name: 'Añadir criterio' }).click();
-  await expect(page.locator('input[id^="axis-"]')).toHaveCount(8);
-  await expect(page.getByRole('button', { name: 'Añadir criterio' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Quitar Nuevo criterio' }).click();
-  await expect(page.locator('input[id^="axis-"]')).toHaveCount(7);
+  // 5) Desactivar un criterio lo saca de la nota y persiste; reactivarlo lo devuelve.
+  const ethics = page.getByLabel('Activar Rapport y ética');
+  await ethics.uncheck();
+  await expect(page.getByText('6/7')).toBeVisible();
+  await expect(page.getByText(/Los pesos activos suman 185/)).toBeVisible();
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
-  await expect(page.locator('input[id^="axis-"]')).toHaveCount(7);
+  await expect(page.getByLabel('Activar Rapport y ética')).not.toBeChecked();
+  await expect(page.getByText('6/7')).toBeVisible();
+  await page.getByLabel('Activar Rapport y ética').check();
+  await page.getByRole('button', { name: 'Guardar criterios' }).click();
+  await expect(page.getByText('Criterios guardados.')).toBeVisible();
 
-  // 6) BANT: activar una entrevista y comprobar que persiste.
-  const interviewBant = page.getByLabel('Entrevista · criterios generales');
+  // 6) La evaluación de llamadas tiene su propia rúbrica editable y versionada.
+  await page.getByRole('tab', { name: 'Evaluación de llamadas' }).click();
+  await expect(page.locator('#weight-apertura')).toHaveValue('10');
+  await expect(page.locator('#source-apertura')).toHaveValue('analisis-llamadas-ventas');
+  await page.locator('#axis-apertura').fill('Apertura de la llamada revisada');
+  await page.locator('#weight-apertura').fill('100');
+  await page.getByRole('button', { name: 'Guardar criterios' }).click();
+  await expect(page.getByText('Criterios guardados.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Evaluación de llamadas' }).click();
+  await expect(page.locator('#weight-apertura')).toHaveValue('100');
+  await expect(page.locator('#axis-apertura')).toHaveValue('Apertura de la llamada revisada');
+
+  // 7) BANT: activar una entrevista y comprobar que persiste.
+  const interviewBant = page.getByLabel('Entrevista · contratación');
   await expect(interviewBant).not.toBeChecked();
   await interviewBant.check();
   await expect(page.getByText('Cambios sin guardar')).toBeVisible();
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Entrevista · criterios generales')).toBeChecked();
+  await expect(page.getByLabel('Entrevista · contratación')).toBeChecked();
 
-  // 7) Reordenar y editar la corrección prioritaria; persiste tras recargar.
+  // 8) Reordenar y editar la corrección prioritaria; persiste tras recargar.
   await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
   await page.getByRole('button', { name: 'Subir la prioridad 2' }).click();
   await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
@@ -211,13 +244,54 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
   await expect(page.locator('#priority-1')).toHaveValue('Regla propia del panel para esta prueba.');
 
-  // 8) Restaurar vuelve a los pesos de las skills y también cambia la nota (10 sobre 100 → 10).
+  // 9) La misma configuración se aplica en el navegador: un roleplay real puntúa con el peso editado.
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('tab', { name: 'Closer · voz' }).click();
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  const reply = page.getByLabel('Tu respuesta');
+  await reply.fill('Hola Marta, te llamo porque he visto que perdéis seguimientos.');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await reply.fill('Me interesa entender cómo gestionáis los seguimientos.');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await expect(page.locator('.practice-turn.is-mine')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Terminar y ver feedback' }).click();
+  await expect(page.getByRole('heading', { name: 'Qué ha funcionado y qué pulir.' })).toBeVisible();
+  await expect(page.locator('.practice-score-total b')).toHaveText('53');
+  await expect(page.getByText('Apertura con prueba social')).toBeVisible();
+  await expect(page.getByText('Cerrar con día y hora.')).toBeVisible();
+
+  // 10) La evaluación de una llamada real usa su propio criterio editado y la misma nota ponderada.
+  await page.getByRole('button', { name: 'Elegir otra situación' }).click();
+  await page.getByRole('tab', { name: 'Revisar llamada' }).click();
+  await page.getByLabel('Transcripción').fill([
+    'VENDEDOR: Hola, te llamo por el formulario que dejaste. ¿Te importa que te haga una pregunta?',
+    'CLIENTE: Dime, tengo cinco minutos.',
+    'VENDEDOR: ¿Qué te hizo buscar una solución ahora?',
+    'CLIENTE: Se me caen diez citas al mes y cada una vale 2.000 euros.',
+  ].join('\n'));
+  await page.getByRole('button', { name: 'Evaluar llamada' }).click();
+  await expect(page.getByRole('heading', { name: 'Qué pasó en la llamada.' })).toBeVisible();
+  await expect(page.locator('.practice-score-total b')).toHaveText('53');
+  await expect(page.getByText('Apertura de la llamada revisada')).toBeVisible();
+  await expect(page.getByText('LA CORRECCIÓN PRIORITARIA · UNA SOLA')).toBeVisible();
+
+  // 11) Restaurar una versión anterior crea una nueva y devuelve la rúbrica de llamada a 10.
+  await page.goto(`${base}/admin#practice`);
+  page.once('dialog', dialog => void dialog.accept());
+  await page.locator('.rubric-versions li').filter({ hasText: 'v1' }).getByRole('button', { name: 'Restaurar' }).click();
+  await expect(page.getByText(/Versión 1 restaurada como versión \d+/)).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Evaluación de llamadas' }).click();
+  await expect(page.locator('#weight-apertura')).toHaveValue('10');
+
+  // 12) Restaurar vuelve a los pesos de las skills y también cambia la nota (10 sobre 100 → 10).
   page.once('dialog', dialog => void dialog.accept());
   await page.getByRole('button', { name: 'Restaurar los de las skills' }).click();
   await expect(page.getByText('Restaurados los criterios por defecto')).toBeVisible();
   await page.reload();
   await expect(page.locator('#weight-apertura')).toHaveValue('10');
-  await expect(page.getByLabel('Entrevista · criterios generales')).not.toBeChecked();
+  await expect(page.getByLabel('Entrevista · contratación')).not.toBeChecked();
   await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
   const restored = await score();
   expect(restored.score).toBe(10);

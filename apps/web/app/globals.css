@@ -890,7 +890,7 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .rubric-room-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
 .rubric-room-tabs button{border:1px solid var(--line);background:var(--sheet);color:var(--ink);padding:8px 14px;border-radius:999px;font-size:var(--text-sm)}
 .rubric-room-tabs button.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper)}
-.rubric-table input,.rubric-table textarea,.rubric-priority textarea{width:100%;font:inherit;font-size:var(--text-sm);color:var(--ink);background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:9px 10px}
+.rubric-table input,.rubric-table select,.rubric-table textarea,.rubric-priority textarea{width:100%;font:inherit;font-size:var(--text-sm);color:var(--ink);background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:9px 10px}
 .rubric-table textarea,.rubric-priority textarea{resize:vertical;line-height:1.5;field-sizing:content;min-height:calc(1.5em*3 + 18px)}
 .rubric-id{display:block;margin-top:3px;color:var(--secondary);font-size:var(--text-2xs);letter-spacing:.4px}
 .rubric-weight{max-width:78px;text-align:right;font-variant-numeric:tabular-nums}
@@ -902,6 +902,11 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .rubric-priority-actions{display:flex;gap:4px;margin-top:6px}
 .rubric-priority-actions button{padding:6px;min-height:34px}
 .rubric-save{margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+.rubric-versions{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rubric-versions li{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 12px;background:var(--sheet);border:1px solid var(--line);border-radius:9px;font-size:var(--text-sm);color:var(--secondary)}
+.rubric-versions li>span:nth-child(2){flex:1;min-width:220px}
+.rubric-version-id{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.rubric-versions button{font-size:var(--text-xs)}
 .practice-bant{margin:20px 0;padding:18px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}
 .practice-bant-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 20px;margin:12px 0 0}
 .practice-bant-grid dt{font-size:var(--text-sm)}

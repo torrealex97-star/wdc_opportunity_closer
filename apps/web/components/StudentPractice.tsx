@@ -2,10 +2,11 @@
 
 import { logActivity } from './studentActivityClient';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, ShieldCheck, Sparkles, Target, Users, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, ScanLine, Send, ShieldCheck, Sparkles, Target, Users, Volume2 } from 'lucide-react';
 import { INTENSITY_LABELS, PRACTICE_SCENARIOS, TRACK_CHANNEL, categoriesFor, scenarioById } from './practiceScenarios';
 import type { PracticePersona, PracticeScenario, PracticeTrack } from './practiceScenarios';
 import StudentQualificationForm from './StudentQualificationForm';
+import CallReview from './CallReview';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
@@ -51,7 +52,7 @@ type Debrief = {
 
 const band = (score: number) => score >= 70 ? 'alto' : score >= 40 ? 'medio' : 'bajo';
 type Stored = { id: string; scenarioId: string; title: string; startedAt: number; turns: number; debrief: Debrief };
-type View = 'scenarios' | 'room' | 'debrief' | 'formulario';
+type View = 'scenarios' | 'room' | 'debrief' | 'formulario' | 'review';
 const KIND_TEXT: Record<PracticeScenario['kind'], string> = { venta: 'VENTA', setter: 'SETTER', frio: 'LLAMADA EN FRÍO', entrevista: 'ENTREVISTA' };
 
 const HISTORY_KEY = 'wdc_practice_history';
@@ -296,6 +297,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   }
 
   if (view === 'formulario') return <div className="practice"><StudentQualificationForm onBack={() => setView('scenarios')} /></div>;
+  if (view === 'review') return <div className="practice"><CallReview onBack={() => setView('scenarios')} /></div>;
 
   if (view === 'room' && scenario) {
     const voiceRoom = TRACK_CHANNEL[scenario.track] === 'voz';
@@ -426,10 +428,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     <div className="practice-rooms" role="tablist" aria-label="Salas de práctica">
       {(['closer', 'setter', 'frio', 'entrevista'] as PracticeTrack[]).map(item => {
         const Icon = TRACK_ICONS[item];
-        return <button key={item} type="button" role="tab" aria-selected={track === item} className={`practice-room-tab ${track === item ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); }}>
+        return <button key={item} type="button" role="tab" aria-selected={track === item && view === 'scenarios'} className={`practice-room-tab ${track === item && view === 'scenarios' ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); setView('scenarios'); }}>
           <Icon size={16} />{TRACK_TEXT[item].nav}
         </button>;
       })}
+      <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('review')}><ScanLine size={16} />Revisar llamada</button>
       <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('formulario')}><ShieldCheck size={16} />Formulario · test</button>
     </div>
     {challenges.length > 0 && <section className="practice-prepared" aria-label="Retos de tu coach">

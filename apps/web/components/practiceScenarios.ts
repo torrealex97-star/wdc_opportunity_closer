@@ -21,8 +21,8 @@ export type PracticeScenario = {
   track: PracticeTrack;
   category: CloserCategory | SetterCategory | ColdCategory | InterviewerType;
   persona: PracticePersona;
-  // Entrevista con perfil: usa la rúbrica WDC de seis criterios en vez de los cuatro genéricos.
-  rubric?: 'wdc-entrevista';
+  // Solo la evaluación de una llamada real usa una rúbrica propia; el resto de la sala, la de su kind.
+  rubric?: 'llamada';
   title: string;
   context: string;
   summary: string;
@@ -267,11 +267,10 @@ const SEEDS: ScenarioSeed[] = [
     intensity: 'dura',
     minutes: 9,
   },
-  // Entrevistas por perfil (rúbrica WDC de seis criterios).
+  // Entrevistas por perfil: misma rúbrica de contratación de scalix-ventas §7, otro entrevistador.
   {
     id: 'perfil-directo',
     kind: 'entrevista',
-    rubric: 'wdc-entrevista',
     title: 'Entrevista con Carlos, el dueño directo',
     context: 'Empresa ficticia de servicios B2B · 14 personas',
     summary: 'Un dueño que va al grano: quiere números, casos y retorno. Practicas responder corto, con cifras propias, sin rodeos.',
@@ -284,7 +283,6 @@ const SEEDS: ScenarioSeed[] = [
   {
     id: 'perfil-esceptico',
     kind: 'entrevista',
-    rubric: 'wdc-entrevista',
     title: 'Entrevista con Patricia, la escéptica',
     context: 'Agencia ficticia · ya contrató closers que no funcionaron',
     summary: 'Ha quemado dinero con closers y no cree nada sin pruebas. Practicas sostener la confianza cuando cada afirmación se cuestiona.',
@@ -297,7 +295,6 @@ const SEEDS: ScenarioSeed[] = [
   {
     id: 'perfil-amable',
     kind: 'entrevista',
-    rubric: 'wdc-entrevista',
     title: 'Entrevista con Miguel, el amable',
     context: 'Tienda online ficticia · equipo pequeño',
     summary: 'Conversación relajada que observa si eres auténtica o recitas un guion. Practicas conectar sin perder concreción.',
@@ -310,7 +307,6 @@ const SEEDS: ScenarioSeed[] = [
   {
     id: 'perfil-exigente',
     kind: 'entrevista',
-    rubric: 'wdc-entrevista',
     title: 'Entrevista con Lucía, la exigente',
     context: 'Startup ficticia · busca closer senior',
     summary: 'Nivel alto: pide métricas complejas, escalabilidad y criterio propio. Practicas no desmoronarte cuando la pregunta sube de nivel.',
