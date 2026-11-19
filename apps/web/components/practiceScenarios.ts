@@ -1,19 +1,25 @@
 // Catálogo visible de prácticas. Sin empresas reales: toda situación es ficticia y
 // la UI lo dice. Los prompts de cada personaje viven solo en el servidor, igual que
 // las capas de resistencia: aquí solo se declara lo que la alumna ve.
-// Dos salas: la de llamada (cliente simulado) y la de entrevista (entrevistador simulado).
+// Cuatro salas por rol —closer, setter, llamada en frío y entrevista— y un test de
+// formulario de cualificación aparte. Closer, frío y entrevista se practican con voz;
+// el setter, por chat, que es donde ocurre su trabajo (WhatsApp, DM, seguimiento).
 // Cada situación declara en qué sala vive, su categoría y la persona que la interpreta;
 // esto es lo único que el navegador sabe del personaje (el prompt vive en el servidor).
-export type PracticeTrack = 'llamada' | 'entrevista';
-export type CallCategory = 'inicio' | 'objeciones' | 'completa';
+export type PracticeTrack = 'closer' | 'setter' | 'frio' | 'entrevista';
+/** Cómo se practica la sala: dos roles se entrenan hablando y uno escribiendo. */
+export type PracticeChannel = 'voz' | 'chat';
+export type CloserCategory = 'apertura' | 'descubrimiento' | 'objeciones' | 'cierre';
+export type SetterCategory = 'primer-contacto' | 'cualificacion' | 'agenda' | 'rescate' | 'seguimiento';
+export type ColdCategory = 'apertura' | 'decisor' | 'cualificacion' | 'seguimiento';
 export type InterviewerType = 'dueno' | 'direccion' | 'rrhh' | 'responsable' | 'esceptico' | 'cercano' | 'experiencia';
 export type PracticePersona = { name: string; role: string; initials: string; tone: 'clay' | 'sage' | 'amber' };
 
 export type PracticeScenario = {
   id: string;
-  kind: 'venta' | 'entrevista';
+  kind: 'venta' | 'setter' | 'frio' | 'entrevista';
   track: PracticeTrack;
-  category: CallCategory | InterviewerType;
+  category: CloserCategory | SetterCategory | ColdCategory | InterviewerType;
   persona: PracticePersona;
   // Entrevista con perfil: usa la rúbrica WDC de seis criterios en vez de los cuatro genéricos.
   rubric?: 'wdc-entrevista';
@@ -27,10 +33,33 @@ export type PracticeScenario = {
   minutes: number;
 };
 
-export const CALL_CATEGORIES: Array<{ id: CallCategory; label: string; hint: string }> = [
-  { id: 'inicio', label: 'Inicio de llamada', hint: 'Los primeros treinta segundos: contexto, permiso y una pregunta que abra la conversación.' },
+export const TRACK_CHANNEL: Record<PracticeTrack, PracticeChannel> = {
+  closer: 'voz',
+  setter: 'chat',
+  frio: 'voz',
+  entrevista: 'voz',
+};
+
+export const CLOSER_CATEGORIES: Array<{ id: CloserCategory; label: string; hint: string }> = [
+  { id: 'apertura', label: 'Apertura y marco', hint: 'Los primeros treinta segundos: contexto, permiso y una pregunta que abra la conversación.' },
+  { id: 'descubrimiento', label: 'Descubrimiento', hint: 'Profundizar sin interrogar y poner cifras al coste de seguir igual, antes de hablar del servicio.' },
   { id: 'objeciones', label: 'Objeciones', hint: 'El «es caro», el «lo tengo que pensar», el tercero y el ataque directo.' },
-  { id: 'completa', label: 'Llamada completa', hint: 'De la apertura al cierre, con descubrimiento, precio y siguiente paso en la misma conversación.' },
+  { id: 'cierre', label: 'Cierre', hint: 'Pedir la venta, sostener el silencio después del precio y de la llamada completa.' },
+];
+
+export const SETTER_CATEGORIES: Array<{ id: SetterCategory; label: string; hint: string }> = [
+  { id: 'primer-contacto', label: 'Primer contacto', hint: 'El lead acaba de dejar sus datos: responder en minutos, con contexto y una pregunta.' },
+  { id: 'cualificacion', label: 'Cualificación', hint: 'Urgencia, autoridad y recursos con tres preguntas, sin que parezca un interrogatorio.' },
+  { id: 'agenda', label: 'Agenda de la llamada', hint: 'Dos huecos concretos de las próximas 48 horas y confirmación, no «te mando el enlace cuando pueda».' },
+  { id: 'rescate', label: 'No-show', hint: 'Un plantón no es un no: recuperar la cita sin hacer sentir culpable a nadie.' },
+  { id: 'seguimiento', label: 'Seguimiento', hint: 'Valor antes de insistir, cuatro toques útiles y un cierre honesto de la conversación.' },
+];
+
+export const COLD_CATEGORIES: Array<{ id: ColdCategory; label: string; hint: string }> = [
+  { id: 'apertura', label: 'Apertura en frío', hint: 'Los primeros quince segundos de una llamada que nadie espera: motivo, permiso y una pregunta.' },
+  { id: 'decisor', label: 'Llegar al decisor', hint: 'Recepción, «está en una reunión» y cómo llegar a quien decide sin mentir ni dejar un correo genérico.' },
+  { id: 'cualificacion', label: 'Cualificar y agendar', hint: 'Tres preguntas para saber si hay urgencia, autoridad y recursos, y una cita con día y hora.' },
+  { id: 'seguimiento', label: 'Densidad de contactos', hint: 'El sexto intento con un ángulo nuevo, sin culpar al lead ni darlo por perdido antes de tiempo.' },
 ];
 
 export const INTERVIEWER_TYPES: Array<{ id: InterviewerType; label: string; hint: string }> = [
@@ -43,10 +72,15 @@ export const INTERVIEWER_TYPES: Array<{ id: InterviewerType; label: string; hint
   { id: 'experiencia', label: 'Objeción de experiencia', hint: 'Te cuestionan no conocer el sector: piden un plan creíble.' },
 ];
 
-export const categoriesFor = (track: PracticeTrack) => track === 'llamada' ? CALL_CATEGORIES : INTERVIEWER_TYPES;
+export const categoriesFor = (track: PracticeTrack) =>
+  track === 'closer' ? CLOSER_CATEGORIES
+  : track === 'setter' ? SETTER_CATEGORIES
+  : track === 'frio' ? COLD_CATEGORIES
+  : INTERVIEWER_TYPES;
 
 const PERSONAS: Record<string, PracticePersona> = {
   'venta-fria': { name: 'Marta', role: 'Directora de marketing · empresa ficticia', initials: 'MA', tone: 'clay' },
+  'closer-descubrimiento': { name: 'Álvaro', role: 'Dueño de agencia · ficticia', initials: 'AL', tone: 'clay' },
   'objeciones-precio': { name: 'Javier', role: 'Gerente de academia · ficticia', initials: 'JA', tone: 'clay' },
   'venta-pensarlo': { name: 'Cristina', role: 'Fundadora de consultoría · ficticia', initials: 'CR', tone: 'clay' },
   'venta-pareja': { name: 'Andrés', role: 'Socio de agencia · ficticia', initials: 'AN', tone: 'clay' },
@@ -58,6 +92,15 @@ const PERSONAS: Record<string, PracticePersona> = {
   'venta-fitness': { name: 'Daniel', role: 'Autónomo · programa ficticio', initials: 'DA', tone: 'amber' },
   'llamada-completa': { name: 'Paula', role: 'Responsable de operaciones · ficticia', initials: 'PA', tone: 'clay' },
   'llamada-completa-b2b': { name: 'Marcos', role: 'Director financiero · ficticio', initials: 'MR', tone: 'clay' },
+  'setter-inbound': { name: 'Nerea', role: 'Dueña de clínica · ficticia', initials: 'NE', tone: 'amber' },
+  'setter-cualificar': { name: 'Pablo', role: 'Dueño de tienda online · ficticia', initials: 'PB', tone: 'amber' },
+  'setter-agendar': { name: 'Marina', role: 'Consultora · empresa ficticia', initials: 'MN', tone: 'amber' },
+  'setter-noshow': { name: 'Teresa', role: 'Arquitecta · estudio ficticio', initials: 'TE', tone: 'amber' },
+  'setter-seguimiento': { name: 'Gonzalo', role: 'Dueño de reformas · ficticia', initials: 'GO', tone: 'amber' },
+  'frio-apertura': { name: 'Rocío', role: 'Directora de operaciones · ficticia', initials: 'RO', tone: 'clay' },
+  'frio-decisor': { name: 'Carmen', role: 'Recepción · empresa ficticia', initials: 'CM', tone: 'clay' },
+  'frio-cualificar': { name: 'Iván', role: 'Autónomo · negocio ficticio', initials: 'IV', tone: 'clay' },
+  'frio-seguimiento': { name: 'Sara', role: 'Gerente de tienda · ficticia', initials: 'SA', tone: 'clay' },
   'entrevista-closer': { name: 'Lucía', role: 'Responsable de ventas', initials: 'LU', tone: 'sage' },
   'entrevista-setter': { name: 'Diego', role: 'Sales manager', initials: 'DI', tone: 'sage' },
   'entrevista-experiencia': { name: 'Elena', role: 'Dueña de servicios · ficticia', initials: 'EL', tone: 'sage' },
@@ -76,21 +119,32 @@ export const INTENSITY_LABELS: Record<PracticeScenario['intensity'], string> = {
   dura: 'Dura',
 };
 
-// Sala y categoría de cada situación. La llamada se agrupa por momento de la conversación;
-// la entrevista, por tipo de entrevistador.
-const SCENARIO_META: Record<string, { track: PracticeTrack; category: CallCategory | InterviewerType }> = {
-  'venta-fria': { track: 'llamada', category: 'inicio' },
-  'objeciones-precio': { track: 'llamada', category: 'objeciones' },
-  'venta-pensarlo': { track: 'llamada', category: 'objeciones' },
-  'venta-pareja': { track: 'llamada', category: 'objeciones' },
-  'venta-cerrada': { track: 'llamada', category: 'objeciones' },
-  'venta-infoproducto': { track: 'llamada', category: 'objeciones' },
-  'venta-saas-b2b': { track: 'llamada', category: 'objeciones' },
-  'venta-clinica': { track: 'llamada', category: 'objeciones' },
-  'venta-reformas': { track: 'llamada', category: 'objeciones' },
-  'venta-fitness': { track: 'llamada', category: 'objeciones' },
-  'llamada-completa': { track: 'llamada', category: 'completa' },
-  'llamada-completa-b2b': { track: 'llamada', category: 'completa' },
+// Sala y categoría de cada situación. El closer se agrupa por momento de la llamada; el setter,
+// por momento de su conversación escrita; el frío, por lo que cuesta la llamada; y la entrevista,
+// por tipo de entrevistador.
+const SCENARIO_META: Record<string, { track: PracticeTrack; category: PracticeScenario['category'] }> = {
+  'venta-fria': { track: 'closer', category: 'apertura' },
+  'closer-descubrimiento': { track: 'closer', category: 'descubrimiento' },
+  'objeciones-precio': { track: 'closer', category: 'objeciones' },
+  'venta-pensarlo': { track: 'closer', category: 'cierre' },
+  'venta-pareja': { track: 'closer', category: 'objeciones' },
+  'venta-cerrada': { track: 'closer', category: 'objeciones' },
+  'venta-infoproducto': { track: 'closer', category: 'objeciones' },
+  'venta-saas-b2b': { track: 'closer', category: 'objeciones' },
+  'venta-clinica': { track: 'closer', category: 'objeciones' },
+  'venta-reformas': { track: 'closer', category: 'objeciones' },
+  'venta-fitness': { track: 'closer', category: 'objeciones' },
+  'llamada-completa': { track: 'closer', category: 'cierre' },
+  'llamada-completa-b2b': { track: 'closer', category: 'cierre' },
+  'setter-inbound': { track: 'setter', category: 'primer-contacto' },
+  'setter-cualificar': { track: 'setter', category: 'cualificacion' },
+  'setter-agendar': { track: 'setter', category: 'agenda' },
+  'setter-noshow': { track: 'setter', category: 'rescate' },
+  'setter-seguimiento': { track: 'setter', category: 'seguimiento' },
+  'frio-apertura': { track: 'frio', category: 'apertura' },
+  'frio-decisor': { track: 'frio', category: 'decisor' },
+  'frio-cualificar': { track: 'frio', category: 'cualificacion' },
+  'frio-seguimiento': { track: 'frio', category: 'seguimiento' },
   'entrevista-closer': { track: 'entrevista', category: 'responsable' },
   'entrevista-setter': { track: 'entrevista', category: 'responsable' },
   'entrevista-experiencia': { track: 'entrevista', category: 'experiencia' },
@@ -116,6 +170,18 @@ const SEEDS: ScenarioSeed[] = [
     level: 'Closer · primera llamada',
     intensity: 'real',
     minutes: 6,
+  },
+  {
+    id: 'closer-descubrimiento',
+    kind: 'venta',
+    title: 'Descubrimiento: poner cifras al coste de seguir igual',
+    context: 'Agencia ficticia de captación · 8 personas · primera llamada',
+    summary: 'El cliente responde en generalidades y dice que «va bien». Practicas profundizar sin interrogar, sacar un ejemplo concreto y cuantificar con sus propias cifras antes de presentar nada.',
+    objectives: ['Preguntar situación y deseo antes de hablar del servicio', 'Pedir un ejemplo concreto, no una impresión', 'Poner cifras al coste de seguir igual con sus datos', 'Resumir, confirmar y solo entonces proponer'],
+    opening: 'Buenas. Te escucho, aunque te aviso: el equipo comercial va bien. Siempre se puede ir mejor, pero no me quejo.',
+    level: 'Closer · descubrimiento',
+    intensity: 'real',
+    minutes: 8,
   },
   {
     id: 'objeciones-precio',
@@ -315,6 +381,117 @@ const SEEDS: ScenarioSeed[] = [
     intensity: 'real',
     minutes: 7,
   },
+  // Setter: conversación escrita (WhatsApp, DM). Cualificar con las tres preguntas del formulario
+  // previo —urgencia, autoridad y recursos— y agendar, que es el trabajo del puesto.
+  {
+    id: 'setter-inbound',
+    kind: 'setter',
+    title: 'Lead nuevo que acaba de dejar sus datos',
+    context: 'Chat ficticio · anuncio de Instagram · clínica de fisioterapia',
+    summary: 'Ha rellenado el formulario hace dos minutos y pregunta qué pasa ahora. Practicas responder en el primer mensaje, dar contexto y abrir con una pregunta en vez de con un discurso.',
+    objectives: ['Responder en el primer mensaje con nombre y contexto', 'Preguntar por su situación antes de explicar el servicio', 'Detectar la urgencia real (cuándo quiere resolverlo)', 'Proponer la llamada con dos huecos concretos'],
+    opening: 'Hola, acabo de rellenar el formulario de la web. ¿Qué pasa ahora?',
+    level: 'Setter · primer contacto',
+    intensity: 'real',
+    minutes: 6,
+  },
+  {
+    id: 'setter-cualificar',
+    kind: 'setter',
+    title: 'Cualificar sin que parezca un interrogatorio',
+    context: 'Chat ficticio · tienda online · respuestas de una palabra',
+    summary: 'El lead contesta «sí», «depende», «no sé». Practicas sacar urgencia, autoridad y recursos con preguntas cortas y naturales, y decidir si la llamada con el closer tiene sentido.',
+    objectives: ['Convertir una respuesta vacía en información', 'Preguntar cuándo quiere resolverlo', 'Averiguar quién decide además de él', 'Confirmar si hay presupuesto antes de agendar'],
+    opening: 'Sí, me interesa. Depende del precio.',
+    level: 'Setter · cualificación',
+    intensity: 'real',
+    minutes: 7,
+  },
+  {
+    id: 'setter-agendar',
+    kind: 'setter',
+    title: '«En enero lo vemos»: agendar sin presionar',
+    context: 'Chat ficticio · consultora de marketing · lead tibio',
+    summary: 'Interesada, pero lo deja para más adelante. Practicas ofrecer dos huecos de las próximas 48 horas, explicar por qué merece la pena hablar ahora y no aceptar un «ya te escribo».',
+    objectives: ['Validar la cautela sin discutirla', 'Dar una razón concreta para hablar esta semana', 'Ofrecer dos huecos con día y hora', 'Dejar la cita confirmada, no «pendiente»'],
+    opening: 'Gracias por la info. Ahora estoy con mil cosas, en enero lo vemos mejor.',
+    level: 'Setter · agenda',
+    intensity: 'real',
+    minutes: 6,
+  },
+  {
+    id: 'setter-noshow',
+    kind: 'setter',
+    title: 'No-show: recuperar la llamada de hoy',
+    context: 'Chat ficticio · estudio de arquitectura · cita perdida',
+    summary: 'No entró a la llamada. Practicas escribir sin culpabilizar, recordar en una frase por qué quería hablar y abrir dos huecos nuevos.',
+    objectives: ['Escribir sin reproche ni sarcasmo', 'Recordar su motivo en una frase', 'Ofrecer dos huecos nuevos', 'Cerrar la cita o dejarla en un no claro'],
+    opening: 'Perdona, se me ha complicado la mañana y no he podido entrar.',
+    level: 'Setter · no-show',
+    intensity: 'suave',
+    minutes: 5,
+  },
+  {
+    id: 'setter-seguimiento',
+    kind: 'setter',
+    title: 'Cuatro toques de valor y un cierre honesto',
+    context: 'Chat ficticio · empresa de reformas · lleva dos semanas en visto',
+    summary: 'Dejó de responder después de dos mensajes. Practicas aportar algo útil antes de insistir, no repetir «¿alguna novedad?» y cerrar la conversación con dignidad si no hay respuesta.',
+    objectives: ['Aportar valor en cada toque, no solo recordar', 'Preguntar por el obstáculo real una vez', 'No culpar ni usar urgencia falsa', 'Cerrar el seguimiento sin dejar la conversación abierta para siempre'],
+    opening: 'Ahora no es buen momento. Te escribo yo cuando pueda.',
+    level: 'Setter · seguimiento',
+    intensity: 'real',
+    minutes: 7,
+  },
+  // Llamada en frío: prospección pura. El objetivo no es cerrar, es conseguir la cita.
+  {
+    id: 'frio-apertura',
+    kind: 'frio',
+    title: 'Los quince segundos de una llamada que nadie espera',
+    context: 'Llamada ficticia · empresa de logística · 40 personas',
+    summary: 'No te espera, está entre reuniones y no te conoce. Practicas el motivo en una frase, el permiso para preguntar y una pregunta que no se pueda contestar con «mándame un correo».',
+    objectives: ['Presentarte con nombre y empresa en una frase', 'Dar un motivo concreto, no un discurso', 'Pedir permiso para una sola pregunta', 'Terminar con un siguiente paso, no con un correo genérico'],
+    opening: '¿Dígame? ¿Quién es?',
+    level: 'Frío · apertura',
+    intensity: 'dura',
+    minutes: 5,
+  },
+  {
+    id: 'frio-decisor',
+    kind: 'frio',
+    title: '«Está en una reunión»: llegar a quien decide',
+    context: 'Llamada ficticia · recepción de una empresa de servicios',
+    summary: 'Te atiende recepción y protege la agenda. Practicas dar un motivo breve y cierto, pedir el nombre de quien decide y conseguir una vía directa sin inventar una urgencia.',
+    objectives: ['Tratar bien a quien filtra, sin intentar saltártela', 'Explicar en una frase por qué llamas', 'Pedir nombre y mejor vía para la persona que decide', 'Conseguir un hueco concreto o una hora para volver a llamar'],
+    opening: 'Buenos días, le atiendo yo. ¿Con quién quiere hablar?',
+    level: 'Frío · llegar al decisor',
+    intensity: 'real',
+    minutes: 5,
+  },
+  {
+    id: 'frio-cualificar',
+    kind: 'frio',
+    title: 'Cualificar en frío y agendar la llamada',
+    context: 'Llamada ficticia · autónomo que dejó sus datos hace un mes',
+    summary: 'Te contesta, medio interesado y medio desconfiado. Practicas las tres preguntas del formulario previo —urgencia, autoridad y recursos— y una cita con día y hora.',
+    objectives: ['Recordar de dónde viene tu llamada sin excusarte', 'Preguntar cuándo quiere resolverlo', 'Averiguar quién más decide', 'Agendar con día y hora o descalificar con respeto'],
+    opening: '¿Sí? ¿Esto por qué es? Creo que dejé mis datos hace tiempo, no me acuerdo.',
+    level: 'Frío · cualificar',
+    intensity: 'real',
+    minutes: 7,
+  },
+  {
+    id: 'frio-seguimiento',
+    kind: 'frio',
+    title: 'El sexto intento con un ángulo nuevo',
+    context: 'Llamada ficticia · gerente de tienda · cinco llamadas sin respuesta',
+    summary: 'Ya te conoce y no ha contestado cinco veces. Practicas un motivo nuevo y breve, sin reprochar el silencio ni dar la conversación por perdida antes de tiempo.',
+    objectives: ['Abrir con un motivo nuevo, no con «te llamo otra vez»', 'No reprochar que no haya contestado', 'Preguntar una sola cosa y dejar hablar', 'Acordar un paso concreto o cerrar el contacto con claridad'],
+    opening: '¿Sí? Uy, otra vez tú. Mira, ahora no puedo.',
+    level: 'Frío · insistencia',
+    intensity: 'dura',
+    minutes: 6,
+  },
   // Entrevistadores con otro punto de vista: personas (HR) y negocio (dirección de ventas).
   {
     id: 'entrevista-rrhh',
@@ -369,7 +546,7 @@ const SEEDS: ScenarioSeed[] = [
 
 export const PRACTICE_SCENARIOS: PracticeScenario[] = SEEDS.map(seed => ({
   ...seed,
-  ...(SCENARIO_META[seed.id] ?? { track: seed.kind === 'venta' ? 'llamada' : 'entrevista', category: seed.kind === 'venta' ? 'inicio' : 'responsable' }),
+  ...(SCENARIO_META[seed.id] ?? { track: seed.kind === 'entrevista' ? 'entrevista' : 'closer', category: seed.kind === 'entrevista' ? 'responsable' : 'apertura' }),
   persona: personaOf(seed.id),
 }));
 

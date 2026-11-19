@@ -104,6 +104,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/offertags.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/voice.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice.mjs
+# Formulario de cualificación: ocho preguntas, una respuesta de autoridad por pregunta y presentación revisada sin IA.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/qualification.mjs
 # Práctica de una candidatura: solo el anuncio y la parte profesional del formulario viajan al modelo.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practicecontext.mjs
 # «Tu siguiente práctica»: elección determinista (eje flojo, categoría menos practicada, días sin practicar).

@@ -123,10 +123,12 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
       <article className="progress-card"><h2>Evolución semanal</h2><p className="card-meta">Nota media de tus prácticas por semana (de lunes a domingo, hora de Madrid). Una semana sin prácticas se queda en «—».</p>
         <WeeklyBars weekly={p.weekly} />
         <details><summary>Ver como tabla</summary><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Semana del</th><th scope="col" className="num">Prácticas</th><th scope="col" className="num">Nota media</th></tr></thead><tbody>{p.weekly.map(w => <tr key={w.week}><th scope="row">{weekLabel(w.week)}</th><td className="num">{w.count}</td><td className="num">{dash(w.avg)}</td></tr>)}</tbody></table></div></details></article>
-      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en los últimos {p.days} días. La llamada y la entrevista van por separado y, con menos de {MIN_AXIS_SAMPLES} prácticas en un eje, se muestra «—»: dos datos no son una tendencia.</p>
+      <article className="progress-card"><h2>{coach ? 'Competencias' : 'Tus competencias'}</h2><p className="card-meta">Media por eje en los últimos {p.days} días. Cada sala va por separado —closer, setter, frío y entrevista— y, con menos de {MIN_AXIS_SAMPLES} prácticas en un eje, se muestra «—»: dos datos no son una tendencia.</p>
         {p.axes.length ? <div className="axis-rooms">
-          <AxisGroup title="Llamada" rows={p.axes.filter(a => a.track === 'llamada')} />
-          <AxisGroup title="Entrevista" rows={p.axes.filter(a => a.track === 'entrevista')} />
+          <AxisGroup title="Closer (voz)" rows={p.axes.filter(a => a.track === 'closer')} />
+          <AxisGroup title="Setter (chat)" rows={p.axes.filter(a => a.track === 'setter')} />
+          <AxisGroup title="Frío (voz)" rows={p.axes.filter(a => a.track === 'frio')} />
+          <AxisGroup title="Entrevista (voz)" rows={p.axes.filter(a => a.track === 'entrevista')} />
           <AxisGroup title="Prácticas anteriores sin sala" rows={p.axes.filter(a => a.track === null)} />
         </div>
           : <p className="card-meta">— Todavía no hay prácticas puntuadas por eje en este periodo.</p>}</article>

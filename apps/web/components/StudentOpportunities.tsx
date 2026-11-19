@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Bookmark, BriefcaseBusiness, ChevronRight, Clock3, Compass, FileText, Globe2, GraduationCap, HeartHandshake, Inbox, Languages, Laptop, LoaderCircle, MapPin, MessageSquare, PhoneOutgoing, Search, ShieldAlert, TrendingUp, Users, X } from 'lucide-react';
 import OpportunityRadar from './OpportunityRadar';
 import StudentPractice from './StudentPractice';
+import type { PracticeTrack } from './practiceScenarios';
 import StudentProgress from './StudentProgress';
 import StudentTraining from './StudentTraining';
 import { hasPay } from './offerFacts';
@@ -191,7 +192,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   const [wider, setWider] = useState<Offer[] | null>(null); // hueco ampliado cuando el filtro estrecho devuelve <10
   const [selectionTotal, setSelectionTotal] = useState(0);
   const [saved, setSaved] = useState(false);
-  const [practice, setPractice] = useState<'llamada' | 'entrevista' | null>(null);
+  const [practice, setPractice] = useState<PracticeTrack | null>(null);
   const [training, setTraining] = useState(false);
   const [progress, setProgress] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -212,7 +213,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
     // Enlaces directos del panel de la alumna: /?tab=formacion y /?tab=practica.
     const tab = new URLSearchParams(window.location.search).get('tab');
     if (tab === 'formacion') setTraining(true);
-    else if (tab === 'practica') setPractice('llamada');
+    else if (tab === 'practica') setPractice('closer');
   }, []);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -289,12 +290,12 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="WDC · Inicio"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>
       <div className="workspace-label">TU SIGUIENTE PASO</div>
-      <nav aria-label="Navegación principal"><button className={`nav ${!saved && !practice && !training && !progress ? 'active' : ''}`} aria-current={!saved && !practice && !training && !progress ? 'page' : undefined} onClick={() => { setSaved(false); setPractice(null); setTraining(false); setProgress(false); }}><Compass size={18} />Oportunidades</button><button className={`nav ${saved && !practice && !training ? 'active' : ''}`} aria-current={saved && !practice && !training ? 'page' : undefined} onClick={() => { setSaved(true); setPractice(null); setTraining(false); setProgress(false); }}><Bookmark size={18} />Guardadas</button><button className={`nav ${practice === 'llamada' ? 'active' : ''}`} aria-current={practice === 'llamada' ? 'page' : undefined} onClick={() => { setPractice('llamada'); setSaved(false); setTraining(false); setProgress(false); }}><MessageSquare size={18} />AI roleplay · llamada</button><button className={`nav ${practice === 'entrevista' ? 'active' : ''}`} aria-current={practice === 'entrevista' ? 'page' : undefined} onClick={() => { setPractice('entrevista'); setSaved(false); setTraining(false); setProgress(false); }}><Users size={18} />AI roleplay · entrevista</button><button className={`nav ${training ? 'active' : ''}`} aria-current={training ? 'page' : undefined} onClick={() => { setTraining(true); setSaved(false); setPractice(null); setProgress(false); }}><GraduationCap size={18} />Formación</button><button className={`nav ${progress ? 'active' : ''}`} aria-current={progress ? 'page' : undefined} onClick={() => { setProgress(true); setSaved(false); setPractice(null); setTraining(false); }}><TrendingUp size={18} />Mi progreso</button></nav>
+      <nav aria-label="Navegación principal"><button className={`nav ${!saved && !practice && !training && !progress ? 'active' : ''}`} aria-current={!saved && !practice && !training && !progress ? 'page' : undefined} onClick={() => { setSaved(false); setPractice(null); setTraining(false); setProgress(false); }}><Compass size={18} />Oportunidades</button><button className={`nav ${saved && !practice && !training ? 'active' : ''}`} aria-current={saved && !practice && !training ? 'page' : undefined} onClick={() => { setSaved(true); setPractice(null); setTraining(false); setProgress(false); }}><Bookmark size={18} />Guardadas</button><button className={`nav ${practice ? 'active' : ''}`} aria-current={practice ? 'page' : undefined} onClick={() => { setPractice(practice ?? 'closer'); setSaved(false); setTraining(false); setProgress(false); }}><MessageSquare size={18} />Sala de práctica</button><button className={`nav ${training ? 'active' : ''}`} aria-current={training ? 'page' : undefined} onClick={() => { setTraining(true); setSaved(false); setPractice(null); setProgress(false); }}><GraduationCap size={18} />Formación</button><button className={`nav ${progress ? 'active' : ''}`} aria-current={progress ? 'page' : undefined} onClick={() => { setProgress(true); setSaved(false); setPractice(null); setTraining(false); }}><TrendingUp size={18} />Mi progreso</button></nav>
       <div className="sidebar-note"><span className="eyebrow">TU TALENTO.<br />TU PRÓXIMA EMPRESA.</span><p>Has trabajado para llegar hasta aquí. Ahora elige dónde quieres dar tu siguiente paso.</p></div>
       <div className="local-user"><HeartHandshake size={22} /><div><strong>Comunidad WDC</strong><small>Te acompañamos en el camino</small></div></div>
     </aside>
     <div className="main-shell">
-      <header className="topbar"><div>Women Digital Closer <ChevronRight size={14} /><strong>{saved ? 'Tus guardadas' : practice ? (practice === 'llamada' ? 'AI roleplay · llamada' : 'AI roleplay · entrevista') : training ? 'Formación' : progress ? 'Tu progreso' : 'Oportunidades'}</strong></div><span className="student-tag">De la formación a tu próximo trabajo</span></header>
+      <header className="topbar"><div>Women Digital Closer <ChevronRight size={14} /><strong>{saved ? 'Tus guardadas' : practice ? 'Sala de práctica' : training ? 'Formación' : progress ? 'Tu progreso' : 'Oportunidades'}</strong></div><span className="student-tag">De la formación a tu próximo trabajo</span></header>
       <main>
         {progress ? <StudentProgress /> : training ? <StudentTraining /> : practice ? <StudentPractice track={practice} onTrackChange={setPractice} /> : <>
         <div className="page-heading"><div><span className="eyebrow">EMPRESAS QUE BUSCAN TALENTO COMERCIAL</span><h1>{saved ? 'Las que te interesan.' : 'Elige tu próxima oportunidad.'}</h1><p>{saved ? 'Vuelve a comparar sus condiciones y decide tu siguiente paso.' : 'WDC reúne oportunidades en español para que encuentres dónde quieres crecer.'}</p></div><span className="heading-icon"><Compass size={30} strokeWidth={1.2} /></span></div>

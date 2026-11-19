@@ -23,6 +23,12 @@ const debrief = {
 // La vista de alumna carga oportunidades al montar: se neutraliza para aislar la práctica.
 const emptyCatalog = (route: import('@playwright/test').Route) => route.fulfill({ json: { items: [], total: 0 } });
 
+// La sala tiene una sola entrada en el menú y cuatro salas por rol dentro; closer es la primera.
+const openRoom = async (page: import('@playwright/test').Page, tab = 'Closer · voz') => {
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('tab', { name: tab }).click();
+};
+
 test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con ejes y señales', async ({ page }) => {
   const calls: Record<string, unknown>[] = [];
   const activity: Record<string, unknown>[] = [];
@@ -35,9 +41,9 @@ test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con 
     return route.fulfill({ json: { reply: 'Entiendo. ¿Y cómo lo estaríais midiendo?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
-  await expect(page.getByRole('heading', { name: 'Ensaya la llamada antes de la real.' })).toBeVisible();
-  await expect(page.locator('.practice-card')).toHaveCount(12);
+  await openRoom(page);
+  await expect(page.getByRole('heading', { name: 'Ensaya la llamada de cierre.' })).toBeVisible();
+  await expect(page.locator('.practice-card')).toHaveCount(13);
   await expect(page.locator('.practice-level[data-intensity="dura"]')).toHaveCount(3);
   // Sin puerta previa: «Practicar» entra directo a la sala.
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
@@ -88,7 +94,7 @@ test('una práctica vieja sin ejes se sigue pudiendo leer desde el historial', a
   }, legacy);
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await expect(page.locator('.practice-history li')).toHaveCount(1);
   await expect(page.locator('.practice-history-score')).toHaveCount(0);
   await page.getByRole('button', { name: 'Ver feedback' }).click();
@@ -101,7 +107,7 @@ test('un error del proveedor no pierde la conversación ni la puerta vuelve', as
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.route('**/api/practice', route => route.fulfill({ status: 502, json: { detail: 'No se ha podido completar la respuesta. La conversación no se ha perdido: vuelve a intentarlo.' } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await page.getByLabel('Tu respuesta').fill('Hola, ¿qué tal?');
   await page.getByRole('button', { name: 'Enviar respuesta' }).click();
@@ -119,7 +125,7 @@ test('la sala cierra la conversación antes de que el feedback sea imposible', a
     return route.fulfill({ json: { reply: 'Entiendo. ¿Y cómo lo mediríais?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   const reply = page.getByLabel('Tu respuesta');
   const send = page.getByRole('button', { name: 'Enviar respuesta' });
@@ -165,7 +171,7 @@ test('el dictado añade lo reconocido al borrador sin enviarlo y el orbe marca e
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.route('**/api/practice', route => route.fulfill({ json: { reply: 'Sigue.' } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await expect(page.locator('.jarvis-orb')).toHaveAttribute('data-state', 'idle');
   await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
@@ -187,7 +193,7 @@ test('sin reconocimiento de voz no se ofrece el micrófono y se puede escribir',
   });
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await expect(page.getByRole('button', { name: 'Dictar la respuesta' })).toHaveCount(0);
   await page.getByLabel('Tu respuesta').fill('Escribo la respuesta a mano.');
@@ -198,7 +204,7 @@ test('sin proveedor la sala lo dice y no inventa una respuesta', async ({ page }
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.route('**/api/practice', route => route.fulfill({ status: 503, json: { detail: 'La sala de práctica no está configurada en este despliegue.' } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await openRoom(page);
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await page.getByLabel('Tu respuesta').fill('Hola, ¿qué tal?');
   await page.getByRole('button', { name: 'Enviar respuesta' }).click();
@@ -209,22 +215,22 @@ test('sin proveedor la sala lo dice y no inventa una respuesta', async ({ page }
   await expect(page.locator('.practice-turn.is-mine')).toHaveCount(1);
 });
 
-test('las dos salas de AI roleplay separan llamada y entrevista, y filtran por categoría', async ({ page }) => {
+test('las salas separan closer, setter, frío y entrevista, y filtran por categoría', async ({ page }) => {
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
-  await expect(page.getByRole('tab', { name: 'AI roleplay · llamada' })).toHaveAttribute('aria-selected', 'true');
-  // La sala de llamada agrupa por momento: inicio, objeciones y llamada completa.
-  await expect(page.locator('.practice-card')).toHaveCount(12);
-  for (const category of ['Inicio de llamada', 'Objeciones', 'Llamada completa']) {
+  await openRoom(page);
+  await expect(page.getByRole('tab', { name: 'Closer · voz' })).toHaveAttribute('aria-selected', 'true');
+  // La sala de closer agrupa por momento: apertura, descubrimiento, objeciones y cierre.
+  await expect(page.locator('.practice-card')).toHaveCount(13);
+  for (const category of ['Apertura y marco', 'Descubrimiento', 'Objeciones', 'Cierre']) {
     await page.getByRole('button', { name: category, exact: true }).click();
     await expect(page.locator('.practice-card').first()).toBeVisible();
   }
-  await page.getByRole('button', { name: 'Llamada completa', exact: true }).click();
-  await expect(page.locator('.practice-card')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Cierre', exact: true }).click();
+  await expect(page.locator('.practice-card')).toHaveCount(3);
   // La carita del personaje (monograma) y su papel son visibles antes de practicar.
   await expect(page.locator('.practice-card').first().locator('.practice-persona .persona-face')).toHaveText(/^[A-Z]{2}$/);
-  await page.getByRole('tab', { name: 'AI roleplay · entrevista' }).click();
+  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
   await expect(page.locator('.practice-card')).toHaveCount(9);
   await page.getByRole('button', { name: 'Dueño directo', exact: true }).click();
   await expect(page.locator('.practice-card')).toHaveCount(1);
@@ -233,4 +239,37 @@ test('las dos salas de AI roleplay separan llamada y entrevista, y filtran por c
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await expect(page.locator('.practice-chat-head .persona-face')).toHaveText('CA');
   await expect(page.locator('.practice-chat-head')).toContainText('Carlos');
+});
+
+test('la sala de setter es de chat y deja el orbe de voz fuera', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.route('**/api/practice', route => route.fulfill({ json: { reply: '¿Y en qué mes quieres abrir la segunda sede?' } }));
+  await page.goto('/');
+  await openRoom(page, 'Setter · chat');
+  await expect(page.locator('.practice-card')).toHaveCount(5);
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  await expect(page.getByText('Chat simulado')).toBeVisible();
+  await expect(page.locator('.jarvis-orb')).toHaveCount(0);
+  await page.getByLabel('Tu respuesta').fill('Hola Nerea, soy Ana. ¿Cuándo te gustaría abrir la segunda sede?');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await expect(page.getByText('¿Y en qué mes quieres abrir la segunda sede?')).toBeVisible();
+});
+
+test('el test del formulario de cualificación corrige cada respuesta y explica lo que lee quien contrata', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('tab', { name: 'Formulario · test' }).click();
+  await expect(page.getByRole('heading', { name: 'El formulario que sí te llama.' })).toBeVisible();
+  for (let i = 0; i < 8; i++) {
+    await page.locator('.qualify-option').nth(2).click();
+    await page.getByRole('button', { name: i === 7 ? 'Ver resultado' : 'Siguiente' }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Así se lee tu formulario.' })).toBeVisible();
+  await expect(page.locator('.qualify-score b')).toHaveText('100');
+  await expect(page.locator('.qualify-review > li')).toHaveCount(8);
+  // La presentación libre se revisa con reglas explicables, no con una nota.
+  await page.getByLabel('Tu presentación').fill('No tengo experiencia, soy muy trabajadora.');
+  await page.getByRole('button', { name: 'Revisar mi presentación' }).click();
+  await expect(page.locator('.qualify-criteria li[data-ok="false"]').first()).toBeVisible();
 });

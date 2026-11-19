@@ -43,7 +43,8 @@ test('la sala practica la entrevista de una candidatura con su anuncio', async (
     return route.fulfill({ json: { reply: '¿Y qué resultados medías?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · entrevista' }).click();
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
   const panel = page.getByRole('region', { name: 'Practica una candidatura tuya' });
   await expect(panel).toBeVisible();
   const profileTick = panel.getByRole('checkbox', { name: /Usar mi formulario base/ });
@@ -111,7 +112,8 @@ test('el dictado se registra como práctica por voz, con su duración', async ({
     return route.fulfill({ json: { reply: 'Bien. ¿Y el siguiente paso?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · entrevista' }).click();
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
   await expect(page.getByLabel('Tu respuesta')).toHaveValue(/he cerrado doce mil euros/);

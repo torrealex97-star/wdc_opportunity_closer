@@ -2,6 +2,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LoaderCircle, Target } from 'lucide-react';
 import { PRACTICE_SCENARIOS, scenarioById } from './practiceScenarios';
+import type { PracticeTrack } from './practiceScenarios';
+
+// El escenario se elige por su rol; el título ya dice el caso concreto.
+const TRACK_SHORT: Record<PracticeTrack, string> = { closer: 'Closer', setter: 'Setter', frio: 'Frío', entrevista: 'Entrevista' };
 
 // Retos de una alumna desde su ficha. La coordinadora elige escenario, nota mínima opcional, fecha límite
 // y deja una nota. El estado NO se edita: lo calcula el servidor con la actividad de ella.
@@ -81,7 +85,7 @@ export default function StudentChallenges({ studentId }: { studentId: string }) 
     {available && <form className="practice-prepared-form" onSubmit={assign} aria-label="Asignar un reto">
       <label>Escenario<select value={scenario} required onChange={event => setScenario(event.target.value)}>
         <option value="">Elige una situación</option>
-        {PRACTICE_SCENARIOS.map(item => <option key={item.id} value={item.id}>{item.track === 'llamada' ? 'Llamada' : 'Entrevista'} · {item.title}</option>)}
+        {PRACTICE_SCENARIOS.map(item => <option key={item.id} value={item.id}>{TRACK_SHORT[item.track]} · {item.title}</option>)}
       </select></label>
       <label>Nota mínima (opcional)<input type="number" min={1} max={100} step={1} value={minScore} onChange={event => setMinScore(event.target.value)} placeholder="Sin mínimo" /></label>
       <label>Fecha límite<input type="date" value={due} required onChange={event => setDue(event.target.value)} /></label>

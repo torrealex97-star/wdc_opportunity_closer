@@ -171,7 +171,7 @@ export const LOGICA = {
     'Después de soltar el número, no hables. Ni «¿qué te parece?» ni «¿cómo lo ves?». Quien habla primero después del precio, pierde.',
   closeExample:
     'Tú decides: seguir igual o empezar. Lo que no puedes es seguir diciendo que quieres 5.000 € al mes y no cambiar nada.',
-  task: 'Haz el cálculo en voz alta con una persona real y después cállate diez segundos. Repítelo tres veces esta semana.',
+  task: 'Haz el cálculo en voz alta con una persona real y después cállate ocho segundos: es la pausa del método. Repítelo tres veces esta semana.',
 };
 
 // ---- Módulo 3: anti-freezing -----------------------------------------------

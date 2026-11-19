@@ -47,7 +47,7 @@ assert.equal(madrid('2026-11-25T23:30:00Z').late, true);
 // 10) Sin lectura de actividad el estado es «—» (unknown) y los intentos son null, no cero.
 const unknown = challengeViews([challenge], null, now)[0];
 assert.equal(unknown.status, 'unknown'); assert.equal(unknown.attempts, null); assert.equal(unknown.best_score, null);
-assert.equal(unknown.scenario.title, '«Me parece caro» a mitad de la propuesta'); assert.equal(unknown.scenario.track, 'llamada');
+assert.equal(unknown.scenario.title, '«Me parece caro» a mitad de la propuesta'); assert.equal(unknown.scenario.track, 'closer');
 assert.equal(challengeViews([challenge], [], now)[0].status, 'pending');
 
 // 11) Validación del encargo: escenario del catálogo, nota 1–100 o vacía, plazo real de hoy a un año, nota 1–500.

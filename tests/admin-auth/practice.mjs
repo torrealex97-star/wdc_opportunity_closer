@@ -1,7 +1,7 @@
 // Catálogo de la sala de práctica: cada situación visible tiene su personaje en el servidor y ninguna expone su prompt.
 // node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice.mjs
 import assert from 'node:assert/strict';
-import { PRACTICE_SCENARIOS, INTERVIEWER_TYPES, scenarioById } from '../../apps/web/components/practiceScenarios.ts';
+import { PRACTICE_SCENARIOS, INTERVIEWER_TYPES, TRACK_CHANNEL, categoriesFor, scenarioById } from '../../apps/web/components/practiceScenarios.ts';
 import { buildPersonaPrompt, axesFor, debriefInstructions, debriefSchema } from '../../apps/web/app/api/practice/prompts.ts';
 import { analyzeSignals } from '../../apps/web/app/api/practice/signals.ts';
 
@@ -14,7 +14,7 @@ await step('ids únicos y cada situación tiene todo lo que la UI muestra', () =
     assert.ok(s.title && s.context && s.summary && s.opening && s.level, s.id);
     assert.ok(s.objectives.length >= 3 && s.objectives.length <= 5, `${s.id}: objetivos`);
     assert.ok(s.minutes >= 5 && s.minutes <= 12, `${s.id}: minutos`);
-    assert.ok(['venta', 'entrevista'].includes(s.kind) && ['suave', 'real', 'dura'].includes(s.intensity), s.id);
+    assert.ok(['venta', 'setter', 'frio', 'entrevista'].includes(s.kind) && ['suave', 'real', 'dura'].includes(s.intensity), s.id);
     assert.equal(scenarioById(s.id), s);
   }
 });
@@ -28,20 +28,33 @@ await step('todas tienen personaje en el servidor, con sus tres niveles y rúbri
 });
 await step('el catálogo cubre los nichos y los entrevistadores pedidos, todo ficticio', () => {
   for (const id of ['venta-infoproducto', 'venta-saas-b2b', 'venta-clinica', 'venta-reformas', 'venta-fitness', 'entrevista-rrhh', 'entrevista-head-sales']) assert.ok(scenarioById(id), id);
-  assert.equal(PRACTICE_SCENARIOS.filter(s => s.kind === 'venta').length, 12);
+  assert.equal(PRACTICE_SCENARIOS.filter(s => s.kind === 'venta').length, 13);
+  assert.equal(PRACTICE_SCENARIOS.filter(s => s.kind === 'setter').length, 5);
+  assert.equal(PRACTICE_SCENARIOS.filter(s => s.kind === 'frio').length, 4);
   assert.equal(PRACTICE_SCENARIOS.filter(s => s.kind === 'entrevista').length, 9);
   for (const s of PRACTICE_SCENARIOS.filter(x => /^venta-(infoproducto|saas|clinica|reformas|fitness)/.test(x.id))) assert.match(s.context, /fictici/i, `${s.id}: debe decir que es ficticia`);
 });
-await step('las dos salas cubren sus categorías y cada situación tiene su persona visible', () => {
-  const llamada = PRACTICE_SCENARIOS.filter(s => s.track === 'llamada');
-  const entrevista = PRACTICE_SCENARIOS.filter(s => s.track === 'entrevista');
-  assert.equal(llamada.length, 12); assert.equal(entrevista.length, 9);
-  // Las tres categorías de llamada pedidas por el propietario, con al menos una situación cada una.
-  for (const category of ['inicio', 'objeciones', 'completa']) assert.ok(llamada.some(s => s.category === category), category);
-  assert.ok(llamada.filter(s => s.category === 'completa').length >= 2, 'llamada completa');
+await step('cada rol tiene su sala, su canal y sus categorías cubiertas', () => {
+  const by = track => PRACTICE_SCENARIOS.filter(s => s.track === track);
+  assert.equal(by('closer').length, 13);
+  assert.equal(by('setter').length, 5);
+  assert.equal(by('frio').length, 4);
+  assert.equal(by('entrevista').length, 9);
+  // Closer, frío y entrevista se entrenan con voz; el setter practica por chat, que es donde trabaja.
+  assert.deepEqual(TRACK_CHANNEL, { closer: 'voz', setter: 'chat', frio: 'voz', entrevista: 'voz' });
+  // Ninguna sala declara una categoría vacía, y cada situación vive en una categoría de la suya.
+  for (const track of ['closer', 'setter', 'frio', 'entrevista']) {
+    const categories = categoriesFor(track);
+    for (const s of by(track)) assert.ok(categories.some(c => c.id === s.category), `${s.id}: categoría de su sala`);
+    for (const category of categories) assert.ok(by(track).some(s => s.category === category.id), `${track}: ${category.id} sin situación`);
+  }
+  // El closer cubre apertura, descubrimiento, objeciones y cierre; el setter, sus cinco momentos; el frío, sus cuatro.
+  for (const category of ['apertura', 'descubrimiento', 'objeciones', 'cierre']) assert.ok(by('closer').some(s => s.category === category), category);
+  for (const category of ['primer-contacto', 'cualificacion', 'agenda', 'rescate', 'seguimiento']) assert.ok(by('setter').some(s => s.category === category), category);
+  for (const category of ['apertura', 'decisor', 'cualificacion', 'seguimiento']) assert.ok(by('frio').some(s => s.category === category), category);
   // La entrevista se agrupa por tipo de entrevistador y todos los tipos declarados se usan.
-  for (const s of entrevista) assert.ok(INTERVIEWER_TYPES.some(t => t.id === s.category), s.id);
-  for (const type of INTERVIEWER_TYPES) assert.ok(entrevista.some(s => s.category === type.id), type.id);
+  for (const s of by('entrevista')) assert.ok(INTERVIEWER_TYPES.some(t => t.id === s.category), s.id);
+  for (const type of INTERVIEWER_TYPES) assert.ok(by('entrevista').some(s => s.category === type.id), type.id);
   // La carita es un monograma de dos letras: no hay fotos inventadas ni activos externos.
   for (const s of PRACTICE_SCENARIOS) assert.match(s.persona.initials, /^[A-Z]{2}$/, s.id);
   assert.ok(PRACTICE_SCENARIOS.every(s => s.persona.name && s.persona.role), 'cada persona tiene nombre y papel visibles');

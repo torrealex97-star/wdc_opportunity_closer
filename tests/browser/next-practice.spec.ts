@@ -12,8 +12,8 @@ const progress = {
     { week: '2026-10-26', avg: null, count: 0 }, { week: '2026-10-19', avg: null, count: 0 }, { week: '2026-10-12', avg: null, count: 0 },
   ],
   axes: [
-    { axis: 'cierre', avg: 40, track: 'llamada', count: 4 },
-    { axis: 'objecion', avg: 55, track: 'llamada', count: 4 },
+    { axis: 'cierre', avg: 40, track: 'closer', count: 4 },
+    { axis: 'objecion', avg: 55, track: 'closer', count: 4 },
     { axis: 'encaje', avg: 20, track: 'entrevista', count: 2 },
     { axis: 'empatia', avg: 77, count: 5, track: null },
   ],
@@ -30,7 +30,7 @@ test('la sala recomienda la siguiente práctica con su motivo y la arranca', asy
   await page.route('**/api/student/progress*', route => route.fulfill({ json: payload }));
   await page.route('**/api/student/applications', route => route.fulfill({ status: 401, json: { detail: 'Entra con tu cuenta.' } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI roleplay · llamada' }).click();
+  await page.getByRole('button', { name: 'Sala de práctica' }).click();
   const card = page.getByRole('region', { name: 'Tu siguiente práctica' });
   await expect(card).toBeVisible();
   await expect(card.getByText('TU SIGUIENTE PRÁCTICA')).toBeVisible();
@@ -42,16 +42,16 @@ test('la sala recomienda la siguiente práctica con su motivo y la arranca', asy
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
 });
 
-test('competencias separa llamada y entrevista y pone «—» con menos de 3 datos', async ({ page }) => {
+test('competencias separa cada sala y pone «—» con menos de 3 datos', async ({ page }) => {
   await page.route('**/api/student/progress*', route => route.fulfill({ json: payload }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Mi progreso' }).click();
   await expect(page.getByRole('heading', { name: 'Tus competencias' })).toBeVisible();
-  await expect(page.getByRole('progressbar', { name: 'Cierre en llamada' })).toHaveAttribute('aria-valuenow', '40');
-  await expect(page.getByRole('progressbar', { name: 'Objeciones en llamada' })).toHaveAttribute('aria-valuenow', '55');
+  await expect(page.getByRole('progressbar', { name: 'Cierre en closer (voz)' })).toHaveAttribute('aria-valuenow', '40');
+  await expect(page.getByRole('progressbar', { name: 'Objeciones en closer (voz)' })).toHaveAttribute('aria-valuenow', '55');
   // La entrevista tiene 2 datos: no hay media, hay un hueco declarado con su causa.
   await expect(page.getByText('menos de 3 prácticas (2)')).toBeVisible();
-  await expect(page.getByRole('progressbar', { name: 'Encaje en entrevista' })).toHaveCount(0);
+  await expect(page.getByRole('progressbar', { name: 'Encaje en entrevista (voz)' })).toHaveCount(0);
   // Un eje sin sala se muestra aparte, no se suma a ninguna de las dos.
   await expect(page.getByRole('progressbar', { name: 'Apertura y marco en prácticas anteriores sin sala' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Prácticas anteriores sin sala' })).toBeVisible();

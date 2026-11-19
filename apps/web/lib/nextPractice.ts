@@ -1,8 +1,12 @@
 // «Tu siguiente práctica»: elección determinista a partir de lo ya registrado. Sin IA, sin azar y sin
 // campos nuevos en la base: el eje más flojo (con al menos 3 prácticas), la categoría menos practicada
 // de esa sala y los días desde la última práctica. La UI solo pinta el resultado y arranca el escenario.
-export type NextTrack = 'llamada' | 'entrevista';
+import type { PracticeTrack } from '../components/practiceScenarios';
+
+export type NextTrack = PracticeTrack;
 export const MIN_AXIS_SAMPLES = 3;
+// Orden fijo del catálogo: desempata sin azar cuando dos salas tienen las mismas prácticas.
+export const TRACK_ORDER: NextTrack[] = ['closer', 'setter', 'frio', 'entrevista'];
 
 export type NextAxis = { axis: string; avg: number; count: number; track: NextTrack | null };
 // Lo mínimo que se usa del catálogo: así la función se prueba sin cargar la UI.
@@ -46,8 +50,11 @@ export function nextPractice<S extends NextScenario>(scenarios: S[], input: Next
     .sort((a, b) => a.avg - b.avg || a.axis.localeCompare(b.axis));
   const weakAxis = qualified[0] ?? null;
   const trackCount = (track: NextTrack) => scenarios.filter(item => item.track === track).reduce((sum, item) => sum + (mastery.get(item.id) ?? 0), 0);
-  // Sin ejes suficientes, la sala que menos ha tocado; empate → llamada (orden fijo del catálogo).
-  const track: NextTrack = weakAxis?.track ?? (trackCount('llamada') <= trackCount('entrevista') ? 'llamada' : 'entrevista');
+  // Sin ejes suficientes, la sala que menos ha tocado; empate → la primera del orden fijo del catálogo.
+  // Solo cuentan las salas que existen en el catálogo que se le pasa: una sala vacía no es una recomendación.
+  const tracks = TRACK_ORDER.filter(item => scenarios.some(scenario => scenario.track === item));
+  if (!tracks.length) return null;
+  const track: NextTrack = weakAxis?.track ?? tracks.reduce((best, item) => trackCount(item) < trackCount(best) ? item : best, tracks[0]);
   const pool = scenarios.filter(item => item.track === track);
   const categories: string[] = [];
   for (const item of pool) if (!categories.includes(item.category)) categories.push(item.category);

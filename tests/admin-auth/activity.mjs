@@ -72,7 +72,7 @@ const split = summarize([
   row('practice', '2026-10-24T09:00:00Z', { ref: 'entrevista-closer', score: 60, detail: { axes: { objecion: 50, encaje: 65 } } }),
 ], 7, new Date('2026-10-25T12:00:00Z'));
 assert.deepEqual(split.axes, [
-  { axis: 'objecion', avg: 90, track: 'llamada', count: 1 }, { axis: 'cierre', avg: 70, track: 'llamada', count: 1 },
+  { axis: 'objecion', avg: 90, track: 'closer', count: 1 }, { axis: 'cierre', avg: 70, track: 'closer', count: 1 },
   { axis: 'objecion', avg: 50, track: 'entrevista', count: 1 }, { axis: 'encaje', avg: 65, track: 'entrevista', count: 1 },
 ], 'objeciones de llamada y de entrevista no se mezclan');
 assert.equal(week.recent[0].kind, 'training_exam'); assert.equal(week.recent[0].score, 33, 'lo más reciente primero');

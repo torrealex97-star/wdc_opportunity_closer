@@ -825,3 +825,55 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .challenge-item p{font-size:12px;color:var(--secondary);margin:0}
 .challenge-item .card-meta{margin-top:4px}
 @media(max-width:700px){.practice-prepared{padding:16px}.practice-prepared-form>label:first-child,.practice-prepared-form .check-label{flex:1 1 100%}.practice-prepared-actions{margin-left:0;width:100%}.practice-prepared-actions button{flex:1 1 auto}}
+
+/* --- Salas por rol: voz para closer, frío y entrevista; chat para setter (2026-11-19) ---
+   La sala de chat se reconoce sin leer el texto: el orbe de voz deja su sitio a una marca de chat.
+   El test del formulario usa las mismas tarjetas y criterios que la formación. Solo tokens. */
+.practice-voice.is-chat{color:var(--secondary);display:flex;align-items:center;gap:8px}
+.practice-voice.is-chat small{font-size:10px;letter-spacing:.6px;text-transform:uppercase}
+.qualify{display:grid;gap:18px;max-width:820px}
+.qualify-lead{font-size:14px;line-height:1.7;color:var(--secondary);max-width:70ch;margin:0}
+.qualify-intro{display:grid;gap:12px;padding:20px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}
+.qualify-intro p{font-size:13px;line-height:1.65;margin:0;max-width:72ch}
+.qualify-note{font-size:12px;color:var(--secondary);border-left:3px solid var(--accent);padding-left:12px}
+.qualify-progress{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--secondary);font-weight:600}
+.qualify-question{border:0;padding:0;margin:0;display:grid;gap:8px}
+.qualify-question legend{font-size:20px;font-weight:600;color:var(--ink);line-height:1.35;padding:0}
+.qualify-options{display:grid;gap:10px;margin-top:8px}
+.qualify-option{display:flex;gap:12px;align-items:flex-start;text-align:left;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet);color:var(--ink);font-size:13px;line-height:1.6;min-height:52px}
+.qualify-option:hover{border-color:var(--accent)}
+.qualify-option[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.qualify-letter{display:grid;place-items:center;flex:0 0 26px;height:26px;border-radius:50%;border:1px solid var(--line);font-size:11px;font-weight:650;color:var(--secondary)}
+.qualify-option[aria-pressed="true"] .qualify-letter{border-color:var(--accent);color:var(--accent)}
+.qualify-feedback{padding:16px 18px;border-radius:var(--radius);border:1px solid var(--line);background:var(--inset)}
+.qualify-feedback[data-grade="2"]{border-color:var(--sage);background:var(--sage-soft)}
+.qualify-feedback[data-grade="0"]{border-color:var(--warning);background:var(--warning-soft)}
+.qualify-feedback strong{display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.qualify-feedback p{font-size:13px;line-height:1.6;margin:0}
+.qualify-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.qualify-score{display:inline-flex;align-items:baseline;gap:6px;padding:14px 18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet)}
+.qualify-score b{font-size:30px;line-height:1}
+.qualify-score span{font-size:12px;color:var(--secondary)}
+.qualify-score small{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--secondary);margin-left:6px}
+.qualify-score[data-band="alto"]{border-color:var(--sage)}.qualify-score[data-band="alto"] b{color:var(--sage)}
+.qualify-score[data-band="medio"] b{color:var(--warning)}
+.qualify-score[data-band="bajo"]{border-color:var(--warning)}.qualify-score[data-band="bajo"] b{color:var(--warning)}
+.qualify-review{display:grid;gap:14px;margin:0;padding:0;list-style:none}
+.qualify-review>li{padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sheet)}
+.qualify-review-head{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.qualify-review-head strong{font-size:13px;flex:1 1 260px;line-height:1.5}
+.qualify-grade{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--secondary);white-space:nowrap}
+.qualify-grade[data-grade="2"]{color:var(--sage)}
+.qualify-grade[data-grade="0"]{color:var(--warning)}
+.qualify-reads,.qualify-best{font-size:12px;line-height:1.65;color:var(--secondary);margin:8px 0 0}
+.qualify-best{color:var(--ink)}
+.qualify-rules{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.qualify-rules>li{padding:14px 16px;border-left:3px solid var(--accent);background:var(--inset);border-radius:0 var(--radius) var(--radius) 0}
+.qualify-rules strong{font-size:13px}
+.qualify-rules p{font-size:12px;line-height:1.6;color:var(--secondary);margin:4px 0 0}
+.qualify-pitch{display:grid;gap:10px;padding:20px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}
+.qualify-pitch h2{display:flex;gap:8px;align-items:center;margin:0}
+.qualify-criteria{display:grid;gap:8px;margin:4px 0 0;padding:0;list-style:none}
+.qualify-criteria>li{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--warning)}
+.qualify-criteria>li[data-ok="true"]{color:var(--sage)}
+@media(max-width:700px){.qualify-question legend{font-size:17px}.qualify-option{padding:14px}.qualify-actions button{flex:1 1 auto}}

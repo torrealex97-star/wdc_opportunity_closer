@@ -2,9 +2,10 @@
 
 import { logActivity } from './studentActivityClient';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, Sparkles, Target, Users, Volume2 } from 'lucide-react';
-import { INTENSITY_LABELS, PRACTICE_SCENARIOS, categoriesFor, scenarioById } from './practiceScenarios';
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, Gauge, LoaderCircle, MessageSquare, Mic, MicOff, Phone, Play, Quote, RotateCcw, Send, ShieldCheck, Sparkles, Target, Users, Volume2 } from 'lucide-react';
+import { INTENSITY_LABELS, PRACTICE_SCENARIOS, TRACK_CHANNEL, categoriesFor, scenarioById } from './practiceScenarios';
 import type { PracticePersona, PracticeScenario, PracticeTrack } from './practiceScenarios';
+import StudentQualificationForm from './StudentQualificationForm';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
@@ -47,7 +48,8 @@ type Debrief = {
 
 const band = (score: number) => score >= 70 ? 'alto' : score >= 40 ? 'medio' : 'bajo';
 type Stored = { id: string; scenarioId: string; title: string; startedAt: number; turns: number; debrief: Debrief };
-type View = 'scenarios' | 'room' | 'debrief';
+type View = 'scenarios' | 'room' | 'debrief' | 'formulario';
+const KIND_TEXT: Record<PracticeScenario['kind'], string> = { venta: 'VENTA', setter: 'SETTER', frio: 'LLAMADA EN FRÍO', entrevista: 'ENTREVISTA' };
 
 const HISTORY_KEY = 'wdc_practice_history';
 // Una candidatura de su tablero: el id es lo único que se manda al servidor; el anuncio y el
@@ -85,25 +87,40 @@ function Bubble({ turn, onSpeak }: { turn: Turn; onSpeak?: (text: string) => voi
   </div>;
 }
 
-// Sala de AI roleplay: dos salas, una de llamada con cliente simulado y otra de entrevista con
-// entrevistador simulado. Todo es ficticio y se dice; el feedback cita solo frases literales de
-// la alumna (validadas en servidor) y se apoya en el método de WDC.
+// Cuatro salas por rol y un test de formulario. Todo es ficticio y se dice; el feedback cita
+// solo frases literales de la alumna (validadas en servidor) y se apoya en el método de WDC.
+// Closer, frío y entrevista son salas de VOZ; el setter practica por CHAT, que es donde trabaja.
 const TRACK_TEXT: Record<PracticeTrack, { nav: string; eyebrow: string; title: string; lead: string; categoriesLabel: string }> = {
-  llamada: {
-    nav: 'AI roleplay · llamada',
-    eyebrow: 'SALA DE AI ROLEPLAY · LLAMADA',
-    title: 'Ensaya la llamada antes de la real.',
-    lead: 'Un cliente simulado al otro lado: practica el inicio, las objeciones o la llamada completa. Recibes feedback sobre lo que has dicho.',
+  closer: {
+    nav: 'Closer · voz',
+    eyebrow: 'SALA DE VOZ · CLOSER',
+    title: 'Ensaya la llamada de cierre.',
+    lead: 'Un cliente simulado al otro lado. Habla en voz alta: el dictado escribe lo que dices y tú decides cuándo enviarlo. Recibes feedback sobre lo que has dicho.',
     categoriesLabel: 'Momento de la llamada',
   },
+  setter: {
+    nav: 'Setter · chat',
+    eyebrow: 'SALA DE CHAT · SETTER',
+    title: 'Abre conversaciones y agenda la llamada.',
+    lead: 'Un lead simulado por chat, como en WhatsApp o un mensaje directo. Practicas el primer mensaje, las tres preguntas de cualificación (urgencia, autoridad y recursos) y la cita con el closer.',
+    categoriesLabel: 'Momento del setter',
+  },
+  frio: {
+    nav: 'Frío · voz',
+    eyebrow: 'SALA DE VOZ · LLAMADA EN FRÍO',
+    title: 'Aguanta los primeros treinta segundos.',
+    lead: 'Una llamada que nadie espera. Habla en voz alta: practicas el motivo en una frase, la pregunta que abre la conversación y la cita con día y hora. Aquí el objetivo es la reunión, no la venta.',
+    categoriesLabel: 'Lo que cuesta la llamada',
+  },
   entrevista: {
-    nav: 'AI roleplay · entrevista',
-    eyebrow: 'SALA DE AI ROLEPLAY · ENTREVISTA',
+    nav: 'Entrevista · voz',
+    eyebrow: 'SALA DE VOZ · ENTREVISTA',
     title: 'Practica con cada tipo de entrevistador.',
-    lead: 'Un entrevistador simulado, del dueño directo a dirección o Recursos Humanos. Elige su estilo y ensaya tus respuestas con feedback.',
+    lead: 'Un entrevistador simulado, del dueño directo a dirección o Recursos Humanos. Elige su estilo y ensaya tus respuestas hablando: el dictado las escribe para que las corrijas.',
     categoriesLabel: 'Tipo de entrevistador',
   },
 };
+const TRACK_ICONS: Record<PracticeTrack, typeof Phone> = { closer: Phone, setter: MessageSquare, frio: Phone, entrevista: Users };
 
 // «Carita» del personaje con las iniciales, en un solo sitio para la tarjeta y la sala.
 export function PersonaFace({ persona, size = 'md' }: { persona: PracticePersona; size?: 'sm' | 'md' | 'lg' }) {
@@ -261,7 +278,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     }
   }
 
-  function startPrepared(kind: 'entrevista' | 'llamada') {
+  function startPrepared(kind: 'entrevista' | 'closer') {
     const application = prepared.find(item => item.id === preparedId);
     const item = scenarioById(kind === 'entrevista' ? 'entrevista-closer' : 'llamada-completa');
     if (!application || !item) return;
@@ -269,12 +286,15 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     begin(item, { applicationId: application.id, title: application.offer_title, company: application.offer_company, includeProfile: useProfile && canUseProfile });
   }
 
+  if (view === 'formulario') return <div className="practice"><StudentQualificationForm onBack={() => setView('scenarios')} /></div>;
+
   if (view === 'room' && scenario) {
+    const voiceRoom = TRACK_CHANNEL[scenario.track] === 'voz';
     return <section className="practice practice-room">
       <div className="practice-room-head">
         <button className="practice-back" type="button" onClick={() => { setView('scenarios'); setScenario(null); setOfferSession(null); setTurns([]); }}><ArrowLeft size={16} />Salir</button>
         <div>
-          <span className="eyebrow">{offerSession ? 'SIMULACRO · TU CANDIDATURA' : `SIMULACRO · ${scenario.kind === 'venta' ? 'VENTA' : 'ENTREVISTA'} · ${INTENSITY_LABELS[scenario.intensity].toUpperCase()}`}</span>
+          <span className="eyebrow">{offerSession ? 'SIMULACRO · TU CANDIDATURA' : `SIMULACRO · ${KIND_TEXT[scenario.kind]} · ${INTENSITY_LABELS[scenario.intensity].toUpperCase()}`}</span>
           <h1>{offerSession ? offerSession.title : scenario.title}</h1>
           <p>{offerSession ? `${offerSession.company ?? 'Empresa no indicada'} · Conversación basada en el anuncio público que estás trabajando.` : scenario.context}</p>
         </div>
@@ -282,7 +302,9 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       </div>
       <div className="practice-grid">
         <div className="practice-chat">
-          <div className="practice-chat-head"><PersonaFace persona={scenario.persona} /><div><strong>{scenario.persona.name}</strong><small>{scenario.persona.role} · simulación</small></div><div className="practice-voice"><JarvisOrb state={orb} /><small>{orb === 'listening' ? 'Te escucho' : orb === 'thinking' ? 'Pensando' : orb === 'speaking' ? 'Hablando' : 'Voz en espera'}</small></div></div>
+          <div className="practice-chat-head"><PersonaFace persona={scenario.persona} /><div><strong>{scenario.persona.name}</strong><small>{scenario.persona.role} · simulación</small></div>{voiceRoom
+            ? <div className="practice-voice"><JarvisOrb state={orb} /><small>{orb === 'listening' ? 'Te escucho' : orb === 'thinking' ? 'Pensando' : orb === 'speaking' ? 'Hablando' : 'Voz en espera'}</small></div>
+            : <div className="practice-voice is-chat"><MessageSquare size={17} /><small>Chat simulado</small></div>}</div>
           <div className="practice-body" ref={chat} aria-live="polite">
             {turns.map((turn, index) => <Bubble key={`${index}-${turn.role}`} turn={turn} onSpeak={canSpeak && turn.role === 'coach' ? speak : undefined} />)}
             {busy && <div className="practice-turn is-them"><div className="practice-bubble is-typing" role="status" aria-label="El interlocutor está escribiendo"><i /><i /><i /></div></div>}
@@ -292,7 +314,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           <form className="practice-composer" onSubmit={send}>
             <label htmlFor="practice-reply" className="sr-only">Tu respuesta</label>
             {voice.supported && <button type="button" className="practice-mic" data-listening={voice.listening} aria-pressed={voice.listening} onClick={() => voice.listening ? voice.stop() : voice.start()} disabled={busy || atLimit} aria-label={voice.listening ? 'Parar el dictado' : 'Dictar la respuesta'} title={voice.listening ? 'Parar el dictado' : 'Dictar la respuesta'}>{voice.listening ? <MicOff size={17} /> : <Mic size={17} />}</button>}
-            <textarea ref={composer} id="practice-reply" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) void send(event); }} placeholder={atLimit ? 'La conversación ha llegado a su final.' : voice.interim || 'Responde como lo dirías en la conversación real…'} rows={2} maxLength={800} disabled={busy || atLimit} />
+            <textarea ref={composer} id="practice-reply" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) void send(event); }} placeholder={atLimit ? 'La conversación ha llegado a su final.' : voice.interim || (voiceRoom ? 'Habla y dicta tu respuesta, o escríbela como lo dirías…' : 'Escribe como en WhatsApp: un mensaje, una pregunta…')} rows={2} maxLength={800} disabled={busy || atLimit} />
             <button className="primary" type="submit" disabled={busy || atLimit || !draft.trim()} aria-label="Enviar respuesta">{busy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}Enviar</button>
           </form>
           <div className="practice-finish">
@@ -304,7 +326,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           <h2>Lo que practicas</h2>
           <ol>{scenario.objectives.map(objective => <li key={objective}>{objective}</li>)}</ol>
           {offerSession && <div className="practice-hint"><BriefcaseBusiness size={16} /><p>Practicas para {offerSession.title}{offerSession.company ? ` en ${offerSession.company}` : ''}. El anuncio es público; lo que no publica, no se inventa.</p></div>}
-          <div className="practice-hint"><MessageSquare size={16} /><p>Escribe como hablarías: frases cortas, una pregunta cada vez. El interlocutor no conoce tu CV.</p></div>
+          <div className="practice-hint"><MessageSquare size={16} /><p>{voiceRoom ? 'Habla como en la llamada real: frases cortas, una pregunta cada vez. El dictado escribe lo que dices; tú decides cuándo enviarlo.' : 'Escribe como en WhatsApp: una o dos frases y una sola pregunta por mensaje. Un párrafo largo se contesta tarde.'}</p></div>
           <div className="practice-hint"><Target size={16} /><p>No hay respuestas perfectas. Si te bloqueas, pide contexto o propón un siguiente paso.</p></div>
           <p className="practice-note">Empresa y personas son ficticias. Esta práctica no envía nada a ninguna empresa.</p>
         </aside>
@@ -377,12 +399,16 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         <h1>{text.title}</h1>
         <p>{text.lead}</p>
       </div>
-      <span className="practice-icon">{track === 'llamada' ? <Phone size={26} strokeWidth={1.4} /> : <Users size={26} strokeWidth={1.4} />}</span>
+      <span className="practice-icon">{track === 'entrevista' ? <Users size={26} strokeWidth={1.4} /> : track === 'setter' ? <MessageSquare size={26} strokeWidth={1.4} /> : <Phone size={26} strokeWidth={1.4} />}</span>
     </div>
-    <div className="practice-rooms" role="tablist" aria-label="Salas de AI roleplay">
-      {(['llamada', 'entrevista'] as PracticeTrack[]).map(item => <button key={item} type="button" role="tab" aria-selected={track === item} className={`practice-room-tab ${track === item ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); }}>
-        {item === 'llamada' ? <Phone size={16} /> : <Users size={16} />}{TRACK_TEXT[item].nav}
-      </button>)}
+    <div className="practice-rooms" role="tablist" aria-label="Salas de práctica">
+      {(['closer', 'setter', 'frio', 'entrevista'] as PracticeTrack[]).map(item => {
+        const Icon = TRACK_ICONS[item];
+        return <button key={item} type="button" role="tab" aria-selected={track === item} className={`practice-room-tab ${track === item ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); }}>
+          <Icon size={16} />{TRACK_TEXT[item].nav}
+        </button>;
+      })}
+      <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('formulario')}><ShieldCheck size={16} />Formulario · test</button>
     </div>
     {challenges.length > 0 && <section className="practice-prepared" aria-label="Retos de tu coach">
       <div className="practice-prepared-head"><Target size={18} /><div><span className="eyebrow">RETOS DE TU COACH</span><h2>Lo que te ha pedido practicar</h2><p>Un reto se cumple con una práctica de ese escenario, después de asignarlo y dentro del plazo; si tiene nota mínima, también hay que alcanzarla. El estado sale de tu actividad, no se marca a mano.</p></div></div>
@@ -409,7 +435,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         <label className="check-label"><input type="checkbox" checked={useProfile} disabled={!canUseProfile} onChange={event => setUseProfile(event.target.checked)} />Usar mi formulario base en esta práctica{canUseProfile ? '' : ' (marca antes el permiso en «Mi formulario base»)'}</label>
         <div className="practice-prepared-actions">
           <button type="button" className="primary" disabled={!preparedId} onClick={() => startPrepared('entrevista')}><Users size={15} />Entrevista de esta oferta</button>
-          <button type="button" disabled={!preparedId} onClick={() => startPrepared('llamada')}><Phone size={15} />Llamada de cierre</button>
+          <button type="button" disabled={!preparedId} onClick={() => startPrepared('closer')}><Phone size={15} />Llamada de cierre</button>
         </div>
       </div>
       <p className="practice-note">Al proveedor de IA solo viajan el anuncio público y la conversación. Si marcas el formulario, también tu experiencia, herramientas, presentación y motivación; nunca tu email, teléfono, LinkedIn, CV, vídeo ni expectativa salarial.</p>

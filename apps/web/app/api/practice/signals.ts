@@ -1,6 +1,8 @@
 // Señales de estilo de la práctica: se calculan sin IA, con la frase literal que
 // las dispara. Son observaciones, no veredictos: el feedback del modelo decide.
 export type PracticeTurn = { role: 'user' | 'coach'; content: string };
+// Las tres salas de venta comparten las señales de apertura y siguiente paso; la entrevista, las suyas.
+type PracticeKind = 'venta' | 'setter' | 'frio' | 'entrevista';
 
 export type PracticeSignal = {
   id: string;
@@ -118,16 +120,16 @@ function noNextStep(turns: PracticeTurn[]): PracticeSignal | null {
   };
 }
 
-function noQuestions(turns: PracticeTurn[], kind: 'venta' | 'entrevista'): PracticeSignal | null {
+function noQuestions(turns: PracticeTurn[], kind: PracticeKind): PracticeSignal | null {
   const student = turns.filter(turn => turn.role === 'user');
   if (!student.length) return null;
   if (student.some(turn => turn.content.includes('?'))) return null;
   return {
     id: 'sin-preguntas',
-    label: kind === 'venta' ? 'No has preguntado nada' : 'No has hecho ninguna pregunta',
-    detail: kind === 'venta'
-      ? 'Sin una pregunta no hay descubrimiento: el interlocutor solo puede responder a lo que ya has dicho.'
-      : 'La entrevista también se juega al final: una pregunta demuestra interés real por el puesto.',
+    label: kind === 'entrevista' ? 'No has hecho ninguna pregunta' : 'No has preguntado nada',
+    detail: kind === 'entrevista'
+      ? 'La entrevista también se juega al final: una pregunta demuestra interés real por el puesto.'
+      : 'Sin una pregunta no hay descubrimiento: el interlocutor solo puede responder a lo que ya has dicho.',
     quote: student[student.length - 1].content.trim().slice(0, 140),
   };
 }
@@ -168,13 +170,14 @@ function filler(turns: PracticeTurn[]): PracticeSignal | null {
 }
 
 // Prioridad docente: primero lo que más cuesta una venta, después el estilo.
-export function analyzeSignals(turns: PracticeTurn[], kind: 'venta' | 'entrevista'): PracticeSignal[] {
+export function analyzeSignals(turns: PracticeTurn[], kind: PracticeKind): PracticeSignal[] {
+  const sale = kind !== 'entrevista';
   const candidates = [
     fillerAfterPrice(turns),
     contradictoryValidation(turns),
-    kind === 'venta' ? submissiveOpening(turns) : null,
-    kind === 'venta' ? gushing(turns) : null,
-    kind === 'venta' ? noNextStep(turns) : null,
+    sale ? submissiveOpening(turns) : null,
+    sale ? gushing(turns) : null,
+    sale ? noNextStep(turns) : null,
     noQuestions(turns, kind),
     longMessages(turns),
     filler(turns),

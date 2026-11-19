@@ -2,6 +2,7 @@ import { FINAL_EXAM } from '../components/trainingContent';
 import { EXAM_PASS, gradeExam } from '../components/trainingCheck';
 import { REVIEW_REFS } from '../components/trainingRefs';
 import { scenarioById } from '../components/practiceScenarios';
+import type { PracticeTrack } from '../components/practiceScenarios';
 import { ORG } from './external';
 import { pagedRest, serviceRest } from './supabaseAuth';
 
@@ -146,7 +147,7 @@ export type Progress = {
   weekly: { week: string; avg: number | null; count: number }[];
   // Los ejes se agrupan por sala: «objeciones» existe en la llamada y en la entrevista y no son la misma competencia.
   // `count` viaja para no presentar una media de una sola práctica como tendencia.
-  axes: { axis: string; avg: number; track: 'llamada' | 'entrevista' | null; count: number }[];
+  axes: { axis: string; avg: number; track: PracticeTrack | null; count: number }[];
   last_practice_at: string | null;
   recent: ActivityRow[];
   lifetime: Totals & { achievements: Achievement[] };
@@ -162,7 +163,7 @@ export function summarize(rows: ActivityRow[], days: number, now = new Date(), t
     const scores = rows.filter(row => row.kind === 'practice' && typeof row.score === 'number' && mondayOf(madridDay(row.created_at)) === week).map(row => row.score as number);
     return { week, avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null, count: scores.length };
   });
-  const byAxis = new Map<string, { axis: string; track: 'llamada' | 'entrevista' | null; values: number[] }>();
+  const byAxis = new Map<string, { axis: string; track: PracticeTrack | null; values: number[] }>();
   for (const row of windowed) if (row.kind === 'practice' && isRecord(row.detail.axes)) {
     const track = scenarioById(row.ref ?? '')?.track ?? null;
     for (const [axis, value] of Object.entries(row.detail.axes)) if (typeof value === 'number') {

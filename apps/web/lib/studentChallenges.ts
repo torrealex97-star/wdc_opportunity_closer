@@ -1,4 +1,5 @@
 import { scenarioById } from '../components/practiceScenarios';
+import type { PracticeTrack } from '../components/practiceScenarios';
 import { ORG, scrub } from './external';
 import { madridDay, type ActivityRow } from './studentActivity';
 import { pagedRest, serviceRest } from './supabaseAuth';
@@ -34,7 +35,7 @@ export type ChallengeProgress = {
   // Cumplió la nota, pero después de la fecha límite: se declara en vez de aprobarlo tarde.
   late: boolean;
 };
-export type ChallengeView = StudentChallenge & ChallengeProgress & { scenario: { title: string; track: 'llamada' | 'entrevista' } | null };
+export type ChallengeView = StudentChallenge & ChallengeProgress & { scenario: { title: string; track: PracticeTrack } | null };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const isInt = (value: unknown, min: number, max: number): value is number => typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
