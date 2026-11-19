@@ -2,6 +2,8 @@
 
 _Revisión del 2026-10-24. Nivel de evidencia: **inspected** — se ha leído el código de las aplicaciones anteriores; no se han ejecutado. Las cifras de esta nota salen de contar los datos de origen, no de una prueba de producto._
 
+_Actualizado el 2026-11-19: se descartan el banco de objeciones y una vista «Repaso» para consultarlo (decisión registrada en [STATUS](STATUS.md), sesión 230). El resto de la nota se mantiene tal como se revisó el 2026-10-24._
+
 Fuentes revisadas: `closer-ai-coach` (`src/data/salesMethodology.ts`, `src/data/proposalData.ts`, `src/lib/aiEngine.ts`, `src/components/InterviewSimulator.tsx`, `ManagerDashboardView.tsx`, `CloserDashboard.tsx`, `src/hooks/useVoice.ts`) y `radar-clientes` (`public/jarvis.js`, `README.md`).
 
 ## Ya está dentro: no repetir
@@ -28,7 +30,7 @@ El debrief ya detecta «pero» y relleno tras el precio. Falta el otro detector 
 
 `interviewQuestions` (10): experiencia, metodología, la objeción más difícil, «por qué tú», **sin experiencia**, motivación, manejo de presión, **remuneración**, call en vivo y pregunta inversa. Cada una trae qué evalúa el entrevistador, la fórmula de respuesta, un ejemplo y las banderas rojas.
 
-Es la pieza con más valor para aspirantes: se puede usar **sin IA** como modo estudio y autoevaluación (¿doy cifras?, ¿me pongo a la defensiva?, ¿devuelvo una pregunta?), y alimentar las entrevistas simuladas con las preguntas que hoy improvisa el modelo. Las banderas rojas permiten una corrección determinista, no una nota inventada.
+Es la pieza con más valor para aspirantes: sirve **sin IA** dentro de la entrevista simulada —las preguntas que hoy improvisa el modelo y sus banderas rojas como autoevaluación (¿doy cifras?, ¿me pongo a la defensiva?, ¿devuelvo una pregunta?)—, **no como vista «Repaso» aparte**: esa superficie se descartó el 2026-11-19 junto con el banco de objeciones (ver «Lo que no conviene portar»). Las banderas rojas permiten una corrección determinista, no una nota inventada.
 
 ### 4. Formato de coaching: una sola carencia y plan de 24 h — coste bajo
 
@@ -48,6 +50,7 @@ En `ManagerDashboardView` la coordinadora asigna un reto («tres simulacros de o
 
 ## Lo que no conviene portar
 
+- **El banco de objeciones y una vista «Repaso» para consultarlo** — descartado el 2026-11-19 (sesión 230 de [STATUS](STATUS.md)). `AudioBank.tsx` + `GoldenResponsePlayer.tsx` no traen audio grabado: son siete objeciones con respuesta escrita que el navegador lee en voz alta. La sala ya tiene voz propia y la formación cubre el repertorio (10 cierres y 9 pasos, cada uno con su banco de preguntas), así que una biblioteca aparte repite lo que ya se enseña; además, una colección de respuestas «ideales» empuja un guion ganador que choca con el criterio de ejemplo, no de respuesta perfecta.
 - **La clave del proveedor en el navegador** (`getApiKey`/`setApiKey` en `localStorage`): aquí el proveedor vive en servidor, detrás de `LLMProvider`.
 - **La credencial o certificación emitida**: la formación ya dice que no es un título oficial; no se puede inventar uno.
 - **Las cifras y casos de ejemplo** («74,2 % de cierre», «12/15 en racha», «primera venta de 3.000 € en tres semanas», testimonios con nombre): son datos inventados y la norma del repositorio es no inventar resultados.
@@ -58,7 +61,7 @@ En `ManagerDashboardView` la coordinadora asigna un reto («tres simulacros de o
 ## Orden sugerido
 
 1. Commission breath y formato de una sola carencia en el debrief.
-2. Banco de preguntas con modo estudio y autoevaluación por banderas rojas.
+2. Preguntas de entrevista dentro de la simulación, con sus banderas rojas como autoevaluación; sin vista «Repaso» (descartada el 2026-11-19).
 3. Capas de objeción en la práctica (escenario + prompt + lectura en el debrief).
 4. Retos y objetivo semanal en los dos paneles.
 5. Voz con interrupción; Jarvis copiloto solo después de decidir coste y proveedor.

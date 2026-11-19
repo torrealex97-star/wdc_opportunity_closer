@@ -1,6 +1,6 @@
 # Mejora de la sala de práctica a partir de `closer-ai-coach`
 
-Revisión 2026-10-23. **Aprobado el 2026-10-23: bloque I1 y notas 0-100 por eje y global.** I1 entregado (ver [STATUS](../STATUS.md)); I2 (voz) e I3 (repaso/progreso local) siguen pendientes de aprobación, igual que la persistencia con identidad. Nada del paquete se ha copiado literalmente: el método se ha reescrito en los tipos y el tono de este producto.
+Revisión 2026-10-23. **Aprobado el 2026-10-23: bloque I1 y notas 0-100 por eje y global.** I1 entregado (ver [STATUS](../STATUS.md)); I2 (voz) e I3 (pre-llamada y progreso local) siguen pendientes de aprobación, igual que la persistencia con identidad. **Actualizado el 2026-11-19: se descartan la vista «Repaso» y el banco de objeciones (A8)**, con el motivo en D; I3 se queda solo con lo que no era Repaso. Nada del paquete se ha copiado literalmente: el método se ha reescrito en los tipos y el tono de este producto.
 
 ## Qué se ha revisado
 
@@ -18,7 +18,7 @@ Lo que ya tiene esta app: 4 situaciones ficticias, conversación con Groq detrá
 
 1. **Honestidad**: nada de cifras, testimonios ni resultados inventados. Un ejemplo se presenta como ejemplo.
 2. **Seguridad**: la clave vive solo en servidor; los prompts no viajan al navegador; sin CORS abierto ni gasto anónimo.
-3. **Coste**: primero lo determinista y lo gratuito (señales, repaso, voz del navegador); la IA solo donde aporta.
+3. **Coste**: primero lo determinista y lo gratuito (señales, progreso local, voz del navegador); la IA solo donde aporta.
 4. **Diseño**: la práctica debe leerse como el resto del producto, no como un panel de videojuego.
 
 ## A. Lo que tomaría
@@ -32,9 +32,11 @@ Lo que ya tiene esta app: 4 situaciones ficticias, conversación con Groq detrá
 | A5 | Rúbrica por ejes con evidencia | Feedback legible: 4 ejes por tipo, cada uno con veredicto y cita | Respuesta de `debrief` |
 | A6 | Coaching de una sola deficiencia, proyección en terceros, tarea de 24 h | Corrige un error por sesión en lugar de listar diez; evita desmoralizar | Campo `focus` + `next` |
 | A7 | Respuesta ideal reformulada | La alumna ve cómo sonaría bien con sus propias palabras | Nuevo bloque `model` |
-| A8 | Biblioteca de objeciones, cierres, escalera de creencias, STAR, tonos | Estudio consultable antes y después de practicar, sin coste de IA | Vista «Repaso» |
+| A8 | ~~Biblioteca de objeciones, cierres, escalera de creencias, STAR, tonos~~ — **descartada el 2026-11-19** | Se planteó como estudio consultable antes y después de practicar, sin coste de IA | Vista «Repaso»: no se construye (motivo en D, N13) |
 | A9 | Protocolo anti-freezing y «leads difíciles» | Dos situaciones duras que hoy no existen: ataque al ego y respuestas de una palabra | 2 escenarios nuevos |
 | A10 | Secuencia de pre-llamada (6 mensajes) | Entrena show-rate, que es donde se pierde la venta antes de la llamada | Ejercicio escrito de una sola respuesta |
+
+A8 queda descartada desde el 2026-11-19: no se construye la vista «Repaso» ni se porta el banco de objeciones del paquete. El motivo está en D (N13) y la fecha, en esta misma línea; las filas A9 y A10 siguen en pie.
 
 Detalles que sí cambian respecto al original:
 
@@ -78,6 +80,7 @@ Se descarta la voz de pago (ElevenLabs/Deepgram/Whisper) en esta fase: cuesta, r
 | N10 | Estética oscura con cristal, gemas y brillos | No es la dirección editorial del producto |
 | N11 | Panel de manager, asignaciones, ranking, XP y niveles | Necesitan identidad y persistencia que aún no existen; gamificación antes de medir es ruido |
 | N12 | Sus pruebas (un único test de ejemplo) | No hay nada que portar |
+| N13 | Vista «Repaso» y banco de objeciones (A8) — **descartados el 2026-11-19** | En `AudioBank.tsx` + `GoldenResponsePlayer.tsx` no hay audio grabado: son siete objeciones con respuesta escrita leídas por el TTS del navegador. La sala ya tiene voz propia y la formación cubre el repertorio (10 cierres y 9 pasos, cada uno con su banco de preguntas), así que una biblioteca aparte repite lo que ya se enseña; además, una colección de respuestas «ideales» empuja un guion ganador que choca con el criterio de ejemplo, no de respuesta perfecta. La decisión está registrada en [STATUS](../STATUS.md), sesión 230 |
 
 ## E. Incrementos propuestos
 
@@ -103,11 +106,11 @@ Resultado: micrófono en la sala, dictado con autoenvío por silencio, lectura a
 
 Criterios: sin permiso se explica qué hacer; sin soporte se ofrece texto; el texto dictado pasa por los mismos topes; la conversación sigue siendo navegable con teclado.
 
-### I3 — Repaso y progreso local (A8, A10)
+### I3 — Pre-llamada y progreso local (A10)
 
-Resultado: vista «Repaso» con objeciones, cierres, creencias, STAR y tonos, buscable; ejercicio de un mensaje de pre-llamada; progreso por ejes en el historial local (8 últimas sesiones), sin XP ni ranking.
+Resultado: ejercicio de un mensaje de pre-llamada y progreso por ejes en el historial local (8 últimas sesiones), sin XP ni ranking. La vista «Repaso» y el banco de objeciones (A8) **no forman parte de este incremento**: se descartaron el 2026-11-19 y el motivo está en D (N13).
 
-Criterios: contenido sin cifras ni casos reales; el ejercicio se evalúa con el mismo patrón de evidencia; el historial no sale del navegador.
+Criterios: el ejercicio se evalúa con el mismo patrón de evidencia; el historial no sale del navegador.
 
 ### Fuera de este plan (decisión aparte)
 
@@ -128,10 +131,11 @@ Persistencia de sesiones, vista de coordinadora, asignaciones y certificación d
 
 1. **Aprobado**: I1 (método en la sala) y el uso del paquete como material propio reescribible.
 2. **Aprobado con matiz**: notas 0-100 por eje y global. Se implementan como **estimación docente** calculada en servidor (media de los ejes), rotulada en la ficha y en el historial; no es una nota oficial ni una probabilidad.
-3. **Pendiente de aprobación**: I2 (dictado y lectura automática) e I3 (repaso y progreso por ejes).
+3. **Pendiente de aprobación**: I2 (dictado y lectura automática) e I3 (pre-llamada y progreso por ejes), ya sin la vista «Repaso» descartada el 2026-11-19.
 4. **Fuera hasta decidir identidad y base de datos**: persistencia de sesiones, vista de coordinadora, asignaciones y certificación de cuatro semanas.
 
 ## Evidencia de esta revisión
 
 - Inventario y lectura de los archivos citados; nada copiado al repositorio.
 - No se ejecutaron pruebas de runtime: es un cambio solo de documentación.
+- Actualización del 2026-11-19 (sesión 230 de `STATUS`): se marcan como descartados A8, la vista «Repaso» y el banco de objeciones; es una corrección documental, sin cambios de código ni pruebas de runtime.
