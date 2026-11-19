@@ -108,16 +108,58 @@ function gushing(turns: PracticeTurn[]): PracticeSignal | null {
   };
 }
 
-function noNextStep(turns: PracticeTurn[]): PracticeSignal | null {
+function noNextStep(turns: PracticeTurn[], kind: PracticeKind): PracticeSignal | null {
   const student = turns.filter(turn => turn.role === 'user');
   if (student.length < 3) return null;
   if (student.some(turn => NEXT_STEP.test(turn.content))) return null;
+  const interview = kind === 'entrevista';
   return {
     id: 'sin-paso',
-    label: 'Sin siguiente paso concreto',
-    detail: 'La conversación se queda en el interés. Un día, una hora y una acción pequeña convierten el interés en algo que se puede cumplir.',
+    label: interview ? 'Sin siguiente paso concreto' : 'No pediste un paso concreto',
+    detail: interview
+      ? 'La conversación se queda en las respuestas. Un día, una hora y una acción pequeña convierten el interés en algo que se puede cumplir.'
+      : 'BAMFAM: la siguiente conversación se agenda dentro de esta. «Te mando información» o «ya te escribo» no es un siguiente paso; un día y una hora, sí.',
     quote: student[student.length - 1].content.trim().slice(0, 140),
   };
+}
+
+// Ratio de habla (rúbrica D1): en una llamada de venta el prospecto habla ~2/3 y la vendedora ~1/3.
+// Se mide sobre las palabras, sin IA; solo avisa cuando hay conversación suficiente para que signifique algo.
+function talksTooMuch(turns: PracticeTurn[]): PracticeSignal | null {
+  const count = (role: PracticeTurn['role']) => turns
+    .filter(turn => turn.role === role)
+    .reduce((total, turn) => total + wordCount(turn.content), 0);
+  const mine = count('user');
+  const theirs = count('coach');
+  const total = mine + theirs;
+  if (total < 120 || mine / total <= 0.55) return null;
+  const share = Math.round((mine / total) * 100);
+  return {
+    id: 'hablas',
+    label: 'Hablas más que el cliente',
+    detail: `Has dicho el ${share} % de las palabras. En una llamada de venta el cliente habla alrededor de dos tercios: una pregunta abierta y silencio devuelven el marco.`,
+    quote: turns.filter(turn => turn.role === 'user').sort((a, b) => wordCount(b.content) - wordCount(a.content))[0]?.content.trim().slice(0, 140) ?? '',
+  };
+}
+
+// Precio antes de descubrir (rubrica.md: bandera roja de la fase B): si el precio aparece en los
+// primeros turnos y antes de cualquier pregunta, el pitch se ha adelantado al dolor.
+function priceBeforeDiscovery(turns: PracticeTurn[]): PracticeSignal | null {
+  const student = turns.filter(turn => turn.role === 'user');
+  if (student.length < 2) return null;
+  for (const [index, turn] of student.slice(0, 4).entries()) {
+    const price = PRICE.exec(turn.content);
+    if (!price) continue;
+    const before = student.slice(0, index).some(item => item.content.includes('?'));
+    if (before || turn.content.slice(0, price.index).includes('?')) continue;
+    return {
+      id: 'precio-antes',
+      label: 'Precio antes de descubrir',
+      detail: 'El precio apareció antes de que el cliente contara su problema. Primero se vende el método y se cuantifica el coste de seguir igual; el precio, después.',
+      quote: quoteAround(turn.content, PRICE),
+    };
+  }
+  return null;
 }
 
 function noQuestions(turns: PracticeTurn[], kind: PracticeKind): PracticeSignal | null {
@@ -175,9 +217,11 @@ export function analyzeSignals(turns: PracticeTurn[], kind: PracticeKind): Pract
   const candidates = [
     fillerAfterPrice(turns),
     contradictoryValidation(turns),
+    sale ? priceBeforeDiscovery(turns) : null,
     sale ? submissiveOpening(turns) : null,
     sale ? gushing(turns) : null,
-    sale ? noNextStep(turns) : null,
+    sale ? talksTooMuch(turns) : null,
+    sale ? noNextStep(turns, kind) : null,
     noQuestions(turns, kind),
     longMessages(turns),
     filler(turns),

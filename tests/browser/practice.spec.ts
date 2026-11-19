@@ -12,6 +12,13 @@ const debrief = {
     { id: 'cierre', label: 'Cierre', score: 42, note: 'La conversación termina sin día ni hora.', quote: '' },
   ],
   score: 61,
+  bant: {
+    budget: { status: '~', quote: '' },
+    authority: { status: '?', quote: '' },
+    need: { status: '✓', quote: 'he visto que perdéis seguimientos' },
+    timing: { status: '?', quote: '' },
+    decision: 'avanzar_sin_cualificar',
+  },
   signals: [
     { id: 'sin-paso', label: 'Sin siguiente paso concreto', detail: 'Un día, una hora y una acción pequeña convierten el interés en algo que se puede cumplir.', quote: 'Me interesa entender cómo gestionáis los seguimientos' },
     { id: 'largo', label: 'Un mensaje demasiado largo', detail: 'Ese mensaje tiene 340 caracteres. En una llamada real, tres frases seguidas suelen perder al interlocutor.', quote: 'Me interesa entender cómo gestionáis los seguimientos' },
@@ -35,6 +42,8 @@ test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con 
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.route('**/api/student/activity', route => { activity.push(route.request().postDataJSON()); return route.fulfill({ status: 201, json: { ok: true } }); });
   await page.route('**/api/practice', route => {
+    // La sala pide primero las etiquetas de los ejes (GET); el resto es la conversación.
+    if (route.request().method() === 'GET') return route.fulfill({ json: { labels: {} } });
     const body = route.request().postDataJSON();
     calls.push(body);
     if (body.mode === 'debrief') return route.fulfill({ json: { debrief } });
@@ -64,8 +73,12 @@ test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con 
   await expect(page.locator('.practice-axis')).toHaveCount(4);
   await expect(page.locator('.practice-axis dt b')).toHaveText(['78', '64', '58', '42']);
   await expect(page.getByRole('meter', { name: 'Cierre: 42 de 100' })).toHaveAttribute('aria-valuenow', '42');
-  await expect(page.getByText('LO QUE MÁS TE HA FRENADO')).toBeVisible();
+  await expect(page.getByText('LA CORRECCIÓN PRIORITARIA · UNA SOLA')).toBeVisible();
   await expect(page.getByText('Cerrar con un siguiente paso concreto en vez de dejar la conversación abierta.')).toBeVisible();
+  // La auditoría BANT de la skill viaja con el feedback, con sus cuatro letras y la decisión.
+  await expect(page.getByText('CUALIFICACIÓN DE LA LLAMADA · BANT')).toBeVisible();
+  await expect(page.locator('.practice-bant-grid dt')).toHaveText(['~ Presupuesto', '? Autoridad', '✓ Necesidad', '? Momento']);
+  await expect(page.getByText('Avanzó sin cualificar bien')).toBeVisible();
   // Señales deterministas y respuesta modelo.
   await expect(page.getByRole('heading', { name: 'Señales de estilo' })).toBeVisible();
   await expect(page.locator('.practice-signals li')).toHaveCount(2);
@@ -120,6 +133,7 @@ test('un error del proveedor no pierde la conversación ni la puerta vuelve', as
 test('la sala cierra la conversación antes de que el feedback sea imposible', async ({ page }) => {
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.route('**/api/practice', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { labels: {} } });
     const body = route.request().postDataJSON();
     if (body.mode === 'debrief') return route.fulfill({ json: { debrief } });
     return route.fulfill({ json: { reply: 'Entiendo. ¿Y cómo lo mediríais?' } });

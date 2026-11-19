@@ -20,6 +20,7 @@ test('la sala practica la entrevista de una candidatura con su anuncio', async (
     },
   }));
   await page.route('**/api/practice', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { labels: {} } });
     const body = route.request().postDataJSON() as Record<string, unknown>;
     posts.push(body);
     if (body.mode === 'debrief') {
@@ -101,6 +102,7 @@ test('el dictado se registra como práctica por voz, con su duración', async ({
   const activity: Array<Record<string, any>> = [];
   await page.route('**/api/student/activity', route => { activity.push(route.request().postDataJSON()); return route.fulfill({ json: { saved: true } }); });
   await page.route('**/api/practice', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { labels: {} } });
     const body = route.request().postDataJSON() as Record<string, unknown>;
     if (body.mode === 'debrief') {
       return route.fulfill({ json: { debrief: {

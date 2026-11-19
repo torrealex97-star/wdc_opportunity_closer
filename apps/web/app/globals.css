@@ -885,3 +885,27 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .qualify-criteria>li{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--warning)}
 .qualify-criteria>li[data-ok="true"]{color:var(--sage)}
 @media(max-width:700px){.qualify-question legend{font-size:17px}.qualify-option{padding:14px}.qualify-actions button{flex:1 1 auto}}
+
+/* Criterios de práctica (panel) y auditoría BANT (feedback de la alumna). */
+.rubric-room-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
+.rubric-room-tabs button{border:1px solid var(--line);background:var(--sheet);color:var(--ink);padding:8px 14px;border-radius:999px;font-size:var(--text-sm)}
+.rubric-room-tabs button.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.rubric-table input,.rubric-table textarea,.rubric-priority textarea{width:100%;font:inherit;font-size:var(--text-sm);color:var(--ink);background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:9px 10px}
+.rubric-table textarea,.rubric-priority textarea{resize:vertical;line-height:1.5}
+.rubric-id{display:block;margin-top:3px;color:var(--secondary);font-size:var(--text-2xs);letter-spacing:.4px}
+.rubric-weight{max-width:78px;text-align:right;font-variant-numeric:tabular-nums}
+.rubric-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px}
+.rubric-bant{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 16px}
+.rubric-priorities{list-style:none;margin:0;padding:0}
+.rubric-priority{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:8px}
+.rubric-priority-index{display:grid;place-items:center;width:24px;height:24px;margin-top:9px;border-radius:999px;background:var(--inset);color:var(--secondary);font-size:var(--text-xs);font-weight:600;font-variant-numeric:tabular-nums}
+.rubric-priority-actions{display:flex;gap:4px;margin-top:6px}
+.rubric-priority-actions button{padding:6px;min-height:34px}
+.rubric-save{margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+.practice-bant{margin:20px 0;padding:18px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}
+.practice-bant-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 20px;margin:12px 0 0}
+.practice-bant-grid dt{font-size:var(--text-sm)}
+.practice-bant-grid dt b{color:var(--accent);margin-right:4px}
+.practice-bant-grid dd{margin:4px 0 0;color:var(--secondary);font-size:var(--text-xs);line-height:1.5}
+.practice-bant-decision{margin-top:14px;font-size:var(--text-sm)}
+@media(max-width:700px){.rubric-priority{grid-template-columns:24px minmax(0,1fr)}.rubric-priority-actions{grid-column:2}}

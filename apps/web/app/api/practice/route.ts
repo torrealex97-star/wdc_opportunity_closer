@@ -9,6 +9,8 @@ import { analyzeSignals } from './signals';
 import type { PracticeTurn } from './signals';
 import { clientIp, createTurnBudget } from '../../../lib/practiceBudget';
 import { callModel, hasModelKey, providerFailure, resolveModel } from '../../../lib/aiProvider';
+import { allAxisLabels } from '../../../lib/practiceRubrics';
+import { loadPracticeConfig } from '../../../lib/practiceRubricStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +61,14 @@ function readTurns(value: unknown): PracticeTurn[] | null {
   return turns;
 }
 
+// Etiquetas de los ejes para «Mi progreso» y «Tu siguiente práctica». El panel puede renombrar un
+// criterio; la alumna tiene que ver el mismo nombre en su nota. Solo viajan id → etiqueta, nunca
+// las guías (que son el criterio interno de evaluación) ni los pesos.
+export async function GET() {
+  const config = await loadPracticeConfig();
+  return Response.json({ labels: allAxisLabels(config.rubrics) }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin');
   const host = request.headers.get('host') ?? '';
@@ -93,6 +103,8 @@ export async function POST(request: NextRequest) {
   };
 
   if (!hasModelKey()) return providerFailure('missing_key', 'La sala de práctica');
+  // Los criterios son los del panel (o los de las skills si aún no se ha guardado nada).
+  const criteria = await loadPracticeConfig();
   const ip = clientIp(request.headers);
   if (budget.spend(`ip:${ip}`, IP_DAILY_TURNS) === null || budget.spend('global', DAILY_TURNS) === null) {
     return reply({ detail: 'La sala de práctica ha llegado a su límite de hoy. Vuelve mañana o pide a tu coordinadora que lo amplíe.' }, 429);
@@ -104,15 +116,15 @@ export async function POST(request: NextRequest) {
     const result = await callModel({
       model: MODEL,
       messages: [
-        { role: 'system', content: debriefInstructions(scenario, context) },
+        { role: 'system', content: debriefInstructions(scenario, context, criteria.rubrics, criteria.priorities, criteria.bant) },
         { role: 'user', content: `Conversación:\n${transcript}\n\nDevuelve el feedback con el esquema indicado.` },
       ],
       temperature: 0.3,
       maxTokens: 900,
-      schema: { name: 'practice_debrief', schema: debriefSchema(scenario) },
+      schema: { name: 'practice_debrief', schema: debriefSchema(scenario, criteria.rubrics, criteria.bant) },
     });
     if (!result.ok) return providerFailure(result.error, 'La sala de práctica');
-    const debrief = cleanDebrief(result.content, turns, scenario);
+    const debrief = cleanDebrief(result.content, turns, scenario, criteria.rubrics, criteria.bant);
     if (!debrief) return providerFailure('invalid_output', 'La sala de práctica');
     // Las señales son deterministas y no dependen del modelo: se calculan aquí y
     // viajan con el feedback (también al historial local).
@@ -120,7 +132,7 @@ export async function POST(request: NextRequest) {
   }
 
   const messages: Array<{ role: 'system' | 'assistant' | 'user'; content: string }> = [
-    { role: 'system', content: buildPersonaPrompt(scenario, studentTurns, context) },
+    { role: 'system', content: buildPersonaPrompt(scenario, studentTurns, context, criteria.rubrics) },
     ...turns.map(turn => ({ role: turn.role === 'coach' ? 'assistant' as const : 'user' as const, content: turn.content })),
   ];
   const result = await callModel({ model: MODEL, messages, temperature: 0.75, maxTokens: 260 });

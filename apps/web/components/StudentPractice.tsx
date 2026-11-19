@@ -11,17 +11,18 @@ import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
 import { MIN_AXIS_SAMPLES, nextPractice, type NextPracticeChoice } from '../lib/nextPractice';
 import { AXIS_LABELS } from '../lib/practiceAxes';
+import { BANT_LABELS, DECISION_LABELS, type PracticeBant } from '../lib/practiceRubrics';
 import type { Progress } from '../lib/studentActivity';
 
 // Por qué esa práctica y no otra: los tres criterios salen de sus datos (eje flojo, categoría menos
 // practicada y días sin practicar), sin azar y sin IA.
-function nextReason(choice: NextPracticeChoice): string {
+function nextReason(choice: NextPracticeChoice, labels: Record<string, string>): string {
   const parts: string[] = [];
   parts.push(choice.days === null ? 'Todavía no has hecho ninguna práctica.'
     : choice.days === 0 ? 'Hoy ya has practicado, pero esta es la que más te conviene ahora.'
     : `Llevas ${choice.days} ${choice.days === 1 ? 'día' : 'días'} sin practicar.`);
   parts.push(choice.weakest
-    ? `Tu eje más flojo es «${AXIS_LABELS[choice.weakest.axis] ?? choice.weakest.axis}» (${choice.weakest.avg}/100 en ${choice.weakest.count} prácticas).`
+    ? `Tu eje más flojo es «${labels[choice.weakest.axis] ?? choice.weakest.axis}» (${choice.weakest.avg}/100 en ${choice.weakest.count} prácticas).`
     : `Aún no hay ${MIN_AXIS_SAMPLES} prácticas con nota por eje: empieza por lo que menos has tocado.`);
   const label = categoriesFor(choice.track).find(item => item.id === choice.category)?.label ?? choice.category;
   parts.push(choice.categoryCount === 0 ? `«${label}» todavía no la has practicado.` : `«${label}» es la que menos has practicado (${choice.categoryCount} ${choice.categoryCount === 1 ? 'vez' : 'veces'}).`);
@@ -40,6 +41,8 @@ type Debrief = {
   moments?: { quote: string; why: string }[];
   axes?: Axis[];
   score?: number;
+  // Auditoría BANT de las salas de venta (rúbrica de `analisis-llamadas-ventas`).
+  bant?: PracticeBant;
   signals?: Signal[];
   model?: string;
   next: string;
@@ -147,6 +150,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [offerSession, setOfferSession] = useState<OfferSession | null>(null);
   const [next, setNext] = useState<NextPracticeChoice<PracticeScenario> | null>(null);
   const [challenges, setChallenges] = useState<AssignedChallenge[]>([]);
+  const [labels, setLabels] = useState<Record<string, string>>(AXIS_LABELS);
   const [speaking, setSpeaking] = useState(false);
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
   // Si en esta sesión ha dictado algo, la práctica se registra como «voz»: el modo es el que usó, no el que tocaba.
@@ -188,6 +192,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       .catch(() => undefined);
     // Retos de su coach. Si la tabla aún no está migrada el servidor lo declara (`available:false`) y no
     // se pinta la tarjeta: nunca se enseña «ningún reto» cuando en realidad no se pudo leer.
+    // El panel puede renombrar un eje: el mismo nombre que usa la nota, también en «tu siguiente práctica».
+    fetch('/api/practice', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { labels?: Record<string, string> } | null) => { if (data?.labels) setLabels(current => ({ ...current, ...data.labels })); })
+      .catch(() => undefined);
     fetch('/api/student/challenges', { cache: 'no-store' })
       .then(response => response.ok ? response.json() : null)
       .then((data: { available?: boolean; challenges?: AssignedChallenge[] | null } | null) => {
@@ -349,7 +358,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           <small>estimación</small>
         </div>
         <div className="practice-score-detail">
-          <div className="practice-score-head"><h2>{debrief.axes.length === 4 ? 'Los cuatro ejes' : `Los ${debrief.axes.length} criterios`}</h2><small>{scenario?.rubric === 'wdc-entrevista' ? 'Media ponderada según la rúbrica.' : 'Media de ejes.'} No es una nota oficial.</small></div>
+          <div className="practice-score-head"><h2>{`Los ${debrief.axes.length} criterios`}</h2><small>Media ponderada según la rúbrica. No es una nota oficial.</small></div>
           <dl className="practice-axes">
             {debrief.axes.map(axis => <div className="practice-axis" key={axis.id}>
               <dt><span>{axis.label}</span><b data-band={band(axis.score)}>{axis.score}</b></dt>
@@ -360,7 +369,20 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           </dl>
         </div>
       </div> : null}
-      {debrief.focus && <div className="practice-focus"><span className="eyebrow">LO QUE MÁS TE HA FRENADO</span><p>{debrief.focus}</p></div>}
+      {debrief.bant && <div className="practice-bant">
+        <span className="eyebrow">CUALIFICACIÓN DE LA LLAMADA · BANT</span>
+        <dl className="practice-bant-grid">
+          {(['budget', 'authority', 'need', 'timing'] as const).map(letter => {
+            const item = debrief.bant![letter];
+            return <div key={letter}>
+              <dt><b>{item.status}</b> {BANT_LABELS[letter]}</dt>
+              {item.quote && <dd>«{item.quote}»</dd>}
+            </div>;
+          })}
+        </dl>
+        <p className="practice-bant-decision"><strong>Decisión:</strong> {DECISION_LABELS[debrief.bant.decision]}</p>
+      </div>}
+      {debrief.focus && <div className="practice-focus"><span className="eyebrow">LA CORRECCIÓN PRIORITARIA · UNA SOLA</span><p>{debrief.focus}</p></div>}
       <div className="practice-columns">
         <div><h2><Check size={17} />Qué has hecho bien</h2><ul>{debrief.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>
         <div><h2><Target size={17} />Qué pulir</h2><ul>{debrief.improvements.map(item => <li key={item}>{item}</li>)}</ul></div>
@@ -425,7 +447,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       </div>
     </section>}
     {next && <section className="practice-prepared practice-next-card" aria-label="Tu siguiente práctica">
-      <div className="practice-prepared-head"><Sparkles size={18} /><div><span className="eyebrow">TU SIGUIENTE PRÁCTICA</span><h2>{next.scenario.title}</h2><p>{nextReason(next)}</p></div></div>
+      <div className="practice-prepared-head"><Sparkles size={18} /><div><span className="eyebrow">TU SIGUIENTE PRÁCTICA</span><h2>{next.scenario.title}</h2>      <p>{nextReason(next, labels)}</p></div></div>
       <div className="practice-prepared-actions"><button type="button" className="primary" onClick={() => { onTrackChange(next.track); begin(next.scenario); }}><Play size={15} />Practicar esta</button></div>
     </section>}
     {prepared.length > 0 && <section className="practice-prepared" aria-label="Practica una candidatura tuya">

@@ -1,6 +1,10 @@
 import { TRACK_CHANNEL } from '../../../components/practiceScenarios';
 import type { PracticeChannel, PracticeScenario } from '../../../components/practiceScenarios';
 import { contextInstructions, type PracticeContext } from '../../../lib/practiceContext';
+import {
+  axesForRoom, BANT_HELP, BANT_LABELS, DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, roomOf,
+  type BantConfig, type RoomRubrics, type RubricAxis,
+} from '../../../lib/practiceRubrics';
 
 // Prompts de la sala de práctica. Viven solo en servidor: el navegador recibe el
 // catálogo visible, nunca el personaje ni las capas de resistencia.
@@ -423,61 +427,11 @@ const PERSONAS: Record<string, Persona> = {
   },
 };
 
-type Axis = { id: string; label: string; guide: string; weight?: number };
-
-// Rúbrica de entrevista de WDC: seis criterios con peso. La nota global es la media
-// ponderada, no la media simple, y se sigue calculando en servidor.
-const WDC_INTERVIEW: Axis[] = [
-  { id: 'confianza', label: 'Confianza y autoridad', guide: 'Proyecta seguridad sin arrogancia; controla el tono y el ritmo.', weight: 25 },
-  { id: 'claridad', label: 'Claridad y estructura', guide: 'Responde directo y ordenado, sin divagar.', weight: 20 },
-  { id: 'evidencia', label: 'Evidencia y cifras', guide: 'Respalda con datos propios y casos reales; no infla lo que no puede justificar.', weight: 20 },
-  { id: 'objecion', label: 'Manejo de objeciones', guide: 'Convierte la pregunta difícil o la desconfianza en una oportunidad, sin defenderse.', weight: 15 },
-  { id: 'encaje', label: 'Encaje', guide: 'Demuestra que entiende cómo trabaja esa empresa y que no es un trabajo más.', weight: 10 },
-  { id: 'iniciativa', label: 'Cierre e iniciativa', guide: 'Termina con una pregunta poderosa o un siguiente paso concreto.', weight: 10 },
-];
-
-const METHOD: Record<PracticeScenario['kind'], { label: string; axes: Axis[] }> = {
-  venta: {
-    label: 'venta',
-    axes: [
-      { id: 'apertura', label: 'Apertura y marco', guide: 'Abre con contexto, pide permiso, no se disculpa ni se pone por debajo.' },
-      { id: 'descubrimiento', label: 'Descubrimiento', guide: 'Pregunta y profundiza antes de hablar de la solución; no salta al pitch.' },
-      { id: 'objecion', label: 'Objeciones', guide: 'Aísla la objeción antes de responder, valida con «y» en vez de «pero», no presiona.' },
-      { id: 'cierre', label: 'Cierre', guide: 'Pide un siguiente paso concreto con día y hora; sostiene el silencio después del precio.' },
-    ],
-  },
-  entrevista: {
-    label: 'entrevista',
-    axes: [
-      { id: 'claridad', label: 'Claridad', guide: 'Responde de forma directa y ordenada, sin rodeos ni relleno.' },
-      { id: 'evidencia', label: 'Evidencia', guide: 'Usa ejemplos y cifras propias; no inventa datos ni resultados.' },
-      { id: 'objecion', label: 'Objeciones', guide: 'Reconoce la pega sin ponerse a la defensiva y reencuadra con un plan.' },
-      { id: 'iniciativa', label: 'Iniciativa', guide: 'Hace preguntas y propone un siguiente paso concreto.' },
-    ],
-  },
-  // Setter: su trabajo termina en una cita con el closer, no en una venta.
-  setter: {
-    label: 'setter',
-    axes: [
-      { id: 'apertura', label: 'Primer mensaje', guide: 'Abre con nombre, contexto y una pregunta; nada de párrafos ni audios largos.' },
-      { id: 'cualificacion', label: 'Cualificación', guide: 'Saca urgencia, autoridad y recursos con preguntas cortas, una cada vez, sin interrogar.' },
-      { id: 'agenda', label: 'Agenda', guide: 'Propone dos huecos de las próximas 48 horas con día y hora y deja la cita confirmada.' },
-      { id: 'seguimiento', label: 'Seguimiento', guide: 'Aporta valor antes de insistir; no culpa al lead ni usa urgencia falsa; cierra el contacto con claridad.' },
-    ],
-  },
-  // Frío: el objetivo de la llamada es la cita, no la venta.
-  frio: {
-    label: 'llamada en frío',
-    axes: [
-      { id: 'apertura', label: 'Apertura', guide: 'En quince segundos: nombre, empresa, motivo concreto y permiso para una pregunta.' },
-      { id: 'marco', label: 'Marco', guide: 'No se disculpa, no vende antes de descubrir y no se pone por debajo de quien contesta.' },
-      { id: 'cualificacion', label: 'Cualificación', guide: 'Pregunta urgencia, autoridad y recursos antes de proponer la cita.' },
-      { id: 'siguiente', label: 'Siguiente paso', guide: 'Acuerda día y hora, o cierra el contacto con claridad si no encaja.' },
-    ],
-  },
-};
-
-export const axesFor = (scenario: PracticeScenario): Axis[] => scenario.rubric === 'wdc-entrevista' ? WDC_INTERVIEW : METHOD[scenario.kind].axes;
+// Los ejes salen de `lib/practiceRubrics` (skills `analisis-llamadas-ventas` y `scalix-ventas`),
+// editables desde el panel: aquí no se copia ninguna rúbrica.
+export type Axis = RubricAxis;
+export const axesFor = (scenario: PracticeScenario, rubrics: RoomRubrics = DEFAULT_RUBRICS): Axis[] =>
+  axesForRoom(roomOf(scenario.kind, scenario.rubric), rubrics);
 
 const SHARED_RULES = `Reglas de la simulación:
 - Responde siempre en español, en 2 a 3 frases y máximo 60 palabras.
@@ -510,10 +464,10 @@ export function stageFor(scenario: PracticeScenario, studentTurns: number) {
   return Math.min(3, stage);
 }
 
-export function buildPersonaPrompt(scenario: PracticeScenario, studentTurns: number, context?: PracticeContext | null) {
+export function buildPersonaPrompt(scenario: PracticeScenario, studentTurns: number, context?: PracticeContext | null, rubrics: RoomRubrics = DEFAULT_RUBRICS) {
   const persona = PERSONAS[scenario.id];
   const stage = stageFor(scenario, studentTurns);
-  const axisText = axesFor(scenario).map(axis => `${axis.label}: ${axis.guide}`).join('\n');
+  const axisText = axesFor(scenario, rubrics).map(axis => `${axis.label}: ${axis.guide}`).join('\n');
   return `Eres ${persona.name}, ${persona.role}.
 
 ${persona.brief}
@@ -574,40 +528,65 @@ const METHOD_ANCHORS: Record<PracticeScenario['kind'], string[]> = {
   ],
 };
 
-export function debriefInstructions(scenario: PracticeScenario, context?: PracticeContext | null) {
-  const definitions = axesFor(scenario);
+export function debriefInstructions(
+  scenario: PracticeScenario,
+  context?: PracticeContext | null,
+  rubrics: RoomRubrics = DEFAULT_RUBRICS,
+  priorities: string[] = DEFAULT_PRIORITIES,
+  bantConfig: BantConfig = DEFAULT_BANT,
+) {
+  const definitions = axesFor(scenario, rubrics);
   const axes = definitions
-    .map(axis => `- ${axis.id}: ${axis.guide}${axis.weight ? ` (peso ${axis.weight}%)` : ''}`)
+    .map(axis => `- ${axis.id}: ${axis.guide} (peso ${axis.weight}%)`)
     .join('\n');
-  const count = ['cuatro', 'cinco', 'seis'][definitions.length - 4] ?? String(definitions.length);
+  const count = ['cuatro', 'cinco', 'seis', 'siete', 'ocho'][definitions.length - 4] ?? String(definitions.length);
+  const bantRequired = bantConfig[roomOf(scenario.kind, scenario.rubric)];
+  const bantBlock = bantRequired
+    ? `\nAuditoría BANT (obligatoria; puntúa solo lo que la conversación demuestre):
+- Estado de cada letra, en este orden: Budget · Authority · Need · Timing. ✓ fuerte, ~ débil, ✗ falla, ? nunca salió. Si salió cualquier parte de la vara, no uses ?.
+- Cada letra lleva una cita literal del interlocutor (máximo 15 palabras) o quote vacío si nunca salió. Nunca adivines ni inventes cifras.
+- Vara: ${(['budget', 'authority', 'need', 'timing'] as const).map(letter => `${BANT_LABELS[letter]}: ${BANT_HELP[letter]}`).join(' ')}
+- decision: lo que hizo la alumna, una de estas cinco: correcto_avanzar (todo ✓), avanzar_sin_cualificar (algún ~ o ? y ningún ✗), no_debio_avanzar (algún ✗ y avanzó), correcto_parar (algún ✗ y paró), paro_demasiado_pronto (ningún ✗ y paró). Un «lo pienso», «mándame info» o «te llamo yo» cuenta como parar. Agendar la siguiente llamada no es timing.
+` : '';
   return `Evalúas una práctica de conversación de una alumna de Women Digital Closer. Devuelve feedback breve en español de España.
 
 Reglas:
+- Mide la EJECUCIÓN, no el resultado: una venta cerrada con mala ejecución sigue siendo mala ejecución y una llamada perdida con buena ejecución puede ser un lead inviable. No premies el desenlace.
 - Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.
 - No inventes resultados, cifras, empresas ni contrataciones. No atribuyas logros que no estén en la conversación.
 - Puntúa los ${count} ejes de 0 a 100 como estimación docente: 0-40 ausente o contraproducente, 41-60 parcial, 61-80 correcto, 81-100 sólido. No regales puntuaciones altas.
-- focus: la única habilidad que más le ha frenado hoy, en una frase.
+- focus: LA CORRECCIÓN PRIORITARIA, una sola, en una frase. Elígela con el orden de abajo y no des una lista de fallos.
 - strengths: hasta 3 cosas concretas que hizo bien. improvements: hasta 3 mejoras accionables.
 - model: una forma posible de decir mejor una de sus frases, con sus propias palabras y sin inventar datos. No es «la respuesta correcta».
 - next: una sola tarea para las próximas 24 horas, concreta y comprobable (qué hacer, cuántas veces y con qué situación de la sala), ligada a la habilidad de «focus». No propongas varias cosas a la vez.
-- Tono directo y respetuoso, sin elogios vacíos.
+- Tono directo y respetuoso, sin elogios vacíos. Si la práctica fue buena, dilo y no inventes defectos.
 - Apoya cada note en el método cuando venga al caso, nombrando la regla (por ejemplo «ley del pero» o «regla del silencio»). No inventes reglas ni teoría propia.
+
+Orden de impacto para elegir la corrección prioritaria (manda la primera que aplique; si hay un fallo de adherencia al método o de lead, ese manda sobre la lista y lo dices):
+${priorities.map((rule, index) => `${index + 1}. ${rule}`).join('\n')}
 
 Método WDC que puedes citar (no lo recites entero, usa solo lo que aplique):
 ${METHOD_ANCHORS[scenario.kind].map(rule => `- ${rule}`).join('\n')}
 
-Ejes (puntúa los ${count}, con el id exacto):
+Ejes (puntúa los ${count}, con el id exacto y el peso que se indica):
 ${axes}
-
+${bantBlock}
 Situación practicada: ${scenario.title} (${scenario.kind}). Objetivos: ${scenario.objectives.join('; ')}.${context ? `\n\nLa práctica va sobre una candidatura concreta: ${context.offer.title}${context.offer.company ? ` en ${context.offer.company}` : ''}. Valora el encaje con ese puesto usando solo el anuncio y la conversación; no inventes requisitos, condiciones ni procesos que no aparezcan.` : ''}`;
 }
 
-export function debriefSchema(scenario: PracticeScenario) {
-  const count = axesFor(scenario).length;
+export const needsBant = (scenario: PracticeScenario, bantConfig: BantConfig = DEFAULT_BANT) => bantConfig[roomOf(scenario.kind, scenario.rubric)];
+
+export function debriefSchema(scenario: PracticeScenario, rubrics: RoomRubrics = DEFAULT_RUBRICS, bantConfig: BantConfig = DEFAULT_BANT) {
+  const definitions = axesFor(scenario, rubrics);
+  const count = definitions.length;
+  const letter = { type: 'object', additionalProperties: false, required: ['status', 'quote'], properties: {
+    status: { type: 'string', enum: ['✓', '~', '✗', '?'] },
+    quote: { type: 'string' },
+  } };
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['summary', 'focus', 'strengths', 'improvements', 'axes', 'model', 'next'],
+    required: ['summary', 'focus', 'strengths', 'improvements', 'axes', 'model', 'next', ...(needsBant(scenario, bantConfig) ? ['bant'] : [])],
     properties: {
       summary: { type: 'string' },
       focus: { type: 'string' },
@@ -622,7 +601,7 @@ export function debriefSchema(scenario: PracticeScenario) {
           additionalProperties: false,
           required: ['id', 'score', 'note', 'quote'],
           properties: {
-            id: { type: 'string', enum: axesFor(scenario).map(axis => axis.id) },
+            id: { type: 'string', enum: definitions.map(axis => axis.id) },
             score: { type: 'integer', minimum: 0, maximum: 100 },
             note: { type: 'string' },
             quote: { type: 'string' },
@@ -631,6 +610,14 @@ export function debriefSchema(scenario: PracticeScenario) {
       },
       model: { type: 'string' },
       next: { type: 'string' },
+      ...(needsBant(scenario, bantConfig) ? { bant: {
+        type: 'object', additionalProperties: false,
+        required: ['budget', 'authority', 'need', 'timing', 'decision'],
+        properties: {
+          budget: letter, authority: letter, need: letter, timing: letter,
+          decision: { type: 'string', enum: ['correcto_avanzar', 'avanzar_sin_cualificar', 'no_debio_avanzar', 'correcto_parar', 'paro_demasiado_pronto'] },
+        },
+      } } : {}),
     },
   };
 }

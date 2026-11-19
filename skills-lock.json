@@ -1,11 +1,23 @@
 {
   "version": 2,
   "skills": {
+    "analisis-llamadas-ventas": {
+      "source": "local:claude-code",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/analisis-llamadas-ventas/SKILL.md",
+      "computedHash": "ce056f245c9cce78c0c413f9ef034700145747bd867f999143d7d69e060dbd85"
+    },
     "deploy-to-vercel": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/deploy-to-vercel/SKILL.md",
       "computedHash": "66b99dfa063b1c405155e9bffd99c04ca3e312e81b168d540b757bb194b7400a"
+    },
+    "scalix-ventas": {
+      "source": "local:claude-code",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/scalix-ventas/SKILL.md",
+      "computedHash": "f4047ae2f0dfde8b55ba4e67338705c0a3230f05b31c76149662e653f2b49e6f"
     },
     "supabase": {
       "source": "supabase/agent-skills",

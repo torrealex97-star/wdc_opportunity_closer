@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, BriefcaseBusiness, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Plug, RefreshCcw, Search, ShieldCheck, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
+import { Activity, BriefcaseBusiness, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Plug, RefreshCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
 import CloudAdminPanel from './CloudAdminPanel';
 import EngineAlertBanner from './EngineAlertBanner';
 import ApifyTab from './ApifyTab';
@@ -15,11 +15,12 @@ import sourceCatalog from '../lib/sourceCatalog.json';
 import { catalogCodeFor, groupByFamily } from '../lib/sourceFamilies';
 import { setupFor, type Setup } from '../lib/sourceSetup';
 import SourceSetupGuide from './SourceSetupGuide';
+import PracticeSettings from './PracticeSettings';
 
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
 export type Me = { email: string; role: 'owner' | 'admin' };
-type Tab = 'summary' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'scorecard' | 'apis' | 'students' | 'users';
+type Tab = 'summary' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -236,6 +237,7 @@ const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode;
   { id: 'scorecard', group: 'Sistema', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
   { id: 'apis', group: 'Sistema', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
   { id: 'students', group: 'Equipo', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
+  { id: 'practice', group: 'Equipo', label: 'Criterios de práctica', icon: <SlidersHorizontal size={18} />, eyebrow: 'CÓMO SE PUNTÚA Y QUÉ SE CORRIGE', title: 'Los criterios de las salas.', lead: 'Rúbricas por sala, pesos, BANT y la única corrección prioritaria. Lo que cambies aquí es lo que aplica el servidor al puntuar la próxima práctica.' },
   { id: 'users', group: 'Equipo', label: 'Usuarios', icon: <Users size={18} />, eyebrow: 'QUIÉN ENTRA', title: 'Equipo con acceso.', lead: 'Solo las personas de esta lista pueden entrar al panel.' },
 ];
 
@@ -302,6 +304,7 @@ export default function AdminShell() {
         {tab === 'apis' && <ApisTab owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'scorecard' && <SourceScorecard onSessionLost={lost} />}
         {tab === 'students' && <StudentsTab owner={me.role === 'owner'} onSessionLost={lost} />}
+        {tab === 'practice' && <PracticeSettings onSessionLost={lost} />}
         {tab === 'users' && <UsersTab me={me} onSessionLost={lost} />}
       </main>
     </div>
