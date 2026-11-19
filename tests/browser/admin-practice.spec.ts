@@ -1,54 +1,222 @@
 import { test, expect } from '@playwright/test';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import net from 'node:net';
 
-// Criterios de práctica en el panel. Como admin-students.spec.ts, /admin solo monta AdminShell en modo
-// hospedado (CAREER_ENGINE_URL); sin ese servidor la prueba se omite en vez de mentir:
-//   CAREER_ENGINE_URL=https://<engine> WDC_CLOUD_ADMIN=1 npm run dev -w apps/web
-test.skip(process.env.WDC_CLOUD_ADMIN !== '1', 'requiere /admin en modo hospedado (CAREER_ENGINE_URL)');
+// Prueba ACTIVA (sin banderas): arranca su propio `next dev` con el backend local de criterios
+// (SQLite), un `/admin` en modo hospedado y un proveedor de modelo simulado. Comprueba la ida y vuelta
+// completa: panel → persistencia → puntuación de una práctica con el peso guardado.
+test.describe.configure({ mode: 'serial' });
+test.setTimeout(180_000);
 
-const rooms = [
-  { id: 'venta', label: 'Closer · llamada de cierre', note: 'Rúbrica completa.' },
-  { id: 'setter', label: 'Setter · cualificación y agenda', note: 'Peso en BANT.' },
-  { id: 'frio', label: 'Llamada en frío', note: 'Peso en apertura.' },
-  { id: 'entrevista', label: 'Entrevista · criterios generales', note: 'Criterios de contratación.' },
-  { id: 'wdc-entrevista', label: 'Entrevista · rúbrica WDC', note: 'Seis criterios.' },
-];
-const axis = (id: string, label: string, weight: number) => ({ id, label, guide: 'Qué debe demostrar.', weight });
-const rubrics = {
-  venta: [axis('apertura', 'Apertura y agenda', 10), axis('descubrimiento', 'Clarify, label y pain cycle', 25), axis('objecion', 'Objeciones y cierre', 30), axis('etica', 'Rapport y ética', 35)],
-  setter: [axis('apertura', 'Primer mensaje', 15), axis('cualificacion', 'BANT y cualificación', 30), axis('agenda', 'Edificación y agenda', 25), axis('traspaso', 'Traspaso al closer', 30)],
-  frio: [axis('apertura', 'Apertura y gancho', 35), axis('siguiente', 'Paso a cita con dos opciones', 30), axis('etica', 'Rapport y ética', 35)],
-  entrevista: [axis('evidencia', 'Evidencia y cifras', 40), axis('criterio', 'Criterio comercial', 40), axis('claridad', 'Claridad', 20)],
-  'wdc-entrevista': [axis('confianza', 'Confianza y autoridad', 40), axis('claridad', 'Claridad y estructura', 30), axis('evidencia', 'Evidencia y cifras', 30)],
-};
-const config = { rubrics, priorities: ['No hubo pain cycle.', 'No pidió la venta.'], bant: { venta: true, setter: true, frio: true, entrevista: false, 'wdc-entrevista': false } };
-
-test('el panel edita los pesos, ve el cambio sin guardar y lo manda entero al servidor', async ({ page }) => {
-  const saved: Record<string, unknown>[] = [];
-  await page.route('**/api/admin/session', route => route.fulfill({ json: { configured: true, authenticated: true, email: 'owner@wdc.test', role: 'owner' } }));
-  await page.route('**/api/admin/practice?fresh=1', route => route.fulfill({ json: { config, defaults: config, rooms, source: 'db', reason: null, updated_at: new Date().toISOString(), updated_by: 'owner@wdc.test' } }));
-  await page.route('**/api/admin/practice', route => {
-    if (route.request().method() !== 'PUT') return route.fulfill({ json: { config, defaults: config, rooms, source: 'db', reason: null, updated_at: null, updated_by: null } });
-    saved.push(route.request().postDataJSON() as Record<string, unknown>);
-    return route.fulfill({ json: { config, source: 'db', reason: null, updated_at: new Date().toISOString(), updated_by: 'owner@wdc.test' } });
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const freePort = () => new Promise<number>((resolve, reject) => {
+  const server = net.createServer();
+  server.on('error', reject);
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    server.close(() => resolve(port));
   });
+});
 
-  await page.goto('/admin#practice');
+// Respuesta fija del modelo: todos los ejes a 0 salvo apertura a 100. Así la nota es
+// exactamente el peso guardado de apertura / suma de pesos, sin depender de ninguna estimación.
+const modelDebrief = {
+  summary: 'Práctica de prueba con un feedback fijo.',
+  focus: 'Cerrar con día y hora.',
+  strengths: ['Abre con permiso'],
+  improvements: ['Cuantifica el coste'],
+  axes: [
+    { id: 'apertura', score: 100, note: 'Apertura medida.', quote: '' },
+    { id: 'descubrimiento', score: 0, note: 'Sin descubrimiento.', quote: '' },
+    { id: 'pitch', score: 0, note: 'Sin pitch.', quote: '' },
+    { id: 'control', score: 0, note: 'Sin control.', quote: '' },
+    { id: 'objecion', score: 0, note: 'Sin objeciones.', quote: '' },
+    { id: 'siguiente', score: 0, note: 'Sin siguiente paso.', quote: '' },
+    { id: 'etica', score: 0, note: 'Sin evidencia de trato.', quote: '' },
+  ],
+  bant: {
+    budget: { status: '?', quote: '' },
+    authority: { status: '?', quote: '' },
+    need: { status: '?', quote: '' },
+    timing: { status: '?', quote: '' },
+    decision: 'paro_demasiado_pronto',
+  },
+  model: 'Podrías haber dicho: ¿lo dejamos el jueves a las diez?',
+  next: 'Agenda una llamada con dos huecos concretos.',
+};
+
+let next: ChildProcess | null = null;
+let model: Server | null = null;
+let base = '';
+let dataDir = '';
+let log = '';
+
+test.beforeAll(async () => {
+  dataDir = mkdtempSync(path.join(tmpdir(), 'wdc-practice-'));
+  const modelPort = await freePort();
+  model = createServer((request, response) => {
+    if (request.method !== 'POST') { response.writeHead(404).end(); return; }
+    let body = '';
+    request.on('data', chunk => { body += String(chunk); });
+    request.on('end', () => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(modelDebrief) } }] }));
+    });
+  });
+  await new Promise<void>(resolve => model!.listen(modelPort, '127.0.0.1', resolve));
+
+  const port = await freePort();
+  base = `http://127.0.0.1:${port}`;
+  next = spawn('npx', ['--no-install', 'next', 'dev', 'apps/web', '--hostname', '127.0.0.1', '--port', String(port)], {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      CAREER_ENGINE_URL: 'http://127.0.0.1:9',
+      NEXT_DIST_DIR: '.next-e2e',
+      NEXT_TELEMETRY_DISABLED: '1',
+      PRACTICE_DB_PATH: path.join(dataDir, 'practice-rubrics.sqlite'),
+      GROQ_BASE_URL: `http://127.0.0.1:${modelPort}/v1`,
+      GROQ_API_KEY: 'test-key',
+      SUPABASE_URL: '',
+      SUPABASE_PUBLISHABLE_KEY: '',
+      SUPABASE_SERVICE_ROLE_KEY: '',
+    },
+  });
+  next.stdout?.on('data', chunk => { log += String(chunk); });
+  next.stderr?.on('data', chunk => { log += String(chunk); });
+
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    try {
+      const response = await fetch(`${base}/api/admin/session`);
+      const data = await response.json() as { authenticated?: boolean };
+      if (data.authenticated) return;
+    } catch { /* el servidor aún compila */ }
+    if (next.exitCode !== null) break;
+    await sleep(500);
+  }
+  throw new Error(`El servidor de la prueba no arrancó.\n${log.slice(-4000)}`);
+});
+
+test.afterAll(async () => {
+  if (next?.pid) { try { process.kill(-next.pid, 'SIGTERM'); } catch { /* ya cerrado */ } }
+  await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
+  if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+});
+
+async function score(): Promise<{ score: number; label: string }> {
+  const response = await fetch(`${base}/api/practice`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      scenario: 'venta-fria',
+      mode: 'debrief',
+      messages: [
+        { role: 'user', content: 'Hola Marta, te llamo porque he visto que perdéis seguimientos. ¿Te importa que te haga una pregunta?' },
+        { role: 'coach', content: 'Dime, tengo cinco minutos.' },
+        { role: 'user', content: 'Entiendo. ¿Cuántas citas se caen al mes por el correo?' },
+      ],
+    }),
+  });
+  const data = await response.json() as { debrief?: { score?: number; axes?: Array<{ id: string; label: string }> }; detail?: string };
+  expect(response.status, data.detail ?? 'la práctica debe puntuar').toBe(200);
+  const axis = data.debrief?.axes?.find(item => item.id === 'apertura');
+  return { score: data.debrief?.score ?? -1, label: axis?.label ?? '' };
+}
+
+test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la nota y el feedback', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('pageerror', error => consoleErrors.push(error.message));
+
+  await page.goto(`${base}/admin#practice`);
   await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
-  // La sala de closer abre con sus pesos reales y la suma declarada.
-  const weight = page.getByLabel('Peso de Apertura y agenda');
+  await expect(page.getByText(/Base local de desarrollo/)).toBeVisible();
+
+  // 1) Las cinco salas y los pesos de la skill.
+  for (const room of ['Closer · llamada de cierre', 'Setter · cualificación y agenda', 'Llamada en frío', 'Entrevista · criterios generales', 'Entrevista · rúbrica WDC']) {
+    await expect(page.getByRole('tab', { name: room })).toBeVisible();
+  }
+  // Se localizan por id: al cambiar el nombre, las etiquetas accesibles («Peso de …») cambian con él.
+  const weight = page.locator('#weight-apertura');
   await expect(weight).toHaveValue('10');
   await expect(page.getByText(/Los pesos suman 100/)).toBeVisible();
-  await weight.fill('15');
-  await expect(page.getByText(/Los pesos suman 105/)).toBeVisible();
+
+  // 2) Editar nombre, peso y guía; el aviso de cambios sin guardar aparece.
+  const name = page.locator('#axis-apertura');
+  const guide = page.locator('#guide-apertura');
+  await name.fill('Apertura con prueba social');
+  await weight.fill('100');
+  await guide.fill('Abre con una prueba de un caso idéntico y pide permiso antes de preguntar.');
   await expect(page.getByText('Cambios sin guardar')).toBeVisible();
-  // BANT: la entrevista no se audita; la sala de venta sí.
-  await expect(page.getByLabel('Entrevista · criterios generales')).not.toBeChecked();
-  await expect(page.getByLabel('Closer · llamada de cierre')).toBeChecked();
+  await expect(page.getByText(/Los pesos suman 190/)).toBeVisible();
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
-  await expect.poll(() => saved.length).toBe(1);
-  const venta = (saved[0].rubrics as typeof rubrics).venta;
-  expect(venta[0]).toMatchObject({ id: 'apertura', weight: 15 });
-  expect((saved[0].priorities as string[])[0]).toBe('No hubo pain cycle.');
-  expect((saved[0].bant as Record<string, boolean>).entrevista).toBe(false);
+  await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
+
+  // 3) Recarga real: los tres campos siguen ahí.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await expect(page.locator('#weight-apertura')).toHaveValue('100');
+  await expect(page.locator('#axis-apertura')).toHaveValue('Apertura con prueba social');
+  await expect(page.locator('#guide-apertura')).toHaveValue(/prueba de un caso idéntico/);
+  await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
+
+  // 4) Puntuación real después del cambio: 100 de apertura sobre 190 de peso total → 53.
+  const changed = await score();
+  expect(changed.score).toBe(53);
+  expect(changed.label).toBe('Apertura con prueba social');
+
+  // 5) Añadir hasta el límite de 8; el botón se bloquea y quitar devuelve la rúbrica a 7.
+  await page.getByRole('button', { name: 'Añadir criterio' }).click();
+  await expect(page.locator('input[id^="axis-"]')).toHaveCount(8);
+  await expect(page.getByRole('button', { name: 'Añadir criterio' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Quitar Nuevo criterio' }).click();
+  await expect(page.locator('input[id^="axis-"]')).toHaveCount(7);
+  await page.getByRole('button', { name: 'Guardar criterios' }).click();
+  await expect(page.getByText('Criterios guardados.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await expect(page.locator('input[id^="axis-"]')).toHaveCount(7);
+
+  // 6) BANT: activar una entrevista y comprobar que persiste.
+  const interviewBant = page.getByLabel('Entrevista · criterios generales');
+  await expect(interviewBant).not.toBeChecked();
+  await interviewBant.check();
+  await expect(page.getByText('Cambios sin guardar')).toBeVisible();
+  await page.getByRole('button', { name: 'Guardar criterios' }).click();
+  await expect(page.getByText('Criterios guardados.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Entrevista · criterios generales')).toBeChecked();
+
+  // 7) Reordenar y editar la corrección prioritaria; persiste tras recargar.
+  await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
+  await page.getByRole('button', { name: 'Subir la prioridad 2' }).click();
+  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
+  await page.locator('#priority-1').fill('Regla propia del panel para esta prueba.');
+  await page.getByRole('button', { name: 'Guardar criterios' }).click();
+  await expect(page.getByText('Criterios guardados.')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
+  await expect(page.locator('#priority-1')).toHaveValue('Regla propia del panel para esta prueba.');
+
+  // 8) Restaurar vuelve a los pesos de las skills y también cambia la nota (10 sobre 100 → 10).
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: 'Restaurar los de las skills' }).click();
+  await expect(page.getByText('Restaurados los criterios por defecto')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#weight-apertura')).toHaveValue('10');
+  await expect(page.getByLabel('Entrevista · criterios generales')).not.toBeChecked();
+  await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
+  const restored = await score();
+  expect(restored.score).toBe(10);
+  expect(restored.label).toBe('Apertura y agenda');
+
+  expect(consoleErrors).toEqual([]);
 });

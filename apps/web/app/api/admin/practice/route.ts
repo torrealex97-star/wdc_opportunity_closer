@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     config: { rubrics: config.rubrics, priorities: config.priorities, bant: config.bant },
     defaults: { rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT },
     rooms: ROOMS,
+    backend: config.backend,
     source: config.source,
     reason: config.reason,
     updated_at: config.updated_at,
@@ -41,6 +42,7 @@ export async function PUT(request: NextRequest) {
   if (!result.ok) return Response.json({ detail: result.detail }, { status: result.status });
   return reply(auth!, {
     config: { rubrics: result.config.rubrics, priorities: result.config.priorities, bant: result.config.bant },
+    backend: result.config.backend,
     source: result.config.source,
     reason: result.config.reason,
     updated_at: result.config.updated_at,
@@ -51,10 +53,12 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const { auth, error } = await gate(request, true);
   if (error) return error;
+  const { backend: configBackendAfterReset } = await loadPracticeConfig(true);
   const result = await resetPracticeConfig();
   if (!result.ok) return Response.json({ detail: result.detail }, { status: 503 });
   return reply(auth!, {
     config: { rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT },
+    backend: configBackendAfterReset,
     source: 'defaults',
     reason: null,
     updated_at: null,

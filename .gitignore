@@ -22,3 +22,6 @@ Growth Oportunity- PLAN/
 # cuenta, que es por entorno. La plantilla versionada es `wrangler.example.toml`.
 sites/engine/wrangler.toml
 sites/cron/wrangler.toml
+
+# Servidores Next aislados de las pruebas E2E (distDir propio).
+.next-e2e*/

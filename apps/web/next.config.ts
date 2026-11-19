@@ -12,6 +12,9 @@ const headers = [
 const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  // Permite aislar el servidor de las pruebas E2E (`.next-e2e`) del `next dev` del operador sin
+  // compartir caché de compilación. En un despliegue normal no se define y queda `.next`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   async headers() { return [{ source: '/:path*', headers }]; },
 };
 export default config;

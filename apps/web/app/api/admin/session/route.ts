@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createLoginLimiter, loginIp, tooManyAttempts } from '../../../../lib/loginLimit';
-import { ACCESS_COOKIE, authenticate, clearCookies, originBlocked, sessionAvailable, sessionCookies, withCookies } from '../../../../lib/adminAuth';
+import { ACCESS_COOKIE, authenticate, clearCookies, localDevOperator, originBlocked, sessionAvailable, sessionCookies, withCookies } from '../../../../lib/adminAuth';
 import { adminRole, normalizeEmail, passwordLogin, signOut } from '../../../../lib/supabaseAuth';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,12 @@ export const runtime = 'nodejs';
 const noStore = { 'Cache-Control': 'no-store' };
 
 export async function GET(request: NextRequest) {
-  if (!sessionAvailable()) return Response.json({ configured: false, authenticated: false }, { headers: noStore });
+  if (!sessionAvailable()) {
+    const local = localDevOperator(request);
+    return Response.json(local
+      ? { configured: true, authenticated: true, email: local.email, role: local.role, local: true }
+      : { configured: false, authenticated: false }, { headers: noStore });
+  }
   const auth = await authenticate(request);
   const body = auth.ok ? { configured: true, authenticated: true, email: auth.admin.email, role: auth.admin.role } : { configured: true, authenticated: false };
   return withCookies(Response.json(body, { headers: noStore }), auth.ok ? auth.setCookies : []);

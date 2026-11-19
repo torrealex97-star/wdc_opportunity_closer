@@ -28,6 +28,18 @@ export const clearCookies = () => [ACCESS_COOKIE, REFRESH_COOKIE, LEGACY_COOKIE]
 
 export const sessionAvailable = () => authConfigured() && allowlistConfigured();
 
+// Operador local SOLO para desarrollo: sin Supabase configurado, en un proceso que no es producción y
+// con la petición llegando por loopback, el panel local se abre como propietario. Es el equivalente a
+// `local single-operator mode` del resto del repo, no autenticación hospedada: `next start` y Vercel
+// corren con NODE_ENV=production y nunca entran aquí. El servidor de desarrollo escucha en 127.0.0.1.
+export const localDevOperator = (request: NextRequest): Admin | null => {
+  if (process.env.NODE_ENV === 'production' || sessionAvailable()) return null;
+  const host = (request.headers.get('host') ?? '').toLowerCase();
+  const hostname = host.startsWith('[') ? host.slice(1, host.indexOf(']')) : host.split(':')[0];
+  if (!['127.0.0.1', 'localhost', '::1'].includes(hostname)) return null;
+  return { email: 'local-dev@wdc', role: 'owner' };
+};
+
 // Caché corta por token para no consultar Auth + lista en cada fetch del panel.
 const verified = new Map<string, { admin: Admin; until: number }>();
 const CACHE_MS = 30_000;
@@ -39,7 +51,12 @@ async function authorize(email: string): Promise<AuthResult | Admin> {
 }
 
 export async function authenticate(request: NextRequest): Promise<AuthResult> {
-  if (!sessionAvailable()) return { ok: false, status: 503, detail: 'El acceso al panel no está configurado en este despliegue.' };
+  if (!sessionAvailable()) {
+    const local = localDevOperator(request);
+    return local
+      ? { ok: true, admin: local, setCookies: [] }
+      : { ok: false, status: 503, detail: 'El acceso al panel no está configurado en este despliegue.' };
+  }
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   if (access) {
     const hit = verified.get(hash(access));

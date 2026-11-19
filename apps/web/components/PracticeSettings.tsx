@@ -18,6 +18,7 @@ type Payload = {
   config: Config;
   defaults: Config;
   rooms: RoomMeta[];
+  backend: 'supabase' | 'local';
   source: 'db' | 'defaults';
   reason: string | null;
   updated_at: string | null;
@@ -28,7 +29,7 @@ const clone = (value: Config): Config => JSON.parse(JSON.stringify(value)) as Co
 
 export default function PracticeSettings({ onSessionLost }: { onSessionLost: () => void }) {
   const [config, setConfig] = useState<Config>({ rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT });
-  const [meta, setMeta] = useState<Omit<Payload, 'config' | 'defaults' | 'rooms'>>({ source: 'defaults', reason: null, updated_at: null, updated_by: null });
+  const [meta, setMeta] = useState<Omit<Payload, 'config' | 'defaults' | 'rooms'>>({ backend: 'supabase', source: 'defaults', reason: null, updated_at: null, updated_by: null });
   const [rooms, setRooms] = useState<RoomMeta[]>(ROOMS);
   const [room, setRoom] = useState<PracticeRoom>('venta');
   const [busy, setBusy] = useState(true);
@@ -47,7 +48,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       })
       .then(data => {
         setConfig(clone(data.config));
-        setMeta({ source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+        setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
         if (data.rooms?.length) setRooms(data.rooms);
         setDirty(false);
       })
@@ -105,7 +106,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo guardar.');
-      setMeta({ source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
       setDirty(false);
       setNotice('Criterios guardados. La próxima práctica y el próximo feedback ya los usan.');
     } catch (err) { setError((err as Error).message); }
@@ -120,7 +121,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo restaurar.');
       setConfig(clone(data.config));
-      setMeta({ source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
+      setMeta({ backend: data.backend, source: data.source, reason: data.reason, updated_at: data.updated_at, updated_by: data.updated_by });
       setDirty(false);
       setNotice('Restaurados los criterios por defecto (los de las skills).');
     } catch (err) { setError((err as Error).message); }
@@ -129,9 +130,13 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
 
   if (busy) return <p className="muted"><LoaderCircle size={14} className="spin" /> Leyendo los criterios…</p>;
 
+  const where = meta.backend === 'local' ? 'la base local de desarrollo' : 'la base de datos';
   const saved = meta.source === 'db'
-    ? `Guardados${meta.updated_by ? ` por ${meta.updated_by}` : ''}${meta.updated_at ? ` el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(meta.updated_at))}` : ''}.`
+    ? `Guardados en ${where}${meta.updated_by ? ` por ${meta.updated_by}` : ''}${meta.updated_at ? ` el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(meta.updated_at))}` : ''}.`
     : meta.reason ?? 'Sin cambios guardados: se aplican los criterios por defecto de las skills.';
+  const backendNote = meta.backend === 'local'
+    ? 'Base local de desarrollo (SQLite). En producción se usa Supabase; este aviso no aparece allí.'
+    : null;
 
   return <section aria-label="Criterios de práctica">
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
@@ -143,7 +148,8 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       <span><strong>{weight}</strong>peso total (se normaliza)</span>
       <span><strong>{Object.values(config.bant).filter(Boolean).length}</strong>salas con BANT</span>
     </div>
-    <p className="card-meta" style={{ marginBottom: 20 }}>{saved}</p>
+    <p className="card-meta" style={{ marginBottom: backendNote ? 4 : 20 }}>{saved}</p>
+    {backendNote && <p className="card-meta" style={{ marginBottom: 20 }}>{backendNote}</p>}
 
     <div className="rubric-room-tabs" role="tablist" aria-label="Sala">
       {rooms.map(item => <button key={item.id} type="button" role="tab" aria-selected={room === item.id}
@@ -167,7 +173,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
           </td>
           <td>
             <label htmlFor={`guide-${axis.id}`} className="sr-only">Guía de {axis.label}</label>
-            <textarea id={`guide-${axis.id}`} rows={2} maxLength={400} value={axis.guide}
+            <textarea id={`guide-${axis.id}`} rows={Math.min(9, Math.max(3, Math.ceil(axis.guide.length / 42)))} maxLength={400} value={axis.guide}
               onChange={event => patchAxis(axis.id, { guide: event.target.value })} />
           </td>
           <td style={{ textAlign: 'right' }}>
@@ -196,7 +202,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     <ol className="rubric-priorities">{config.priorities.map((priority, index) => <li key={index} className="rubric-priority">
       <span className="rubric-priority-index">{index + 1}</span>
       <label htmlFor={`priority-${index}`} className="sr-only">Prioridad {index + 1}</label>
-      <textarea id={`priority-${index}`} rows={2} maxLength={200} value={priority} onChange={event => setPriority(index, event.target.value)} />
+      <textarea id={`priority-${index}`} rows={Math.min(5, Math.max(2, Math.ceil(priority.length / 60)))} maxLength={200} value={priority} onChange={event => setPriority(index, event.target.value)} />
       <span className="rubric-priority-actions">
         <button type="button" onClick={() => movePriority(index, -1)} disabled={index === 0} aria-label={`Subir la prioridad ${index + 1}`}><ArrowUp size={14} /></button>
         <button type="button" onClick={() => movePriority(index, 1)} disabled={index === config.priorities.length - 1} aria-label={`Bajar la prioridad ${index + 1}`}><ArrowDown size={14} /></button>

@@ -1,6 +1,6 @@
 # ADR-019 — Los roleplays y el feedback se puntúan con las skills de ventas, y el panel puede afinarlos
 
-Estado: aceptada · Fecha: 2026-11-19 · Evidencia: *inspeccionado* (skills leídas) y *probado* (pruebas unitarias y de navegador con servicios simulados). La migración de persistencia está **preparada y sin aplicar** (aplicar DDL exige orden expresa del propietario).
+Estado: aceptada · Fecha: 2026-11-19 · Evidencia: *inspeccionado* (skills leídas), *probado* (pruebas unitarias y E2E con servicios simulados) y *verificado* en Chromium local (panel real, consola sin errores). La migración de Supabase está **preparada y sin aplicar** (aplicar DDL exige orden expresa del propietario); el desarrollo local persiste en SQLite con migraciones versionadas.
 
 ## Contexto
 El propietario pidió revisar los criterios de todos los roleplays, de la revisión de llamadas y de la puntuación con las skills `/scalix-ventas` y `/analisis-llamadas-ventas` de Claude Code, cambiar lo que no estuviera acorde y dejar un panel de administración para ajustarlo.
@@ -18,6 +18,7 @@ Antes, la sala puntuaba con cuatro ejes genéricos sin pesos (apertura, descubri
 4. **Una sola corrección prioritaria**, elegida con el orden de impacto de la skill; el prompt lo exige y el panel puede reordenar esa lista.
 5. **Señales deterministas nuevas**: ratio de habla (la vendedora no debe acaparar) y precio antes de descubrir. Siguen siendo observaciones sin IA, con cita literal.
 6. **Configuración editable y versionada en base de datos** (`practice_rubrics`, una fila por organización): rúbricas por sala, orden de prioridades y qué salas exigen BANT. Se valida el conjunto entero antes de escribir; si la tabla no existe o el JSON guardado no es válido, se aplican los valores por defecto y se declara la causa (nunca se finge que el cambio está activo). Los valores por defecto viven en `apps/web/lib/practiceRubrics.ts`.
+7. **Desarrollo local sin Supabase**: como no hay Supabase, Docker ni Postgres en el entorno local, el mismo store usa un backend SQLite de Node con migraciones versionadas en código (`practiceLocalMigrations.ts`), solo si no hay Supabase configurado y `NODE_ENV !== 'production'`; la API declara `backend: 'local'` y el panel lo dice. El operador local `local-dev@wdc` (propietario) solo se acepta por loopback y fuera de producción. No es autenticación hospedada ni se despliega: `next start` corre en producción. La tabla Postgres sigue siendo la de producción y su DDL no se aplica sin orden del propietario.
 7. **El cambio no reescribe el historial**: las prácticas ya puntuadas conservan sus ejes y su nota. Los pesos nuevos se aplican a la siguiente réplica y al siguiente feedback.
 
 ## Alternativas descartadas
@@ -29,5 +30,7 @@ Antes, la sala puntuaba con cuatro ejes genéricos sin pesos (apertura, descubri
 ## Consecuencias
 - Cambian los ids de eje de closer (aparecen `pitch`, `control`, `siguiente`, `etica`; desaparece `cierre` y `marco` en frío). «Mi progreso» agrupa por id: las prácticas nuevas se separan de las antiguas, y el panel puede renombrar etiquetas sin romper la serie.
 - Las notas antiguas y nuevas no son estrictamente comparables; el historial no se migra ni se recalcula.
-- La tabla nueva necesita una migración (`20261119_practice_rubrics.sql`). Mientras no se aplique, el panel muestra los criterios por defecto y declara que no puede guardar.
+- La tabla nueva necesita una migración (`20261119_practice_rubrics.sql`). Mientras no se aplique en el Supabase real, en producción el panel muestra los criterios por defecto y declara que no puede guardar; en desarrollo local guarda en SQLite y lo declara.
+- El backend local es una comodidad de desarrollo, no una segunda fuente de verdad: no se despliega, no se comparte y su base vive fuera del repo (`PRACTICE_DB_PATH` o `.local/`).
+- Evidencia de la ida y vuelta: [practice-persistence.mjs](../tests/admin-auth/practice-persistence.mjs) (5/5) y [admin-practice.spec.ts](../tests/browser/admin-practice.spec.ts) (1/1 activa): peso 100 → nota 53 y etiqueta nueva en el feedback; restaurar → nota 10.
 - El análisis de varias llamadas (modo multi-llamada de la skill) no se implementa aquí: la sala puntúa una conversación por sesión.

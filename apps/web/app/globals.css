@@ -891,7 +891,7 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .rubric-room-tabs button{border:1px solid var(--line);background:var(--sheet);color:var(--ink);padding:8px 14px;border-radius:999px;font-size:var(--text-sm)}
 .rubric-room-tabs button.is-active{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 .rubric-table input,.rubric-table textarea,.rubric-priority textarea{width:100%;font:inherit;font-size:var(--text-sm);color:var(--ink);background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:9px 10px}
-.rubric-table textarea,.rubric-priority textarea{resize:vertical;line-height:1.5}
+.rubric-table textarea,.rubric-priority textarea{resize:vertical;line-height:1.5;field-sizing:content;min-height:calc(1.5em*3 + 18px)}
 .rubric-id{display:block;margin-top:3px;color:var(--secondary);font-size:var(--text-2xs);letter-spacing:.4px}
 .rubric-weight{max-width:78px;text-align:right;font-variant-numeric:tabular-nums}
 .rubric-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px}
