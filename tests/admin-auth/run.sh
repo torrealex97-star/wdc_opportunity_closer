@@ -108,6 +108,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practicecontext.mjs
 # «Tu siguiente práctica»: elección determinista (eje flojo, categoría menos practicada, días sin practicar).
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/nextpractice.mjs
+# Retos asignados: escenario, nota mínima, plazo y nota del coach; el estado sale de student_activity.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/challenges.mjs
 # Topes de la sala: la IP del limitador no puede salir de una cabecera que elija el cliente.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practicebudget.mjs
 node tests/secrets.mjs

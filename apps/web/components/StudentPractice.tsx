@@ -53,6 +53,20 @@ const HISTORY_KEY = 'wdc_practice_history';
 // Una candidatura de su tablero: el id es lo único que se manda al servidor; el anuncio y el
 // formulario los resuelve él (la página no ve el contexto que va al modelo).
 type Prepared = { id: string; offer_title: string; offer_company: string | null };
+// Reto asignado por la coordinadora: el estado llega calculado del servidor con la actividad real.
+type AssignedChallenge = {
+  id: string; scenario_id: string; min_score: number | null; due_on: string; coach_note: string;
+  status: 'pending' | 'completed' | 'missed' | 'unknown'; attempts: number | null; best_score: number | null;
+  qualifying_score: number | null; completed_at: string | null; late: boolean;
+};
+const challengeDay = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' }).format(new Date(`${iso}T12:00:00Z`));
+const challengeMoment = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(iso));
+function challengeStatusText(c: AssignedChallenge): string {
+  if (c.status === 'completed') return `Completado${c.qualifying_score !== null ? ` con ${c.qualifying_score}/100` : ''}${c.completed_at ? ` el ${challengeMoment(c.completed_at)}` : ''} · plazo ${challengeDay(c.due_on)}.`;
+  if (c.status === 'missed') return c.late ? 'Fuera de plazo: alcanzaste la nota después de la fecha límite.' : 'Fuera de plazo: no hay una práctica que cumpla el reto.';
+  if (c.status === 'unknown') return '— No se pudo leer tu actividad: el estado no se puede saber ahora mismo.';
+  return c.attempts ? `Pendiente · ${c.attempts} ${c.attempts === 1 ? 'intento' : 'intentos'}${c.best_score !== null ? ` · mejor ${c.best_score}/100` : ''}.` : 'Pendiente · todavía sin intentos.';
+}
 type OfferSession = { applicationId: string; title: string; company: string | null; includeProfile: boolean };
 // La ruta acepta 24 turnos por petición. La sala corta antes para que el feedback
 // siempre quepa: sin este tope, una conversación larga acababa en 422 y no había
@@ -115,6 +129,7 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const [useProfile, setUseProfile] = useState(false);
   const [offerSession, setOfferSession] = useState<OfferSession | null>(null);
   const [next, setNext] = useState<NextPracticeChoice<PracticeScenario> | null>(null);
+  const [challenges, setChallenges] = useState<AssignedChallenge[]>([]);
   const [speaking, setSpeaking] = useState(false);
   // Dictado del navegador: lo que se reconoce se añade al borrador, nunca se envía solo.
   // Si en esta sesión ha dictado algo, la práctica se registra como «voz»: el modo es el que usó, no el que tocaba.
@@ -152,6 +167,14 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
           mastery: data.metrics?.mastery ?? [],
           lastPracticeAt: data.progress.last_practice_at ?? null,
         }));
+      })
+      .catch(() => undefined);
+    // Retos de su coach. Si la tabla aún no está migrada el servidor lo declara (`available:false`) y no
+    // se pinta la tarjeta: nunca se enseña «ningún reto» cuando en realidad no se pudo leer.
+    fetch('/api/student/challenges', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then((data: { available?: boolean; challenges?: AssignedChallenge[] | null } | null) => {
+        if (data?.available && Array.isArray(data.challenges)) setChallenges(data.challenges);
       })
       .catch(() => undefined);
   }, []);
@@ -361,6 +384,20 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
         {item === 'llamada' ? <Phone size={16} /> : <Users size={16} />}{TRACK_TEXT[item].nav}
       </button>)}
     </div>
+    {challenges.length > 0 && <section className="practice-prepared" aria-label="Retos de tu coach">
+      <div className="practice-prepared-head"><Target size={18} /><div><span className="eyebrow">RETOS DE TU COACH</span><h2>Lo que te ha pedido practicar</h2><p>Un reto se cumple con una práctica de ese escenario, después de asignarlo y dentro del plazo; si tiene nota mínima, también hay que alcanzarla. El estado sale de tu actividad, no se marca a mano.</p></div></div>
+      <div className="practice-prepared-form">
+        {challenges.map(c => { const item = scenarioById(c.scenario_id); return <div key={c.id} className="challenge-item">
+          <div>
+            <h3>{item?.title ?? `Escenario no disponible (${c.scenario_id})`}</h3>
+            <p>Hasta el {challengeDay(c.due_on)}{c.min_score !== null ? ` · nota mínima ${c.min_score}/100` : ' · cualquier nota'}</p>
+            <p className="card-meta">«{c.coach_note}»</p>
+            <p className="card-meta"><strong>{challengeStatusText(c)}</strong></p>
+          </div>
+          {item && <button type="button" className={c.status === 'completed' ? undefined : 'primary'} onClick={() => { onTrackChange(item.track); begin(item); }}><Play size={15} />{c.status === 'completed' ? 'Repetir' : 'Practicar'}</button>}
+        </div>; })}
+      </div>
+    </section>}
     {next && <section className="practice-prepared practice-next-card" aria-label="Tu siguiente práctica">
       <div className="practice-prepared-head"><Sparkles size={18} /><div><span className="eyebrow">TU SIGUIENTE PRÁCTICA</span><h2>{next.scenario.title}</h2><p>{nextReason(next)}</p></div></div>
       <div className="practice-prepared-actions"><button type="button" className="primary" onClick={() => { onTrackChange(next.track); begin(next.scenario); }}><Play size={15} />Practicar esta</button></div>

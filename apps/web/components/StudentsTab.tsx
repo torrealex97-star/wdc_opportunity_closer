@@ -5,6 +5,7 @@ import { api } from './AdminShell';
 import { REVIEW_REFS } from './trainingRefs';
 import StudentActivityDashboard from './StudentActivityDashboard';
 import StudentProgress from './StudentProgress';
+import StudentChallenges from './StudentChallenges';
 
 // Alumnas: invitar, pausar/reactivar (reversible) y dar de baja (solo propietario, irreversible). Sin datos de perfil aquí.
 type Row = { id: string; email: string; status: 'invited' | 'active' | 'paused'; invited_by: string | null; created_at: string };
@@ -74,6 +75,7 @@ export default function StudentsTab({ owner, onSessionLost }: { owner: boolean; 
         <div className="detail-top"><span className="eyebrow">FICHA DE LA ALUMNA · {LABEL[progressOf.status]}</span><button className="icon-button" aria-label="Cerrar el progreso" onClick={() => progressDialog.current?.close()}><X size={20} /></button></div>
         <StudentProgress endpoint={`/api/admin/students/${progressOf.id}/progress`} audience="coach"
           heading={{ eyebrow: 'SU ACTIVIDAD EN EL PORTAL', title: progressOf.email, lead: 'La misma ficha que ella ve en «Mi progreso»: sus prácticas, notas, evolución y formación. Sin compararla con otras alumnas.' }} />
+        <StudentChallenges studentId={progressOf.id} />
       </div>}
     </dialog>
   </section>;

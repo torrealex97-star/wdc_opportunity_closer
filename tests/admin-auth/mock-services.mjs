@@ -146,6 +146,14 @@ export function startMocks({ authPort, enginePort }) {
       rows = rows.slice(Number(q.offset) || 0); if (Number(q.limit)) rows = rows.slice(0, Number(q.limit));
       return send(res, 200, rows);
     }
+    if (url.pathname === '/rest/v1/student_challenges') {
+      state.challenges ??= []; const q = Object.fromEntries(url.searchParams); const eqv = k => q[k]?.startsWith('eq.') ? decodeURIComponent(q[k].slice(3)) : null;
+      if (req.method === 'POST') { const row = { id: crypto.randomUUID(), org_id: 'cloud-wdc', created_by: null, created_at: new Date().toISOString(), ...body }; state.challenges.unshift(row); return send(res, 201, [row]); }
+      let rows = state.challenges.filter(r => (!eqv('org_id') || r.org_id === eqv('org_id')) && (!eqv('student_id') || r.student_id === eqv('student_id')));
+      rows.sort((a, b) => String(a.due_on).localeCompare(String(b.due_on)) || String(a.created_at).localeCompare(String(b.created_at)));
+      const offset = Number(q.offset) || 0, limit = Number(q.limit);
+      return send(res, 200, limit ? rows.slice(offset, offset + limit) : rows.slice(offset));
+    }
     if (url.pathname === '/rest/v1/student_application_profiles') {
       state.appProfiles ??= new Map(); const q = Object.fromEntries(url.searchParams); const uid = q.user_id?.slice(3);
       if (req.method === 'POST') { const row = { ...state.appProfiles.get(body.user_id), ...body }; state.appProfiles.set(body.user_id, row); return send(res, 201, [row]); }

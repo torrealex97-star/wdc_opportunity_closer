@@ -75,7 +75,7 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
 | 11 | Auto-apply con Playwright/Camoufox y operadores | ⛔ | **No se construye** (ADR-012). |
 | 12 | Capas de objeción con reglas de salto (circunstancias → terceros → el yo) en la sala | ⬜ | Agente (prompts y escenarios); `docs/PORTING_REVIEW.md` punto 1. |
 | 13 | Banco de 10 preguntas de entrevista con intención, fórmula y banderas rojas (modo estudio sin IA) | ✅ | Hecho (módulo 9 de Formación). Conviene que una closer lea las fórmulas y ejemplos. |
-| 14 | Retos asignados por la coordinadora y objetivo semanal elegido por la alumna | ⬜ | Tabla nueva (migración sin aplicar → tu orden); punto 7. Los objetivos fijos ya existen (#39). |
+| 14 | Retos asignados por la coordinadora y objetivo semanal elegido por la alumna | 🟡 | **Reto reducido construido** (sesión 229): escenario, nota mínima opcional, plazo y nota del coach, con estado derivado de `student_activity`; migración `20261119_student_challenges.sql` **preparada y sin aplicar** (tu orden) y prueba `BEGIN…ROLLBACK` escrita sin ejecutar. Falta aplicar la migración, ejecutar su prueba y el objetivo semanal de la alumna. Los objetivos fijos ya existen (#39). |
 | 15 | Voz con interrupción (*barge-in*) y copiloto «Jarvis» con memoria | ⛔ | Voz: ver fila 2. Copiloto: proveedor, presupuesto por alumna y decisión de coste tuyos; punto 8-9. |
 | ✅ | Señales de apertura sumisa y entusiasmo de más; feedback con tarea de 24 h (puntos 2 y 4) | ✅ | Hecho (#50). |
 

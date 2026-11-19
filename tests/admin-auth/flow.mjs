@@ -288,6 +288,28 @@ await step('alumnas: invitación, recuperación, login, perfil con consentimient
   assert.equal(otraFicha.json.progress.practice.count, 1, 'solo la práctica de esta alumna');
   assert.equal(otraFicha.json.progress.practice.avg, 40);
   assert.ok(!otraFicha.json.progress.recent.some(r => r.kind === 'training_exam'), 'el examen de la otra alumna no aparece');
+  // Retos asignados: el escenario y el plazo los pone la coordinadora; el ESTADO se deriva de la actividad
+  // (organización + alumna + escenario + plazo + nota mínima) y el navegador no lo puede enviar.
+  const retoPath = `/api/admin/students/${id}/challenges`;
+  assert.equal((await call(retoPath, { cookies: false })).status, 401, 'sin sesión del panel no hay retos');
+  const due = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  assert.equal((await call(retoPath, { method: 'POST', body: { scenario_id: 'no-existe', due_on: due, coach_note: 'x' } })).status, 422);
+  assert.equal((await call(retoPath, { method: 'POST', body: { scenario_id: 'objeciones-precio', min_score: 0, due_on: due, coach_note: 'x' } })).status, 422);
+  assert.equal((await call(retoPath, { method: 'POST', body: { scenario_id: 'objeciones-precio', due_on: '2020-01-01', coach_note: 'x' } })).status, 422);
+  const assigned = await call(retoPath, { method: 'POST', body: { scenario_id: 'objeciones-precio', min_score: 70, due_on: due, coach_note: 'Trabaja el precio sin rebajar.' } });
+  assert.equal(assigned.status, 201); assert.equal(assigned.json.challenge.org_id, 'cloud-wdc'); assert.equal(assigned.json.challenge.created_by, 'owner@test.dev');
+  // El reto de la otra alumna no se filtra a la lectura de E.
+  assert.equal((await call(`/api/admin/students/${other.id}/challenges`, { method: 'POST', body: { scenario_id: 'venta-fria', due_on: due, coach_note: 'Abre sin disculparte.' } })).status, 201);
+  const mineChallenges = await call('/api/student/challenges', studentHeaders);
+  assert.equal(mineChallenges.status, 200); assert.equal(mineChallenges.json.challenges.length, 1); assert.equal(mineChallenges.json.challenges[0].status, 'pending'); assert.equal(mineChallenges.json.challenges[0].attempts, 0);
+  // Una práctica por debajo de la nota mínima no lo cumple...
+  assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'practice', ref: 'objeciones-precio', score: 60, detail: {} } })).status, 201);
+  assert.equal((await call('/api/student/challenges', studentHeaders)).json.challenges[0].status, 'pending');
+  // ...y una que sí la alcanza lo completa; el estado no viaja desde el navegador.
+  assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'practice', ref: 'objeciones-precio', score: 85, detail: {} } })).status, 201);
+  const doneChallenge = (await call('/api/student/challenges', studentHeaders)).json.challenges[0];
+  assert.equal(doneChallenge.status, 'completed'); assert.equal(doneChallenge.best_score, 85); assert.equal(doneChallenge.attempts, 2); assert.ok(doneChallenge.completed_at);
+  const adminChallenges = await call(retoPath); assert.equal(adminChallenges.status, 200); assert.equal(adminChallenges.json.challenges[0].status, 'completed');
   assert.equal((await call('/api/admin/students/00000000-0000-4000-8000-000000000999/progress')).status, 404, 'un id ajeno no abre ficha');
   assert.equal((await call(`/api/admin/students?id=${other.id}`, { method: 'DELETE' })).status, 200, 'se limpia la alumna de prueba');
   assert.equal((await call('/api/admin/students', { method: 'PATCH', body: { id, status: 'paused' } })).status, 200);
