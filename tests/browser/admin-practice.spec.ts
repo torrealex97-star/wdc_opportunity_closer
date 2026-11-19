@@ -54,10 +54,14 @@ let next: ChildProcess | null = null;
 let model: Server | null = null;
 let base = '';
 let dataDir = '';
+let distDir = '';
 let log = '';
 
 test.beforeAll(async () => {
   dataDir = mkdtempSync(path.join(tmpdir(), 'wdc-practice-'));
+  // Caché de Turbopack propia por ejecución: reutilizar `.next-e2e` tras matar un servidor deja el
+  // directorio de persistencia a medias y el siguiente arranque falla.
+  distDir = `.next-e2e-${process.pid}-${Date.now()}`;
   const modelPort = await freePort();
   model = createServer((request, response) => {
     if (request.method !== 'POST') { response.writeHead(404).end(); return; }
@@ -79,7 +83,7 @@ test.beforeAll(async () => {
     env: {
       ...process.env,
       CAREER_ENGINE_URL: 'http://127.0.0.1:9',
-      NEXT_DIST_DIR: '.next-e2e',
+      NEXT_DIST_DIR: distDir,
       NEXT_TELEMETRY_DISABLED: '1',
       PRACTICE_DB_PATH: path.join(dataDir, 'practice-rubrics.sqlite'),
       GROQ_BASE_URL: `http://127.0.0.1:${modelPort}/v1`,
@@ -108,6 +112,7 @@ test.afterAll(async () => {
   if (next?.pid) { try { process.kill(-next.pid, 'SIGTERM'); } catch { /* ya cerrado */ } }
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+  if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true });
 });
 
 async function score(): Promise<{ score: number; label: string }> {

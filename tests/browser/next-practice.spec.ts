@@ -47,8 +47,9 @@ test('competencias separa cada sala y pone «—» con menos de 3 datos', async 
   await page.goto('/');
   await page.getByRole('button', { name: 'Mi progreso' }).click();
   await expect(page.getByRole('heading', { name: 'Tus competencias' })).toBeVisible();
-  await expect(page.getByRole('progressbar', { name: 'Cierre en closer (voz)' })).toHaveAttribute('aria-valuenow', '40');
-  await expect(page.getByRole('progressbar', { name: 'Objeciones en closer (voz)' })).toHaveAttribute('aria-valuenow', '55');
+  // Coincidencia exacta: «Cierre» también aparece dentro de «Objeciones y cierre» (eje nuevo).
+  await expect(page.getByRole('progressbar', { name: 'Cierre en closer (voz)', exact: true })).toHaveAttribute('aria-valuenow', '40');
+  await expect(page.getByRole('progressbar', { name: 'Objeciones y cierre en closer (voz)', exact: true })).toHaveAttribute('aria-valuenow', '55');
   // La entrevista tiene 2 datos: no hay media, hay un hueco declarado con su causa.
   await expect(page.getByText('menos de 3 prácticas (2)')).toBeVisible();
   await expect(page.getByRole('progressbar', { name: 'Encaje en entrevista (voz)' })).toHaveCount(0);

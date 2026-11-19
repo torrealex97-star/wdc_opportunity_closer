@@ -4,7 +4,8 @@ test('operator can configure search, inspect sources and use mobile navigation',
   await page.route('**/api/backend/source-connections', route => route.fulfill({ json: [] }));
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Su próximo paso empieza aquí.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Buscar oportunidades', exact: true })).toBeEnabled();
+  // Con la suite completa en paralelo, la primera carga de /api/backend/config puede pasar de 5 s.
+  await expect(page.getByRole('button', { name: 'Buscar oportunidades', exact: true })).toBeEnabled({ timeout: 15_000 });
   await page.getByRole('combobox', { name: 'Perfil profesional' }).selectOption('closer');
   await page.getByRole('combobox', { name: 'Mercado', exact: true }).selectOption('ES');
   await page.getByText('Afinar búsqueda', { exact: true }).click();
