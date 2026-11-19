@@ -1,5 +1,18 @@
 # Estado
 
+## Revisión del repo antiguo: retos sí, el resto no (sesión 230) — 2026-11-19
+
+- **Petición del propietario**: dejar constancia de la revisión de los formularios y superficies del repo antiguo frente al portal, con el veredicto «retos sí, el resto no».
+- **Qué se comparó** (`inspected`): la copia local de `closer-ai-coach` (`.local/closer-ai-coach`, fuera de Git): `LoginScreen.tsx`, `SettingsModal.tsx`, el formulario de asignación de `ManagerDashboardView.tsx`, `AudioBank.tsx` + `GoldenResponsePlayer.tsx`, el selector de dificultad de `InteractiveSimulator.tsx`/`InterviewSimulator.tsx`, los logros/XP de `CloserDashboard.tsx` + `dataLayer.ts` y el esquema de `supabase/migration.sql` (`profiles`, `teams`, `assignments`, `achievements`). En el portal: autenticación y panel (`AdminShell`, `adminAuth`), `StudentPractice.tsx`, `practiceScenarios.ts`, `studentMetrics.ts`, `studentActivity.ts`, `studentRetention.ts`, `StudentProgress.tsx`, `StudentsTab.tsx` y el aislamiento por `org_id`.
+- **Veredicto — retos sí**: el formulario de asignación del manager (escenario/objeción, nota mínima y fecha límite) es la única pieza que merecía la pena portar; ya se reconstruyó en la sesión 229 como `student_challenges`, con `org_id`, nota del coach y **estado derivado de `student_activity`** (mejor que el `assignments` antiguo, que guardaba el estado a mano). Su migración sigue **sin aplicar**.
+- **Veredicto — el resto no**:
+  - **Formularios de acceso y ajustes**: no se portan. El antiguo permite registro abierto con elección de rol y guarda la clave del proveedor en `localStorage` (los ajustes); el portal ya tiene acceso por invitación, recuperación, lista de usuarios y panel, y la clave vive solo en servidor.
+  - **Banco de audio**: no contiene audio grabado; es un banco de siete objeciones con respuesta escrita y TTS del navegador. Se descarta: la sala ya tiene voz, la formación cubre el repertorio y portarlo empujaría un guion de «respuesta ganadora» que choca con el criterio de ejemplo, no de respuesta perfecta.
+  - **Selector de dificultad por sesión** (Fácil/Media/Alta/Hardcore): se descarta el selector libre. La intensidad fija por escenario (`suave`, `real`, `dura`) mantiene comparables las notas y deja la resistencia en el servidor; 21 situaciones ya cubren los niveles.
+  - **Logros/XP**: ya existen en el portal y son mejores. XP y nivel **derivados** de la actividad y las candidaturas (sin tabla que inflar, tope de tres prácticas/día), seis logros, racha y desglose visible; el antiguo guardaba `xp`, `nivel`, `racha_actual` y `racha_max` en `profiles`.
+  - **Equipos y objetivos**: se descarta el modelo antiguo. `teams`/`manager_id`/`team_id` añade un segundo eje de permisos que hoy no hace falta (WDC funciona como una organización), su migración está rota (`profiles` referencia `teams` antes de crearla) y el «objetivo semanal» de la alumna solo era texto de marketing. El portal ya tiene objetivos semanales calculados y retos asignados; si algún día hacen falta cohortes, se diseñan bajo `org_id`.
+- **Evidencia y alcance**: nivel **inspected** — lectura de código y datos; no se ejecutó ni la app antigua ni el portal. **Sin cambios de código**: esta sesión solo añade esta entrada; no hay migraciones, pruebas, despliegues ni DDL, y no se declara ninguna prueba de runtime.
+
 ## Retos asignados por la coordinadora, con estado derivado de la actividad (sesión 229) — 2026-11-19
 
 - **Petición del propietario**: «Implementa el reto asignado reducido: escenario, nota mínima opcional, fecha límite y nota del coach, con estado calculado desde student_activity y org_id. Empieza por la migración versionada con su prueba BEGIN…ROLLBACK y no apliques DDL a Supabase real hasta que te lo autorice.»
