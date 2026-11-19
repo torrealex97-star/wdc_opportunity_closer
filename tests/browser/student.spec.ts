@@ -34,6 +34,23 @@ test('student sees three profiles and decision facts without operational control
   await expect(page.getByRole('heading', { name: offer.original_title, exact: true })).toBeVisible();
 });
 
+test('el catálogo se recorre por páginas con un recuento honesto', async ({ page }) => {
+  // 20 ofertas superan una página: la lista se parte y el recuento dice cuántas hay en total.
+  const items = Array.from({ length: 20 }, (_, i) => ({ ...offer, id: `student-page-${i}`, original_title: `Closer de ventas ${i + 1}`, company: `Empresa ${i + 1}`, source_url: `https://example.com/job/${i}` }));
+  await page.route('**/api/backend/opportunities/search', route => route.fulfill({ json: { items, total: items.length, selection_total: 20 } }));
+  await page.goto('/');
+  const pager = page.getByRole('navigation', { name: 'Páginas de oportunidades' });
+  await expect(page.getByRole('heading', { name: /Oportunidades para explorar/ }).locator('span')).toHaveText('20');
+  await expect(page.getByText('Mostrando 1–12 de 20')).toBeVisible();
+  await expect(page.locator('.student-results .opportunity-grid > div')).toHaveCount(12);
+  await pager.getByRole('button', { name: '2', exact: true }).click();
+  await expect(page.getByText('Mostrando 13–20 de 20')).toBeVisible();
+  await expect(page.locator('.student-results .opportunity-grid > div')).toHaveCount(8);
+  await expect(page.getByRole('heading', { name: 'Closer de ventas 20', exact: true })).toBeVisible();
+  await pager.getByRole('button', { name: 'Anterior', exact: true }).click();
+  await expect(page.getByText('Mostrando 1–12 de 20')).toBeVisible();
+});
+
 test('sin cifra publicada la tarjeta lo dice y no inventa compensación', async ({ page }) => {
   const withoutPay = { ...offer, compensation: 'Importe no publicado', compensation_note: 'Pregunta por el fijo y las comisiones antes de avanzar.' };
   await page.route('**/api/backend/opportunities/search', route => route.fulfill({ json: { items: [withoutPay], total: 1 } }));

@@ -32,6 +32,19 @@ const MARKETS = ['any', 'ES', 'EU', 'LATAM', 'US'] as const;
 // prospección solo consta cuando el anuncio la menciona, así que ninguna se supone.
 const MODALITIES = ['any', 'remote', 'hybrid', 'onsite'] as const;
 const MOTIONS = ['any', 'outbound', 'inbound'] as const;
+// El catálogo se recorre por páginas reales: con la lista entera en una tirada, «cuántas hay» no se ve.
+// Doce caben en dos columnas sin que la página pese de más y el recuento («Mostrando 1–12 de N») dice la verdad.
+const PAGE_SIZE = 12;
+function pageNumbers(current: number, count: number): Array<number | 'gap'> {
+  if (count <= 7) return Array.from({ length: count }, (_, i) => i + 1);
+  const keep = new Set([1, count, current - 1, current, current + 1].filter(n => n >= 1 && n <= count));
+  const out: Array<number | 'gap'> = [];
+  for (let n = 1; n <= count; n += 1) {
+    if (keep.has(n)) out.push(n);
+    else if (out[out.length - 1] !== 'gap') out.push('gap');
+  }
+  return out;
+}
 // Modalidad y prospección se marcan como el bilingüe: una casilla por opción, sin desplegable.
 // Son excluyentes porque el motor filtra por un valor; desmarcar la activa vuelve a «cualquiera».
 function Ticks({ legend, hint, value, options, onChange }: { legend: string; hint?: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
@@ -204,8 +217,10 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   // finding 2 — sin credencial individual todavía, la vista alumna no muta el
   // catálogo compartido del operador). El motor admin mantiene su marcador propio.
   const [localSaves, setLocalSaves] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const sequence = useRef(0);
   const dialog = useRef<HTMLDialogElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
   // Tras el montaje (nunca durante la hidratación): la URL restaura el contexto de la alumna.
   useEffect(() => {
     const fromUrl = queryFromUrl();
@@ -225,7 +240,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   useEffect(() => {
     let stopped = false;
     const id = ++sequence.current;
-    setBusy(true); setError(''); setWider(null); setDegraded(false);
+    setBusy(true); setError(''); setWider(null); setDegraded(false); setPage(1);
     // Hosted: Guardadas son las marcadas en Este navegador (filtrado en cliente);
     // el marcador starred_only del engine queda como curación del operador.
     request<Results>('opportunities/search', saved ? (hosted ? { role: null, market: 'any', days: 10, include_bilingual: true, starred_only: false, include_extra_roles: true } : { role: null, market: 'any', days: 10, include_bilingual: true, starred_only: true, include_extra_roles: true }) : applied)
@@ -286,6 +301,16 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
   const visible = saved && hosted ? items.filter(isStarred) : items;
   // Familias del relleno, en el orden en que aparecen: el rótulo del bloque y cada tarjeta las nombran.
   const widerFamilies = [...new Set((wider ?? []).map(offer => offer.role_label || label(offer.role)))];
+  // Página actual, acotada al recuento real: un filtro que devuelve menos ofertas no deja la lista en blanco.
+  const total = visible.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * PAGE_SIZE;
+  const paged = visible.slice(start, start + PAGE_SIZE);
+  function goToPage(next: number) {
+    setPage(Math.min(Math.max(next, 1), pageCount));
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   return <div className="shell student-shell">
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="WDC · Inicio"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>
@@ -314,11 +339,19 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
         {error && <p className="alert error" role="alert">{error}</p>}
         {degraded && !busy && <p className="selection-note" role="status">El catálogo general no responde ahora mismo. Estas son las ofertas externas ya revisadas y aprobadas; el resto volverá cuando el buscador se recupere.</p>}
         {!saved && <OpportunityRadar offers={[...visible, ...(wider ?? [])]} busy={busy} role={applied.role ?? null} onRole={next => applyQuery({ ...applied, role: next })} />}
-        <section className="student-results" aria-busy={busy}><div className="results-heading"><h2>{saved ? 'Tus oportunidades guardadas' : 'Oportunidades para explorar'} <span>{busy ? '…' : visible.length + (wider?.length ?? 0)}</span></h2><span className="student-freshness">Actualización diaria</span></div>
+        <section className="student-results" aria-busy={busy} ref={resultsRef}><div className="results-heading"><h2>{saved ? 'Tus oportunidades guardadas' : 'Oportunidades para explorar'} <span>{busy ? '…' : visible.length + (wider?.length ?? 0)}</span></h2><span className="student-freshness">Actualización diaria</span></div>
           {!saved && !busy && selectionTotal > 0 && <p className="selection-note">Selección del día: las {selectionTotal} que mejor cumplen los requisitos van primero. Puedes explorar el resto del catálogo debajo.</p>}
-          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : applied.modality !== 'any' || applied.sales_motion !== 'any' ? 'Solo enseñamos las que declaran lo que pides. Quita la modalidad o la prospección para ver el catálogo completo, o elige otro perfil o mercado.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{visible.map((offer, index) => <div key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}><OfferCard offer={offer}
+          {busy ? <div className="opportunity-grid" aria-hidden="true"><div className="opportunity-card is-skeleton"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div><div className="opportunity-card is-skeleton is-late"><span className="shimmer-line wide" /><span className="shimmer-line" /><span className="shimmer-line" /><span className="shimmer-line short" /></div></div> : !visible.length ? <div className="empty"><Compass size={32} strokeWidth={1.3} /><h3>{saved ? 'Guarda las que te hagan dar el siguiente paso.' : 'Aún no hay oportunidades con estos criterios.'}</h3><p>{saved ? 'Pulsa el marcador de una oferta para volver a verla aquí.' : applied.modality !== 'any' || applied.sales_motion !== 'any' ? 'Solo enseñamos las que declaran lo que pides. Quita la modalidad o la prospección para ver el catálogo completo, o elige otro perfil o mercado.' : 'Puedes elegir otro perfil o mercado. Seguimos buscando nuevas oportunidades en español.'}</p></div> :          <div className="opportunity-grid">{paged.map((offer, index) => <div key={offer.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}><OfferCard offer={offer}
               starred={isStarred(offer)} saving={saving === offer.id}
               onStar={() => void star(offer)} onOpen={() => setDetail(offer)} /></div>)}</div>}
+          {!busy && total > PAGE_SIZE && <nav className="pager" aria-label="Páginas de oportunidades">
+            <button type="button" disabled={current === 1} onClick={() => goToPage(current - 1)}>Anterior</button>
+            {pageNumbers(current, pageCount).map((n, i) => n === 'gap'
+              ? <span key={`gap-${i}`} className="pager-gap" aria-hidden="true">…</span>
+              : <button type="button" key={n} className={n === current ? 'is-current' : ''} aria-current={n === current ? 'page' : undefined} onClick={() => goToPage(n)}>{n}</button>)}
+            <button type="button" disabled={current === pageCount} onClick={() => goToPage(current + 1)}>Siguiente</button>
+            <span className="pager-count">Mostrando {start + 1}–{Math.min(start + PAGE_SIZE, total)} de {total}</span>
+          </nav>}
           {!saved && !busy && wider?.length ? <div className="wider-bucket">
             <h3>{items.length} con tu filtro · {wider.length} más del catálogo {applied.market !== 'any' ? 'con tu mercado' : 'comercial en español'}</h3>
             <p>Con tu filtro de perfil no aparecían suficientes {applied.role ? `ofertas de ${label(applied.role)}` : 'ofertas en tu mercado'}; estas vienen del mismo catálogo real con el filtro ampliado, en {applied.include_bilingual ? 'español o inglés' : 'español'}{widerFamilies.length ? ` y de ${widerFamilies.join(', ')}` : ''}.</p>

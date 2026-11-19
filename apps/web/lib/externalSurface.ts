@@ -181,7 +181,9 @@ export function inMarket(o: ExternalOffer, wanted: string): boolean {
 export async function externalForStudent(q: Query) {
   if (q.starred_only || !MARKET_OK.has(q.market)) return [];
   // Solo aprobadas, ya ordenadas por puntuación en el servidor (con miles de borradores no se pierde ninguna aprobada).
-  const [all, paused] = await Promise.all([listOffers({ statuses: ['approved', 'published'], byScore: true, limit: 600, onlyLive: true }), pausedSourcesStrict()]);
+  // El tope es el máximo que admite una lectura (1.000 filas): con más aprobadas vivas que eso, las de menor
+  // puntuación no llegan a la alumna y hay que paginar la lectura (siguiente incremento); hoy hay 285.
+  const [all, paused] = await Promise.all([listOffers({ statuses: ['approved', 'published'], byScore: true, limit: 1000, onlyLive: true }), pausedSourcesStrict()]);
   if (!paused) return []; // no se sabe qué fuentes están pausadas: ante la duda no se muestra nada
   const rows = dedupeReposted((all ?? []).filter(o => !paused.has(o.source)));
   const cutoff = Date.now() - q.days * 86400000;

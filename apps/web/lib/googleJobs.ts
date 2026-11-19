@@ -45,6 +45,26 @@ export const maxDorks = (env: NodeJS.ProcessEnv = process.env) => {
   return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 0), GOOGLE_JOBS_DORKS.length) : DEFAULT_MAX_DORKS;
 };
 
+// Con el presupuesto por defecto solo caben 7 de los 10 dorks. Enviar siempre los MISMOS 7 dos veces al día
+// devuelve el mismo inventario y el catálogo deja de crecer aunque la recogida «vaya bien»: medido el
+// 2026-11-19, 25 filas aceptadas por día y **una** nueva (el resto eran republicaciones ya guardadas).
+// Se rota la ventana por día, sin gastar una búsqueda más, para que todo el vocabulario se ejecute en unos
+// días. El reparto entre España y LatAm se mantiene (4+3): lo que rota es el término, no la cobertura.
+export const DAY_MS = 86_400_000;
+export function dorkWindow(now = Date.now(), limit = maxDorks()): Dork[] {
+  const total = GOOGLE_JOBS_DORKS.length;
+  const size = Math.min(Math.max(Math.floor(limit), 0), total);
+  if (!size) return [];
+  if (size === total) return [...GOOGLE_JOBS_DORKS];
+  const spain = GOOGLE_JOBS_DORKS.filter(d => d.gl === 'es');
+  const latam = GOOGLE_JOBS_DORKS.filter(d => d.gl !== 'es');
+  const esCount = Math.min(spain.length, Math.max(1, Math.round((size * spain.length) / total)));
+  const day = Math.floor(now / DAY_MS);
+  const pick = (list: readonly Dork[], count: number) =>
+    Array.from({ length: Math.min(count, list.length) }, (_, i) => list[(day + i) % list.length]);
+  return [...pick(spain, esCount), ...pick(latam, size - esCount)];
+}
+
 // Fecha relativa tal como la publica Google («hace 2 días», «3 days ago»). Solo
 // se usa cuando la fuente la dice; si no hay frase reconocible, la fecha queda
 // desconocida en vez de inventarse.
@@ -162,7 +182,7 @@ export async function collectGoogleJobs(via: string, deadline?: number, fetchFor
     const secret = await getSecret('serpapi');
     if (!secret) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi' };
     const fetchQuery = fetchFor(secret);
-    const dorks = GOOGLE_JOBS_DORKS.slice(0, limit);
+    const dorks = dorkWindow(Date.now(), limit);
     const all: Candidate[] = []; const errors: string[] = []; let truncated = false;
     // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice.
     if (timeLeft(deadline) < 3_500) {

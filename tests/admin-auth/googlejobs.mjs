@@ -36,6 +36,8 @@ const server = http.createServer(async (req, res) => {
     if (mode === 'empty') return send(200, { error: "Google hasn't returned any results for this query." });
     const q = url.searchParams.get('q') ?? '';
     // El mismo anuncio aparece en dos dorks: debe quedar una sola fila.
+    // La ventana de dorks rota por día: el anuncio que se repite entre búsquedas tiene que venir en cualquiera
+    // de ellas para que la prueba mida el dedupe y no el dork que toque hoy.
     const rows = q.includes('high ticket')
       ? [job('job-1'), job('job-2', {
           title: 'Setter/Closer',
@@ -43,7 +45,7 @@ const server = http.createServer(async (req, res) => {
           apply_options: [{ title: 'InfoJobs', link: 'https://www.infojobs.net/oferta/job-2' }],
           detected_extensions: { posted_at: 'ayer' },
         }), job('job-2')]
-      : [job('job-1'), job('job-3', { share_link: 'javascript:alert(1)', link: null, apply_options: [] })];
+      : [job('job-1'), job('job-2'), job('job-3', { share_link: 'javascript:alert(1)', link: null, apply_options: [] })];
     return send(200, { jobs_results: rows });
   }
   if (url.pathname === '/rest/v1/integration_connections') {
@@ -69,7 +71,7 @@ delete process.env.SERPAPI_JOBS_MAX_DORKS;
 
 const { encryptSecret } = await import('../../apps/web/lib/secrets.ts');
 process.env.TEST_SECRET = encryptSecret('serpapi-key-1234');
-const { collectGoogleJobs, postedAt, toCandidate, GOOGLE_JOBS_DORKS, DEFAULT_MAX_DORKS, SEARCH_USD } = await import('../../apps/web/lib/googleJobs.ts');
+const { collectGoogleJobs, postedAt, toCandidate, dorkWindow, DAY_MS, GOOGLE_JOBS_DORKS, DEFAULT_MAX_DORKS, SEARCH_USD } = await import('../../apps/web/lib/googleJobs.ts');
 
 const results = [];
 const step = async (name, fn) => {
@@ -118,12 +120,27 @@ await step('pide cada dork a Google Jobs en su país, en español y sin paginar'
     assert.equal(search.api_key, 'serpapi-key-1234');
     assert.equal(search.next_page_token ?? null, null, 'no se paga una segunda página');
   }
-  assert.deepEqual(searches.map(s => s.q), GOOGLE_JOBS_DORKS.slice(0, DEFAULT_MAX_DORKS).map(d => d.q));
-  assert.deepEqual(searches.map(s => s.gl), GOOGLE_JOBS_DORKS.slice(0, DEFAULT_MAX_DORKS).map(d => d.gl));
+  assert.deepEqual(searches.map(s => s.q), dorkWindow().map(d => d.q));
+  assert.deepEqual(searches.map(s => s.gl), dorkWindow().map(d => d.gl));
   // El presupuesto por defecto cubre los dos mercados: 4 dorks de España y 3 de LatAm (dólares).
   assert.equal(searches.filter(s => s.gl === 'es').length, 4);
   assert.equal(searches.filter(s => s.gl !== 'es').length, 3);
   assert.ok(searches.some(s => s.gl === 'mx') && searches.some(s => s.gl === 'co') && searches.some(s => s.gl === 'ar'));
+});
+
+await step('rota la ventana de dorks por día: mismo coste y todo el vocabulario se ejecuta', async () => {
+  const seen = new Set();
+  for (let day = 0; day < GOOGLE_JOBS_DORKS.length; day += 1) {
+    const window = dorkWindow(day * DAY_MS);
+    assert.equal(window.length, DEFAULT_MAX_DORKS, `ventana de ${window.length} dorks el día ${day}`);
+    assert.equal(new Set(window.map(d => d.q)).size, window.length, 'un dork no se repite en la misma pasada');
+    assert.equal(window.filter(d => d.gl === 'es').length, 4, 'el reparto de España se mantiene');
+    assert.equal(window.filter(d => d.gl !== 'es').length, 3, 'el reparto de LatAm se mantiene');
+    window.forEach(d => seen.add(d.q));
+  }
+  assert.equal(seen.size, GOOGLE_JOBS_DORKS.length, 'en una vuelta completa se ejecutan todos los dorks');
+  assert.notDeepEqual(dorkWindow(0).map(d => d.q), dorkWindow(DAY_MS).map(d => d.q), 'cada día cambia la ventana');
+  assert.deepEqual(dorkWindow(0, GOOGLE_JOBS_DORKS.length).map(d => d.q), GOOGLE_JOBS_DORKS.map(d => d.q), 'con presupuesto para todos, el vocabulario completo');
 });
 
 await step('fechas: relativas sí, desconocidas no se inventan', async () => {
