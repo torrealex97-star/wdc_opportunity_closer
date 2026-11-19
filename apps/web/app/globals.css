@@ -909,3 +909,142 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .practice-bant-grid dd{margin:4px 0 0;color:var(--secondary);font-size:var(--text-xs);line-height:1.5}
 .practice-bant-decision{margin-top:14px;font-size:var(--text-sm)}
 @media(max-width:700px){.rubric-priority{grid-template-columns:24px minmax(0,1fr)}.rubric-priority-actions{grid-column:2}}
+/* Ruta de formación importable, hub de recursos, frase diaria y celebración de candidaturas. */
+.curriculum{display:grid;gap:24px;padding-bottom:8px}
+.curriculum-head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:26px 28px;background:var(--accent-soft);border-radius:14px}
+.curriculum-head h2{font-family:var(--font-display);font-size:30px;font-weight:400;line-height:1.2;margin:8px 0 8px;max-width:24ch}
+.curriculum-head p{font-size:12.5px;color:var(--ink);line-height:1.7;max-width:70ch}
+.curriculum-badge{flex-shrink:0;display:grid;place-items:center;gap:2px;min-width:104px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--sheet);color:var(--accent)}
+.curriculum-badge b{font-family:var(--font-display);font-size:26px;font-weight:400;line-height:1}
+.curriculum-badge small{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--secondary)}
+.curriculum-stats{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:11.5px;color:var(--secondary)}
+.curriculum-stats>span{display:inline-flex;align-items:center;gap:6px}
+.curriculum-stats>span b{color:var(--ink)}
+.curriculum-source{margin-left:auto;font-size:10px;color:var(--secondary)}
+.curriculum-progress{display:grid;gap:5px;min-width:150px}
+.curriculum-progress .meter{height:6px;border-radius:3px;background:var(--inset);overflow:hidden}
+.curriculum-progress .meter>span{display:block;height:100%;background:var(--sage);border-radius:3px}
+.curriculum-progress small{font-size:10px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.curriculum-modules{display:grid;gap:16px}
+.curriculum-module{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:22px 24px;display:grid;gap:14px}
+.curriculum-module>header{display:flex;align-items:flex-start;gap:14px}
+.curriculum-module>header>div{flex:1;min-width:0}
+.curriculum-module>header h3{font-family:var(--font-display);font-size:23px;font-weight:400;line-height:1.25}
+.curriculum-module>header p{font-size:12px;color:var(--secondary);line-height:1.65;margin-top:5px}
+.curriculum-module-index{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--inset);color:var(--secondary);font-size:12px;font-weight:650;flex-shrink:0}
+.curriculum-module-count{font-size:11px;color:var(--secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.curriculum-objectives{list-style:none;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;padding:0}
+.curriculum-objectives li{font-size:11px;color:var(--secondary);display:flex;gap:6px;align-items:flex-start;line-height:1.5}
+.curriculum-objectives li::before{content:"·";color:var(--accent);font-weight:700}
+.curriculum-lessons{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--line)}
+.curriculum-lessons li{border-bottom:1px solid var(--line)}
+.curriculum-lesson-row{width:100%;display:flex;align-items:center;gap:12px;padding:13px 0;border:0;border-radius:0;background:transparent;text-align:left;min-height:52px}
+.curriculum-lesson-row:hover:not(:disabled){background:var(--paper)}
+.curriculum-lesson-check{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--inset);color:var(--secondary);font-size:10px;font-weight:650;flex-shrink:0}
+.curriculum-lesson-row[data-done="true"] .curriculum-lesson-check{background:var(--sage-soft);border-color:var(--sage);color:var(--sage)}
+.curriculum-lesson-title{flex:1;min-width:0;display:grid;gap:2px}
+.curriculum-lesson-title strong{font-size:13px;font-weight:600}
+.curriculum-lesson-title small{font-size:11px;color:var(--secondary);line-height:1.5;overflow-wrap:anywhere}
+.curriculum-lesson-meta{display:inline-flex;align-items:center;gap:8px;font-size:10px;color:var(--secondary);white-space:nowrap}
+.curriculum-deep{margin-top:4px}
+.curriculum-deep button{font-size:11px;color:var(--accent);background:transparent;border:0;justify-self:start;padding:0;min-height:32px;text-decoration:underline;text-underline-offset:3px}
+.curriculum-next{display:flex;justify-content:flex-end;padding-top:8px}
+.curriculum-next .primary{font-size:12px}
+
+.curriculum-lesson{display:grid;gap:22px;max-width:1000px}
+.curriculum-lesson-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.curriculum-lesson-head h2{font-family:var(--font-display);font-size:34px;font-weight:400;line-height:1.2;margin:8px 0 8px}
+.curriculum-lesson-head p{color:var(--secondary);font-size:13px;line-height:1.7;max-width:70ch}
+.lesson-content{white-space:pre-wrap;font-size:13.5px;line-height:1.85;color:var(--ink);max-width:78ch}
+.lesson-keypoints{padding:20px 22px;background:var(--sage-soft);border-radius:12px;display:grid;gap:10px}
+.lesson-keypoints h3,.lesson-resources h3{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sage)}
+.lesson-keypoints ul{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.lesson-keypoints li{font-size:12.5px;line-height:1.65;color:var(--ink);display:flex;gap:8px}
+.lesson-keypoints li::before{content:"✓";color:var(--sage);font-weight:700}
+.lesson-resources{display:grid;gap:12px}
+.lesson-resources h3{color:var(--ink)}
+.resource-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.resource-card{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:9px;min-width:0}
+.resource-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.resource-card-head .card-meta{margin:0;font-size:10px;overflow-wrap:anywhere}
+.resource-card h3{font-size:14px;font-weight:600;line-height:1.4}
+.resource-card>p{font-size:11.5px;color:var(--secondary);line-height:1.65}
+.resource-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.resource-card-actions a,.resource-card-actions button{font-size:11px;min-height:34px;padding:6px 10px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink)}
+.resource-card details{margin-top:2px}
+.resource-card details summary{font-size:11px;color:var(--accent)}
+.resource-content{white-space:pre-wrap;font-size:11.5px;line-height:1.7;color:var(--secondary);background:var(--inset);border-radius:8px;padding:14px;margin-top:8px;overflow-wrap:anywhere}
+.lesson-quiz{display:grid;gap:16px;padding-top:8px}
+.lesson-quiz-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.lesson-quiz-head h3{font-family:var(--font-display);font-size:25px;font-weight:400;margin:6px 0 4px}
+.lesson-quiz-head p{font-size:12px;color:var(--secondary)}
+.quiz-count{font-size:11px;color:var(--secondary);white-space:nowrap;font-variant-numeric:tabular-nums}
+.quiz-list{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.quiz-question{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:var(--sheet);display:grid;gap:12px}
+.quiz-question[data-ok="true"]{border-color:var(--sage)}
+.quiz-question[data-ok="false"]{border-color:var(--warning)}
+.quiz-question legend{font-size:13.5px;font-weight:600;line-height:1.55;display:flex;gap:9px;align-items:flex-start;color:var(--ink);margin-bottom:4px}
+.quiz-index{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:10px;flex-shrink:0;margin-top:1px}
+.quiz-options{display:grid;gap:7px}
+.quiz-option{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;font-weight:400;line-height:1.55;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer}
+.quiz-option input{width:15px;min-height:15px;height:15px;margin-top:2px;accent-color:var(--accent)}
+.quiz-option span{flex:1;min-width:0}
+.quiz-option[data-state="correct"]{border-color:var(--sage);background:var(--sage-soft);color:var(--sage)}
+.quiz-option[data-state="wrong"]{border-color:var(--warning);background:var(--warning-soft);color:var(--warning)}
+.quiz-feedback{font-size:12px;line-height:1.65;padding:11px 13px;border-radius:8px;background:var(--warning-soft);color:var(--warning)}
+.quiz-feedback[data-ok="true"]{background:var(--sage-soft);color:var(--sage)}
+.quiz-feedback strong{font-weight:650}
+.quiz-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.quiz-actions .primary{font-size:12px}
+.quiz-actions>button:not(.primary){font-size:11px}
+.quiz-fail{font-size:12px;color:var(--warning);font-weight:550}
+.quiz-passed{display:flex;align-items:flex-start;gap:10px;padding:13px 15px;border-radius:9px;background:var(--sage-soft);color:var(--sage);flex:1;min-width:260px}
+.quiz-passed strong{font-size:12.5px}
+.quiz-passed p{font-size:11px;line-height:1.55;margin-top:2px}
+
+.resources-hub{display:grid;gap:16px;padding:24px;background:var(--inset);border-radius:14px}
+.resources-hub-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.resources-hub-head h3{font-family:var(--font-display);font-size:24px;font-weight:400;line-height:1.3;margin-top:5px;max-width:36ch}
+.resources-filters{display:flex;gap:10px;flex-wrap:wrap}
+.resources-filters label{font-size:10px;min-width:140px}
+.resources-filters select{min-height:38px;padding:7px 10px;font-size:11px}
+
+.daily-quote{display:grid;gap:10px;padding:22px 24px;background:var(--sheet);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px}
+.daily-quote.is-compact{padding:18px 20px}
+.daily-quote.is-loading{gap:8px;min-height:92px}
+.daily-quote-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.daily-quote-head .eyebrow{display:inline-flex;align-items:center;gap:6px}
+.daily-quote blockquote{font-family:var(--font-display);font-size:22px;line-height:1.45;color:var(--ink);display:flex;gap:10px;margin:0;align-items:flex-start}
+.daily-quote blockquote svg{color:var(--accent);margin-top:5px;flex-shrink:0}
+.daily-quote.is-compact blockquote{font-size:19px}
+.daily-quote-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.daily-quote-actions button,.daily-quote-actions summary{font-size:10.5px;min-height:32px;padding:5px 10px}
+.daily-quote-actions details{margin-left:auto}
+.daily-quote-actions ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px;max-width:560px}
+.daily-quote-actions li{font-size:11px;line-height:1.6;color:var(--secondary);border-left:2px solid var(--line);padding-left:10px}
+.daily-quote-actions li span{display:block;font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.daily-quote-actions small{font-size:10px;color:var(--warning)}
+
+.celebration{position:fixed;inset:0;z-index:40;pointer-events:none;display:flex;align-items:flex-end;justify-content:flex-end;padding:24px}
+.confetti{position:absolute;inset:0;overflow:hidden}
+.confetti span{position:absolute;top:-14px;height:12px;border-radius:2px;opacity:.9;animation-name:confetti-fall;animation-timing-function:cubic-bezier(.23,.62,.5,1);animation-iteration-count:1;animation-fill-mode:forwards}
+@keyframes confetti-fall{0%{transform:translateY(-20px) rotate(0)}100%{transform:translateY(105vh) rotate(720deg)}}
+.celebration-card{pointer-events:auto;position:relative;width:min(380px,calc(100vw - 48px));background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:0 18px 50px #352c3233;display:grid;gap:10px}
+.celebration-card .icon-button{position:absolute;top:10px;right:10px}
+.celebration-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.celebration-card h2{font-family:var(--font-display);font-size:27px;font-weight:400;line-height:1.2;padding-right:24px}
+.celebration-card>p{font-size:12px;color:var(--secondary);line-height:1.65}
+.celebration-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:4px 0;padding:12px;background:var(--inset);border-radius:8px}
+.celebration-stats dt{font-size:9px;color:var(--secondary);line-height:1.4}
+.celebration-stats dd{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;margin:2px 0 0}
+.celebration-actions{display:flex;gap:8px;flex-wrap:wrap}
+.celebration-actions a{font-size:11px;min-height:36px;padding:8px 12px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;text-decoration:none}
+.celebration-actions a:not(.primary){border:1px solid var(--line);background:var(--paper)}
+
+@media(max-width:1000px){.curriculum-head{padding:22px}.curriculum-head h2{font-size:27px}.resource-grid{grid-template-columns:1fr}.curriculum-source{margin-left:0}.curriculum-lesson-head h2{font-size:30px}}
+@media(max-width:700px){.curriculum-head{flex-direction:column;align-items:flex-start;padding:20px}.curriculum-badge{display:none}.curriculum-module{padding:18px}.curriculum-lesson-row{align-items:flex-start;flex-wrap:wrap}.curriculum-lesson-meta{width:100%;padding-left:36px}.curriculum-lesson-head{flex-direction:column;gap:8px}.curriculum-lesson-head h2{font-size:27px}.resources-hub{padding:18px}.resources-filters{width:100%}.resources-filters label{flex:1 1 130px}.lesson-quiz-head{flex-direction:column;gap:4px}.quiz-question{padding:15px}.celebration{padding:12px;align-items:flex-start}.celebration-card{width:100%;margin-top:8px}.daily-quote{padding:18px}.daily-quote blockquote{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.confetti{display:none}.celebration-card{box-shadow:0 6px 20px #352c3220}}
+/* Puente entre la ruta importable y los nueve módulos de método que ya existían. */
+.training-method-head{display:grid;gap:4px;padding-top:14px;border-top:1px solid var(--line)}
+.training-method-head h2{font-family:var(--font-display);font-size:27px;font-weight:400;line-height:1.25}
+@media(max-width:700px){.training-method-head h2{font-size:23px}}

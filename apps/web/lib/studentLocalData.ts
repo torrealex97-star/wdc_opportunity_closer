@@ -1,7 +1,11 @@
 // Datos de la alumna que se guardan SOLO en este navegador (no en nuestro servidor). Claves fijas y sin espacio por
 // cuenta, así que en un ordenador compartido las vería la siguiente persona: se borran al cerrar sesión y al
 // «Borrar mi perfil» (el borrado del servidor no puede alcanzarlas).
-export const STUDENT_LOCAL_KEYS = ['wdc_practice_history', 'wdc_training_precall', 'wdc_training_exam', 'wdc_saved_offers'] as const;
+export const STUDENT_LOCAL_KEYS = [
+  'wdc_practice_history', 'wdc_training_precall', 'wdc_training_exam', 'wdc_saved_offers',
+  // Ruta importada, tests por lección y frase diaria: también son datos de esta alumna en este navegador.
+  'wdc_training_lessons', 'wdc_training_quizzes', 'wdc_quote_seed', 'wdc_quote_saved', 'wdc_quote_read',
+] as const;
 
 /** Quita del navegador todo lo que la alumna dejó en él. Sin almacenamiento disponible no hace nada. */
 export function clearStudentLocalData(storage: Pick<Storage, 'removeItem'> | null = typeof window === 'undefined' ? null : safeStorage()): number {

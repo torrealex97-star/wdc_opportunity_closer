@@ -1,13 +1,14 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { Copy, ExternalLink, LoaderCircle, MessageSquare, Save } from 'lucide-react';
-import { LABELS, MOVE_LABELS, NEXT, STAGES, stageOf, type AppStatus } from '../lib/applicationStages';
+import { LABELS, MOVE_LABELS, NEXT, SENT, STAGES, stageOf, type AppStatus } from '../lib/applicationStages';
 import ApplyAssistant from './ApplyAssistant';
+import Celebration, { type CelebrationProps } from './Celebration';
 
 // Tablero (pipeline) de candidaturas: todas sus ofertas en columnas por etapa real del proceso.
 // La alumna mueve la tarjeta cuando la empresa contesta (nada se detecta solo) y la app nunca envía
 // ni rellena nada. Los estados son los del servidor: aquí solo se ofrecen movimientos permitidos.
-type Application = { id: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; cover_message: string | null; notes: string | null; updated_at: string };
+type Application = { id: string; offer_title: string; offer_company: string | null; offer_url: string; status: AppStatus; cover_message: string | null; notes: string | null; updated_at: string; applied_at?: string | null };
 type CopyField = { key: string; label: string; value: string };
 type Payload = { applications: Application[]; copy: CopyField[] };
 
@@ -28,6 +29,8 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
   const [busyId, setBusyId] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [celebration, setCelebration] = useState<Omit<CelebrationProps, 'onClose'> | null>(null);
+  const closeCelebration = useCallback(() => setCelebration(null), []);
 
   const load = useCallback(() => {
     fetch('/api/student/applications', { headers: { 'Content-Type': 'application/json' }, cache: 'no-store' })
@@ -57,6 +60,23 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
         throw new Error(typeof detail.detail === 'string' ? detail.detail : 'No se pudo guardar.');
       }
       setNote(ok);
+      // La celebración se dispara al REGISTRAR una candidatura enviada, no al abrir el anuncio ni al guardar
+      // una nota. El contador sale de sus candidaturas reales; el hito es el siguiente, no una promesa.
+      if (body.status === 'applied') {
+        const already = (data?.applications ?? []).some(app => app.id === id && (SENT as readonly string[]).includes(app.status));
+        if (!already) {
+          const sent = (data?.applications ?? []).filter(app => (SENT as readonly string[]).includes(app.status)).length + 1;
+          const weekStart = Date.now() - 7 * 86_400_000;
+          const week = (data?.applications ?? []).filter(app => (SENT as readonly string[]).includes(app.status) && app.applied_at && Date.parse(app.applied_at) >= weekStart).length + 1;
+          const milestone = [1, 5, 10, 25].find(value => value === sent) ?? null;
+          const next = [1, 5, 10, 25].find(value => value > sent) ?? null;
+          setCelebration({
+            title: milestone ? `¡Hito: ${milestone} ${milestone === 1 ? 'candidatura' : 'candidaturas'}!` : 'Candidatura enviada',
+            detail: 'Has registrado una candidatura enviada. El siguiente paso no es esperar: prepara la siguiente o afila un argumento con un test corto.',
+            applications: sent, week, nextMilestone: next,
+          });
+        }
+      }
     } catch (e) { setError((e as Error).message); } finally { setBusyId(''); load(); }
   }
 
@@ -124,5 +144,6 @@ export default function StudentPipeline({ refreshKey, onLost }: { refreshKey: nu
       <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 6 }}>{data.copy.map(field => <li key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', justifyContent: 'space-between' }}>
         <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}><span className="card-meta" style={{ margin: 0 }}>{field.label}: </span>{field.value.length > 120 ? `${field.value.slice(0, 120)}…` : field.value}</span>
         <button onClick={() => void copyIt(field.value, field.label)} aria-label={`Copiar ${field.label}`}><Copy size={14} /></button></li>)}</ul></details>}
+    {celebration && <Celebration {...celebration} onClose={closeCelebration} />}
   </section>;
 }

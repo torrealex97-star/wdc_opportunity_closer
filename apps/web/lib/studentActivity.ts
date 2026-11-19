@@ -35,7 +35,10 @@ export function checkActivity(body: unknown): Checked {
   if (kind === 'training_review') {
     if (typeof ref !== 'string' || !(REVIEW_REFS as readonly string[]).includes(ref)) return { ok: false, detail: 'Módulo de formación desconocido.' };
     if (!isInt(info.met, 0, 50) || !isInt(info.total, 1, 50) || info.met > info.total) return { ok: false, detail: 'Criterios cumplidos no válidos.' };
-    return { ok: true, value: { kind, ref, score: null, detail: { met: info.met, total: info.total } } };
+    // Lección de la ruta importada: se valida como slug y se guarda para derivar el progreso por lección.
+    // El módulo (`ref`) sigue siendo el que cuenta para XP, igual que antes.
+    if (info.lesson !== undefined && (typeof info.lesson !== 'string' || !/^[a-z0-9-]{2,61}$/.test(info.lesson))) return { ok: false, detail: 'Lección de formación no válida.' };
+    return { ok: true, value: { kind, ref, score: null, detail: { met: info.met, total: info.total, ...(typeof info.lesson === 'string' ? { lesson: info.lesson } : {}) } } };
   }
   if (kind === 'training_exam') {
     if (ref !== 'final') return { ok: false, detail: 'Examen desconocido.' };
@@ -116,16 +119,18 @@ export function streaks(rows: Pick<ActivityRow, 'created_at'>[], now = new Date(
 export type Achievement = { id: string; label: string; unlocked: boolean };
 type Totals = {
   practice: { count: number; avg: number | null; best: number | null };
-  training: { modules: string[]; examBest: number | null; examPassed: boolean; examAttempts: number };
+  training: { modules: string[]; lessons: string[]; examBest: number | null; examPassed: boolean; examAttempts: number };
 };
 function totals(rows: ActivityRow[]): Totals {
   const practice = rows.filter(row => row.kind === 'practice' && typeof row.score === 'number').map(row => row.score as number);
   const exams = rows.filter(row => row.kind === 'training_exam' && typeof row.score === 'number');
   const reviewed = new Set(rows.filter(row => row.kind === 'training_review' && row.ref).map(row => row.ref as string));
+  // Progreso fino de la ruta importada: una fila por lección completada (con test superado), nunca el score del navegador.
+  const lessons = new Set(rows.filter(row => row.kind === 'training_review' && typeof row.detail.lesson === 'string').map(row => row.detail.lesson as string));
   const examBest = exams.length ? Math.max(...exams.map(row => row.score as number)) : null;
   return {
     practice: { count: practice.length, avg: practice.length ? Math.round(practice.reduce((a, b) => a + b, 0) / practice.length) : null, best: practice.length ? Math.max(...practice) : null },
-    training: { modules: REVIEW_REFS.filter(ref => reviewed.has(ref)), examBest, examPassed: examBest !== null && examBest >= EXAM_PASS, examAttempts: exams.length },
+    training: { modules: REVIEW_REFS.filter(ref => reviewed.has(ref)), lessons: [...lessons], examBest, examPassed: examBest !== null && examBest >= EXAM_PASS, examAttempts: exams.length },
   };
 }
 

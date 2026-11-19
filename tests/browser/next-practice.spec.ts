@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 const progress = {
   days: 90, sessions: 2, last_seen: '2026-11-18T09:00:00Z', truncated: false,
   practice: { count: 6, avg: 61, best: 80 },
-  training: { modules: [], examBest: null, examPassed: false, examAttempts: 0 },
+  training: { modules: [], lessons: [], examBest: null, examPassed: false, examAttempts: 0 },
   streak: { current: 0, best: 0 },
   weekly: [
     { week: '2026-11-16', avg: 61, count: 2 }, { week: '2026-11-09', avg: null, count: 0 }, { week: '2026-11-02', avg: null, count: 0 },
@@ -20,7 +20,7 @@ const progress = {
   // Hace seis días: la frase usa la fecha real de hoy, así que la prueba busca el patrón, no un número fijo.
   last_practice_at: new Date(Date.now() - 6 * 86_400_000).toISOString(),
   recent: [],
-  lifetime: { practice: { count: 6, avg: 61, best: 80 }, training: { modules: [], examBest: null, examPassed: false, examAttempts: 0 }, achievements: [] },
+  lifetime: { practice: { count: 6, avg: 61, best: 80 }, training: { modules: [], lessons: [], examBest: null, examPassed: false, examAttempts: 0 }, achievements: [] },
 };
 
 const payload = { progress, metrics: { xp: { xp: 120, level: 1, floor: 0, next: 200, parts: [] }, mastery: [], applications: null }, retention: null };

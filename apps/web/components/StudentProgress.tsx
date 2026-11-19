@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Award, Flame, LoaderCircle, RotateCw } from 'lucide-react';
 import { REVIEW_REFS } from './trainingRefs';
 import { TRAINING_MODULES } from './trainingContent';
+import { DEFAULT_CURRICULUM, TOTAL_LESSONS } from '../lib/trainingCurriculum';
 import { scenarioById } from './practiceScenarios';
 import type { Progress } from '../lib/studentActivity';
 import type { AppFunnel, Mastery, XpResult } from '../lib/studentMetrics';
@@ -132,7 +133,7 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
           <AxisGroup title="Prácticas anteriores sin sala" rows={p.axes.filter(a => a.track === null)} />
         </div>
           : <p className="card-meta">— Todavía no hay prácticas puntuadas por eje en este periodo.</p>}</article>
-      <article className="progress-card"><h2>Formación</h2><p className="card-meta">{p.lifetime.training.modules.length} de {REVIEW_REFS.length} módulos repasados (en total, no solo este periodo).</p>
+      <article className="progress-card"><h2>Formación</h2><p className="card-meta">{p.lifetime.training.modules.length} de {REVIEW_REFS.length} módulos repasados y {(p.lifetime.training.lessons?.length ?? 0)} de {TOTAL_LESSONS(DEFAULT_CURRICULUM)} lecciones de la ruta con test superado (en total, no solo este periodo).</p>
         <ul className="plain-list">{REVIEW_REFS.map(ref => { const done = p.lifetime.training.modules.includes(ref); return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Repasado' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>; })}</ul>
         <p className="card-meta"><strong>Examen de egreso:</strong> {p.lifetime.training.examBest === null ? '— sin intentar' : `mejor nota ${p.lifetime.training.examBest}/100 (${p.lifetime.training.examPassed ? 'superado' : 'no superado'}, ${p.lifetime.training.examAttempts} ${p.lifetime.training.examAttempts === 1 ? 'intento' : 'intentos'})`}. Es una señal de uso, no una certificación oficial.</p></article>
       {metrics && <article className="progress-card"><h2>Maestría por escenario</h2><p className="card-meta">{coach ? 'Su' : 'Tu'} nota media en cada práctica de la sala (de siempre, no solo este periodo). Es una estimación del modelo.</p>

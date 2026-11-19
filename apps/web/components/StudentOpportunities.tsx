@@ -7,6 +7,7 @@ import StudentPractice from './StudentPractice';
 import type { PracticeTrack } from './practiceScenarios';
 import StudentProgress from './StudentProgress';
 import StudentTraining from './StudentTraining';
+import DailyQuote from './DailyQuote';
 import { hasPay } from './offerFacts';
 import { ROLE_EVAL_ORDER, ROLE_LABELS, ROLE_OPTIONS } from '../lib/vocabulary';
 import { request } from './client';
@@ -323,6 +324,7 @@ export default function StudentOpportunities({ hosted = false }: { hosted?: bool
       <header className="topbar"><div>Women Digital Closer <ChevronRight size={14} /><strong>{saved ? 'Tus guardadas' : practice ? 'Sala de práctica' : training ? 'Formación' : progress ? 'Tu progreso' : 'Oportunidades'}</strong></div><span className="student-tag">De la formación a tu próximo trabajo</span></header>
       <main>
         {progress ? <StudentProgress /> : training ? <StudentTraining /> : practice ? <StudentPractice track={practice} onTrackChange={setPractice} /> : <>
+        {!saved && <DailyQuote />}
         <div className="page-heading"><div><span className="eyebrow">EMPRESAS QUE BUSCAN TALENTO COMERCIAL</span><h1>{saved ? 'Las que te interesan.' : 'Elige tu próxima oportunidad.'}</h1><p>{saved ? 'Vuelve a comparar sus condiciones y decide tu siguiente paso.' : 'WDC reúne oportunidades en español para que encuentres dónde quieres crecer.'}</p></div><span className="heading-icon"><Compass size={30} strokeWidth={1.2} /></span></div>
         {!saved && <div className="search-panel student-search">
           {/* Sin campo de frase: con pocas opciones reales, elegir en los desplegables es más rápido y no promete

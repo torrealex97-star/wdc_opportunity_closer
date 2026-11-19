@@ -14,19 +14,19 @@ test('el panel abre la ficha de una alumna concreta, no el agregado', async ({ p
   // La lista del panel trae el agregado; la ficha debe leer SOLO a la alumna elegida.
   const progress = (avg: number, count: number) => ({
     days: 30, sessions: 4, last_seen: new Date().toISOString(), truncated: false,
-    practice: { count, avg, best: avg }, training: { modules: [], examBest: null, examPassed: false, examAttempts: 0 },
+    practice: { count, avg, best: avg }, training: { modules: [], lessons: [], examBest: null, examPassed: false, examAttempts: 0 },
     streak: { current: 2, best: 5 },
     weekly: Array.from({ length: 6 }, (_, i) => ({ week: new Date(Date.now() - (5 - i) * 7 * 86400000).toISOString().slice(0, 10), avg: i === 5 ? avg : null, count: i === 5 ? count : 0 })),
     axes: [{ axis: 'objecion', avg }],
     recent: [{ id: 'r1', kind: 'practice', ref: 'objeciones-precio', score: avg, detail: {}, created_at: new Date().toISOString() }],
-    lifetime: { practice: { count, avg, best: avg }, training: { modules: [], examBest: null, examPassed: false, examAttempts: 0 }, achievements: [] },
+    lifetime: { practice: { count, avg, best: avg }, training: { modules: [], lessons: [], examBest: null, examPassed: false, examAttempts: 0 }, achievements: [] },
   });
   const asked: string[] = [];
   await page.route('**/api/admin/session', route => route.fulfill({ json: { configured: true, authenticated: true, email: 'owner@wdc.test', role: 'owner' } }));
   await page.route(/\/api\/admin\/students\?/, route => route.fulfill({
     json: {
       students, days: 30, activity_available: true, applications_available: true, applications_truncated: false,
-      activity: [{ student: { id: students[0].id }, summary: { sessions: 3, last_seen: null, practice: { count: 9, avg: 88 }, training: { modules: [], examBest: null, examPassed: false }, streak: { current: 1 } } }],
+      activity: [{ student: { id: students[0].id }, summary: { sessions: 3, last_seen: null, practice: { count: 9, avg: 88 }, training: { modules: [], lessons: [], examBest: null, examPassed: false }, streak: { current: 1 } } }],
       totals: { entered7: 2, active: 2, practices: 9, exams_passed: 0 }, truncated: false,
     },
   }));

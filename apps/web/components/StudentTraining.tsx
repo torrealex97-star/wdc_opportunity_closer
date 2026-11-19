@@ -13,6 +13,7 @@ import {
   YELLOW_LEADS, YELLOW_RULE,
 } from './trainingContent';
 import type { BankQuestion, TrainingId } from './trainingContent';
+import TrainingCurriculum from './TrainingCurriculum';
 import {
   EXAM_PASS, YELLOW_BLOCK, freezingFalls, gradeBank, gradeExam, moralFor, reviewCloseLine,
   reviewFreezing, reviewInterviewAnswer, reviewLogica, reviewPreCall, reviewYellows, yellowMistakes,
@@ -606,9 +607,14 @@ export default function StudentTraining() {
       <div>
         <span className="eyebrow">FORMACIÓN COMERCIAL</span>
         <h1>Aprende el método antes de improvisar.</h1>
-        <p>Nueve módulos para practicar las partes de la conversación que se pueden entrenar: antes de la llamada, la brecha, la presión, los leads difíciles, la calificación, los diez cierres, el descubrimiento, las preguntas de entrevista y el examen final.</p>
+        <p>Una ruta corta por módulos, lecciones, recursos y tests, más nueve módulos de método para practicar las partes de la conversación que se pueden entrenar: antes de la llamada, la brecha, la presión, los leads difíciles, la calificación, los diez cierres, el descubrimiento, las preguntas de entrevista y el examen final.</p>
       </div>
       <span className="training-icon"><GraduationCap size={28} strokeWidth={1.4} /></span>
+    </div>
+    <TrainingCurriculum onOpenMethod={id => setOpen(id)} />
+    <div className="training-method-head">
+      <span className="eyebrow">MÉTODO COMPLETO</span>
+      <h2>Los nueve módulos de siempre</h2>
     </div>
     <div className="training-grid">
       {TRAINING_MODULES.map(item => <article className="training-card" key={item.id}>

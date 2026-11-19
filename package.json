@@ -15,6 +15,8 @@
     "test:web": "bash tests/admin-auth/run.sh",
     "test:engine": "node --experimental-strip-types tests/engine/activate.mjs",
     "handoff": "node scripts/handoff.mjs check",
+    "training:import": "node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs scripts/training-import.mjs",
+    "training:template": "node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs scripts/training-import.mjs --template docs/templates/training",
     "vocab:audit": "node scripts/vocabulary-audit.mjs",
     "funnel:audit": "node scripts/funnel-audit.mjs",
     "withdraw:preview": "node scripts/withdraw-preview.mjs",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
-    "openapi-typescript": "7.13.0"
+    "openapi-typescript": "7.13.0",
+    "read-excel-file": "5.8.0"
   }
 }

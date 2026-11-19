@@ -63,6 +63,14 @@ test('el tablero mueve la tarjeta de columna, guarda la nota y el asistente cont
   await expect(interested.getByTestId('application')).toHaveCount(0);
   expect(state.applications[0].status).toBe('applied');
 
+  // 1b) La candidatura enviada se celebra sin tapar el resto del tablero: confeti decorativo,
+  // contador real y un cierre explícito. El primer hito es 1, no una promesa de resultados.
+  await expect(page.getByRole('heading', { name: '¡Hito: 1 candidatura!' })).toBeVisible();
+  await expect(page.locator('.confetti span')).toHaveCount(26);
+  await expect(page.getByText('Enviadas en total').locator('..')).toContainText('1');
+  await page.getByRole('button', { name: 'Cerrar la celebración' }).click();
+  await expect(page.getByRole('heading', { name: '¡Hito: 1 candidatura!' })).toHaveCount(0);
+
   // 2) Nota: se guarda en su candidatura y no toca el estado.
   await page.getByText('Notas y preguntas de la empresa').click();
   await page.getByLabel('Qué te han dicho / cuándo llamar').fill('Llamar el lunes a las 10');

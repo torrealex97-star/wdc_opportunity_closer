@@ -1,0 +1,83 @@
+id,lesson_id,type,title,description,url,content
+"res-identidad-checklist","fundamentos-identidad","checklist","Checklist de tono y marco","Cinco comprobaciones antes de marcar el número.","","1. ¿Sé por qué esta persona está en la llamada?
+2. ¿He evitado disculparme por llamar?
+3. ¿Tengo una pregunta preparada para abrir, no un discurso?
+4. ¿Sé qué haré si no encaja?
+5. ¿He reservado un minuto para apuntar lo que escuche?"
+"res-pre-llamada-guion","fundamentos-pre-llamada","script","Secuencia de seis mensajes","Guion base con huecos para adaptar al caso, sin cifras inventadas.","","1. Confirmación: «Cita confirmada, [día] a las [hora]. Tres cosas para que aproveches la llamada: 1) [razón concreta], 2) [razón concreta], 3) saldrás con tu siguiente paso. Te dejo la tarea preparatoria: [enlace].»
+2. Presentación: «Soy [nombre], la persona con la que hablarás. Me alegra que hayas dado el paso. Si tienes dudas antes, escríbeme por aquí.»
+3. Noche anterior: vídeo corto y personal: «Mañana a las [hora] nos vemos. He visto tu caso y tengo ideas concretas para [tema].»
+4. Mañana: «Te dejo un caso parecido al tuyo: [caso real o ejemplo sin cifras inventadas]. Mañana te cuento cómo lo abordamos.»
+5. Una hora antes: «Nos vemos en una hora. ¿Prefieres [enlace A] o [enlace B]? Confírmame y te lo paso.»
+6. Quince minutos antes: «Entrando a la sala: [enlace]. Si algo surgió, avísame y reprogramamos; si estás lista, nos vemos en cinco minutos.»"
+"res-pre-llamada-checklist","fundamentos-pre-llamada","checklist","Checklist de show-rate","Lo que revisa una closer antes de dar la cita por buena.","","· Cita a 24-48 horas.
+· Tres razones para asistir en el primer mensaje.
+· Presentación personal con nombre.
+· Material que responda a una objeción probable.
+· Confirmación logística con enlace.
+· Salida digna si no puede."
+"res-apertura-plantilla","fundamentos-apertura","template","Plantilla de apertura en tres frases","Rellena los huecos con lo que ya sabes de su caso.","","«[Nombre], te llamo porque [motivo concreto que ella dio o que consta en las notas]. Vi que [situación/prueba breve], así que hoy quiero entender [tema] y que salgas con [decisión o siguiente paso]. ¿Te parece si empiezo preguntándote [primera pregunta]?»"
+"res-descubrimiento-guion","descubrimiento-preguntar","script","Guion de descubrimiento en cuatro preguntas","Una secuencia corta para no disparar a ciegas.","","1. «¿Qué te hizo buscar [servicio] ahora y no hace seis meses?»
+2. «¿Dónde estás hoy con [tema] y dónde quieres estar?»
+3. «¿Qué te impide llegar ahí por tu cuenta?»
+4. «Si dentro de seis meses todo sigue igual, ¿qué habrá pasado?»
+Después: «Déjame ver si lo entiendo: [resumen con sus palabras]. ¿Es eso?»"
+"res-coste-plantilla","descubrimiento-coste","template","Plantilla de coste de inacción","Tres datos y una frase; sin cifras inventadas.","","Dato 1: ingreso actual [importe/mes].
+Dato 2: objetivo [importe/mes] en [plazo].
+Brecha mensual: [objetivo − actual].
+Coste en el plazo: [brecha × meses].
+Frase: «Tienes dos caminos. Uno: seguir como ahora. Dos: cerrar la brecha de [brecha] al mes. En [plazo], la diferencia entre los dos caminos es [coste]. Tú decides.»
+Después: silencio."
+"res-bant-checklist","descubrimiento-bant","checklist","Checklist BANT con evidencia","Cuatro letras, una cita y una decisión.","","· Presupuesto: ¿qué margen tiene? Cita: «…»
+· Autoridad: ¿decide sola? Cita: «…»
+· Necesidad: ¿qué pasa si no lo resuelve? Cita: «…»
+· Momento: ¿para cuándo? Cita: «…»
+Decisión: avanzar / parar / faltan datos. Si faltan, la siguiente pregunta es…"
+"res-objeciones-tabla","cierre-objeciones","doc","Tabla de objeciones y respuesta","Las cinco objeciones más comunes, con qué preguntar antes de rebatir.","","· «Es caro» → «¿Con qué lo estás comparando?» → reencuadre de valor.
+· «Tengo que hablarlo con mi pareja» → «¿Qué necesitas de esa conversación?» → apoyo, no permiso.
+· «Ya lo intenté y no funcionó» → «¿Qué faltó la última vez?» → no quemarse dos veces.
+· «No es el momento» → «¿Qué tendría que cambiar para que lo fuera?» → momento real.
+· «No confío en los cursos» → «¿Qué tendría que ser distinto para que confiaras?» → prueba concreta."
+"res-cierres-biblioteca","cierre-elegir","doc","Biblioteca de diez cierres","Fórmula, cuándo usarlo y un ejemplo sin importes inventados.","","1. Decadere: «El programa son [importe]. El proceso te lo envío ahora.»
+2. Closer or Further: «¿Esta conversación nos acerca a empezar o nos aleja?»
+3. Six Inches: «Estás a un paso; lo único que falta es decidir.»
+4. Support Not Permission: «No necesitas permiso, necesitas apoyo.»
+5. It's Good That It's A Lot: «Que sea mucho es buena señal: refleja el valor.»
+6. Some Now, More Later: «Puedes empezar con [parte] y sumar el resto en [plazo].»
+7. Don't Burn Twice: «No dejes que te queme dos veces; esta vez hay acompañamiento.»
+8. 1-10: «Del 1 al 10, ¿dónde estás? Si es menos de 7, no es para ti.»
+9. Nervousness: «Los nervios significan que esto te importa.»
+10. Mechanic: «Semana 1 [hito], semana 2 [hito], semana 3 [medición].»"
+"res-cierre-checklist","cierre-siguiente","checklist","Checklist del cierre","Lo que debe existir antes de colgar.","","· ¿He pedido la venta con una frase clara?
+· ¿He sostenido el silencio después del precio?
+· ¿He vuelto a pedir tras el primer no?
+· ¿Hay día y hora para el siguiente paso?
+· ¿He repetido lo acordado y quién hace qué?
+· ¿He dejado de vender después del sí?"
+"res-candidatura-checklist","aplicacion-candidatura","checklist","Checklist antes de enviar","Tres minutos que evitan una candidatura perdida.","","· El enlace del CV abre con «cualquiera con el enlace».
+· El mensaje nombra el puesto y la empresa.
+· Hay una prueba concreta, sin cifras inventadas.
+· He revisado faltas y datos de contacto.
+· He registrado la oferta en mi tablero.
+· Sé cuándo haré seguimiento."
+"res-candidatura-plantilla","aplicacion-candidatura","template","Plantilla de mensaje de candidatura","Contexto, prueba y siguiente paso; sin promesas vacías.","","Hola, equipo de [empresa]:
+
+Me interesa el puesto de [título] porque [motivo concreto del anuncio].
+
+En [situación] hice [acción] y conseguí [resultado real o aprendizaje verificable].
+
+Quedo a vuestra disposición para [siguiente paso: llamada, prueba, entrevista].
+
+Un saludo,
+[nombre]"
+"res-entrevista-guion","aplicacion-entrevista","script","Guion de respuesta con STAR","Una estructura para cualquier pregunta de experiencia.","","Situación: «En [contexto], mi trabajo era [responsabilidad].»
+Timing: «El reto era [por qué ahora / qué urgencia].»
+Autoridad: «Yo decidía [parte] y coordinaba con [quién].»
+Recursos: «Contaba con [herramientas/equipo] y [restricción].»
+Resultado: «Conseguí [resultado verificable]. Lo que haría distinto: [aprendizaje].»"
+"res-habito-plan","aplicacion-habito","template","Plan semanal de práctica y aplicación","Un mínimo realista, con espacio para el día después del no.","","Semana del [fecha]
+· Prácticas: [2] sesiones de [15] minutos. Tema: [eje flojo].
+· Recurso a preparar: [plantilla/guion].
+· Candidaturas: [3] ofertas revisadas y registradas.
+· Seguimiento: [fecha] para las enviadas.
+· Si recibo un no: anoto [motivo], ajusto [frase] y aplico a [siguiente oferta]."
