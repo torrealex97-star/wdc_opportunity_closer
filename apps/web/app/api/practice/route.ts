@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { withCookies } from '../../../lib/adminAuth';
+import { originBlocked, withCookies } from '../../../lib/adminAuth';
 import { authenticateStudent } from '../../../lib/studentAuth';
 import { loadPracticeContext, type PracticeContext } from '../../../lib/practiceContext';
 import { scenarioById } from '../../../components/practiceScenarios';
@@ -71,11 +71,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host') ?? '';
-  if (origin && origin !== `https://${host}` && origin !== `http://${host}`) {
-    return Response.json({ detail: 'Origen no permitido' }, { status: 403 });
-  }
+  // Misma puerta que el resto de rutas de escritura: mismo origen y, además, `sec-fetch-site`.
+  // La comprobación anterior solo miraba `Origin`, que un POST de otro sitio puede omitir.
+  if (originBlocked(request)) return Response.json({ detail: 'Origen no permitido' }, { status: 403 });
   let body: Body;
   try { body = await request.json() as Body; } catch { return Response.json({ detail: 'Cuerpo no válido' }, { status: 422 }); }
   // Revisión de una llamada real: misma rúbrica de `llamada`, otro punto de entrada. No usa

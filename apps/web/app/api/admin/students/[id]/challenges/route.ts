@@ -11,10 +11,10 @@ export const runtime = 'nodejs';
 // `listStudents` ya filtra por org_id, así que un id ajeno responde 404. El estado no se escribe:
 // se deriva de `student_activity` (organización + alumna + escenario + plazo + nota mínima).
 async function studentOf(id: string) {
-  const students = await listStudents();
-  if (!students) return { error: Response.json({ detail: 'No se pudo leer la lista de alumnas.' }, { status: 503 }) };
-  const student = students.find(row => row.id === id);
-  if (!student) return { error: Response.json({ detail: 'Esa alumna no está en la lista.' }, { status: 404 }) };
+  const studentPage = await listStudents();
+  if (!studentPage) return { error: Response.json({ detail: 'No se pudo leer la lista de alumnas.' }, { status: 503 }) };
+  const student = studentPage.rows.find(row => row.id === id);
+  if (!student) return { error: Response.json({ detail: studentPage.truncated ? 'La lista de alumnas es demasiado grande para abrir sus retos.' : 'Esa alumna no está en la lista.' }, { status: studentPage.truncated ? 503 : 404 }) };
   return { student };
 }
 

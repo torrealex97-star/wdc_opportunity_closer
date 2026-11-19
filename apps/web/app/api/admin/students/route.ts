@@ -22,14 +22,15 @@ const reply = (auth: { setCookies: string[] }, body: unknown, status = 200) => w
 export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request, false);
   if (error) return error;
-  const students = await listStudents();
-  if (!students) return Response.json({ detail: 'No se pudo leer la lista de alumnas.' }, { status: 503 });
+  const studentPage = await listStudents();
+  if (!studentPage) return Response.json({ detail: 'No se pudo leer la lista de alumnas.' }, { status: 503 });
+  const students = studentPage.rows;
   // La lista de acceso se sirve aunque la actividad no se pueda leer: entonces se declara `activity_available: false`
   // (sin totales, que serían ceros falsos) en vez de tumbar el panel.
   const days = periodDays(request.nextUrl.searchParams.get('days'));
   const now = new Date();
   const read = await readActivity({ sinceIso: new Date(now.getTime() - days * 86_400_000).toISOString() });
-  if (!read) return reply(auth!, { students, days, activity_available: false, activity: [], totals: null, truncated: false });
+  if (!read) return reply(auth!, { students, students_truncated: studentPage.truncated, days, activity_available: false, activity: [], totals: null, truncated: false });
   // Candidaturas por alumna (solo `user_id` y `status`). Si no se leen, `applications_available: false` y `apps: null`
   // (no ceros). La lectura va por PÁGINAS: PostgREST corta en `db-max-rows` y el recuento salía corto sin avisar.
   const appPage = await listOrgApplicationStatuses();
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
   const sevenDaysAgo = now.getTime() - 7 * 86_400_000;
   const entered7 = new Set(read.rows.filter(row => row.kind === 'session' && new Date(row.created_at).getTime() >= sevenDaysAgo).map(row => row.student_id)).size;
   const totals = { entered7, active: students.filter(student => byStudent.has(student.id)).length, practices: activity.reduce((n, a) => n + a.summary.practice.count, 0), exams_passed: activity.filter(a => a.summary.training.examPassed).length };
-  return reply(auth!, { students, days, activity_available: true, applications_available: appRows !== null, applications_truncated: appPage?.truncated ?? null, activity, totals, truncated: read.truncated });
+  return reply(auth!, { students, students_truncated: studentPage.truncated, days, activity_available: true, applications_available: appRows !== null, applications_truncated: appPage?.truncated ?? null, activity, totals, truncated: read.truncated });
 }
 export async function POST(request: NextRequest) {
   const { auth, error } = await gate(request, true);

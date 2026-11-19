@@ -19,10 +19,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const reply = (body: unknown, status = 200) => withCookies(Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } }), auth.setCookies);
   const { id } = await context.params;
   // `listStudents` ya filtra por organización: una alumna de otra empresa no se puede abrir.
-  const students = await listStudents();
-  if (!students) return reply({ detail: 'No se pudo leer la lista de alumnas.' }, 503);
-  const student = students.find(row => row.id === id);
-  if (!student) return reply({ detail: 'Esa alumna no está en la lista.' }, 404);
+  const studentPage = await listStudents();
+  if (!studentPage) return reply({ detail: 'No se pudo leer la lista de alumnas.' }, 503);
+  const student = studentPage.rows.find(row => row.id === id);
+  if (!student) return reply({ detail: studentPage.truncated ? 'La lista de alumnas es demasiado grande para abrir esta ficha; acota la lista o revisa la paginación.' : 'Esa alumna no está en la lista.' }, studentPage.truncated ? 503 : 404);
   const days = periodDays(request.nextUrl.searchParams.get('days'));
   const read = await readActivity({ studentId: student.id });
   // Sin lectura no se inventan ceros: se declara y la ficha lo dice.

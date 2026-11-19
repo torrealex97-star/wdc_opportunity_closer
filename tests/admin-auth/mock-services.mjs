@@ -131,7 +131,11 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'POST') { if (state.students.some(r => r.email === body.email)) return send(res, 409, {}); state.students.unshift({ id: crypto.randomUUID(), user_id: null, status: 'invited', created_at: new Date().toISOString(), ...body }); return send(res, 201, {}); }
       if (req.method === 'PATCH') { rows.forEach(r => Object.assign(r, body)); return send(res, 200, rows); }
       if (req.method === 'DELETE') { state.students = state.students.filter(r => !rows.includes(r)); return send(res, 204, {}); }
-      return send(res, 200, rows);
+      // PostgREST real pagina: sin `offset`/`limit` el mock devolvía la misma página siempre y
+      // `pagedRest` la leía como una lista truncada. Se ordena por la clave que pide el panel.
+      const offset = Number(q.offset) || 0, limit = Number(q.limit) || 1000;
+      const sorted = rows.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
+      return send(res, 200, sorted.slice(offset, offset + limit));
     }
     if (url.pathname === '/rest/v1/student_activity') {
       state.activity ??= []; const q = Object.fromEntries(url.searchParams);

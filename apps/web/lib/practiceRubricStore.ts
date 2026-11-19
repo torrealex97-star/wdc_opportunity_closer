@@ -82,7 +82,12 @@ export async function loadPracticeConfig(force = false): Promise<LoadedPracticeC
     return value;
   }
   if (!response.ok) {
-    const value = defaults(`La configuración guardada no se pudo leer (HTTP ${response.status}). Se usan los criterios por defecto.`);
+    // 404/400 = la tabla no existe: la migración está preparada pero no aplicada. El panel lo dice
+    // con esas palabras para que nadie confunda «sin persistencia remota» con un fallo del build.
+    const missing = response.status === 404 || response.status === 400;
+    const value = defaults(missing
+      ? 'La persistencia remota aún no está habilitada: faltan las migraciones `20261119_practice_rubrics.sql` y `20261119_practice_rubrics_versions.sql` en Supabase. Se usan los criterios por defecto y los cambios del panel no se guardarán hasta aplicarlas.'
+      : `La configuración guardada no se pudo leer (HTTP ${response.status}). Se usan los criterios por defecto.`);
     cache = { at: Date.now(), value };
     return value;
   }

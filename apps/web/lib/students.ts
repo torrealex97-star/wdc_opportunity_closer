@@ -1,5 +1,5 @@
 import { ORG, scrub } from './external';
-import { findAuthUserId, normalizeEmail, sendRecovery, serviceAuth, serviceRest } from './supabaseAuth';
+import { findAuthUserId, normalizeEmail, pagedRest, sendRecovery, serviceAuth, serviceRest, type PagedRows } from './supabaseAuth';
 import { ROLE_LABELS } from './vocabulary';
 
 // Alumnas: acceso solo por invitación (tabla `students`, igual que `admin_users` para el panel). Aquí viven la lista,
@@ -14,10 +14,13 @@ export async function studentByEmail(email: string): Promise<StudentRow | null> 
   const rows = r.ok ? await json(r) : null;
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
-export async function listStudents(): Promise<StudentRow[] | null> {
-  const r = await serviceRest(`students?org_id=eq.${ORG}&select=id,email,user_id,status,invited_by,created_at&order=created_at.desc&limit=1000`);
-  const rows = r.ok ? await json(r) : null;
-  return Array.isArray(rows) ? rows : null;
+// Por PÁGINAS: una sola petición se cortaba en `db-max-rows` sin decirlo y el panel podía dejar
+// alumnas fuera de la lista. `truncated` viaja al panel para no presentar una lista parcial como completa.
+export async function listStudents(): Promise<PagedRows<StudentRow> | null> {
+  return pagedRest<StudentRow>(
+    `students?org_id=eq.${ORG}&select=id,email,user_id,status,invited_by,created_at`,
+    'created_at.desc,id.desc',
+  );
 }
 // Primer acceso: enlaza el usuario de Auth con su fila y la activa. Nunca reactiva a una pausada.
 export async function linkStudent(s: StudentRow, userId: string): Promise<void> {

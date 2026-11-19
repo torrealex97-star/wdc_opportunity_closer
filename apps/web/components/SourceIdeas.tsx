@@ -5,6 +5,13 @@ import { IDEA_COST_LABEL, IDEA_HOW_LABEL, SOURCE_IDEAS, type IdeaFamily } from '
 // Fuentes del SOP diario que la app puede incorporar. Se muestran con lo que se sabe y lo que no:
 // las comunidades exigen sesión propia y se quedan como ritual manual, no como recogida automática.
 const FAMILIES: IdeaFamily[] = ['España', 'LatAm', 'Freelance', 'Remoto', 'Agregadores', 'Comunidades'];
+// Una URL inválida en los datos no debe tumbar todo el panel; y solo se enlaza http(s), nunca `javascript:`.
+function safeUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
+  } catch { return null; }
+}
 
 export default function SourceIdeas() {
   const open = SOURCE_IDEAS.filter(i => i.how !== 'manual').length;
@@ -25,13 +32,13 @@ export default function SourceIdeas() {
         <h4 className="eyebrow" style={{ marginBottom: 6 }}>{family}</h4>
         <div className="table-wrap"><table className="data-table">
           <thead><tr><th>Fuente</th><th>Por qué</th><th>Vía</th><th>Coste</th><th>Búsqueda</th></tr></thead>
-          <tbody>{rows.map(i => <tr key={i.url}>
-            <td className="primary-cell"><strong><a href={i.url} target="_blank" rel="noopener noreferrer">{i.name}</a></strong><span>{new URL(i.url).hostname.replace(/^www\./, '')}</span></td>
+          <tbody>{rows.map(i => { const url = safeUrl(i.url); return <tr key={i.url}>
+            <td className="primary-cell"><strong>{url ? <a href={url.href} target="_blank" rel="noopener noreferrer">{i.name}</a> : i.name}</strong><span>{url ? url.hostname.replace(/^www\./, '') : 'Enlace no válido'}</span></td>
             <td style={{ maxWidth: 380 }}>{i.why}</td>
             <td>{IDEA_HOW_LABEL[i.how]}</td>
             <td>{IDEA_COST_LABEL[i.cost]}</td>
             <td><code>{i.terms}</code></td>
-          </tr>)}</tbody></table></div>
+          </tr>; })}</tbody></table></div>
       </div>;
     })}
   </details>;

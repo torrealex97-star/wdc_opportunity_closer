@@ -27,6 +27,13 @@ type Meta = {
 type Payload = { config: Config; defaults: Config; rooms: RoomMeta[] } & Meta;
 
 const clone = (value: Config): Config => JSON.parse(JSON.stringify(value)) as Config;
+const SAVED_DATE = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const VERSION_DATE = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Una fecha corrupta en el historial no debe romper el panel entero con un RangeError.
+function formatDate(value: string, formatter = SAVED_DATE): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'fecha desconocida' : formatter.format(date);
+}
 
 export default function PracticeSettings({ onSessionLost }: { onSessionLost: () => void }) {
   const [config, setConfig] = useState<Config>({ rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT });
@@ -147,14 +154,15 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
 
   const where = meta.backend === 'local' ? 'la base local de desarrollo' : 'la base de datos';
   const saved = meta.source === 'db'
-    ? `Guardados en ${where}${meta.updated_by ? ` por ${meta.updated_by}` : ''}${meta.updated_at ? ` el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(meta.updated_at))}` : ''}.`
-    : meta.reason ?? 'Sin cambios guardados: se aplican los criterios por defecto de las skills.';
+    ? `Guardados en ${where}${meta.updated_by ? ` por ${meta.updated_by}` : ''}${meta.updated_at ? ` el ${formatDate(meta.updated_at)}` : ''}.`
+    : 'Sin cambios guardados: se aplican los criterios por defecto de las skills.';
   const backendNote = meta.backend === 'local'
     ? 'Base local de desarrollo (SQLite). En producción se usa Supabase; este aviso no aparece allí.'
     : null;
 
   return <section aria-label="Criterios de práctica">
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
+    {meta.source === 'defaults' && meta.reason && <div className="alert" role="status"><span>{meta.reason}</span></div>}
     {notice && <div className="auth-note" role="status" style={{ marginBottom: 20 }}>{notice}</div>}
 
     <div className="stat-strip">
@@ -255,7 +263,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     {meta.history.length === 0 ? <p className="card-meta">— Todavía no hay versiones: la configuración activa son los criterios por defecto de las skills.</p> : <ul className="rubric-versions">
       {[...meta.history].reverse().map(item => <li key={item.version}>
         <span className="rubric-version-id"><History size={14} /> v{item.version}</span>
-        <span>{item.note ?? 'Guardado'} · {item.by || 'operador'} · {item.at ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(item.at)) : 'sin fecha'}</span>
+        <span>{item.note ?? 'Guardado'} · {item.by || 'operador'} · {item.at ? formatDate(item.at, VERSION_DATE) : 'sin fecha'}</span>
         <button type="button" onClick={() => void restore(item.version)} disabled={saving}>Restaurar</button>
       </li>)}
     </ul>}
