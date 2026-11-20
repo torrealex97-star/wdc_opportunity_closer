@@ -1,5 +1,13 @@
 # Estado
 
+## La prueba E2E del panel deja el árbol limpio (sesión 244) — 2026-11-20
+
+- **Petición del propietario**: que la prueba E2E del panel (`tests/browser/admin-practice.spec.ts`) no modifique ficheros versionados ni comparta caché con el servidor de desarrollo, sin perder el aislamiento que necesita.
+- **Causa** (*inspected* en `next/dist/lib/typescript/writeAppTypeDeclarations.js` de Next 16.4.5): `next dev` reescribe siempre `apps/web/next-env.d.ts` y `apps/web/tsconfig.json` en el directorio del proyecto, con los tipos apuntando a su `distDir`; no hay ajuste de Next que cambie ese destino. Como la prueba usa un `distDir` propio (para no compartir caché con el `next dev` del operador), el contenido cambiaba y el repo quedaba sucio hasta revertirlo a mano.
+- **Cambio** (*tested*): la prueba guarda los bytes de ambos ficheros antes de arrancar y los restaura tal cual en `afterAll`, también cuando un paso falla, y en el `exit` de Node si el flujo no llega a `afterAll`. El aislamiento se mantiene: `distDir` propio por ejecución (`.next-e2e-<pid>-<ts>`, ya en `.gitignore`, borrado al terminar) y la base SQLite en un directorio temporal.
+- **Probado** (*tested*): `npx playwright test tests/browser/admin-practice.spec.ts` **1/1** y, sin ninguna intervención manual, `git status` queda sin `next-env.d.ts` ni `tsconfig.json` (solo el propio cambio de la prueba); no quedan directorios `.next-e2e*`; `npm run typecheck` exit 0 con los ficheros ya restaurados.
+- **Límites honestos**: (1) si el proceso se mata con SIGKILL no hay restauración posible. (2) No se probó con el `next dev` del operador y la prueba escribiendo a la vez en el mismo `apps/web` más allá de compartir directorio (sus cachés son distintas). (3) Sin push: producción aún no incluye esto.
+
 ## Historial de cambios de los criterios de práctica (sesión 243) — 2026-11-20
 
 - **Petición del propietario**: añadir al panel de criterios un historial de cambios (quién, cuándo y qué pesos o guías se modificaron) para auditar los ajustes sin recalcular las prácticas ya puntuadas.

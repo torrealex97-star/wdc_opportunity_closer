@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -57,7 +57,23 @@ let dataDir = '';
 let distDir = '';
 let log = '';
 
+// `next dev` reescribe `apps/web/next-env.d.ts` y `apps/web/tsconfig.json` en cada arranque para apuntar
+// los tipos a su distDir, y no hay ajuste de Next que lo redirija: siempre se escriben en el directorio del
+// proyecto. Con un distDir propio (para no compartir caché con el `next dev` del operador) el contenido
+// cambia y el repo queda sucio. La prueba guarda los bytes originales antes de arrancar y los devuelve
+// tal cual al terminar, también si algún paso falla. El distDir `.next-e2e*` ya está en .gitignore.
+const PROJECT_FILES = ['next-env.d.ts', 'tsconfig.json'].map(name => path.join(process.cwd(), 'apps/web', name));
+const originalProjectFiles = new Map<string, Buffer>();
+function restoreProjectFiles() {
+  for (const [file, contents] of originalProjectFiles) {
+    try { if (!readFileSync(file).equals(contents)) writeFileSync(file, contents); } catch { /* el arranque del servidor no llegó a escribir */ }
+  }
+}
+
 test.beforeAll(async () => {
+  for (const file of PROJECT_FILES) originalProjectFiles.set(file, readFileSync(file));
+  // Si el proceso muere sin pasar por afterAll, se restaura igualmente en la salida normal de Node.
+  process.once('exit', restoreProjectFiles);
   dataDir = mkdtempSync(path.join(tmpdir(), 'wdc-practice-'));
   // Caché de Turbopack propia por ejecución: reutilizar `.next-e2e` tras matar un servidor deja el
   // directorio de persistencia a medias y el siguiente arranque falla.
@@ -116,6 +132,8 @@ test.afterAll(async () => {
   if (next?.pid) { try { process.kill(-next.pid, 'SIGTERM'); } catch { /* ya cerrado */ } }
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
   await sleep(500);
+  // Antes de borrar el distDir: el servidor ya no corre y los ficheros vuelven a su contenido versionado.
+  restoreProjectFiles();
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   // El caché de Turbopack puede seguir escribiendo al recibir SIGTERM; no es parte del resultado.
   try { if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true }); } catch { /* caché de prueba */ }
