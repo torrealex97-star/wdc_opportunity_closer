@@ -692,6 +692,39 @@
   "upstream_filters": []
  },
  {
+  "code": "occ-mundial",
+  "name": "OCC Mundial",
+  "category": "LATAM",
+  "website": "https://www.occ.com.mx",
+  "acquisition_method": "Adaptador específico pendiente",
+  "validation_status": "Sin proveedor verificado",
+  "requires": "input",
+  "note": "Su API interna responde 403 «abuse» desde fuera del navegador (medido 2026-11-20): sin feed público; se conecta con un Actor de Apify opt-in.",
+  "upstream_filters": []
+ },
+ {
+  "code": "chiletrabajos",
+  "name": "Chiletrabajos",
+  "category": "LATAM",
+  "website": "https://www.chiletrabajos.cl",
+  "acquisition_method": "Adaptador específico pendiente",
+  "validation_status": "Sin proveedor verificado",
+  "requires": "input",
+  "note": "Su /rss/ redirige a la portada (200 HTML, sin feed) el 2026-11-20: requiere Actor de Apify o acceso autorizado.",
+  "upstream_filters": []
+ },
+ {
+  "code": "portal-empleo-mx",
+  "name": "Portal del Empleo (México)",
+  "category": "LATAM",
+  "website": "https://www.empleo.gob.mx",
+  "acquisition_method": "Adaptador específico pendiente",
+  "validation_status": "Sin proveedor verificado",
+  "requires": "input",
+  "note": "Servicio público mexicano; su API responde 403 «Acceso no autorizado» a un cliente sin registro (medido 2026-11-20). Vía Apify opt-in o acuerdo de uso.",
+  "upstream_filters": []
+ },
+ {
   "code": "openradar",
   "name": "openradar",
   "category": "Internacional",
@@ -727,5 +760,33 @@
   "requires": "none",
   "note": "Tablero ATS público de la empresa, según la watchlist. La oferta se publica primero aquí; el enlace y la atribución son de la empresa.",
   "upstream_filters": []
+ },
+ {
+  "code": "workable",
+  "name": "Workable",
+  "category": "Internacional",
+  "website": "https://jobs.workable.com",
+  "acquisition_method": "API pública de búsqueda global",
+  "validation_status": "Conector operativo",
+  "requires": "none",
+  "note": "Bolsa pública del ATS, sin clave ni cuenta: `query` busca por término y `location` acota por país. Medido el 2026-11-20: «closer» 4 ofertas en España (una, «Account Executive - High Ticket Closer»), 16 en México, 11 en Colombia y 11 en Argentina; «comercial» 14 en España. No se paga por resultado.",
+  "upstream_filters": [
+   "Búsqueda por término",
+   "País"
+  ]
+ },
+ {
+  "code": "smartrecruiters",
+  "name": "SmartRecruiters · búsqueda global",
+  "category": "Internacional",
+  "website": "https://jobs.smartrecruiters.com",
+  "acquisition_method": "Búsqueda pública + detalle por oferta",
+  "validation_status": "Conector operativo",
+  "requires": "none",
+  "note": "Búsqueda global de su bolsa pública sin clave: `keyword` filtra y `location`/`country` no, así que el mercado lo decide la ubicación de cada oferta. Medido el 2026-11-20: «comercial» 221 resultados, con 34 de España (METRO/MAKRO, Bosch Group), 13 de Colombia, 12 de México y 4 de Chile entre los 100 primeros. El listado no trae descripción: se pide el detalle público de hasta 4 ofertas del perfil por pasada.",
+  "upstream_filters": [
+   "Búsqueda por término",
+   "País de la oferta (local)"
+  ]
  }
 ]

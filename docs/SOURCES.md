@@ -1,6 +1,6 @@
 # Fuentes y búsquedas para WDC
 
-Actualizado: 2026-11-18. Los recuentos de esta cabecera y de la sección «Estado real» están **medidos** contra el código (`sites/engine/worker.js`, `apps/web/lib/sourceCatalog.json`) y contra los servicios; los recuentos de las secciones antiguas (33, 38, «quince conectores») se conservan como contexto histórico y **no son el estado actual**. La revisión de métodos, filtros y 51 referencias del Excel sigue en [SOURCE_ACQUISITION](SOURCE_ACQUISITION.md). Integración local, independiente de Scalix.
+Actualizado: 2026-11-20. Los recuentos de esta cabecera y de la sección «Estado real» están **medidos** contra el código (`sites/engine/worker.js`, `apps/web/lib/sourceCatalog.json`) y contra los servicios; los recuentos de las secciones antiguas (33, 38, «quince conectores») se conservan como contexto histórico y **no son el estado actual**. La revisión de métodos, filtros y 51 referencias del Excel sigue en [SOURCE_ACQUISITION](SOURCE_ACQUISITION.md). Integración local, independiente de Scalix.
 
 ## Qué catálogo manda
 
@@ -11,19 +11,21 @@ Hay dos listas y no son la misma cosa:
 - **`apps/web/lib/sourceCatalog.json` es el export, no una fuente**: no se edita a mano. Cualquier hecho nuevo se escribe en `sources.py` si es del backend local, o en las tablas del export si es del cloud, y se regenera con `PYTHONPATH=apps/api python scripts/export_source_catalog.py`.
 - La prueba [`tests/test_source_catalog_export.py`](../tests/test_source_catalog_export.py) falla si el JSON deja de coincidir con su generador, si vuelve un tablero retirado o si una fuente que el cloud recoge se queda en «pendiente».
 
-## Estado real — medido el 2026-11-18
+## Estado real — medido el 2026-11-20
 
-- **Catálogo del panel: 64 entradas.** De ellas, **36** están marcadas `requires: input` («Requiere configurar») y **28** no piden configuración (26 recogidas y 2 libres sin conector).
-- **Motor cloud: 37 conectores** (`SOURCES`). Una pasada completa declara **112 subrequests de fetch** (tope 1.000 con Workers de pago; 50 en el plan gratuito, donde el planificador aplaza fuentes en vez de romper). El salto desde 79 es el plan B de FreeHire: tres páginas de datos por término cuando su API responde 429.
-- **26 entradas del catálogo tienen recogida ahora.** Las 37 fuentes del motor se agrupan por portal, así que las cifras no coinciden: JobToday son 13 conectores y FreeHire 4; el panel los suma en una fila.
+- **Catálogo del panel: 69 entradas.** De ellas, **39** están marcadas `requires: input` («Requiere configurar») y **30** no piden configuración (28 recogidas y 2 libres sin conector).
+- **Motor cloud: 40 conectores** (`SOURCES`). Una pasada completa declara **126 subrequests de fetch** (tope 1.000 con Workers de pago; 50 en el plan gratuito, donde el planificador aplaza fuentes en vez de romper). El salto desde 79 es el plan B de FreeHire: tres páginas de datos por término cuando su API responde 429; los últimos son Workable (2 conectores × 2 términos × 2 intentos) y SmartRecruiters (búsqueda con un reintento + 4 detalles sin reintento). El coste declarado cuenta los reintentos de `fetchText`: un 429/503 puede pedir la misma URL dos veces.
+- **28 entradas del catálogo tienen recogida ahora.** Las 40 fuentes del motor se agrupan por portal, así que las cifras no coinciden: JobToday son 13 conectores, FreeHire 4 y Workable 2; el panel los suma en una fila.
 - **Sin duplicados engañosos**: el motor cloud emite `getonbrd` y el panel lo cruza con `getonbrd-public` (`ALIAS` de [sourceFamilies.ts](../apps/web/lib/sourceFamilies.ts)). El catálogo lista **`getonbrd-public`, una sola vez**: el export renombra la fila del backend local en vez de añadir una segunda. `freelancer` y `jobgether` se recogían mientras su ficha decía «Adaptador pendiente / Sin proveedor verificado»: ahora dicen «Conector operativo», y eso se declara en el export (2026-11-18). Un test (`tests/engine/catalog.mjs`) falla si vuelve a haber dos entradas para el mismo portal.
 - **2 entradas gratuitas sin conector hoy**: dos feeds muertos, Remote.jobs (301) y Remote First Jobs (404).
 - **Cinco tableros ATS retirados el 2026-11-13** por cero elegibles en dos mediciones independientes: Holded · Recruitee, Monest Capital · Teamtailor, Typeform · Greenhouse, Wallapop · Greenhouse y Livestorm · Recruitee (23 ofertas entre los cinco, ninguna publicable nunca). Responden 200 y cuestan una petición, así que volver a conectarlos es re-añadir su fila; el criterio de retirada está en STATUS (sesión 172).
 
-### Gratis y conectadas (37 conectores, coste cero)
+### Gratis y conectadas (39 conectores, coste cero)
 
 | Portal | Conectores | Cómo se lee | Coste por pasada |
 |---|---|---|---|
+| Workable (España · LATAM) | 2 | API pública de su bolsa (`jobs.workable.com/api/v1/jobs`): `query` por término y `location` por país, sin clave. Dos términos por conector y país por país (México, Colombia, Argentina) | 4 + 4 |
+| SmartRecruiters (global) | 1 | Búsqueda pública (`jobs.smartrecruiters.com/sr-jobs/search`): `keyword` filtra y `location` no, así que el mercado lo decide la ubicación. El detalle público de cada oferta trae el cuerpo | 2 + 4 |
 | JobToday (ES) | 13 | `__NEXT_DATA__` de `/es/trabajos-<slug>`: 7 búsquedas nacionales, 2 barridos por ciudad y 4 slugs reintroducidos el 2026-11-12 (telemarketing, ventas-remoto, ventas, comercial) | 11 + rutas de ciudad |
 | FreeHire (ES/LATAM/global) | 4 | API v1 pública (`/api/v1/jobs/search`) y, si esa responde 429, la ruta de datos de su web (`/jobs/__data.json`, formato `devalue`): el límite es **por IP**, no por clave | 14/6/26/22 (declara reintentos y tres páginas de plan B) |
 | Himalayas | 1 | consultas por alias (`q`) | 1 |
@@ -190,8 +192,126 @@ Solo entra como conector coste cero lo verificado en vivo con datos reales. Todo
 
 ## Expansión documental US — 2026-09-22
 
-La nueva investigación añade 17 fichas priorizadas en [18_US_HISPANIC_SOURCE_RESEARCH](spec/18_US_HISPANIC_SOURCE_RESEARCH.md). El catálogo ejecutable seguía con 33 entradas y seis conectores públicos **cuando se escribió esta sección (2026-09-22)**; los recuentos vigentes están en «Estado real — medido el 2026-11-18» (37 conectores, 64 entradas). Esta entrega no cambió los recuentos de entonces ni activó scrapers.
+La nueva investigación añade 17 fichas priorizadas en [18_US_HISPANIC_SOURCE_RESEARCH](spec/18_US_HISPANIC_SOURCE_RESEARCH.md). El catálogo ejecutable seguía con 33 entradas y seis conectores públicos **cuando se escribió esta sección (2026-09-22)**; los recuentos vigentes están en «Estado real — medido el 2026-11-20» (39 conectores, 68 entradas). Esta entrega no cambió los recuentos de entonces ni activó scrapers.
 
 Prioridad: ATS por empresa (Greenhouse/Lever/Ashby), recruiters LATAM→US (Remote Latinos/HireLATAM/Near), boards hispanos (Hispanic-Jobs/iHispano/DiversityJobs) y fuentes remotas/ventas/comunidades. Acceso y bloqueos documentados por ficha; sin Actors nuevos declarados operativos.
 
 Buscar ES/EN separando US como mercado de clientes de residencia permitida. Español requerido/preferido, inglés, oficina híbrida y autorización laboral son criterios independientes. Admin conserva source/provider/raw; alumna recibe proyección centrada en empresa y condiciones con atribución necesaria.
+
+## Triaje del listado de portales del operador — 2026-11-20
+
+El operador pasó un listado de unos 250 portales (ATS por empresa, bolsas nacionales y servicios públicos de empleo)
+con dos instrucciones: añadir los que tengan **API pública gratuita** y llevar a un proveedor (Apify u otro) lo que
+no la tenga y no sea difícil de conectar. Todo lo que sigue se sondeó **en vivo hoy** (HTTP desde el equipo del
+propietario, `curl` con User-Agent de navegador); ninguna fuente entra por aparecer en la lista.
+
+### Añadido hoy — gratis, sin clave
+
+**Workable** (`workable-es`, `workable-latam`; una sola ficha en el catálogo). Su API de búsqueda global responde
+200 sin clave ni cuenta y devuelve ofertas reales de sus empresas cliente, con empresa, ciudad/país, modalidad
+estructurada (`workplace`), fecha y cuerpo completo:
+
+| Búsqueda medida | Resultado |
+|---|---|
+| `closer` en España | 4 ofertas, las 4 de España; entre ellas «Account Executive - High Ticket Closer» (Huzzle) |
+| `comercial` en España | 14 ofertas (Teleperformance Spain, EALDE Business School…) |
+| `closer` en México / Colombia / Argentina / Chile | 16 / 11 / 11 / 1 |
+| `closer` con «Latin America» | **no filtra**: 12 de las 20 primeras eran de EE. UU. → se pide país por país |
+
+No trae salario estructurado (no se inventa) y cuesta 0 por resultado: 2 `fetch` por conector y pasada, 4 en total.
+
+### Añadido también — SmartRecruiters (búsqueda global, sin clave)
+
+**SmartRecruiters** (`smartrecruiters`). Su buscador público responde JSON sin clave, con una trampa medida:
+`keyword` **sí** filtra (un término inexistente devuelve 0) y `location`/`country` **no** (mismo `totalFound`
+con y sin `location=es`). Los términos en español traen solos el mercado:
+
+| Búsqueda medida | Resultado |
+|---|---|
+| `closer` | 504 resultados, casi todos de EE. UU. y Australia |
+| `comercial` | 221 resultados: 34 de España (METRO/MAKRO, Bosch Group), 13 de Colombia, 12 de México, 11 de Brasil, 7 de Portugal y 4 de Chile entre los 100 primeros |
+
+El listado no trae descripción y sin cuerpo el gate de idioma no publica nada, así que se pide el detalle
+público (`api.smartrecruiters.com/v1/companies/<empresa>/postings/<id>`, también sin clave) de hasta 4 ofertas
+del perfil por pasada, priorizando los mercados que el motor ya reconoce (`LATAM_COUNTRIES` + España; sin
+lista paralela). Coste declarado: 6 `fetch` (búsqueda con un reintento + 4 detalles sin reintento). Lo que no
+cabe (`detalle_fuera_de_presupuesto`) o falla (`sin_detalle`) se cuenta, no se ingiere vacío.
+
+**Verificado en workerd con D1 local** (2026-11-20, `wrangler dev --local --persist-to` fresco, techo de pago):
+una pasada completa de 40 fuentes en 56 s; `workable-es` aceptó 5 (Teleperformance Spain, Workana «Appointment
+Setter»), `workable-latam` 4 (Pavago, The Law Collective «Sales Closer / Intake Specialist») y `smartrecruiters` 2
+con cuerpo real; en D1 se comprobó que descripción, ubicación («Spain · remoto», «Mexico City, Mexico»), fecha y
+`salary: null` llegan al payload. `/api/status` publica `fetch_cost: 126`.
+
+### Ya estaba conectado — no se duplica
+
+Greenhouse y Ashby (Fever, Qonto, Stripe, Pennylane, Cabify) y Teamtailor (ProductHackers) ya se leen en el motor, y
+Recruitee tiene extractor propio desde antes. Las entradas de ATS del listado son **tableros por empresa**, no
+portales con inventario global.
+
+### ATS por empresa: el listado no se puede «añadir entero»
+
+De las ~90 entradas de ATS del listado (BambooHR, Personio, SmartRecruiters, iCIMS, Taleo, SAP SuccessFactors,
+Oracle HCM, Dayforce, UKG, Paylocity, Jobvite, JazzHR, Breezy, Comeet, Loxo, Manatal, Vincere, JobAdder, Rexx,
+softgarden, d.vinci, onlyfy, Talention, TalentLyft, Tribepad, Eploy, networx, Jobtrain, Jobylon, Pinpoint…)
+**ninguna expone inventario global**: cada API pública vive en el subdominio de su cliente y exige un slug
+verificado. Conectar «el ATS» no existe; se conecta una empresa. Lo que se añade es la **capacidad** (los
+extractores de Greenhouse, Ashby, Teamtailor, Recruitee y Workable), y cada empresa nueva exige su slug comprobado
+con ofertas comerciales. Sondeos de hoy sin tablero verificable: BambooHR (`lodgify.bamboohr.com/careers/list` →
+302), Personio (`sennder.jobs.personio.de/xml` → 404), softgarden (`jobs.softgarden.io/jobs.json` → 404), Breezy
+(`chispafy.breezy.hr/json` → 404) y SmartRecruiters (API 200 pero 0 postings para el tenant probado).
+
+### Sin API ni feed utilizable — ruta Apify opt-in
+
+Añadidas al catálogo con su bloqueo medido (no como conectores):
+
+| Portal | Medición de hoy | Ficha |
+|---|---|---|
+| OCC Mundial (MX) | su API interna responde **403 «abuse»** | `occ-mundial` |
+| Chiletrabajos (CL) | `/rss/` redirige a la portada: 200 HTML, sin feed | `chiletrabajos` |
+| Portal del Empleo (MX) | **403 «Acceso no autorizado»** | `portal-empleo-mx` |
+
+No se declara ningún Actor concreto para ellas: el panel abre la tienda de Apify con la búsqueda del portal y la
+app valida ficha, esquema y resultado al lanzar. Nunca se inventa un Actor ID. Otras del listado ya tenían ficha:
+Computrabajo, InfoJobs, Torre, Bumerán/Laborum, Welcome to the Jungle, Tecnoempleo, ClosersAvenue, LinkedIn, Indeed.
+
+### Descartadas con evidencia (o por mercado)
+
+| Fuente | Medición de hoy | Por qué no entra |
+|---|---|---|
+| EURES | **403** de su capa anti-bot | ya constaba como sin endpoint público estable |
+| Torre | `search.torre.co` **404**, `torre.ai/api/...` **404** | sin API pública; su ficha Apify ya existe |
+| Just Join IT | `/api/offers` **404** | sin API pública; mercado polaco |
+| HeadHunter (HH) | `api.hh.ru` **403** sin clave | requiere registro; mercado ruso |
+| JobTech Dev (Platsbanken, SE) | **200** y sin clave | mercado sueco: no aporta closers en español |
+| NAV Arbeidsplassen (NO) | endpoint público **404** hoy | mercado noruego |
+| MyCareersFuture (SG) | **200** y sin clave | mercado de Singapur, fuera del alcance WDC |
+| Bolsa Nacional de Empleo (CL) | **404** | sin API pública |
+| HelloWork | **404** en la ruta probada | sin ruta pública verificada |
+| Bumerán | **403** | ya cubierta por Actor opt-in |
+| Holded · Recruitee | **200**, 8 ofertas, solo un «Sales Data Analyst» | cero closers: seguiría dando 0 elegibles |
+
+El resto del listado (CareerBuilder, Built In, Dice, SEEK, Reed, StepStone, Catho, Naukri, apna, JobKorea,
+Saramin, Liepin, doda, ChinaHR, eFinancialCareers, GulfTalent, USAJOBS, Job Bank, NHS Jobs, VDAB, werk.nl,
+France Travail, Arbeitsagentur…) **no se sondeó hoy** y no se declara nada sobre ellas: varias son de pago, de
+afiliación o de mercados sin closers en español, y las que lo sean tendrían que entrar por la misma regla
+—verificación en vivo con datos reales y coste declarado—, no por aparecer en una lista.
+
+### Crawlers de código abierto y planes gratuitos: qué se reutiliza y qué no
+
+Revisado el listado de resultados que pasó el operador (GitHub topics `job-crawler`, Scrapfly, WebScrapingAPI,
+Kitsuno, jobspipe, CleanJobData, ZenRows, ScrapingBee, SocialCrawl, JobDataFeeds/Techmap):
+
+| Fuente | Qué es | Decisión |
+|---|---|---|
+| **JobSpy** (MIT) | Librería de scraping de Indeed/LinkedIn/Glassdoor/Google Jobs | **Ya reutilizada**: el repo la ejecuta en GitHub Actions con un commit fijado (ver [EXTERNAL_SOURCES](EXTERNAL_SOURCES.md) §2) |
+| **kitsuno-ai/agentic-job-search-eu** (MIT; datos CC-BY-SA) | Directorio YAML de 54 fuentes europeas con límites y rendimiento medidos | **No es código que copiar**: se usa como referencia. Su cobertura de España es adzuna, arbeitnow y tecnoempleo — las dos primeras ya están y la tercera responde 404 |
+| Repos `job-crawler` de GitHub | Scrapers sueltos, muchos GPL/AGPL o sin licencia | **No se copian**: la licencia no es compatible con este repositorio y casi todos exigen proxies de pago. Se conectan sus endpoints públicos cuando existen (es lo que se hizo con Workable y SmartRecruiters) |
+| **Apify** (plan gratuito con crédito mensual) | Actores alojados | Ya integrado como vía opt-in con tope de gasto; ninguna receta se declara operativa sin medirla |
+| **Scrappa · InfoJobs** (500 créditos gratis/mes, sin tarjeta) | JSON estructurado de InfoJobs | **No implementado**: requiere clave y no hay ninguna con la que probar. Queda como ruta a evaluar; la API oficial de InfoJobs exige acuerdo de agregador |
+| **ZenRows / ScrapingBee** (créditos gratis) | Proxies que devuelven HTML | **No implementado**: se paga por URL y devuelven HTML; habría que escribir un extractor por portal y no se puede probar sin clave |
+| **okemprego** (API gratis sin clave) | Portugal, Brasil y Angola | Descartada: su inventario es en portugués y el gate lo rechaza por diseño |
+| **CleanJobData, TheirStack, JobsPipe, Techmap, Fantastic.jobs** | APIs comerciales con prueba gratuita | Sin clave no se pueden verificar; no se implementa nada |
+
+Criterio: de un crawler ajeno se reutiliza lo que tiene licencia compatible (JobSpy) o su API pública; no se
+copian scrapers con licencia incompatible ni se escribe un conector que no se pueda probar con datos reales.

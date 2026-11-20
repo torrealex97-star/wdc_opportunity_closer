@@ -107,9 +107,20 @@ async function freehireGate() {
   freehireGatedAt = Date.now() + FREEHIRE_GLOBAL_SPACING_MS;
 }
 
+// Presupuesto de detalles de SmartRecruiters (`detailBudget`): una sola definición para el extractor y
+// para `fetchCost`. Si divergen, el planificador reserva peticiones que no existen o se queda corto y la
+// invocación muere con «Too many subrequests».
+function srDetailBudget(source) { return Math.max(0, Math.min(Number(source?.detailBudget ?? 4), 10)); }
+
 function fetchCost(source) {
   if (source.kind === 'jobtoday-cities') return (source.paths || []).length;
   if (source.kind === 'getonbrd') return 2;
+  // Reintentos declarados: `fetchText(…, { retry: 1 })` puede pedir DOS veces la misma URL (429/503).
+  // Workable reintenta cada búsqueda; SmartRecruiters reintenta la búsqueda y NO los detalles (un detalle
+  // caído se cuenta y la oferta se omite: reintentarlo costaría más que perderla en esta pasada, y el
+  // planificador ya reanuda la fuente en la siguiente).
+  if (source.kind === 'workable') return (source.termsPerRun || 2) * 2;
+  if (source.kind === 'smartrecruiters') return 2 + srDetailBudget(source);
   if (source.kind === 'freehire') {
     const searches = source.terms ? (source.termsPerRun || 3) : (source.region === 'latam' ? 1 : 3);
     // +FREEHIRE_DATA_PAGES por término: las páginas de datos que se piden si la API responde 429 (el
@@ -337,6 +348,21 @@ const SOURCES = [
   // openradar.fun (2026-11-18): sin clave, OpenAPI 3.1, vacantes y encargos de boards/RSS/Telegram con
   // el texto completo. 3 términos por pasada (rotan por día): es búsqueda por texto, 1 petición por término.
   { code: 'openradar', name: 'openradar', kind: 'openradar', terms: true, termsPerRun: 3 },
+  // Workable (2026-11-20): la bolsa pública de su ATS, con búsqueda global por término y país y **sin
+  // clave**. Medición en vivo de ese día: «closer» 4 ofertas en España (entre ellas «Account Executive
+  // - High Ticket Closer» de Huzzle), «comercial» 14 (Teleperformance Spain, EALDE Business School);
+  // México 16, Colombia 11, Argentina 11, Chile 1 y Portugal 4. Dos términos por pasada y conector, cada
+  // uno con un reintento posible (429/503): 4 fetches declarados por conector y 8 en total. El
+  // planificador aplaza lo que no cabe, declarándolo.
+  { code: 'workable-es', name: 'Workable · España', kind: 'workable', locations: ['Spain'], terms: true, termsPerRun: 2 },
+  { code: 'workable-latam', name: 'Workable · LATAM', kind: 'workable', locations: ['Mexico', 'Colombia', 'Argentina'], terms: true, termsPerRun: 2 },
+  // SmartRecruiters (2026-11-20): búsqueda global de su bolsa pública, **sin clave** y con volumen de
+  // verdad en español: «comercial» da 221 resultados y 34 de las 100 primeras son de España (METRO/MAKRO,
+  // Bosch Group), más Colombia, México, Chile y Brasil. `location`/`country` no filtran, así que el
+  // mercado lo decide la ubicación de cada oferta. El listado no trae descripción: se pide el detalle
+  // público de hasta 4 ofertas del perfil por pasada (coste declarado 6: búsqueda con un reintento +
+  // 4 detalles sin reintento).
+  { code: 'smartrecruiters', name: 'SmartRecruiters · búsqueda global', kind: 'smartrecruiters', terms: true, termsPerRun: 1, detailBudget: 4 },
   { code: 'workingnomads', name: 'Working Nomads', kind: 'workingnomads' },
   { code: 'jobspresso', name: 'Jobspresso', kind: 'jobspresso', slug: 'https://jobspresso.co/feed/?post_type=job_listing' },
   // ATS al final: el budget de subrequests por invocación (~20 fetches medidos
@@ -1016,6 +1042,127 @@ async function sourceOpenradar(source = {}) {
   return all.slice(0, MAX_ITEMS_PER_SOURCE);
 }
 
+// Workable (2026-11-20): la bolsa pública de su ATS, con búsqueda GLOBAL y sin clave ni cuenta.
+// `query` busca en título y texto; `location` acota por país (verificado en vivo el 2026-11-20:
+// «closer» devuelve 4 ofertas y las 4 son de España; México 16/16, Colombia 11/11, Argentina 11/11).
+// «Latin America» NO se aplica como filtro —devolvía 12 de 20 de EE. UU.—, así que este conector pide
+// PAÍSES por su nombre y empareja cada término con uno, con desfase por día para que el mismo término
+// no caiga siempre en el mismo país. La búsqueda no devuelve salario estructurado: `salary` va a null
+// y lo que diga el texto se lee del cuerpo, nunca se inventa.
+async function sourceWorkable(source = {}) {
+  // `locations` es configuración obligatoria: «Latin America» NO filtra (medido), así que cada país va
+  // por su nombre. El desfase por día evita que, con 2 términos y 3 países, uno no se pida nunca.
+  const locations = source.locations ?? [];
+  if (!locations.length) throw new Error('workable sin países configurados');
+  const terms = pickTerms(source.termsPerRun || 2);
+  const shift = Math.floor(Date.now() / 86400000) % locations.length;
+  const seen = new Set(); const all = []; const errors = [];
+  for (let i = 0; i < terms.length; i++) {
+    const term = terms[i];
+    const country = locations[(i + shift) % locations.length];
+    try {
+      const data = JSON.parse(await fetchText(
+        `https://jobs.workable.com/api/v1/jobs?query=${encodeURIComponent(term)}&location=${encodeURIComponent(country)}`,
+        20000, { retry: 1 }));
+      for (const j of (data.jobs || [])) {
+        if (!j?.title) continue;
+        if (!j.url) { countFiltered(source.code, 'sin_url'); continue; }
+        const external = String(j.id ?? j.url);
+        if (seen.has(external)) continue;
+        seen.add(external);
+        const loc = j.location ?? {};
+        const created = j.created ? Date.parse(j.created) : NaN;
+        const payload = {
+          title: j.title,
+          company: j.company?.title ?? null,
+          // `workplace` es un campo estructurado de la fuente («remote»/«hybrid»/«onsite»): se declara
+          // como texto para que la modalidad se lea de la fuente en vez de suponerse.
+          location: [[loc.city, loc.countryName].filter(Boolean).join(', ') || null,
+            j.workplace === 'remote' ? 'remoto' : null].filter(Boolean).join(' · ') || null,
+          url: j.url,
+          salary: null,
+          posted_at: Number.isFinite(created) ? new Date(created).toISOString() : null,
+          // El cuerpo viaja en `description` y el extractor no lo toca: `descriptionOf` ya lo lee de raw.
+          raw: { ...j, search_term: term, search_location: country },
+        };
+        const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
+        all.push({ external_id: external, payload });
+      }
+    } catch (error) { errors.push(`${term}@${country}: ${String(error.message || error).slice(0, 80)}`); }
+  }
+  if (errors.length && !all.length) throw new Error(`ningún término respondió (${errors[0]})`);
+  return all.slice(0, MAX_ITEMS_PER_SOURCE);
+}
+
+// SmartRecruiters (2026-11-20): búsqueda GLOBAL de su bolsa pública, sin clave ni cuenta.
+// `keyword` sí filtra (un término inexistente devuelve 0) pero `location`/`country` NO: `comercial` da
+// 221 resultados con y sin `location=es`, con 34 de España, 13 de Colombia, 12 de México, 11 de Brasil,
+// 7 de Portugal y 4 de Chile entre las 100 primeras. El mercado se decide después con la ubicación de
+// cada oferta; los términos en español traen solos España y LATAM.
+// El listado NO trae descripción y el gate de idioma la necesita, así que se enriquece con el detalle
+// público de la oferta (`api.smartrecruiters.com/v1/companies/<empresa>/postings/<id>`, también sin
+// clave), con presupuesto acotado (`detailBudget`): lo que no cabe se cuenta como
+// `detalle_fuera_de_presupuesto` en vez de ingerirse sin cuerpo y morir luego en la superficie.
+async function sourceSmartRecruiters(source = {}) {
+  const detailBudget = srDetailBudget(source);
+  const terms = pickTerms(source.termsPerRun || 1);
+  const seen = new Set(); const all = []; const errors = [];
+  for (const term of terms) {
+    try {
+      const data = JSON.parse(await fetchText(
+        `https://jobs.smartrecruiters.com/sr-jobs/search?keyword=${encodeURIComponent(term)}&limit=100`,
+        20000, { retry: 1 }));
+      const rows = Array.isArray(data.content) ? data.content : [];
+      // El detalle se paga: primero los mercados que el motor YA reconoce (España y `LATAM_COUNTRIES`) y
+      // después el resto, que aún puede entrar por la vía bilingüe. Sin una lista paralela de países.
+      const inMarket = row => {
+        const name = ISO_COUNTRIES[String(row?.location?.country ?? '').toUpperCase()];
+        return name === 'España' || LATAM_COUNTRIES.has(name);
+      };
+      const ordered = [...rows.filter(inMarket), ...rows.filter(r => !inMarket(r))];
+      let spent = 0;
+      for (const row of ordered) {
+        const external = String(row?.id ?? '');
+        const detailUrl = row?.actions?.details;
+        // Sin id, título o enlace de detalle no hay nada que enriquecer: se declara y se sigue.
+        if (!external || !row?.name) continue;
+        if (!detailUrl) { countFiltered(source.code, 'sin_detalle'); continue; }
+        if (seen.has(external)) continue;
+        seen.add(external);
+        const loc = row.location ?? {};
+        const payload = {
+          title: row.name, company: row.company?.name ?? null,
+          location: [[loc.city, loc.country].filter(Boolean).join(', ') || row.shortLocation || null,
+            loc.remote ? 'remoto' : null, loc.hybrid ? 'híbrido' : null].filter(Boolean).join(' · ') || null,
+          url: row.applyUrl ?? null,
+          salary: null,
+          posted_at: row.releasedDate ? new Date(row.releasedDate).toISOString() : null,
+          raw: { ...row, search_term: term },
+        };
+        const discard = discardReason(payload);
+        if (discard) { countFiltered(source.code, discard); continue; }
+        if (!payload.url) { countFiltered(source.code, 'sin_url'); continue; }
+        if (spent >= detailBudget) { countFiltered(source.code, 'detalle_fuera_de_presupuesto'); continue; }
+        spent += 1;
+        try {
+          // Sin reintento: si el detalle falla, la oferta se cuenta como `sin_detalle` y se omite.
+          const detail = JSON.parse(await fetchText(detailUrl, 20000));
+          const sections = detail?.jobAd?.sections ?? {};
+          const description = ['companyDescription', 'jobDescription', 'qualifications', 'additionalInformation']
+            .map(key => sections[key]?.text ?? '').filter(Boolean).join('\n');
+          // Sin cuerpo no hay oferta publicable: se cuenta y no se ingiere.
+          if (!description) { countFiltered(source.code, 'sin_detalle'); continue; }
+          payload.raw.description = description;
+        } catch { countFiltered(source.code, 'sin_detalle'); continue; }
+        all.push({ external_id: external, payload });
+      }
+    } catch (error) { errors.push(`${term}: ${String(error.message || error).slice(0, 80)}`); }
+  }
+  if (errors.length && !all.length) throw new Error(`ningún término respondió (${errors[0]})`);
+  return all.slice(0, MAX_ITEMS_PER_SOURCE);
+}
+
 async function sourceJobspresso(source) {
   // RSS de WordPress con `post_type=job_listing` (2026-11-08: 200, 20 ítems de empleo). Usa el
   // mismo parseo que `sourceRss` pero SÍ filtra por rol: el feed es heterogéneo.
@@ -1041,7 +1188,7 @@ async function sourceJobspresso(source) {
 // Superficie de pruebas (Node importa este módulo y comprueba vocabulario, rotación y extractores
 // sin red ni D1). Los Workers ignoran exportaciones extra; `sites/engine/deploy-manifest.json`
 // solo declara el módulo y el entrypoint.
-export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, surfaceLimits, serveSurfaceRanked, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf, salesMotionOf };
+export const __test = { parseRetryAfter, noteOf, resetSourceNotes, CLOSER_TERMS, SDR_TERMS, COLD_TERMS, SEARCH_BANKS, TERM_QUOTA, termPlan, declaredTerms, pickTerms, fetchCost, planRun, subrequestLimits, PLATFORM_SUBREQUEST_LIMIT, MAX_SUBREQUEST_CEILING, D1_RESERVED_SUBREQUESTS, sourceFreehire, sourceHimalayas, sourceFreelancer, sourceJobgether, sourceRemotive, sourceJobicy, sourceWorkingNomads, sourceJobspresso, sourceOpenradar, sourceWorkable, sourceSmartRecruiters, SOURCES, isProfileCandidate, familyOf, PROFILE_FAMILIES, filteredOf, filteredByReasonOf, resetExtractFiltered, discardReason, exclusionReason, leadershipTitle, marketRejects, studentSurface, surfaceLimits, serveSurfaceRanked, compareStudentRank, classifyRole, hasWord, spanishBodyGate, descriptionOf, writeAllowance, rowsWritten, isoCountryName, hintInText, get MARKET_HINTS() { return MARKET_HINTS; }, activationBudget, checkTarget, explicitSpain, foreignCountry, marketHinted, locationLabel, countryOfLocation, modalityOf, salesMotionOf };
 
 const EXTRACTORS = {
   jobtoday: sourceJobToday, 'jobtoday-cities': sourceJobTodayCities, greenhouse: sourceGreenhouse, ashby: sourceAshby,
@@ -1049,7 +1196,7 @@ const EXTRACTORS = {
   getonbrd: sourceGetOnBoard, freehire: sourceFreehire, freelancer: sourceFreelancer,
   jobgether: sourceJobgether, remotive: sourceRemotive, jobicy: sourceJobicy,
   workingnomads: sourceWorkingNomads, jobspresso: sourceJobspresso, openradar: sourceOpenradar,
-  remoteok: sourceRemoteOk, arbeitnow: sourceArbeitnow,
+  remoteok: sourceRemoteOk, arbeitnow: sourceArbeitnow, workable: sourceWorkable, smartrecruiters: sourceSmartRecruiters,
 };
 
 // ------ forma de escritura del catálogo (esto es cuota, no estilo) ------

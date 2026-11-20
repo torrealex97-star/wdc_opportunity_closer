@@ -33,9 +33,11 @@ const stale = catalog.filter(c => cloud.has(c.code) && c.requires !== 'input' &&
 assert.deepEqual(stale.map(c => c.code), [], 'entradas recogidas que aún dicen «Adaptador pendiente / Sin proveedor verificado»');
 
 // 4) El recuento que ve el operador: entradas del catálogo que el panel marca como recogidas.
+//    Medido el 2026-11-20 tras añadir Workable y SmartRecruiters (búsqueda global, sin clave):
+//    69 entradas, 28 conectadas.
 const connected = catalog.filter(c => cloud.has(c.code));
-assert.equal(connected.length, 26, `entradas conectadas esperadas 26, hay ${connected.length}: ${connected.map(c => c.code).join(', ')}`);
-assert.equal(catalog.length, 64, `el catálogo tiene 64 entradas, hay ${catalog.length}`);
+assert.equal(connected.length, 28, `entradas conectadas esperadas 28, hay ${connected.length}: ${connected.map(c => c.code).join(', ')}`);
+assert.equal(catalog.length, 69, `el catálogo tiene 69 entradas, hay ${catalog.length}`);
 
 // 5) Un tablero ATS es UNA entrada: conector en el motor y ficha en el catálogo, con el mismo código y
 //    el mismo nombre. Faltaban Fever, Qonto y Holded —el motor los recogía y el panel no los enseñaba— y

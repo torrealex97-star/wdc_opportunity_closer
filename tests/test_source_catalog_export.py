@@ -26,7 +26,7 @@ def test_panel_catalog_follows_cloud_engine_reality():
     # Fuentes que el cloud recoge hoy: operativas y sin pedir configuración.
     # `getonbrd-public` es el código que el panel cruza con el conector `getonbrd` del motor
     # (ALIAS de apps/web/lib/sourceFamilies.ts): una sola fila para el portal.
-    for code in ('openradar', 'ats-greenhouse-feverup', 'ats-ashby-qonto', 'getonbrd-public', 'freehire', 'freelancer', 'jobgether'):
+    for code in ('openradar', 'workable', 'smartrecruiters', 'ats-greenhouse-feverup', 'ats-ashby-qonto', 'getonbrd-public', 'freehire', 'freelancer', 'jobgether'):
         assert rows[code]['validation_status'] == 'Conector operativo', code
         assert rows[code]['requires'] == 'none', code
 

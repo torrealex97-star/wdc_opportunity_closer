@@ -58,6 +58,17 @@ CLOUD_ADDED = [
     {'code': 'ats-ashby-qonto', 'name': 'Qonto · Ashby', 'category': 'Empresas',
      'website': 'https://api.ashbyhq.com/posting-api/job-board/qonto', 'acquisition_method': 'ATS público por empresa',
      'validation_status': 'Conector operativo', 'requires': 'none', 'note': ATS_NOTE, 'upstream_filters': []},
+    {'code': 'workable', 'name': 'Workable', 'category': 'Internacional', 'website': 'https://jobs.workable.com',
+     'acquisition_method': 'API pública de búsqueda global', 'validation_status': 'Conector operativo',
+     'requires': 'none',
+     'note': 'Bolsa pública del ATS, sin clave ni cuenta: `query` busca por término y `location` acota por país. Medido el 2026-11-20: «closer» 4 ofertas en España (una, «Account Executive - High Ticket Closer»), 16 en México, 11 en Colombia y 11 en Argentina; «comercial» 14 en España. No se paga por resultado.',
+     'upstream_filters': ['Búsqueda por término', 'País']},
+    {'code': 'smartrecruiters', 'name': 'SmartRecruiters · búsqueda global', 'category': 'Internacional',
+     'website': 'https://jobs.smartrecruiters.com',
+     'acquisition_method': 'Búsqueda pública + detalle por oferta', 'validation_status': 'Conector operativo',
+     'requires': 'none',
+     'note': 'Búsqueda global de su bolsa pública sin clave: `keyword` filtra y `location`/`country` no, así que el mercado lo decide la ubicación de cada oferta. Medido el 2026-11-20: «comercial» 221 resultados, con 34 de España (METRO/MAKRO, Bosch Group), 13 de Colombia, 12 de México y 4 de Chile entre los 100 primeros. El listado no trae descripción: se pide el detalle público de hasta 4 ofertas del perfil por pasada.',
+     'upstream_filters': ['Búsqueda por término', 'País de la oferta (local)']},
 ]
 
 # El backend local lo llama `getonbrd`; el motor cloud emite ese mismo código y el panel lo cruza con

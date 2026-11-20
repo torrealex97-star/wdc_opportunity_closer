@@ -61,6 +61,11 @@ CATALOG = [
     ("google", "Google dorks · SerpApi", "España · Europa", "https://www.google.com/search?q=site%3Alinkedin.com%2Fjobs%2Fview+%22closer+de+ventas%22", "https://serpapi.com/google-jobs-api", "Motor google_jobs de SerpApi (pendiente de conectar): cada dork del vocabulario WDC busca ofertas ya indexadas de LinkedIn/portales con los filtros exactos (site:, comillas, España). Requiere API key de SerpApi; el coste por búsqueda se controla con el presupuesto diario de ADR-009."),
     ("remotolist", "RemotoList", "España · LATAM", "https://remotolist.com", "", "Comunidad remota hispana con categoría de ventas; sin feed público localizado."),
     ("domestika", "Domestika Empleo", "España", "https://www.domestika.org", "", "Marginal para ventas; HTML por validar."),
+    # Listado de portales del operador (2026-11-20): mercados hispanos SIN api ni feed público
+    # verificado. No se conectan a ciegas: quedan como ruta Apify opt-in con el bloqueo medido.
+    ("occ-mundial", "OCC Mundial", "LATAM", "https://www.occ.com.mx", "", "Su API interna responde 403 «abuse» desde fuera del navegador (medido 2026-11-20): sin feed público; se conecta con un Actor de Apify opt-in."),
+    ("chiletrabajos", "Chiletrabajos", "LATAM", "https://www.chiletrabajos.cl", "", "Su /rss/ redirige a la portada (200 HTML, sin feed) el 2026-11-20: requiere Actor de Apify o acceso autorizado."),
+    ("portal-empleo-mx", "Portal del Empleo (México)", "LATAM", "https://www.empleo.gob.mx", "", "Servicio público mexicano; su API responde 403 «Acceso no autorizado» a un cliente sin registro (medido 2026-11-20). Vía Apify opt-in o acuerdo de uso."),
 ]
 CATALOG_BY_CODE = {r[0]: r for r in CATALOG}
 DEFAULT_MAPPING = {"title": "title", "company": "companyName", "description": "description", "source_url": "url", "locations": "location", "published_at": "postedAt", "work_mode": "workMode"}

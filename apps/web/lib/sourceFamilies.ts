@@ -6,7 +6,7 @@ export type CloudRow = { code: string; name: string; run_status: string | null; 
 export type FamilyRow = CloudRow & { connectors: number; connectors_detail: Array<{ code: string; run_status: string | null; fetched: number | null }> };
 
 // Portales con varios conectores: el código del motor empieza por el del catálogo.
-const BASES = ['jobtoday', 'freehire', 'himalayas'];
+const BASES = ['jobtoday', 'freehire', 'himalayas', 'workable'];
 // Conectores cuyo código NO es el del catálogo. Sin esto, un portal recogido se leía como apagado:
 // `getonbrd` frente a `getonbrd-public`, `remotive-sales` frente a `remotive`, etc.
 const ALIAS: Record<string, string> = {

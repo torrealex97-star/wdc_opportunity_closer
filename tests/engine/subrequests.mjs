@@ -98,10 +98,14 @@ const TOTAL_COST = t.SOURCES.reduce((n, s) => n + fetchCost(s), 0);
 //    2026-11-16: +2 slugs de JobToday para cold caller (call-center y servicio-al-cliente) → 38, y
 //    retirados el mismo día al medir cero tarjetas nuevas en la pasada real → 36.
 //    2026-11-18: +1 `openradar` (3 términos rotando por día) → 37 fuentes y 112 de coste declarado.
-assert.equal(t.SOURCES.length, 37, 'el catálogo del motor tiene 37 fuentes: si cambia, actualizar la medida');
+//    2026-11-20: +2 `workable-es` y `workable-latam` (2 términos cada uno, país por país) → 39 fuentes y
+//    116 de coste declarado. Verificadas en vivo ese día: España 4 ofertas de «closer», LATAM 16/11/11.
+//    El mismo día, +1 `smartrecruiters`. Revisados después con los reintentos declarados (cada búsqueda
+//    con `retry: 1` cuenta dos veces; los detalles no reintentan) → 40 fuentes y 126 de coste.
+assert.equal(t.SOURCES.length, 40, 'el catálogo del motor tiene 40 fuentes: si cambia, actualizar la medida');
 //    2026-11-13: el plan B de FreeHire (`/jobs/__data.json`) pasa a 3 páginas por término, que es lo
 //    que de verdad trae las ofertas mientras la API esté en 429 → 109 de coste declarado (+3 de openradar).
-assert.equal(TOTAL_COST, 112, 'coste medido del barrido completo: 112 subrequests de fetch');
+assert.equal(TOTAL_COST, 126, 'coste medido del barrido completo: 126 subrequests de fetch');
 for (const source of t.SOURCES) {
   // Tope 32 desde el plan B de FreeHire: sus fuentes declaran también las tres páginas de datos por
   // término (las que se piden cuando la API responde 429 por la IP compartida del Worker).
@@ -183,7 +187,7 @@ for (const source of t.SOURCES) {
   }
 }
 
-// 6) La misma pasada con el techo de pago: caben las 26, ninguna se aplaza y se gasta el coste real.
+// 6) La misma pasada con el techo de pago: caben las 40, ninguna se aplaza y se gasta el coste real.
 {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('', { status: 200 });
@@ -197,7 +201,7 @@ for (const source of t.SOURCES) {
     // —el cuerpo vacío no es el HTML/JSON de cada portal—, no del presupuesto: lo que se afirma aquí
     // es que ninguna se queda sin turno por falta de peticiones.
     const executed = body.sources.filter(s => s.status === 'completed' || s.status === 'failed');
-    assert.equal(executed.length, t.SOURCES.length, 'las 37 fuentes se intentan en la misma pasada');
+    assert.equal(executed.length, t.SOURCES.length, 'las 40 fuentes se intentan en la misma pasada');
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -209,7 +213,7 @@ for (const source of t.SOURCES) {
   assert.equal(free.status, 200);
   assert.equal(free.body.subrequests.ceiling, 50);
   assert.equal(free.body.subrequests.budget, FREE_BUDGET);
-  assert.equal(free.body.subrequests.sources, 37);
+  assert.equal(free.body.subrequests.sources, 40);
   assert.equal(free.body.subrequests.fetch_cost, TOTAL_COST);
   assert.deepEqual(free.body.subrequests.deferred, ['himalayas-closer']);
   const paid = await status({ SUBREQUEST_LIMIT: '1000' });
