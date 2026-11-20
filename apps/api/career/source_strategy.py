@@ -75,13 +75,13 @@ BRANDS = {
     "jooble": ["jooble"], "simplyhired": ["simplyhired", "simply-hired"], 'google': ['serpapi', 'google-jobs', 'google-search'],
     'infojobs': ['infojobs'], 'computrabajo': ['computrabajo'], 'workana': ['workana'],
     'getonbrd': ['getonbrd'], 'linkedin': ['linkedin'], 'indeed': ['indeed'],
-    'infoempleo': ['infoempleo'], 'jobtoday': ['jobtoday'], 'trabajos': ['trabajos-com'],
+    'infoempleo': ['infoempleo'], 'jobtoday': ['jobtoday'], 'trabajos': ['trabajos-com', 'trabajos-jobs'],
     'torre': ['torre-ai', 'torre-co', 'torre-scraper'], 'weremoto': ['weremoto'], 'remotoco': ['remoto-co'],
     'laborum': ['bumeran', 'laborum'], 'elempleo': ['elempleo'], 'upwork': ['upwork'],
     'freelancer': ['freelancer-com'], 'malt': ['malt'], 'eures': ['eures'],
     # Marcas reconocidas en el barrido del 2026-11-20. Solo el nombre del portal: el filtro sigue cerrando
     # ante cualquier actor que no sea suyo (un buscador de coches no sirve para ofertas).
-    'trabajos': ['trabajos-com', 'trabajos-jobs'], 'tecnoempleo': ['tecnoempleo'],
+    'tecnoempleo': ['tecnoempleo'],
     'talent': ['talent-com', 'talent-jobs', 'talent-scraper'],
     'milanuncios': ['milanuncios'],
     'welcomejungle': ['welcome-to-the-jungle', 'welcometothejungle', 'wttj'],
