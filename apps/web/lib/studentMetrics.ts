@@ -1,6 +1,6 @@
 import { EXAM_PASS } from '../components/trainingCheck';
 import { REVIEW_REFS } from '../components/trainingRefs';
-import { madridDay } from './studentActivity';
+import { madridDay, reviewPassed } from './studentActivity';
 import type { ActivityRow } from './studentActivity';
 
 // Métricas de la alumna, definidas aquí y en ningún otro sitio (ADR-014). Todo se DERIVA de la actividad y de las candidaturas:
@@ -14,9 +14,9 @@ export const LEVEL_FLOORS = [0, 100, 250, 500, 900, 1400, 2000, 3000] as const;
 export type XpPart = { id: string; label: string; xp: number };
 export type XpResult = { xp: number; level: number; floor: number; next: number | null; parts: XpPart[] };
 
-export function xpAndLevel(rows: Pick<ActivityRow, 'kind' | 'ref' | 'score' | 'created_at'>[], appStatuses: string[] | null): XpResult {
+export function xpAndLevel(rows: (Pick<ActivityRow, 'kind' | 'ref' | 'score' | 'created_at'> & { detail?: Record<string, unknown> })[], appStatuses: string[] | null): XpResult {
   const sessionDays = new Set(rows.filter(row => row.kind === 'session').map(row => madridDay(row.created_at)));
-  const modules = new Set(rows.filter(row => row.kind === 'training_review' && row.ref && (REVIEW_REFS as readonly string[]).includes(row.ref)).map(row => row.ref));
+  const modules = new Set(rows.filter(row => row.kind === 'training_review' && row.ref && (REVIEW_REFS as readonly string[]).includes(row.ref) && reviewPassed(row)).map(row => row.ref));
   const passed = rows.some(row => row.kind === 'training_exam' && typeof row.score === 'number' && row.score >= EXAM_PASS);
   // Antifraude: solo cuentan las tres primeras prácticas de cada día (Madrid).
   const perDay = new Map<string, number>(); let practiceXp = 0;

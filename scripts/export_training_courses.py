@@ -70,16 +70,26 @@ def fetch(path: Path | None = None):
 
 
 def body(worksheet, header_first_cell: str):
-    """Filas de datos de una pestaña, localizadas por su cabecera (no por un número de fila fijo).
+    """Filas de datos de una pestaña con su número de fila, localizadas por su cabecera.
 
     Las hojas llevan un bloque de títulos arriba que el propietario puede ampliar; si eso pasara, un recorte
-    fijo leería la cabecera como si fuera una lección. Se busca la cabecera por su primera celda.
+    fijo leería la cabecera como si fuera una lección. Se busca la cabecera por su primera celda. Se conserva
+    el número de fila porque el enlace a la clase de Skool vive en el hipervínculo de la celda («Abrir
+    lección», «Abrir curso»), no en su texto.
     """
-    rows = [list(row) for row in worksheet.iter_rows(values_only=True)]
+    rows = [[cell.value for cell in row] for row in worksheet.iter_rows()]
     for index, row in enumerate(rows):
         if clean(row[0]).lower() == header_first_cell.lower():
-            return rows[index + 1:]
+            return [(index + 2 + offset, values) for offset, values in enumerate(rows[index + 1:])]
     raise SystemExit(f"No se encontró la cabecera {header_first_cell!r} en la pestaña {worksheet.title!r}.")
+
+
+def link(worksheet, row_number: int, column: int) -> str:
+    """Hipervínculo de una celda, tal cual lo puso el propietario. Vacío si la celda no enlaza nada."""
+    cell = worksheet.cell(row=row_number, column=column)
+    if cell.hyperlink is None or not cell.hyperlink.target:
+        return ''
+    return str(cell.hyperlink.target).strip()
 
 
 def parse(workbook):
@@ -89,7 +99,7 @@ def parse(workbook):
     resources_sheet = body(workbook['Recursos'], 'Lección ID')
 
     courses = []
-    for row in summary:
+    for row_number, row in summary:
         order, title = clean(row[0]), clean(row[1])
         if title.upper() == 'TOTAL':  # detrás vienen el TOTAL y el desglose por carpetas: no son cursos
             break
@@ -98,10 +108,11 @@ def parse(workbook):
         if title not in COURSE_IDS:
             raise SystemExit(f'El curso «{title}» no tiene identificador. Añádelo a COURSE_IDS (sin tocar los existentes).')
         courses.append({'order': int(float(order)), 'title': title, 'duration': duration(row[3]),
-                        'summary': clean(row[6]), 'lessons': []})
+                        'summary': clean(row[6]), 'url': link(workbook['Resumen'], row_number, 6),
+                        'lessons': []})
 
     by_title = {course['title']: course for course in courses}
-    for row in lessons_sheet:
+    for row_number, row in lessons_sheet:
         course_title, folder, title = clean(row[1]), clean(row[2]), clean(row[4])
         if not course_title or not title:
             continue
@@ -109,13 +120,14 @@ def parse(workbook):
         if course is None:
             raise SystemExit(f'La lección «{title}» apunta a un curso que no está en Resumen: {course_title!r}')
         course['lessons'].append({'title': title, 'duration': duration(row[5]),
-                                  'folder': None if folder in ('', 'Sin carpeta') else folder, 'resources': []})
+                                  'folder': None if folder in ('', 'Sin carpeta') else folder,
+                                  'url': link(workbook['Lecciones'], row_number, 8), 'resources': []})
     for course in courses:
         for number, lesson in enumerate(course['lessons'], start=1):
             lesson['id'] = f"{course['order']}.{number}"
 
     index = {(course['title'], lesson['title']): lesson for course in courses for lesson in course['lessons']}
-    for row in resources_sheet:
+    for _row_number, row in resources_sheet:
         name, url = clean(row[3]), clean(row[5])
         if not name:
             continue
@@ -136,15 +148,19 @@ def render(courses) -> str:
         '// Es el único índice de la sección Formación: lo que no esté aquí no se muestra en el portal.',
         '// Generado desde la hoja con `scripts/export_training_courses.py`: no se edita a mano. Las duraciones son las',
         '// que declara Skool, los recursos se enlazan tal cual y `folder` es la carpeta de la hoja (solo «Clases Grupales» usa carpetas).',
+        '// `url` es el enlace de la hoja a la clase de Skool: el del curso abre el módulo y el de la lección abre',
+        '// esa clase concreta. Si una fila no trae enlace, el portal enlaza el del módulo y dice el nombre.',
         '',
         'export type TrainingResource = { name: string; url: string };',
-        'export type TrainingLesson = { id: string; title: string; duration: string; folder?: string; resources: TrainingResource[] };',
+        'export type TrainingLesson = { id: string; title: string; duration: string; folder?: string; url?: string; resources: TrainingResource[] };',
         'export type TrainingCourse = {',
         '  id: string;',
         '  order: number;',
         '  title: string;',
         '  summary: string;',
         '  duration: string;',
+        '  /** Enlace de la hoja al módulo en el Classroom de Skool. */',
+        '  url?: string;',
         '  lessons: TrainingLesson[];',
         '};',
         '',
@@ -158,17 +174,19 @@ def render(courses) -> str:
             f"    title: {js(course['title'])},",
             f"    summary: {js(course['summary'])},",
             f"    duration: {js(course['duration'])},",
+            (f"    url: {js(course['url'])}," if course['url'] else ''),
             '    lessons: [',
         ]
         for lesson in course['lessons']:
             folder = f", folder: {js(lesson['folder'])}" if lesson['folder'] else ''
+            class_url = f", url: {js(lesson['url'])}" if lesson['url'] else ''
             if lesson['resources']:
                 resources = '[' + ', '.join(
                     f"{{ name: {js(r['name'])}, url: {js(r['url'])} }}" for r in lesson['resources']) + ']'
             else:
                 resources = '[]'
             lines.append(f"      {{ id: {js(lesson['id'])}, title: {js(lesson['title'])}, "
-                         f"duration: {js(lesson['duration'])}{folder}, resources: {resources} }},")
+                         f"duration: {js(lesson['duration'])}{folder}{class_url}, resources: {resources} }},")
         lines += ['    ],', '  },']
     lines += [
         '];',

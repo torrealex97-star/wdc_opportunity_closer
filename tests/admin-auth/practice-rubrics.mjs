@@ -32,7 +32,8 @@ await step('las cinco rúbricas son válidas y los pesos suman 100', () => {
     for (const axis of axes) {
       assert.ok(axis.label && axis.guide && axis.weight >= 1, `${room.id}/${axis.id}`);
       assert.equal(axis.enabled, true, `${room.id}/${axis.id}: activo por defecto`);
-      assert.ok(['scalix-ventas', 'analisis-llamadas-ventas'].includes(axis.source), `${room.id}/${axis.id}: fuente`);
+      assert.ok(['metodo-wdc', 'scalix-ventas', 'analisis-llamadas-ventas'].includes(axis.source), `${room.id}/${axis.id}: fuente`);
+      assert.equal(axis.source, 'metodo-wdc', `${room.id}/${axis.id}: la fuente por defecto es la academia`);
       assert.ok(axis.source_ref, `${room.id}/${axis.id}: sección de la skill`);
     }
   }
@@ -63,7 +64,7 @@ await step('el historial de cambios detalla pesos, guías, prioridades y BANT', 
   const peso = diff.axes.find(change => change.field === 'peso');
   assert.deepEqual([peso.room, peso.axis, peso.from, peso.to], ['venta', 'descubrimiento', '25', '30']);
   const guia = diff.axes.find(change => change.field === 'guía');
-  assert.match(guia.from, /Aclara qué le hizo pedir la llamada/);
+  assert.match(guia.from, /Primero la brecha con sus números/);
   assert.equal(guia.to, 'Guía nueva del descubrimiento.');
   const activo = diff.axes.find(change => change.field === 'activo');
   assert.deepEqual([activo.room, activo.from, activo.to], ['frio', 'activo', 'inactivo']);
@@ -138,22 +139,22 @@ await step('lo que edita el panel entra en el prompt y en el esquema', () => {
   assert.equal(score, 100);
 });
 
-await step('BANT solo se pide en las salas de venta y el prompt explica la vara', () => {
+await step('la cualificación solo se pide en las salas de venta y el prompt explica la vara', () => {
   assert.ok(needsBant(closer) && needsBant(setter) && needsBant(frio) && needsBant(CALL_REVIEW_SCENARIO));
   assert.equal(needsBant(interview), false);
   assert.ok(debriefSchema(closer).required.includes('bant'));
   assert.ok(!debriefSchema(interview).required.includes('bant'));
   assert.equal(debriefSchema(interview).properties.bant, undefined);
-  assert.match(debriefInstructions(setter), /Auditoría BANT/);
-  assert.doesNotMatch(debriefInstructions(interview), /Auditoría BANT/);
+  assert.match(debriefInstructions(setter), /Auditoría de la cualificación/);
+  assert.doesNotMatch(debriefInstructions(interview), /Auditoría de la cualificación/);
   assert.equal(DEFAULT_BANT.entrevista, false);
 });
 
 await step('la prioridad manda en el orden de la skill y el feedback no pide varias', () => {
-  assert.match(DEFAULT_PRIORITIES[0], /pain cycle/i);
+  assert.match(DEFAULT_PRIORITIES[0], /No se cavó el dolor/i);
   const instructions = debriefInstructions(closer, null, DEFAULT_RUBRICS, DEFAULT_PRIORITIES);
-  const first = instructions.indexOf('1. No hubo pain cycle');
-  const later = instructions.indexOf('2. BANT, decisor o momento');
+  const first = instructions.indexOf('1. No se cavó el dolor');
+  const later = instructions.indexOf('2. Se presentó la oferta antes de cualificar');
   assert.ok(first > 0 && later > first, 'orden de prioridades');
   assert.match(instructions, /LA CORRECCIÓN PRIORITARIA, una sola/);
   assert.match(instructions, /next: una sola tarea para las próximas 24 horas/);
@@ -214,7 +215,7 @@ await step('una cita inventada se borra; una decisión o un estado fuera de la t
   assert.equal(cleanDebrief(JSON.stringify(missing), turns, closer), null);
 });
 
-await step('la entrevista no exige BANT y puntúa los cuatro criterios de scalix-ventas §7', () => {
+await step('la entrevista no exige BANT y puntúa los cuatro criterios de metodo-wdc §15', () => {
   const generic = scenarioById('entrevista-closer');
   const interviewPayload = JSON.parse(payload());
   delete interviewPayload.bant;

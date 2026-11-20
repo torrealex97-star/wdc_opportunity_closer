@@ -8,7 +8,8 @@ import {
 } from '../lib/practiceRubrics';
 
 // Criterios de la sala y del análisis de llamadas. Edita lo que el servidor aplica al puntuar:
-// rúbricas por sala (nombre, peso y guía), orden de la corrección prioritaria y qué salas exigen BANT.
+// rúbricas por sala (nombre, peso y guía), orden de la corrección prioritaria y qué salas auditan la
+// cualificación (dinero, decisión, necesidad y momento).
 // Guardar valida el conjunto entero en el servidor; si la tabla no está migrada, se declara y se
 // siguen usando los valores por defecto (nunca se finge que el cambio está aplicado).
 
@@ -183,7 +184,7 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     for (const item of diff.prioritiesAdded) lines.push(<li key={`prioridad-añadida-${item}`}>Prioridad añadida: {item}</li>);
     for (const item of diff.prioritiesRemoved) lines.push(<li key={`prioridad-quitada-${item}`}>Prioridad quitada: {item}</li>);
     if (diff.prioritiesReordered) lines.push(<li key="prioridades-reordenadas">Prioridades reordenadas</li>);
-    for (const item of diff.bant) lines.push(<li key={`bant-${item.room}`}><b>{roomLabel(item.room)}</b> · BANT {item.enabled ? 'activado' : 'desactivado'}</li>);
+    for (const item of diff.bant) lines.push(<li key={`bant-${item.room}`}><b>{roomLabel(item.room)}</b> · cualificación {item.enabled ? 'activada' : 'desactivada'}</li>);
     return lines;
   }
 
@@ -250,8 +251,8 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       <span className="card-meta">Los criterios no se crean desde el panel: cada uno declara la skill y la sección de donde sale. Puedes editar, ponderar, activar/desactivar y restaurar versiones. {weight !== 100 ? `Los pesos activos suman ${weight}; la nota se normaliza igual.` : 'Los pesos activos suman 100: la nota se lee como la de la skill.'}</span>
     </div>
 
-    <h2 className="section-title">Cualificación BANT</h2>
-    <p className="card-meta" style={{ marginBottom: 12 }}>En las salas marcadas, el feedback incluye el estado de las cuatro letras con su cita y la decisión (avanzó, paró, debió parar). La entrevista no se audita con BANT: no es una llamada de venta.</p>
+    <h2 className="section-title">Cualificación de la llamada</h2>
+    <p className="card-meta" style={{ marginBottom: 12 }}>En las salas marcadas, el feedback incluye el estado de las cuatro preguntas —dinero, decisión, necesidad y momento— con su cita y la decisión (avanzó, paró, debió parar). La entrevista no se audita: no es una llamada de venta.</p>
     <div className="rubric-bant">
       {rooms.map(item => <label key={item.id} className="check-label">
         <input type="checkbox" checked={config.bant[item.id]} onChange={event => edit({ ...config, bant: { ...config.bant, [item.id]: event.target.checked } })} />

@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, CircleAlert, Clock3, G
 import { INTENSITY_LABELS, PRACTICE_SCENARIOS, TRACK_CHANNEL, categoriesFor, scenarioById } from './practiceScenarios';
 import type { PracticePersona, PracticeScenario, PracticeTrack } from './practiceScenarios';
 import StudentQualificationForm from './StudentQualificationForm';
+import AcademyAssistant from './AcademyAssistant';
 import CallReview from './CallReview';
 import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
@@ -44,7 +45,8 @@ type Debrief = {
   moments?: { quote: string; why: string }[];
   axes?: Axis[];
   score?: number;
-  // Auditoría BANT de las salas de venta (rúbrica de `analisis-llamadas-ventas`).
+  // Auditoría de la cualificación en las salas de venta (método de la academia y rúbrica de
+  // `analisis-llamadas-ventas`).
   bant?: PracticeBant;
   signals?: Signal[];
   model?: string;
@@ -406,7 +408,7 @@ export default function StudentPractice({ track, mode = 'roleplay', onTrackChang
         </div>
       </div> : null}
       {debrief.bant && <div className="practice-bant">
-        <span className="eyebrow">CUALIFICACIÓN DE LA LLAMADA · BANT</span>
+        <span className="eyebrow">CUALIFICACIÓN DE LA LLAMADA</span>
         <dl className="practice-bant-grid">
           {(['budget', 'authority', 'need', 'timing'] as const).map(letter => {
             const item = debrief.bant![letter];
@@ -531,6 +533,7 @@ export default function StudentPractice({ track, mode = 'roleplay', onTrackChang
         <button type="button" onClick={() => { setScenario(scenarioById(entry.scenarioId)); setDebrief(entry.debrief); setView('debrief'); }}>Ver feedback</button>
       </li>)}</ul>
     </div>}
+    <AcademyAssistant room="practica" />
     <p className="practice-note">La sala de práctica es un simulacro formativo. No se envía nada a empresas y no sustituye a una entrevista real. Lo que escribes (o dices) se envía a un proveedor de inteligencia artificial para simular la conversación: no escribas datos personales de terceros. Más en <a href="/privacidad">Privacidad</a> y <a href="/terminos">Términos</a>.</p>
   </section>;
 }

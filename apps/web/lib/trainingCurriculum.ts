@@ -5,6 +5,9 @@
 //
 // Reglas editoriales: nada de cifras, casos o resultados inventados; los guiones usan huecos [así] y
 // remiten al método ya existente (`trainingContent.ts`) para las explicaciones largas.
+// El método es el de la academia: cada lección apunta a la skill `metodo-wdc` (`.agents/skills/`), con
+// la lección del Classroom entre paréntesis (6.1, 7.3, 8.3…), y usa su vocabulario: marco, brecha,
+// dolor, micro cierre, objeción fantasma. Lo que se enseña aquí es lo que se enseña allí.
 
 export type ResourceType = 'template' | 'script' | 'checklist' | 'link' | 'doc' | 'video';
 export const RESOURCE_TYPES: ResourceType[] = ['template', 'script', 'checklist', 'link', 'doc', 'video'];
@@ -162,9 +165,9 @@ export const DEFAULT_CURRICULUM: Curriculum = {
     {
       id: 'fundamentos',
       position: 1,
-      title: 'Fundamentos y apertura',
-      description: 'La base de una llamada que no parece una venta: identidad, pre-llamada y una apertura con prueba, promesa y plan.',
-      objectives: ['Entrar en la llamada con tono de igual a igual', 'Escribir la secuencia de pre-llamada', 'Abrir con una agenda clara en 15-20 segundos'],
+      title: 'Fundamentos y el marco',
+      description: 'La base de una llamada que no parece una venta: identidad, pre-llamada y un marco con prueba, promesa y plan (6.1).',
+      objectives: ['Entrar en la llamada con tono de igual a igual', 'Escribir la secuencia de pre-llamada', 'Sentar el marco en 15-20 segundos, con salida limpia'],
       deep_dive: 'precall',
       lessons: [
         {
@@ -273,19 +276,19 @@ export const DEFAULT_CURRICULUM: Curriculum = {
     {
       id: 'descubrimiento',
       position: 2,
-      title: 'Descubrimiento y brecha',
-      description: 'Preguntar antes de presentar, cuantificar el coste de seguir igual y cualificar sin interrogar.',
-      objectives: ['Abrir con preguntas de situación y dolor', 'Resumir y etiquetar el hueco', 'Calcular el coste de inacción con sus cifras', 'Recoger BANT antes de hablar de dinero'],
+      title: 'Cualificación y brecha',
+      description: 'Preguntar antes de presentar, cavar el dolor, cuantificar el coste de seguir igual y cualificar sin interrogar (6.3, 7.1).',
+      objectives: ['Abrir con preguntas de situación y dolor', 'Resumir y etiquetar el hueco', 'Calcular el coste de inacción con sus cifras', 'Cualificar tiempo, dinero y confianza antes de hablar de precio'],
       deep_dive: 'logica',
       lessons: [
         {
           id: 'descubrimiento-preguntar',
           position: 1,
           title: 'Preguntar antes de presentar',
-          summary: 'La brecha, el pain cycle y el historial: el orden que evita vender a ciegas.',
+          summary: 'La brecha, el dolor cavado y el historial: el orden que evita vender a ciegas.',
           minutes: 10,
-          content: 'Presentar antes de descubrir es adivinar. Primero la brecha con sus números: dónde está hoy y dónde quiere estar. Sin brecha no hay motivo para cambiar nada, así que no se avanza sin ella.\n\nDespués el obstáculo, que es el pain cycle de verdad: «¿qué te frena?», «¿por qué?», «cuéntame más», «dame un ejemplo», «¿qué más te frena?». Dos de esas son órdenes, no preguntas: mantienen el mando sin interrogar. Se cava hasta que aparezca dinero, plazo o una persona, y se baja uno o dos niveles más allá de la primera respuesta.\n\nLuego el historial: qué ha intentado ya y cuánto ha invertido. Todo lo que ya probó es una ventaja, porque está en la llamada justamente porque aquello no lo resolvió.\n\nSe cierra con el resumen en tres frases y su etiqueta: «Para asegurar que te entiendo: probaste X, pasó Y, y ahora dudas de volver a invertir. Suena a que el problema real no es A ni B, sino que necesitas C. ¿Es así?». Si corrige, se acepta y se agrega: esa corrección es información, no un ataque.',
-          key_points: ['La brecha se concreta con sus números antes de hablar del problema.', 'El pain cycle se cava con «¿por qué?» y «dame un ejemplo», no con una sola pregunta.', 'El historial (qué probó y cuánto invirtió) es una ventaja, no un tema incómodo.', 'El resumen lleva su etiqueta y se confirma con ella.', 'Una corrección de la clienta es información, no un ataque.'],
+          content: 'Presentar antes de descubrir es adivinar. Primero la brecha con sus números: dónde está hoy y dónde quiere estar. Sin brecha no hay motivo para cambiar nada, así que no se avanza sin ella.\n\nDespués el obstáculo, que es cavar el dolor de verdad: «¿qué te frena?», «¿por qué?», «cuéntame más», «dame un ejemplo», «¿qué más te frena?». Dos de esas son órdenes, no preguntas: mantienen el mando sin interrogar. Se cava hasta que aparezca dinero, plazo o una persona, y se baja uno o dos niveles más allá de la primera respuesta.\n\nLuego el historial: qué ha intentado ya y cuánto ha invertido. Todo lo que ya probó es una ventaja, porque está en la llamada justamente porque aquello no lo resolvió.\n\nSe cierra con el resumen en tres frases y su etiqueta: «Para asegurar que te entiendo: probaste X, pasó Y, y ahora dudas de volver a invertir. Suena a que el problema real no es A ni B, sino que necesitas C. ¿Es así?». Si corrige, se acepta y se agrega: esa corrección es información, no un ataque.',
+          key_points: ['La brecha se concreta con sus números antes de hablar del problema.', 'El dolor se cava con «¿por qué?» y «dame un ejemplo», no con una sola pregunta.', 'El historial (qué probó y cuánto invirtió) es una ventaja, no un tema incómodo.', 'El resumen lleva su etiqueta y se confirma con ella.', 'Una corrección de la clienta es información, no un ataque.'],
           resources: [
             {
               id: 'res-descubrimiento-guion', type: 'script', title: 'Guion de descubrimiento en cuatro pasos',
@@ -297,7 +300,7 @@ export const DEFAULT_CURRICULUM: Curriculum = {
             {
               id: 'descubrimiento-preguntar-q1', type: 'multiple',
               prompt: '¿Cuál es el orden correcto del descubrimiento?',
-              options: ['Presentar → preguntar → cerrar', 'Brecha con números → obstáculo (pain cycle) → historial → resumen confirmado', 'Precio → objeciones → preguntas', 'Calificar → presentar → descalificar'],
+              options: ['Presentar → preguntar → cerrar', 'Brecha con números → dolor cavado → historial → resumen confirmado', 'Precio → objeciones → preguntas', 'Calificar → presentar → descalificar'],
               correct: 1,
               explanation: 'Primero la brecha (dónde está y dónde quiere estar), después el obstáculo cavado con «¿por qué?» y ejemplos, luego lo que ya intentó y cuánto invirtió, y al final el resumen con su etiqueta y su confirmación. Presentar antes de eso es vender a ciegas.',
             },
@@ -345,32 +348,32 @@ export const DEFAULT_CURRICULUM: Curriculum = {
         {
           id: 'descubrimiento-bant',
           position: 3,
-          title: 'BANT antes del precio',
-          summary: 'Presupuesto, autoridad, necesidad y momento: qué preguntar y cuándo parar.',
+          title: 'Tiempo, dinero y confianza antes del precio',
+          summary: 'Las tres preguntas que la academia pide antes de hablar de dinero, más la prioridad del 1 al 10.',
           minutes: 8,
-          content: 'BANT no es un interrogatorio: es una forma de no cerrar a ciegas. Las cuatro letras se recogen durante el descubrimiento, antes de pedir dinero.\n\nBudget: «¿Qué margen tienes pensado para resolver esto?». La vara es que pueda invertirlo. Si está justo, pregunta si es su problema más importante y si le compensa; a quien no puede invertir no se le pasa a la siguiente llamada.\n\nAuthority: «¿Hay alguien más que tenga que estar de acuerdo?». La vara es que quien decide esté en esta llamada o en la siguiente; si no, estás cualificando a una mensajera.\n\nNeed: el estado deseado en sus palabras y un obstáculo real que se lo impide: «¿qué te frena para conseguir [lo que dijo que quería]?». Un deseo sin obstáculo no es necesidad.\n\nTiming: «¿Para cuándo necesitas que esté funcionando?»; la vara es que quiera resolverlo ya, no «algún día». Un desplazamiento de seis meses también contesta.\n\nCada respuesta se apunta con una cita, no con una interpretación. Distingue «no salió» (?) de «falla» (✗): con un ✗ en Budget o Authority no se avanza; con un ? se pregunta antes de decidir. La decisión de avanzar o parar se declara en voz alta.',
-          key_points: ['BANT se recoge antes del precio, sin sonar a formulario.', 'Need es deseo más obstáculo real, no el coste de esperar.', 'Con ✗ en Budget o Authority no se avanza; con ? se pregunta antes de decidir.', 'Cada letra lleva una cita, no una suposición.'],
+          content: 'Antes de hablar de dinero se cualifican tres cosas y una prioridad. No es un interrogatorio: son las preguntas que ordenan la decisión y evitan cerrar a ciegas (7.1 y 7.3).\n\nTiempo: «esto necesita [tiempo] a la semana; ¿ese tiempo lo puedes priorizar?». Si duda, no se vende: se dice.\n\nDinero: «¿has invertido antes en algo parecido? ¿cuánto? ¿qué rango te resulta cómodo?». La vara es que pueda invertirlo; si está justo, pregunta si es su problema más importante y si le compensa. A quien no puede invertir no se le pasa a la siguiente llamada.\n\nConfianza: «¿qué te haría confiar en que esto puede funcionar para ti?». Es la tercera pata y la que casi nadie pregunta.\n\nPrioridad: «del 1 al 10, ¿qué tan importante es para ti hacer este cambio ahora?». Con 6 o menos no se cierra: se cualifica mejor o no encaja; con 8 o más hay base.\n\nCada respuesta se apunta con una cita, no con una interpretación, y la decisión de avanzar o parar se dice en voz alta.',
+          key_points: ['Se cualifica antes del precio, sin sonar a formulario.', 'Tiempo, dinero y confianza son las tres preguntas de 7.3.', 'La prioridad del 1 al 10 decide: 6 o menos, no se cierra.', 'Cada respuesta lleva una cita, no una suposición.'],
           resources: [
             {
-              id: 'res-bant-checklist', type: 'checklist', title: 'Checklist BANT con evidencia',
-              description: 'Cuatro letras, una cita y una decisión.',
-              content: '· Budget: ¿qué margen tiene? ¿es su problema más importante? Cita: «…»\n· Authority: ¿decide sola? ¿quién más interviene y estará en la siguiente llamada? Cita: «…»\n· Need: ¿qué quiere y qué le frena? Cita: «…»\n· Timing: ¿para cuándo? ¿qué pasa si espera seis meses? Cita: «…»\nDecisión: avanzar / parar. Con ✗ en Budget o Authority no se avanza; con ? se pregunta antes de decidir.',
+              id: 'res-bant-checklist', type: 'checklist', title: 'Checklist de cualificación con evidencia',
+              description: 'Tres preguntas, una prioridad, una cita y una decisión.',
+              content: '· Tiempo: ¿puede priorizar [tiempo] a la semana? Cita: «…»\n· Dinero: ¿ha invertido antes? ¿qué rango le resulta cómodo? Cita: «…»\n· Confianza: ¿qué le haría confiar en que funciona para ella? Cita: «…»\n· Prioridad: del 1 al 10, ¿qué tan importante es ahora? Cita: «…»\nDecisión: avanzar / parar. Con 6 o menos en prioridad no se cierra; se cualifica mejor o no encaja.',
             },
           ],
           questions: [
             {
               id: 'descubrimiento-bant-q1', type: 'multiple',
-              prompt: '¿Cuándo se recoge BANT?',
-              options: ['Después de dar el precio.', 'Durante el descubrimiento, antes de hablar de dinero.', 'Solo si la clienta pregunta por el precio.', 'Al final, cuando ya ha dicho que sí.'],
+              prompt: '¿Qué tres cosas se cualifican antes de hablar de precio?',
+              options: ['Presupuesto, autoridad y necesidad', 'Tiempo, dinero y confianza', 'Precio, producto y plazo', 'Dolor, deseo y urgencia'],
               correct: 1,
-              explanation: 'BANT sirve para decidir si la conversación puede avanzar. Recogerlo después del precio convierte la cualificación en una excusa para el no.',
+              explanation: 'La academia pide tiempo, dinero y confianza (7.3), más la prioridad del 1 al 10. Dolor, deseo y urgencia son los tres pilares del cierre, que es otro paso.',
             },
             {
               id: 'descubrimiento-bant-q2', type: 'case',
-              prompt: 'La clienta dice: «Tendría que hablarlo con mi socio». ¿Qué letra de BANT está en duda?',
-              options: ['Presupuesto', 'Autoridad', 'Necesidad', 'Momento'],
+              prompt: 'La clienta dice: «Del 1 al 10, esto es un 5 para mí ahora mismo». ¿Qué haces?',
+              options: ['Cerrar de todos modos: el 5 es solo una opinión.', 'Cualificar mejor o decir que no encaja: con 6 o menos no se cierra.', 'Bajar el precio para subir la prioridad.', 'Cambiar de tema y presentar la oferta.'],
               correct: 1,
-              explanation: 'La autoridad es la capacidad de decir que sí sin consultar a un tercero. Si hay socio, toca aclarar quién decide y cómo se incorpora a la conversación.',
+              explanation: 'Con 6 o menos la prioridad no sostiene una decisión de alto valor. Se cualifica mejor o se dice que no encaja; bajar el precio no crea prioridad.',
             },
           ],
         },
@@ -380,23 +383,23 @@ export const DEFAULT_CURRICULUM: Curriculum = {
       id: 'cierre',
       position: 3,
       title: 'Objeciones y cierre',
-      description: 'Aislar la objeción real, validar sin «pero», elegir el cierre y sostener el siguiente paso.',
-      objectives: ['Aislar y validar una objeción', 'Elegir el cierre que pide la llamada', 'Pedir la venta y sostener el silencio', 'Cerrar con día y hora'],
+      description: 'Aislar la objeción real, nombrarla sin «pero», elegir el cierre que pide la llamada y sostener el siguiente paso (6.5, 7.x).',
+      objectives: ['Aislar y nombrar una objeción', 'Elegir el cierre que pide la llamada', 'Pedir la decisión y sostener el silencio', 'Cerrar con día y hora'],
       deep_dive: 'cierres',
       lessons: [
         {
           id: 'cierre-objeciones',
           position: 1,
-          title: 'Aislar y validar sin «pero»',
+          title: 'Nombrar la objeción sin «pero»',
           summary: 'La objeción que oyes casi nunca es la objeción que frena la decisión.',
           minutes: 10,
-          content: 'Una objeción es una señal de compra: a quien no le interesa no le hace falta discutir. Antes de responder, haz triaje con una pregunta direccional: «¿crees que esto podría acercarte a tu objetivo?». Si dice que sí, pide el siguiente paso; si no, «¿cuál es tu principal preocupación?».\n\nAísla antes de rebatir: «Además de eso, ¿hay algo más que te impida decidir?» y, si es un «lo pienso», la batería completa: ¿qué temes que pase?, ¿qué variables usas para decidir?, ¿qué lo haría un sí?, ¿qué lo haría un no?. La primera objeción casi nunca es la que frena la decisión.\n\nEntre cierre y cierre, usa AAA: reconoce lo que dijo (Acknowledge), asócialo con algo positivo o con alguien que estaba en su situación (Associate) y haz la siguiente pregunta (Ask). No contradigas ni uses «pero»: «entiendo que el precio te preocupa, y al mismo tiempo lo que me contaste antes era [coste]».\n\nNo defiendas el producto, no justifiques el precio y no expliques lo buena que eres. Devuelve una pregunta que haga pensar: «¿Qué tendría que pasar para que esto tuviera sentido para ti?».',
-          key_points: ['Una objeción es señal de compra, no un no.', 'Aísla antes de rebatir: la primera objeción rara vez es la real.', 'Entre cierres, AAA: reconoce, asocia y pregunta.', 'Valida con «y», no con «pero».', 'No se baja el precio: se cambian términos o componentes.'],
+          content: 'Una objeción es una señal de compra: a quien no le interesa no le hace falta discutir. La academia lo dice claro: no se combate, se gestiona, y no se responde la objeción sino la emoción que la genera (7.1).\n\nPrimero se nombra lo que acaba de decir, con sus palabras: «por lo que me cuentas, el precio no es el problema; el problema es que ya invertiste antes y no funcionó». Y se le pregunta si es así.\n\nDespués se aísla: «además de eso, ¿hay algo más que te impida decidir?». Si es un «lo tengo que pensar», se abre el guion de tres pilares de 7.3 —tiempo, dinero y confianza— y una pregunta final que revela: «si tuvieras el tiempo, el dinero y la confianza, ¿qué es exactamente lo que te impide dar este paso?».\n\nLo que no se hace: discutir con la excusa, convencer al tercero invisible, justificar el producto, animar de más («tú puedes») o aceptar un «déjame pensarlo» como decisión final. Y el hábito: escuchar la objeción completa, esperar dos segundos, respirar y responder.',
+          key_points: ['Una objeción es señal de compra, no un no.', 'Se nombra y se aísla antes de responder: la primera objeción rara vez es la real.', 'Se responde a la emoción, no al dato.', 'Nunca se discute, no se justifica y no se anima de más.', 'No se baja el precio: se cambian términos, con autorización.'],
           resources: [
             {
-              id: 'res-objeciones-tabla', type: 'doc', title: 'Tabla de objeciones y respuesta',
-              description: 'Las siete objeciones con la teoría de fondo y qué preguntar antes de rebatir.',
-              content: '· Precio («es caro»): ¿es liquidez o valor? → «¿con qué lo estás comparando?». No se baja el precio: se cambian términos o componentes.\n· «Lo pienso»: es evitación → batería de preguntas hasta la objeción real, y si no hay, día y hora.\n· Pareja o socio: es apoyo, no permiso → «¿qué pasaría si dijera que no?».\n· Tiempo: es prioridad, no agenda → «¿qué es lo menos importante y lo cambiarías por esto?».\n· Miedo a que no funcione: es riesgo percibido → qué faltó la última vez y qué es distinto, sin prometer resultados.\n· «Estoy mirando otra opción»: «si costaran lo mismo, ¿cuál eliges?» y que diga ella por qué.\n· «Envíamelo»: es una salida amable → resolver lo principal ahora y cerrar día y hora.',
+              id: 'res-objeciones-tabla', type: 'doc', title: 'Las diez objeciones de la academia',
+              description: 'Qué hay detrás de cada una y la frase que sí abre la conversación.',
+              content: '· «Es muy caro» (7.2): falta de valor percibido → «¿caro comparado con qué?» y «¿cuánto te está costando no actuar?».\n· «Lo tengo que pensar» (7.3): miedo a decidir → «¿qué parte específicamente?» y los tres pilares.\n· «Tengo que hablarlo con mi pareja» (7.5): delegó la decisión → «¿qué opinas tú, sin contar a nadie más?».\n· «Ahora no es el momento» (7.9): falta de prioridad → «¿qué tendría que pasar para que sí lo fuera?».\n· «No sé si soy capaz» (7.6): inseguridad → «¿de dónde crees que viene esa duda?».\n· «No tengo tiempo» (7.4): no es prioridad → «¿qué pasaría si no haces nada en tres meses?».\n· «Quiero valorar otras opciones» (7.7): búsqueda de seguridad → «¿qué es lo más importante para ti al comparar?».\n· «Ya probé algo parecido» (7.8): miedo a otra decepción → «¿qué te haría falta esta vez?».\n· «Mándame la información» (7.9): salida amable → «¿qué información necesitas para decidir?».\n· «No es para mí»: encaje → «la pregunta no es si es para ti en general, sino si encaja contigo ahora».',
             },
           ],
           questions: [
@@ -412,7 +415,7 @@ export const DEFAULT_CURRICULUM: Curriculum = {
               prompt: 'La clienta dice que es caro. ¿Qué haces primero?',
               options: ['Bajar el precio.', 'Preguntar con qué lo está comparando.', 'Explicar todas las características.', 'Cerrar con una disyuntiva.'],
               correct: 1,
-              explanation: 'Aislar la objeción empieza por entender contra qué compara. Sin ese dato, cualquier respuesta es una suposición.',
+              explanation: 'Nombrar la objeción empieza por entender contra qué compara. Sin ese dato, cualquier respuesta es una suposición.',
             },
           ],
         },
@@ -420,24 +423,24 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           id: 'cierre-elegir',
           position: 2,
           title: 'Elegir el cierre que pide la llamada',
-          summary: 'No todos los cierres sirven para todas las objeciones.',
+          summary: 'Los cinco cierres de la academia: uno por obstáculo, no cinco seguidos.',
           minutes: 12,
-          content: 'Un cierre es una frase que ayuda a decidir, no un truco para empujar. El orden del método es triaje → cinco cierres universales → cinco específicos, y entre uno y otro, AAA.\n\nLos universales sirven casi siempre: la razón (su objeción es la razón para hacerlo), el hipotético («si esto no fuera un problema, ¿lo harías?»), zoom out (salir del detalle y volver al resultado), del 1 al 10 y mejor caso / peor caso. Los específicos atacan la teoría de fondo: el tiempo es prioridad, el dinero es valor, el decisor es apoyo y no permiso, el detalle es preferencia y el stall es evitar decidir.\n\nLa biblioteca de diez de la ruta (Decadere, Six Inches, Support Not Permission…) es el repertorio para esas teorías: elige el que pide la objeción que acaba de decir. Si invoca a su pareja, apoyo; si dice que es mucho dinero, valor; si necesita entender el sistema, mecanismo; si duda en el último segundo, lo cerca que está.\n\nApilar cierres es correcto si cada uno responde a lo que ella acaba de decir: se escucha, se reconoce, se pregunta y se vuelve a pedir sobre el mismo obstáculo. Lo que no funciona es soltar cierres en serie sin escuchar, ni cambiar de obstáculo para esquivar el que duele.',
-          key_points: ['El orden es triaje → universales → específicos.', 'Cada cierre responde a la objeción que acaba de decir.', 'Apilar cierres vale si se escucha entre uno y otro (AAA).', 'Si no avanza, vuelve a preguntar antes de cambiar de cierre.'],
+          content: 'Cerrar no es forzar: cerrar es ordenar la decisión (6.5). La academia da cinco cierres y una regla: se usa uno, el que mejor se adapte a lo que la clienta acaba de decir; si no mueve la decisión, se vuelve a preguntar qué frena antes de cambiar de cierre.\n\nDirecto: «después de todo lo que hablamos, ¿tiene sentido resolver esto ahora?». Confirmación: «por lo que me dices, esto es justo lo que buscabas, ¿confirmamos?». Prioridad: «¿qué pasa si no haces nada y todo sigue igual en tres meses? ¿Prefieres actuar ahora o seguir igual?». Elección: «empezamos ahora o lo dejas para más adelante y sigues igual, ¿cuál prefieres?». Responsabilidad: «no puedo decidir por ti, pero con lo que hablamos, ¿qué decisión te acerca más a lo que quieres?».\n\nCada cierre es una frase corta que se dice entera, sin justificarla. Y en todos, después de la pregunta, silencio: quien habla primero tras pedir suele rebajar lo que acaba de pedir (6.8).\n\nSi invoca a su pareja, el cierre es de responsabilidad o de confirmación; si dice que es mucho dinero, de prioridad; si duda en el último segundo, de elección. Lo que no se hace es soltar cierres en serie ni cambiar de obstáculo para esquivar el que duele.',
+          key_points: ['Cinco cierres: directo, confirmación, prioridad, elección y responsabilidad.', 'Se usa uno, el que pide la objeción que acaba de decir.', 'Cada cierre se dice entero y se sostiene con silencio.', 'Si no mueve, se pregunta otra vez antes de cambiar de cierre.'],
           resources: [
             {
-              id: 'res-cierres-biblioteca', type: 'doc', title: 'Biblioteca de diez cierres',
-              description: 'Fórmula, cuándo usarlo y un ejemplo sin importes inventados.',
-              content: '1. Decadere: «El programa son [importe]. El proceso te lo envío ahora.»\n2. Closer or Further: «¿Esta conversación nos acerca a empezar o nos aleja?»\n3. Six Inches: «Estás a un paso; lo único que falta es decidir.»\n4. Support Not Permission: «No necesitas permiso, necesitas apoyo.»\n5. It\'s Good That It\'s A Lot: «Que sea mucho es buena señal: refleja el valor.»\n6. Some Now, More Later: «Puedes empezar con [parte] y sumar el resto en [plazo].»\n7. Don\'t Burn Twice: «No dejes que te queme dos veces; esta vez hay acompañamiento.»\n8. 1-10: «Del 1 al 10, ¿dónde estás? Si es menos de 7, no es para ti.»\n9. Nervousness: «Los nervios significan que esto te importa.»\n10. Mechanic: «Semana 1 [hito], semana 2 [hito], semana 3 [medición].»',
+              id: 'res-cierres-biblioteca', type: 'doc', title: 'Los cinco cierres, con su frase',
+              description: 'Fórmula, cuándo usarlo y la frase literal de la academia.',
+              content: '1. Directo: «después de todo lo que hablamos, ¿tiene sentido resolver esto ahora?».\n2. Confirmación: «por lo que me dices, esto es justo lo que buscabas, ¿confirmamos?».\n3. Prioridad: «¿qué pasa si no haces nada y todo sigue igual en tres meses? ¿Prefieres actuar ahora o seguir igual?».\n4. Elección: «empezamos ahora o lo dejas para más adelante y sigues igual, ¿cuál prefieres?».\n5. Responsabilidad: «no puedo decidir por ti, pero con lo que hablamos, ¿qué decisión te acerca más a lo que quieres?».\nDespués de cada uno: silencio.',
             },
           ],
           questions: [
             {
               id: 'cierre-elegir-q1', type: 'case',
               prompt: '«Me encanta, pero tengo que hablarlo con mi pareja antes de decidir.» ¿Qué cierre pide?',
-              options: ['1-10', 'Apoyo, no permiso', 'Mecanismo', 'Nervios'],
+              options: ['Directo', 'De responsabilidad', 'De prioridad', 'De elección'],
               correct: 1,
-              explanation: 'La objeción invoca a un tercero. El cierre devuelve la agencia: necesita apoyo para decidir, no un permiso que la convierta en mensajera.',
+              explanation: 'El cierre de responsabilidad le devuelve la decisión: «no puedo decidir por ti, pero con lo que hablamos, ¿qué decisión te acerca más a lo que quieres?».',
             },
             {
               id: 'cierre-elegir-q2', type: 'multiple',
@@ -454,8 +457,8 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Pedir, callar y siguiente paso',
           summary: 'El precio, el silencio y un día y una hora; «ya te escribo» no es un cierre.',
           minutes: 8,
-          content: 'Pedir la venta es una frase corta y directa: «¿Empezamos?». No es una sugerencia ni una pregunta retórica. Después del precio, el silencio es parte del cierre: sostenerlo no es perder el control, es dar tiempo a decidir.\n\nSi la respuesta es no, no es el final: se gestiona la objeción y se vuelve a pedir. Quien más veces pide, más vende; lo que no se hace es repetir la misma frase sin haber cambiado nada ni bajar el precio para cerrar.\n\nSi sigue siendo no, se agenda la siguiente conversación dentro de la llamada (BAMFAM), con dos opciones de día y hora y la persona que tiene que estar. «Te mando información» o «ya te escribo» no es un siguiente paso: es una forma educada de desaparecer. Si dice que no a las dos, se reduce el compromiso (quince minutos) antes de colgar.\n\nCon el sí, se cierra la logística: repite lo acordado, confirma quién hace qué y cuándo, y despídete sin seguir vendiendo. Si la entrega pasa a otra persona, preséntala edificándola y pásale el contexto: handshake, no handoff.',
-          key_points: ['Pide la venta con una frase directa y sostén el silencio.', 'Tras el primer no se gestiona la objeción y se vuelve a pedir, sin bajar el precio.', 'El siguiente paso es BAMFAM con dos opciones de día y hora.', 'Después del sí, logística: quién hace qué y cuándo.'],
+          content: 'Pedir la venta es una frase corta y directa: «¿Empezamos?». No es una sugerencia ni una pregunta retórica. Después del precio, el silencio es parte del cierre: sostenerlo no es perder el control, es dar tiempo a decidir.\n\nSi la respuesta es no, no es el final: se gestiona la objeción y se vuelve a pedir. Quien más veces pide, más vende; lo que no se hace es repetir la misma frase sin haber cambiado nada ni bajar el precio para cerrar.\n\nSi sigue siendo no, se cierra el ciclo dentro de la llamada: día y hora para la siguiente conversación, con dos opciones, y la persona que tiene que estar. «Te mando información» o «ya te escribo» no es un siguiente paso: es una forma educada de desaparecer. Si dice que no a las dos, se reduce el compromiso (quince minutos) antes de colgar.\n\nCon el sí, se cierra la logística: repite lo acordado, confirma quién hace qué y cuándo, y despídete sin seguir vendiendo. Si la entrega pasa a otra persona, preséntala edificándola y pásale el contexto: handshake, no handoff.',
+          key_points: ['Pide la venta con una frase directa y sostén el silencio.', 'Tras el primer no se gestiona la objeción y se vuelve a pedir, sin bajar el precio.', 'El siguiente paso tiene día y hora, cerrado en la llamada.', 'Después del sí, logística: quién hace qué y cuándo.'],
           resources: [
             {
               id: 'res-cierre-checklist', type: 'checklist', title: 'Checklist del cierre',
@@ -485,8 +488,8 @@ export const DEFAULT_CURRICULUM: Curriculum = {
     {
       id: 'aplicacion',
       position: 4,
-      title: 'Práctica, entrevista y aplicación',
-      description: 'Convertir el método en candidaturas reales: formulario, entrevista y un hábito semanal sostenible.',
+      title: 'Seguimiento, captación y entrevista',
+      description: 'Cerrar el ciclo: seguimiento, candidatura y entrevista con evidencia, y un hábito semanal sostenible (8 y 11).',
       objectives: ['Preparar el formulario y el mensaje de candidatura', 'Responder una entrevista comercial con evidencia', 'Sostener un hábito semanal de práctica y aplicación'],
       deep_dive: 'entrevista',
       lessons: [

@@ -88,3 +88,26 @@ def test_every_resource_has_a_name_and_an_http_link():
 def test_course_durations_are_declared_by_the_source():
     for row in courses():
         assert re.match(r'^\d+:\d{2}:\d{2}$', row['duration']), f"{row['id']}: {row['duration']!r}"
+
+
+# Enlaces a las clases de Skool: los pone el propietario en la hoja («Abrir curso», «Abrir lección») y el
+# portal no los construye. El módulo es obligatorio; la lección, si la hoja la enlaza, tiene que ser suya.
+SKOOL_URL = re.compile(r'^https://www\.skool\.com/women-digital-closers/classroom/[0-9a-f]{8}(\?md=[0-9a-f]{32})?$')
+
+
+def test_every_module_opens_its_skool_class():
+    rows = courses()
+    for row in rows:
+        assert SKOOL_URL.match(row.get('url') or ''), f"{row['id']}: el módulo abre su clase de Skool"
+
+
+def test_lesson_links_are_real_and_not_shared():
+    rows = courses()
+    linked = [lesson for row in rows for lesson in row['lessons'] if lesson.get('url')]
+    for lesson in linked:
+        assert SKOOL_URL.match(lesson['url']), f"{lesson['id']}: enlace de Skool con la forma de la hoja"
+        assert '?md=' in lesson['url'], f"{lesson['id']}: el enlace apunta a la lección, no solo al módulo"
+    assert len({lesson['url'] for lesson in linked}) == len(linked), 'dos lecciones no comparten enlace'
+    # Todas las lecciones de la hoja vienen enlazadas; si alguna se quedara sin enlace, el portal abre el
+    # módulo y dice el nombre (por eso el mínimo, no la igualdad: una hoja futura puede dejar un hueco).
+    assert len(linked) >= 120, f'solo {len(linked)} lecciones con enlace propio'

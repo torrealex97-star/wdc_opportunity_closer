@@ -13,6 +13,12 @@
       "skillPath": "skills/deploy-to-vercel/SKILL.md",
       "computedHash": "66b99dfa063b1c405155e9bffd99c04ca3e312e81b168d540b757bb194b7400a"
     },
+    "metodo-wdc": {
+      "source": "local:claude-code",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/metodo-wdc/SKILL.md",
+      "computedHash": "2f4e41fa039ee0d6ef1cbd01fb57a5f8e83e967566c3df116949bf2b0c7f9aac"
+    },
     "scalix-ventas": {
       "source": "local:claude-code",
       "sourceType": "local",
