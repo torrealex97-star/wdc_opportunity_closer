@@ -1,7 +1,9 @@
--- NO APLICADA en Supabase (aplicar DDL exige orden expresa del propietario). Aditiva y reversible.
--- Currículo de Formación importable desde Excel/CSV + progreso por lección, intentos de test y estado
--- de gamificación. La app funciona con el currículo versionado en el repo mientras esta migración no se
--- aplique (y lo declara); el importador es idempotente por id.
+-- APLICADA en Supabase real (proyecto `closer-ia-ops`, ref `jzchuizybyubtkownhlw`) el 2026-11-20, por
+-- orden expresa del propietario, como migración `training_curriculum` (versión 20261120071928); su prueba
+-- `tests/db/training_curriculum.sql` pasó con BEGIN…ROLLBACK y el currículo quedó cargado (4/12/14/24).
+-- Aditiva y reversible. Currículo de Formación importable desde Excel/CSV + progreso por lección, intentos
+-- de test y estado de gamificación. Si la base no tiene currículo, la app sirve el versionado en el repo y
+-- lo declara; el importador es idempotente por id.
 --
 -- Se reutilizan las tablas existentes: `student_activity` sigue siendo la señal de actividad que da XP,
 -- rachas y logros (ADR-014: métricas derivadas, sin contadores que se puedan inflar), y las

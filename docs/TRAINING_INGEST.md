@@ -7,10 +7,11 @@ siguen viviendo en `student_applications`.
 
 ## Modelo de datos
 
-La migración preparada es [20261120_training_curriculum.sql](../supabase/migrations/20261120_training_curriculum.sql).
-**No está aplicada** al Supabase real: el DDL exige orden expresa del propietario. Mientras tanto la app
-sirve el currículo versionado en [trainingCurriculum.ts](../apps/web/lib/trainingCurriculum.ts) y lo
-declara en la vista («Currículo versionado en el repositorio»).
+La migración es [20261120_training_curriculum.sql](../supabase/migrations/20261120_training_curriculum.sql) y
+**está aplicada** en el Supabase real (`closer-ia-ops`, 2026-11-20) como `training_curriculum`, con el
+currículo cargado (4 módulos, 12 lecciones, 14 recursos, 24 preguntas). La app sirve la base y lo declara
+(`source: "db"`); solo si la base está vacía, falta la migración o el contenido no valida cae al currículo
+versionado en [trainingCurriculum.ts](../apps/web/lib/trainingCurriculum.ts) con el motivo.
 
 | Tabla | Para qué |
 | --- | --- |
@@ -127,9 +128,11 @@ Reglas de seguridad del importador ([training-import.mjs](../scripts/training-im
 
 ## Límites conocidos
 
-- La migración **no está aplicada** en Supabase. Hasta que el propietario lo autorice: currículo del repo,
-  progreso por lección en el navegador + señal `training_review` en `student_activity`, y ninguna escritura
-  en `user_quiz_attempts`/`user_gamification_state`.
+- La migración **está aplicada** y el currículo cargado, pero el progreso por lección sigue en el navegador
+  + señal `training_review` en `student_activity`: nada escribe todavía en `user_lesson_progress`,
+  `user_quiz_attempts` ni `user_gamification_state` (las tablas están listas, sin políticas).
+- La versión que se sirve desde la base es la fecha del `updated_at` más reciente de las cuatro tablas, no
+  una etiqueta fija: reimportar cambia la versión que declara `GET /api/training`.
 - El importador no renombra ids ni borra filas retiradas; un cambio de id se ve como entidad nueva.
 - `read-excel-file` es dependencia de desarrollo: el importador se ejecuta en local/CI, no en el Worker.
 
