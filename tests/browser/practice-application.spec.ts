@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
+
+// La vista de alumna lanza una búsqueda al montar, y esa búsqueda se guarda como ejecución en el motor:
+// se simula en toda la prueba para no escribir en el estado compartido entre workers.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', route => route.fulfill({ json: { items: [], total: 0 } }));
+});
 
 // La sala puede practicar una candidatura concreta. El navegador solo manda el id: el anuncio y
 // el formulario los resuelve el servidor (ver lib/practiceContext), y el panel lo dice.

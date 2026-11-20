@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 // fixtures — same shape as the API contract (v1 literal + unknowns explicit).
 const draftItem = {

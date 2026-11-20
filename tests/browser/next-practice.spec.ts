@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 // «Tu siguiente práctica» y la evolución por eje salen de los mismos datos que ya guarda la actividad:
 // aquí se simula el progreso y se comprueba que la recomendación se explica y arranca el escenario.
@@ -43,6 +43,7 @@ test('la sala recomienda la siguiente práctica con su motivo y la arranca', asy
 });
 
 test('competencias separa cada sala y pone «—» con menos de 3 datos', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', route => route.fulfill({ json: { items: [], total: 0 } }));
   await page.route('**/api/student/progress*', route => route.fulfill({ json: payload }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Mi progreso' }).click();

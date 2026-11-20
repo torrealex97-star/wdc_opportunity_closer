@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './stubs';
 
 // Tablero de /alumna: el seguimiento pasó de lista a pipeline y este test fija lo que no debe
 // romperse —mover una tarjeta de columna, guardar una nota y la puerta del asistente— con la API

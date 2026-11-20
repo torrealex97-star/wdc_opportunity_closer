@@ -1,5 +1,13 @@
 # Estado
 
+## Suite E2E en paralelo con las escrituras aisladas (sesión 245) — 2026-11-20
+
+- **Petición del propietario**: la suite corría con un solo worker porque «algunas pruebas escriben su configuración»; aislar el estado de las que escriben para poder paralelizarlas sin que se pisen.
+- **Qué escribía de verdad** (*verified* con una corrida instrumentada): `admin-practice.spec.ts` ya tenía su propio `next dev` + SQLite temporal + `distDir` por ejecución; lo que sí golpeaba el estado compartido eran dos efectos que nadie simulaba — **actividad** (`POST /api/student/activity`, 7 pruebas de formación y práctica) y **búsqueda de catálogo** (`POST /api/backend/opportunities/search`, 3 pruebas), que el motor guarda como ejecución. Las dos van por `page.route` y cada worker queda con su estado.
+- **Cambio**: nueva base [tests/browser/stubs.ts](../tests/browser/stubs.ts) que, antes de cada prueba, intercepta `**/api/**`: deja pasar lecturas y **corta con 501** cualquier escritura no simulada, fallando la prueba con el método y la ruta. Doce specs pasan a importar esa base; `admin-practice.spec.ts` sigue con `@playwright/test` porque escribe de verdad contra su propio servidor. [playwright.config.ts](../playwright.config.ts) vuelve a `workers: 4` (ajustable con `PLAYWRIGHT_WORKERS`) y documenta la regla.
+- **Probado** (*tested*): con la base nueva, la suite marcó 10 pruebas por escrituras sin simular (`activity` ×7, `opportunities/search` ×3); tras declarar esas rutas, `npx playwright test` **55 pasaron, 6 omitidas** con 4 workers y `git status` limpio. Tiempo medido: **43,5 s con 4 workers** frente a **62,4 s con `PLAYWRIGHT_WORKERS=1`** en la misma máquina; el cuello es el servidor de desarrollo compartido y el Next que arranca `admin-practice`, así que la ganancia es moderada. `npm run typecheck` exit 0.
+- **Límites honestos**: (1) El guardián cubre peticiones del navegador; las que van por `page.request`/APIRequestContext no pasa por él (hoy solo se usan para lecturas). (2) La suite sigue necesitando el servidor de desarrollo levantado en `127.0.0.1:3100` para sus lecturas; no lo arranca ella. (3) Con `WDC_CLOUD_ADMIN=1` las pruebas de alumnas se ejecutan y no se probaron en paralelo con el motor real. (4) Sin push: producción no cambia.
+
 ## La prueba E2E del panel deja el árbol limpio (sesión 244) — 2026-11-20
 
 - **Petición del propietario**: que la prueba E2E del panel (`tests/browser/admin-practice.spec.ts`) no modifique ficheros versionados ni comparta caché con el servidor de desarrollo, sin perder el aislamiento que necesita.

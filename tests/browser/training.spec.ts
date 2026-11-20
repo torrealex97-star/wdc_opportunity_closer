@@ -1,8 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 import { CLOSE_BANK, DISCOVERY_BANK, EXACT_CLOSES, FINAL_EXAM, OBJECTION_BANK, OBJECTION_GUIDES, PRE_CALL_STEPS } from '../../apps/web/components/trainingContent';
 
 // La vista de alumna carga oportunidades al montar: se neutraliza para aislar formación.
 const emptyCatalog = (route: import('@playwright/test').Route) => route.fulfill({ json: { items: [], total: 0 } });
+
+// Revisar un módulo o un ejercicio registra actividad (fire-and-forget): se simula en toda la prueba para
+// no escribir en el backend compartido. Cada worker queda así con su propio estado.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/student/activity', route => route.fulfill({ status: 201, json: { ok: true } }));
+});
 const open = async (page: import('@playwright/test').Page, title: string) => {
   await page.getByRole('button', { name: 'Formación' }).click();
   await page.locator('.training-grid .training-card').filter({ hasText: title }).getByRole('button', { name: 'Abrir módulo' }).click();

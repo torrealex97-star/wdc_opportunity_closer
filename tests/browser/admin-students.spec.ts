@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 // La tabla de alumnas y su ficha viven en AdminShell, que /admin solo monta con CAREER_ENGINE_URL
 // (modo hosted). Igual que admin-cloud.spec.ts, sin ese servidor la prueba se omite en vez de mentir:

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 const debrief = {
   summary: 'Has abierto con contexto y has preguntado por el seguimiento. La apertura aún pide demasiada explicación antes de interesar.',
@@ -29,6 +29,12 @@ const debrief = {
 
 // La vista de alumna carga oportunidades al montar: se neutraliza para aislar la práctica.
 const emptyCatalog = (route: import('@playwright/test').Route) => route.fulfill({ json: { items: [], total: 0 } });
+
+// Cerrar una práctica registra actividad: se simula en toda la prueba para no escribir en el backend
+// compartido (las pruebas que además la inspeccionan registran su propia ruta, que gana por ser posterior).
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/student/activity', route => route.fulfill({ status: 201, json: { ok: true } }));
+});
 
 // La sala tiene una sola entrada en el menú y cuatro salas por rol dentro; closer es la primera.
 const openRoom = async (page: import('@playwright/test').Page, tab = 'Closer · voz') => {
