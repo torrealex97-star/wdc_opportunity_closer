@@ -18,6 +18,34 @@ QUERIES = {'laborum': 'bumeran', 'europe-language': 'europe language jobs',
            'linkedin-posts': 'linkedin posts', 'facebook': 'facebook posts',
            'company': 'greenhouse jobs', 'custom': 'structured jobs'}
 
+# Barrido de repuesto (2026-11-20) para las fuentes que seguían sin buscador verificado: varias consultas por
+# fuente, porque la tienda es difusa y una sola búsqueda por nombre se queda corta. Solo se leen metadatos
+# públicos: aquí no se lanza ningún actor ni se gasta crédito.
+SWEEP = {
+    'trabajos': ['trabajos com bolsa de empleo'],
+    'weremoto': ['weremoto remote jobs', 'we remote jobs latam'],
+    'remotoco': ['remoto co empleos latam', 'remoto.co jobs'],
+    'malt': ['malt job offers', 'malt missions freelance'],
+    'europe-language': ['europe language jobs scraper', 'european language jobs spain'],
+    'jobsqd': ['jobsqd jobs', 'jobsqd.com'],
+    'tecnoempleo': ['tecnoempleo empleo informatica'],
+    'talent': ['talent jobs scraper spain'],
+    'milanuncios': ['milanuncios ofertas de empleo'],
+    'primer-empleo': ['primer empleo ofertas', 'primerempleo.com'],
+    'jobfluent': ['jobfluent jobs', 'jobfluent.com'],
+    'welcomejungle': ['wttj jobs spain'],
+    'closers-avenue': ['closersavenue.com', 'closers avenue jobs'],
+    'google': ['serpapi google jobs'],
+    'remotolist': ['remotolist.com empleo remoto'],
+    'domestika': ['domestika empleo', 'domestika jobs'],
+    'occ-mundial': ['occ mundial empleos'],
+    'chiletrabajos': ['chiletrabajos ofertas'],
+    'portal-empleo-mx': ['portal del empleo mexico ofertas', 'empleo.gob.mx'],
+}
+STORE_LIMIT = 10     # antes 3: el barrido mira más resultados por consulta
+MAX_CANDIDATES = 4    # igual que MAX_RECIPES del exportador: más intentos no caben en una búsqueda diaria
+DISCARDED_KEEP = 40  # actores revisados que se descartan, guardados como prueba de por qué no entran
+
 async def audit_jobtoday_slugs(client):
     """Check periódico de los slugs JobToday del REGISTRY: el destino real de cada
     ruta (redirect o 200) queda registrado como evidencia; un renombrado se detecta
@@ -49,7 +77,7 @@ async def audit_jobtoday_slugs(client):
     return {'checked_at': datetime.now(timezone.utc).isoformat(),
             'slugs': dict(await asyncio.gather(*(check(c) for c in REGISTRY.values() if isinstance(c, JobToday))))}
 
-async def main():
+async def main(only=None):
     semaphore = asyncio.Semaphore(3)
     async with httpx.AsyncClient(timeout=25) as client:
         async def get(path, params=None):
@@ -61,16 +89,30 @@ async def main():
             code, name, _, _, link, _ = row
             record = {'checked_at': datetime.now(timezone.utc).isoformat(), 'candidates': [], 'status': 'not_found'}
             try:
-                query = QUERIES.get(code, name.split(' · ')[0].split(' / ')[0])
-                store = await get('store', {'search': query, 'limit': 3})
-                actors = [f"{x['username']}/{x['name']}" for x in store.get('items', []) if x.get('username') and x.get('name')]
+                base = QUERIES.get(code, name.split(' · ')[0].split(' / ')[0])
+                queries = list(dict.fromkeys([base, *SWEEP.get(code, [])]))
+                totals, actors = {}, []
+                for query in queries:
+                    try:
+                        store = await get('store', {'search': query, 'limit': STORE_LIMIT})
+                    except httpx.HTTPError:
+                        totals[query] = None  # consulta caída: se anota, no se finge un vacío
+                        continue
+                    totals[query] = store.get('total')
+                    actors += [f"{x['username']}/{x['name']}" for x in store.get('items', []) if x.get('username') and x.get('name')]
+                actors = list(dict.fromkeys(actors))
                 if code == 'facebook':
                     actors.insert(0, 'apify/facebook-groups-scraper')
                 if code == 'torre':
                     actors.insert(0, 'scrapers_lat/torre-scraper')
                 if link.startswith('https://apify.com/') and '/store' not in link:
                     actors.insert(0, link.removeprefix('https://apify.com/'))
-                for actor in [a for a in dict.fromkeys(actors) if actor_matches(code, a)][:3]:
+                matched = [a for a in actors if actor_matches(code, a)]
+                # Evidencia del barrido: qué se buscó, cuánto devolvió cada consulta y qué actores se descartaron
+                # (queda escrito para que «no hay buscador» se pueda comprobar, no solo creer).
+                record['sweep'] = {'queries': queries, 'totals': totals, 'reviewed': len(actors),
+                                   'discarded': [a for a in actors if a not in set(matched)][:DISCARDED_KEEP]}
+                for actor in matched[:MAX_CANDIDATES]:
                     try:
                         metadata, build = await asyncio.gather(get('acts/' + actor.replace('/', '~')), get('acts/' + actor.replace('/', '~') + '/builds/default'))
                         if metadata.get('isDeprecated') or build.get('status') != 'SUCCEEDED':
@@ -90,10 +132,15 @@ async def main():
                 record['status'] = 'lookup_failed'
             print(code, record['status'], [x['actor'] for x in record['candidates']], flush=True)
             return code, record
-        results = dict(await asyncio.gather(*(audit(row) for row in CATALOG)))
-        jobtoday = await audit_jobtoday_slugs(client)
-    report = {'apify': results, 'jobtoday_slugs': jobtoday}
-    Path('apps/api/career/source_audit.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + '\n')
+        rows = [row for row in CATALOG if not only or row[0] in only]
+        results = dict(await asyncio.gather(*(audit(row) for row in rows)))
+        jobtoday = await audit_jobtoday_slugs(client) if not only else None
+    path = Path('apps/api/career/source_audit.json')
+    report = json.loads(path.read_text()) if only and path.exists() else {}
+    report.setdefault('apify', {}).update(results)
+    if jobtoday is not None:
+        report['jobtoday_slugs'] = jobtoday
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + '\n')
     write_launchd_alert(report)
 
 
@@ -144,4 +191,7 @@ def log_alert(payload, stream=None):
 # importan `slug_alerts`/`write_launchd_alert`—, así que cada pasada de la suite lanzaba el audit real por
 # red, reescribía `source_audit.json` a mitad de las pruebas y dejaba desfasado lo exportado desde él.
 if __name__ == '__main__':
-    asyncio.run(main())
+    # `--only trabajos,tecnoempleo` relee solo esas fuentes y conserva el resto del informe: es el modo de un
+    # barrido de repuesto, para no reescribir la evidencia de las demás.
+    only = {c for arg in sys.argv[1:] if not arg.startswith('-') for c in arg.split(',')}
+    asyncio.run(main(only or None))

@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-from export_apify_portals import ACTOR_RE, CURATED, MAX_RECIPES, OUT, build, render  # noqa: E402
+from export_apify_portals import ACTOR_RE, CURATED, EXCLUDED, MAX_RECIPES, OUT, TEMPLATES, build, render  # noqa: E402
 
 AUDIT = ROOT / 'apps/api/career/source_audit.json'
 CATALOG = ROOT / 'apps/web/lib/sourceCatalog.json'
@@ -89,8 +89,21 @@ def test_fallbacks_exist_whenever_the_store_offered_them():
     audited = audit()
     for portal in generated():
         available = len(audited.get(portal['id'], {}).get('candidates', []))
+        if portal['id'] in TEMPLATES:  # solo los actores que aceptan la plantilla documentada
+            actors = {r['actor'] for r in portal['recipes']}
+            assert actors == TEMPLATES[portal['id']]['actors'], f'{portal["id"]}: actores fuera de su plantilla'
+            continue
         assert len(portal['recipes']) == min(available, MAX_RECIPES), f'{portal["id"]}: faltan repuestos'
         assert len(portal['recipes']) <= MAX_RECIPES, f'{portal["id"]}: más de {MAX_RECIPES} intentos'
+
+
+def test_templates_only_go_where_the_actor_accepts_them():
+    # Los curados escriben la suya a mano (Workana); aquí se vigilan las que genera la auditoría.
+    with_template = {p['id'] for p in generated() if p.get('inputTemplate')}
+    assert with_template == set(TEMPLATES), f'plantillas inesperadas: {sorted(with_template ^ set(TEMPLATES))}'
+    for code, template in TEMPLATES.items():
+        filled = ' '.join(str(v) for v in template['input'].values())
+        assert '{{query}}' in filled and '{{max_items}}' in filled, f'{code}: la plantilla no rellena nada'
 
 
 def test_only_sources_that_need_a_paid_route_and_have_candidates_appear():
@@ -98,8 +111,11 @@ def test_only_sources_that_need_a_paid_route_and_have_candidates_appear():
     needs_input = {r['code'] for r in rows if r.get('requires') == 'input'}
     codes = {p['id'] for p in generated()}
     assert codes <= needs_input, f'entra una fuente que no necesita proveedor: {sorted(codes - needs_input)}'
-    expected = {c for c in needs_input - CURATED if audited.get(c, {}).get('candidates')}
+    expected = {c for c in needs_input - CURATED - set(EXCLUDED) if audited.get(c, {}).get('candidates')}
     assert codes == expected, f'faltan portales con buscador auditado: {sorted(expected - codes)}'
+    # Una fuente excluida tiene actores auditados pero de otro contrato: se queda fuera y se dice por qué.
+    for code in EXCLUDED:
+        assert code not in codes and audited.get(code, {}).get('candidates'), f'{code}: exclusión sin motivo medido'
 
 
 def test_every_portal_can_be_shown_to_the_operator():

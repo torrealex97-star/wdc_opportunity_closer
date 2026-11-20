@@ -616,9 +616,41 @@
       "status": "metadata_checked"
     },
     "trabajos": {
-      "checked_at": "2026-11-20T16:18:19.747934+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.891181+00:00",
+      "candidates": [
+        {
+          "actor": "bibian/trabajos-jobs-scraper",
+          "title": "Trabajos.com Jobs Scraper · No Login",
+          "url": "https://apify.com/bibian/trabajos-jobs-scraper",
+          "build": "0.1.12",
+          "fields": [
+            "keywords",
+            "location",
+            "maxItems",
+            "onlyNew",
+            "includeDescriptions"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Trabajos.com",
+          "trabajos com bolsa de empleo"
+        ],
+        "totals": {
+          "Trabajos.com": 2,
+          "trabajos com bolsa de empleo": 0
+        },
+        "reviewed": 2,
+        "discarded": [
+          "bibian/spain-jobs-scraper"
+        ]
+      }
     },
     "torre": {
       "checked_at": "2026-11-20T16:18:19.747936+00:00",
@@ -644,14 +676,77 @@
       "status": "metadata_checked"
     },
     "weremoto": {
-      "checked_at": "2026-11-20T16:18:19.747937+00:00",
+      "checked_at": "2026-11-20T17:32:48.898108+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "WeRemoto",
+          "weremoto remote jobs",
+          "we remote jobs latam"
+        ],
+        "totals": {
+          "WeRemoto": 28,
+          "weremoto remote jobs": 5,
+          "we remote jobs latam": 10
+        },
+        "reviewed": 22,
+        "discarded": [
+          "ribtools/webmotors-scraper",
+          "dami_studio/webmotors-scraper",
+          "stealth_mode/webmotors-auto-search-scraper",
+          "gio21/webmotors-scraper-v2",
+          "latinamericadata/webmotors-brasil",
+          "shahidirfan/webmotors-vehicle-scraper",
+          "truefetch/webmotors-api",
+          "crawloop/webmotors-scraper",
+          "reventadata/webmotors-scraper",
+          "silentflow/webmotors-scraper",
+          "getascraper/gupy-jobs-scraper",
+          "scrapers_lat/infojobs-br-scraper",
+          "haketa/computrabajo-scraper",
+          "hipersoft/tecnoempleo-scraper",
+          "boliveira/gupy-vagas",
+          "datadesk-io/jobs-mcp",
+          "benelux-signals/remote-jobs-aggregator",
+          "impressionable_lupine/remote-jobs-api",
+          "quietbyte/remote-jobs-by-country",
+          "datadesk-io/remote-jobs-scraper",
+          "centorprat/remote-jobs-aggregator",
+          "corridordata/global-remote-hiring-signals"
+        ]
+      }
     },
     "remotoco": {
-      "checked_at": "2026-11-20T16:18:19.747939+00:00",
+      "checked_at": "2026-11-20T17:32:48.898325+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Remoto.co",
+          "remoto co empleos latam",
+          "remoto.co jobs"
+        ],
+        "totals": {
+          "Remoto.co": 361,
+          "remoto co empleos latam": 1,
+          "remoto.co jobs": 21
+        },
+        "reviewed": 11,
+        "discarded": [
+          "unfenced-group/remote-co-scraper",
+          "orgupdate/remote-co-jobs-scraper",
+          "saswave/remote-com-job-scraper",
+          "ghostgrid/remoteco-job-scraper",
+          "fetch_cat/remote-dot-com-jobs-scraper",
+          "scrapestorm/remote-com-jobs-scraper---cheap",
+          "delectable_incubator/remote-com-jobs-scraper-low-cost",
+          "powerbox/remote-jobslisting-scraper",
+          "hello.datawizards/RemoteJobs-Scraper",
+          "santamaria-automations/computrabajo-scraper",
+          "shahidirfan/Remote-Job-Scraper"
+        ]
+      }
     },
     "laborum": {
       "checked_at": "2026-11-20T16:18:19.747940+00:00",
@@ -950,9 +1045,41 @@
       "status": "not_found"
     },
     "malt": {
-      "checked_at": "2026-11-20T16:18:19.747947+00:00",
+      "checked_at": "2026-11-20T17:33:17.934103+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Malt",
+          "malt job offers",
+          "malt missions freelance"
+        ],
+        "totals": {
+          "Malt": 68223,
+          "malt job offers": 4,
+          "malt missions freelance": 88
+        },
+        "reviewed": 17,
+        "discarded": [
+          "silentflow/malt-scraper",
+          "silentflow/malt-scraper-ppr",
+          "dltik/malt-scraper",
+          "shoya/malt-profile-scraper",
+          "yogen48-owner/malta-jobs",
+          "zinin/mga-operator-enforcement-monitor",
+          "studio-amba/malt-scraper",
+          "unfenced-group/jobhound-mt-scraper",
+          "nomad-agent/grs-cyprus-scraper",
+          "ahmed_jasarevic/malt-fr-scraper",
+          "mattzer/workday-jobs-scraper",
+          "getdataforme/jobsplus-course-info-parser-spider",
+          "nologin/instagram-scraper",
+          "muira_datamasters/malt-scraper",
+          "dataspryva/malt-freelancer-skill-and-rate-finder",
+          "eliai/seo-audit-report",
+          "blond_terrarium/seo-page-audit-crawler"
+        ]
+      }
     },
     "eures": {
       "checked_at": "2026-11-20T16:18:19.747948+00:00",
@@ -1027,14 +1154,85 @@
       "status": "metadata_checked"
     },
     "europe-language": {
-      "checked_at": "2026-11-20T16:18:19.747950+00:00",
+      "checked_at": "2026-11-20T17:32:48.898481+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "europe language jobs",
+          "europe language jobs scraper",
+          "european language jobs spain"
+        ],
+        "totals": {
+          "europe language jobs": 76,
+          "europe language jobs scraper": 69,
+          "european language jobs spain": 15
+        },
+        "reviewed": 25,
+        "discarded": [
+          "hoholabs/arbeitnow-scraper",
+          "themineworks/welcome-to-the-jungle-jobs-scraper",
+          "shayan.nazari/my-actor-1",
+          "mina_safwat/welcome-to-the-jungle-scraper",
+          "unfenced-group/jobup-ch-scraper",
+          "glasswing/xing-jobs-scraper",
+          "datadesk-io/devitjobs-jobs-scraper",
+          "solidactors/remote-ai-jobs-feed",
+          "northbell/arbeitnow-jobs-scraper",
+          "dadhalfdev/eures-jobs-scraper",
+          "azzouzana/welcome-to-the-jungle-jobs-scraper",
+          "silentflow/welcome-to-the-jungle-scraper-ppe",
+          "stealth_mode/justjoin-jobs-search-scraper",
+          "scrapestorm/eures-job-scraper---cheap",
+          "parsebird/djinni-jobs-scraper",
+          "delectable_incubator/eures-jobs-scraper-low-cost",
+          "praguedatalab/european-job-boards-scraper",
+          "studio-amba/grafton-scraper",
+          "scrapesage/welcome-to-the-jungle-scraper",
+          "santamaria-automations/welcome-to-the-jungle-scraper",
+          "bibian/eures-jobs-scraper",
+          "unfenced-group/jobtoday-scraper",
+          "studio-amba/adecco-scraper",
+          "studio-amba/michael-page-scraper",
+          "responsible_front_evw/eures-eu-jobs-alerts"
+        ]
+      }
     },
     "jobsqd": {
-      "checked_at": "2026-11-20T16:18:19.747954+00:00",
+      "checked_at": "2026-11-20T17:32:48.898485+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Jobsqd",
+          "jobsqd jobs",
+          "jobsqd.com"
+        ],
+        "totals": {
+          "Jobsqd": 133,
+          "jobsqd jobs": 0,
+          "jobsqd.com": 16
+        },
+        "reviewed": 16,
+        "discarded": [
+          "blackfalcondata/jobsdb-scraper",
+          "memo23/jobstreet-scraper",
+          "shahidirfan/Jobsdb-Scraper",
+          "snappytools/jobstreet-jobsdb-scraper",
+          "lexis-solutions/jobsdb",
+          "santamaria-automations/seek-scraper",
+          "herus13/jobstreet-scraper",
+          "corvuslab/jobstreet-scraper",
+          "snow_leo_data/seek-scraper",
+          "rainminer/jobted-com-scraper",
+          "jobsapi/jobted-com-jobs-search-scraper",
+          "rl1987/osint-jobs-scraper",
+          "jobsapi/jobsdb-sg-jobs-search-scraper",
+          "joesimo/successfactors-jobs",
+          "notarealgamedev/teamtailor-jobs",
+          "saswave/jobsdb-scraper"
+        ]
+      }
     },
     "facebook": {
       "checked_at": "2026-11-20T16:18:19.747957+00:00",
@@ -1510,9 +1708,28 @@
       "status": "metadata_checked"
     },
     "custom": {
-      "checked_at": "2026-11-20T16:18:19.747967+00:00",
+      "checked_at": "2026-11-20T17:32:48.898489+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "structured jobs"
+        ],
+        "totals": {
+          "structured jobs": 17236
+        },
+        "reviewed": 8,
+        "discarded": [
+          "troy_007/hn-who-is-hiring-extractor",
+          "noniner/b2b-job-post-parser",
+          "reaperoak/hacker-news-who-is-hiring-parser",
+          "yzy001/hn-hiring-jobs",
+          "haketa/hiring-cafe-scraper",
+          "signalscope-data/hn-hiring-parser",
+          "data_factory_nerd/hn-whos-hiring-jobs",
+          "spherical_tact/hn-who-is-hiring-ai"
+        ]
+      }
     },
     "jobgether": {
       "checked_at": "2026-11-20T16:18:19.747968+00:00",
@@ -1520,69 +1737,966 @@
       "status": "not_found"
     },
     "tecnoempleo": {
-      "checked_at": "2026-11-20T16:18:19.747970+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898492+00:00",
+      "candidates": [
+        {
+          "actor": "blackfalcondata/tecnoempleo-scraper",
+          "title": "Tecnoempleo Scraper — Spain IT Job Listings",
+          "url": "https://apify.com/blackfalcondata/tecnoempleo-scraper",
+          "build": "0.1.54",
+          "fields": [
+            "query",
+            "province",
+            "startUrls",
+            "en_remoto",
+            "professionalSkill",
+            "experience",
+            "salary",
+            "workday",
+            "contractType",
+            "date_start",
+            "maxResults",
+            "includeDetails",
+            "descriptionMaxLength",
+            "compact",
+            "incrementalMode",
+            "stateKey",
+            "emitUnchanged",
+            "emitExpired",
+            "skipReposts",
+            "telegramToken",
+            "telegramChatId",
+            "discordWebhookUrl",
+            "slackWebhookUrl",
+            "whatsappPhoneNumberId",
+            "whatsappAccessToken",
+            "whatsappTo",
+            "webhookUrl",
+            "webhookHeaders",
+            "notificationLimit",
+            "notifyOnlyChanges",
+            "descriptionFormat",
+            "excludeEmptyFields",
+            "appConnector",
+            "mcpIssueTeam"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "nomad-agent/tecnoempleo-scraper",
+          "title": "Tecnoempleo Jobs Scraper: Spain IT Jobs + Only New",
+          "url": "https://apify.com/nomad-agent/tecnoempleo-scraper",
+          "build": "0.1.54",
+          "fields": [
+            "queries",
+            "locations",
+            "locationTypes",
+            "employmentTypes",
+            "postedWithin",
+            "maxItems",
+            "dedupe",
+            "schemaVersion"
+          ],
+          "required": [
+            "schemaVersion"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "kalirobot/tecnoempleo-scraper",
+          "title": "Tecnoempleo Scraper: Extract Tech Jobs",
+          "url": "https://apify.com/kalirobot/tecnoempleo-scraper",
+          "build": "0.1.32",
+          "fields": [
+            "keywords",
+            "province",
+            "role",
+            "remote",
+            "max_items"
+          ],
+          "required": [
+            "max_items"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT",
+            "PRICE_PER_DATASET_ITEM"
+          ]
+        },
+        {
+          "actor": "solidcode/tecnoempleo-scraper",
+          "title": "Tecnoempleo Scraper",
+          "url": "https://apify.com/solidcode/tecnoempleo-scraper",
+          "build": "1.0.4",
+          "fields": [
+            "query",
+            "provinces",
+            "workModality",
+            "professionalFunctions",
+            "contractType",
+            "workday",
+            "experience",
+            "postedSince",
+            "startUrls",
+            "includeDetails",
+            "maxResults"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Tecnoempleo",
+          "tecnoempleo empleo informatica"
+        ],
+        "totals": {
+          "Tecnoempleo": 12,
+          "tecnoempleo empleo informatica": 2
+        },
+        "reviewed": 9,
+        "discarded": []
+      }
     },
     "talent": {
-      "checked_at": "2026-11-20T16:18:19.747972+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898494+00:00",
+      "candidates": [
+        {
+          "actor": "blackfalcondata/talent-com-jobs-scraper",
+          "title": "Talent.com Job Scraper [Just 💰$1.5] — Jobs across 42 Markets",
+          "url": "https://apify.com/blackfalcondata/talent-com-jobs-scraper",
+          "build": "0.1.72",
+          "fields": [
+            "mode",
+            "jobUrls",
+            "query",
+            "country",
+            "location",
+            "startUrls",
+            "maxResults",
+            "maxPages",
+            "daysOld",
+            "jobType",
+            "remoteFilter",
+            "includeDetails",
+            "descriptionMaxLength",
+            "compact",
+            "incrementalMode",
+            "stateKey",
+            "emitUnchanged",
+            "emitExpired",
+            "skipReposts",
+            "telegramToken",
+            "telegramChatId",
+            "discordWebhookUrl",
+            "slackWebhookUrl",
+            "whatsappPhoneNumberId",
+            "whatsappAccessToken",
+            "whatsappTo",
+            "webhookUrl",
+            "webhookHeaders",
+            "notificationLimit",
+            "notifyOnlyChanges",
+            "proxyConfiguration",
+            "descriptionFormat",
+            "excludeEmptyFields",
+            "appConnector",
+            "mcpIssueTeam"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "solidcode/talent-com-scraper",
+          "title": "Talent.com Jobs Scraper",
+          "url": "https://apify.com/solidcode/talent-com-scraper",
+          "build": "1.0.5",
+          "fields": [
+            "searchQueries",
+            "country",
+            "location",
+            "startUrls",
+            "maxResults",
+            "jobType",
+            "remote",
+            "datePosted",
+            "fetchDescription"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "agentx/talent-jobs-scraper",
+          "title": "Talent Jobs Scraper: Talent.com Salary, Remote",
+          "url": "https://apify.com/agentx/talent-jobs-scraper",
+          "build": "1.0.47",
+          "fields": [
+            "max_results",
+            "keyword",
+            "country",
+            "location",
+            "currency"
+          ],
+          "required": [
+            "max_results",
+            "keyword",
+            "country"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "scrapers_lat/talent-jobs-scraper",
+          "title": "Talent.com Jobs Scraper & API - Salary, Company, No API Key",
+          "url": "https://apify.com/scrapers_lat/talent-jobs-scraper",
+          "build": "0.1.33",
+          "fields": [
+            "keyword",
+            "location",
+            "country",
+            "radius",
+            "startUrls",
+            "jobUrls",
+            "maxJobs",
+            "maxPages",
+            "withDetails",
+            "remoteOnly",
+            "employmentType",
+            "minSalary",
+            "postedWithinDays",
+            "descriptionMaxLength",
+            "proxyConfiguration"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Talent.com",
+          "talent jobs scraper spain"
+        ],
+        "totals": {
+          "Talent.com": 32,
+          "talent jobs scraper spain": 51
+        },
+        "reviewed": 18,
+        "discarded": [
+          "0xgollum/global-job-aggregator",
+          "nomad-agent/tecnoempleo-scraper",
+          "igolaizola/infojobs-scraper",
+          "easyapi/infojobs-job-scraper",
+          "santamaria-automations/sepe-es-scraper",
+          "parseforge/infojobs-scraper",
+          "benthepythondev/infojobs-jobs-scraper",
+          "themineworks/infojobs-scraper",
+          "solidcode/infojobs-net-scraper",
+          "studio-amba/tecnoempleo-scraper"
+        ]
+      }
     },
     "milanuncios": {
-      "checked_at": "2026-11-20T16:18:19.747973+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898496+00:00",
+      "candidates": [
+        {
+          "actor": "hipersoft/milanuncios-scraper",
+          "title": "Milanuncios Scraper — Anuncios Clasificados (Spain)",
+          "url": "https://apify.com/hipersoft/milanuncios-scraper",
+          "build": "1.0.9",
+          "fields": [
+            "queries",
+            "category",
+            "province",
+            "minPrice",
+            "maxPrice",
+            "sellerType",
+            "maxItems",
+            "proxyConfiguration"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "blackfalcondata/milanuncios-scraper",
+          "title": "Milanuncios Scraper [Just 💰$1.5] — Cars, Homes & All Ads",
+          "url": "https://apify.com/blackfalcondata/milanuncios-scraper",
+          "build": "0.1.28",
+          "fields": [
+            "startUrls",
+            "category",
+            "query",
+            "make",
+            "region",
+            "province",
+            "priceMin",
+            "priceMax",
+            "yearMin",
+            "yearMax",
+            "kmMin",
+            "kmMax",
+            "fuelType",
+            "transmission",
+            "includeKeywords",
+            "excludeKeywords",
+            "maxResults",
+            "compact",
+            "includeDetails",
+            "descriptionMaxLength",
+            "descriptionFormat",
+            "excludeEmptyFields",
+            "incrementalMode",
+            "stateKey",
+            "skipReposts",
+            "emitUnchanged",
+            "emitExpired",
+            "telegramToken",
+            "telegramChatId",
+            "discordWebhookUrl",
+            "slackWebhookUrl",
+            "notificationLimit",
+            "notifyOnlyChanges",
+            "whatsappAccessToken",
+            "whatsappPhoneNumberId",
+            "whatsappTo",
+            "webhookUrl",
+            "webhookHeaders",
+            "appConnector",
+            "mcpIssueTeam"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Milanuncios Empleo",
+          "milanuncios ofertas de empleo"
+        ],
+        "totals": {
+          "Milanuncios Empleo": 2,
+          "milanuncios ofertas de empleo": 0
+        },
+        "reviewed": 2,
+        "discarded": []
+      }
     },
     "primer-empleo": {
-      "checked_at": "2026-11-20T16:18:19.747975+00:00",
+      "checked_at": "2026-11-20T17:32:48.898499+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Primer Empleo",
+          "primer empleo ofertas",
+          "primerempleo.com"
+        ],
+        "totals": {
+          "Primer Empleo": 111,
+          "primer empleo ofertas": 0,
+          "primerempleo.com": 0
+        },
+        "reviewed": 10,
+        "discarded": [
+          "delectable_incubator/gov-uk-jobs-scraper-low-cost",
+          "delectable_incubator/job-room-ch-arbeit-swiss-scraper---preiswert-low-cost",
+          "automation-lab/amazon-product-search-results-scraper",
+          "delectable_incubator/remote-rocketship-jobs-scraper-low-cost",
+          "alwaysprimedev/multi-ats-jobs-scraper",
+          "delectable_incubator/guru-com-jobs-scraper-low-cost",
+          "delectable_incubator/hh-ru-jobs-scraper-byudzhetnyy-low-cost",
+          "delectable_incubator/infojobs-job-detail-scraper-low-cost",
+          "delectable_incubator/remote-com-jobs-scraper-low-cost",
+          "delectable_incubator/eures-jobs-scraper-low-cost"
+        ]
+      }
     },
     "jobfluent": {
-      "checked_at": "2026-11-20T16:18:19.747976+00:00",
+      "checked_at": "2026-11-20T17:32:48.898500+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Jobfluent",
+          "jobfluent jobs",
+          "jobfluent.com"
+        ],
+        "totals": {
+          "Jobfluent": 0,
+          "jobfluent jobs": 0,
+          "jobfluent.com": 0
+        },
+        "reviewed": 0,
+        "discarded": []
+      }
     },
     "welcomejungle": {
-      "checked_at": "2026-11-20T16:18:19.747978+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898502+00:00",
+      "candidates": [
+        {
+          "actor": "saswave/welcome-to-the-jungle-scraper",
+          "title": "Welcome to the jungle scraper",
+          "url": "https://apify.com/saswave/welcome-to-the-jungle-scraper",
+          "build": "0.0.78",
+          "fields": [
+            "search_job",
+            "jobs",
+            "companies",
+            "max_page"
+          ],
+          "required": [],
+          "pricing_models": [
+            "FLAT_PRICE_PER_MONTH",
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "silentflow/welcome-to-the-jungle-scraper-ppe",
+          "title": "Welcome to the Jungle Job Scraper",
+          "url": "https://apify.com/silentflow/welcome-to-the-jungle-scraper-ppe",
+          "build": "1.0.12",
+          "fields": [
+            "startUrls",
+            "jobIds",
+            "searches",
+            "location",
+            "language",
+            "scrapeMode",
+            "contractTypes",
+            "remoteTypes",
+            "publishedSince",
+            "maxItems"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "dltik/welcome-to-the-jungle-scraper",
+          "title": "Welcome to the Jungle Scraper: WTJ Tech Jobs FR/EU + Salaries",
+          "url": "https://apify.com/dltik/welcome-to-the-jungle-scraper",
+          "build": "2.0.6",
+          "fields": [
+            "keywords",
+            "contractTypes",
+            "country",
+            "cities",
+            "remote",
+            "experienceLevels",
+            "language",
+            "enrichDetails",
+            "enrichCompany",
+            "analyzeJobs",
+            "onlyWithApplicationQuestions",
+            "candidateProfile",
+            "incrementalMode",
+            "includeUnchanged",
+            "includeExpired",
+            "stateKey",
+            "maxResults"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "silentflow/welcome-to-the-jungle-scraper",
+          "title": "Welcome to the Jungle Scraper | Jobs and Company Data",
+          "url": "https://apify.com/silentflow/welcome-to-the-jungle-scraper",
+          "build": "1.0.14",
+          "fields": [
+            "startUrls",
+            "searches",
+            "location",
+            "language",
+            "scrapeMode",
+            "contractTypes",
+            "remoteTypes",
+            "publishedSince",
+            "maxItems"
+          ],
+          "required": [],
+          "pricing_models": [
+            "FLAT_PRICE_PER_MONTH",
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Welcome to the Jungle ES",
+          "wttj jobs spain"
+        ],
+        "totals": {
+          "Welcome to the Jungle ES": 10,
+          "wttj jobs spain": 5
+        },
+        "reviewed": 15,
+        "discarded": [
+          "flarewow/dice-jobs-scraper",
+          "flarewow/totaljobs-reed-jobs-scraper",
+          "amygraphics/france-jobs-scraper"
+        ]
+      }
     },
     "closers-avenue": {
-      "checked_at": "2026-11-20T16:18:19.747979+00:00",
+      "checked_at": "2026-11-20T17:32:48.898504+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "ClosersAvenue",
+          "closersavenue.com",
+          "closers avenue jobs"
+        ],
+        "totals": {
+          "ClosersAvenue": 0,
+          "closersavenue.com": 0,
+          "closers avenue jobs": 0
+        },
+        "reviewed": 0,
+        "discarded": []
+      }
     },
     "google": {
-      "checked_at": "2026-11-20T16:18:19.747981+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898506+00:00",
+      "candidates": [
+        {
+          "actor": "plainrows/google-jobs-scraper",
+          "title": "Google Jobs Scraper API: Listings, Salaries & Apply Links",
+          "url": "https://apify.com/plainrows/google-jobs-scraper",
+          "build": "0.1.32",
+          "fields": [
+            "queries",
+            "country",
+            "languageCode",
+            "maxJobsPerQuery",
+            "onlyNewJobs",
+            "monitorName"
+          ],
+          "required": [
+            "queries"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "brightgro/google-jobs",
+          "title": "Google Jobs Search Results",
+          "url": "https://apify.com/brightgro/google-jobs",
+          "build": "0.1.4",
+          "fields": [
+            "queries",
+            "country",
+            "location",
+            "maxJobsPerQuery",
+            "employmentTypes"
+          ],
+          "required": [
+            "queries"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "alexmorain/google-jobs-scraper",
+          "title": "Google Jobs Scraper | Jobs by City, Apply Links, Full Coverage",
+          "url": "https://apify.com/alexmorain/google-jobs-scraper",
+          "build": "0.1.11",
+          "fields": [
+            "queries",
+            "locations",
+            "country",
+            "language",
+            "datePosted",
+            "employmentTypes",
+            "remoteOnly",
+            "completeCoverage",
+            "startUrls",
+            "maxItems",
+            "maxRequestsPerSearch",
+            "maxConcurrency",
+            "newOnly",
+            "monitorName",
+            "webhookUrl"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "arcadium/google-jobs",
+          "title": "Google Jobs Scraper: Salary, Apply Links, ATS Detection",
+          "url": "https://apify.com/arcadium/google-jobs",
+          "build": "0.1.13",
+          "fields": [
+            "queries",
+            "locations",
+            "datePosted",
+            "employmentTypes",
+            "remoteOnly",
+            "maxResultsPerQuery",
+            "maxItems",
+            "country",
+            "language",
+            "includeDescription",
+            "maxDescriptionChars",
+            "jobsDbExport",
+            "includeErrorRows",
+            "maxRetries"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Google dorks",
+          "serpapi google jobs"
+        ],
+        "totals": {
+          "Google dorks": 822,
+          "serpapi google jobs": 18
+        },
+        "reviewed": 17,
+        "discarded": [
+          "alizarin_refrigerator-owner/square-merchant-finder-discover-businesses-using-square",
+          "scrapesage/phoneinfoga-scraper",
+          "anshumanatrey/ashby-jobs-search",
+          "easy_scraper/instagram-leads-scraper",
+          "datacach/phoneinfoga-phone-number-osint-scanner",
+          "scrapesage/holehe-scraper",
+          "easy_scraper/mass-instagram-email-scraper",
+          "easy_scraper/mass-linkedin-email-scraper",
+          "complete_analogy/openosint-domain-recon",
+          "mambalabs/gtm-job-discovery"
+        ]
+      }
     },
     "remotolist": {
-      "checked_at": "2026-11-20T16:18:19.747983+00:00",
+      "checked_at": "2026-11-20T17:32:48.898508+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "RemotoList",
+          "remotolist.com empleo remoto"
+        ],
+        "totals": {
+          "RemotoList": 4,
+          "remotolist.com empleo remoto": 0
+        },
+        "reviewed": 4,
+        "discarded": [
+          "scrapersdelight/realestate-com-au-scraper",
+          "contactminerlabs/harcourts-real-estate-agents-email-scraper",
+          "contactminerlabs/ray-white-real-estate-agents-email-scraper-advanced",
+          "contactminerlabs/raine-horne-real-estate-agents-email-scraper"
+        ]
+      }
     },
     "domestika": {
-      "checked_at": "2026-11-20T16:18:19.747985+00:00",
+      "checked_at": "2026-11-20T17:32:48.898510+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Domestika Empleo",
+          "domestika empleo",
+          "domestika jobs"
+        ],
+        "totals": {
+          "Domestika Empleo": 13,
+          "domestika empleo": 13,
+          "domestika jobs": 21
+        },
+        "reviewed": 15,
+        "discarded": [
+          "hllerdgn80/uk-mp-financial-interests-watchlist",
+          "steadfetch/seg-social-afiliacion-municipal-extractor",
+          "nabeelbaghoor/global-company-database-api",
+          "bareezh_codes/merojob-nepal-jobs-scraper",
+          "yugenox/tradeindia-scraper",
+          "agenscrape/dubizzle-uae-scraper",
+          "khadinakbar/yahoo-finance-scraper",
+          "scrapemint/florida-sunbiz-new-business-leads",
+          "research_master/akshare-financial-data",
+          "domestic_buffalograss/company-hiring-tracker",
+          "siteverdict/siteverdict-uk-energy-carbon",
+          "domestic_buffalograss/ecb-fx",
+          "maximedupre/alternative-data",
+          "automation_studio/specialty-food-distributors-scraper",
+          "jpmarketdata/hlj-japan-domestic-catalog-export"
+        ]
+      }
     },
     "occ-mundial": {
-      "checked_at": "2026-11-20T16:18:19.747987+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898512+00:00",
+      "candidates": [
+        {
+          "actor": "corvuslab/occ-mundial-jobs-scraper",
+          "title": "OCC Mundial Jobs Scraper — Full Details, Salary & Alerts",
+          "url": "https://apify.com/corvuslab/occ-mundial-jobs-scraper",
+          "build": "0.2.48",
+          "fields": [
+            "query",
+            "location",
+            "startUrls",
+            "maxResults",
+            "descriptionFormat",
+            "descriptionMaxLength",
+            "compact",
+            "excludeEmptyFields",
+            "incrementalMode",
+            "stateKey",
+            "emitUnchanged",
+            "emitExpired",
+            "telegramToken",
+            "telegramChatId",
+            "slackWebhookUrl",
+            "discordWebhookUrl",
+            "webhookUrl",
+            "webhookHeaders",
+            "notificationLimit",
+            "proxyConfiguration",
+            "maxPages",
+            "pageConcurrency",
+            "detailConcurrency",
+            "requestDelayMs"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "automatic/occ-mx-scraper",
+          "title": "OCC Mundial Scraper: Mexico Jobs, Salaries & Companies",
+          "url": "https://apify.com/automatic/occ-mx-scraper",
+          "build": "0.2.13",
+          "fields": [
+            "queries",
+            "searches",
+            "maxPages",
+            "maxResults",
+            "maxDetails",
+            "requestDelaySecs",
+            "proxyUrl",
+            "proxyUsername",
+            "proxyPassword",
+            "debugDump",
+            "proxy",
+            "onlyNewSinceLastRun",
+            "stateKey"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "gio21/occmundial-jobs-scraper",
+          "title": "OCC Mundial Jobs Scraper - Full Details, $0.005/Job",
+          "url": "https://apify.com/gio21/occmundial-jobs-scraper",
+          "build": "0.0.3",
+          "fields": [
+            "keyword",
+            "maxItems"
+          ],
+          "required": [
+            "keyword"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "normdata/occ-scraper",
+          "title": "OCC Mundial Jobs Scraper",
+          "url": "https://apify.com/normdata/occ-scraper",
+          "build": "1.0.9",
+          "fields": [
+            "maxItems",
+            "keywords",
+            "locations",
+            "pageUrl",
+            "categories",
+            "workModels",
+            "contractTypes",
+            "education",
+            "minSalary",
+            "maxSalary",
+            "postedWithin",
+            "sortBy"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "OCC Mundial",
+          "occ mundial empleos"
+        ],
+        "totals": {
+          "OCC Mundial": 15,
+          "occ mundial empleos": 3
+        },
+        "reviewed": 11,
+        "discarded": [
+          "ambiotec/mexico-jobs-scraper",
+          "datadesk-io/mexico-jobs-scraper"
+        ]
+      }
     },
     "chiletrabajos": {
-      "checked_at": "2026-11-20T16:18:19.747989+00:00",
-      "candidates": [],
-      "status": "not_found"
+      "checked_at": "2026-11-20T17:32:48.898513+00:00",
+      "candidates": [
+        {
+          "actor": "rainminer/chiletrabajos-scraper",
+          "title": "ChileTrabajos Job Scraper",
+          "url": "https://apify.com/rainminer/chiletrabajos-scraper",
+          "build": "1.0.1",
+          "fields": [
+            "startUrls",
+            "maxItems",
+            "proxyConfiguration"
+          ],
+          "required": [
+            "startUrls"
+          ],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "fabrikit/chiletrabajos-scraper",
+          "title": "Chiletrabajos Scraper - Chile Job Listings",
+          "url": "https://apify.com/fabrikit/chiletrabajos-scraper",
+          "build": "0.1.2",
+          "fields": [
+            "searchQueries",
+            "locations",
+            "categories",
+            "publishedWithin",
+            "jobType",
+            "company",
+            "inclusionOnly",
+            "startUrls",
+            "includeDetails",
+            "maxItems",
+            "maxPagesPerSource",
+            "proxyConfiguration"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "santamaria-automations/chiletrabajos-jobs-scraper",
+          "title": "Chiletrabajos Jobs Scraper: Chile Job Listings",
+          "url": "https://apify.com/santamaria-automations/chiletrabajos-jobs-scraper",
+          "build": "0.1.2",
+          "fields": [
+            "searchQueries",
+            "location",
+            "category",
+            "jobType",
+            "postedWithin",
+            "company",
+            "inclusionLaw",
+            "sortBy",
+            "maxResultsPerQuery",
+            "maxResults",
+            "includeDetails"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        },
+        {
+          "actor": "hipersoft/chiletrabajos-scraper",
+          "title": "Chiletrabajos Scraper — Chile Job Listings",
+          "url": "https://apify.com/hipersoft/chiletrabajos-scraper",
+          "build": "1.0.5",
+          "fields": [
+            "keywords",
+            "cities",
+            "includeDetails",
+            "maxItems",
+            "proxyConfiguration"
+          ],
+          "required": [],
+          "pricing_models": [
+            "PAY_PER_EVENT"
+          ]
+        }
+      ],
+      "status": "metadata_checked",
+      "sweep": {
+        "queries": [
+          "Chiletrabajos",
+          "chiletrabajos ofertas"
+        ],
+        "totals": {
+          "Chiletrabajos": 4,
+          "chiletrabajos ofertas": 0
+        },
+        "reviewed": 4,
+        "discarded": []
+      }
     },
     "portal-empleo-mx": {
-      "checked_at": "2026-11-20T16:18:19.747991+00:00",
+      "checked_at": "2026-11-20T17:32:48.898515+00:00",
       "candidates": [],
-      "status": "not_found"
+      "status": "not_found",
+      "sweep": {
+        "queries": [
+          "Portal del Empleo (México)",
+          "portal del empleo mexico ofertas",
+          "empleo.gob.mx"
+        ],
+        "totals": {
+          "Portal del Empleo (México)": 0,
+          "portal del empleo mexico ofertas": 0,
+          "empleo.gob.mx": 0
+        },
+        "reviewed": 0,
+        "discarded": []
+      }
     }
   },
   "jobtoday_slugs": {

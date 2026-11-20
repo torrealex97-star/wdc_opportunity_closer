@@ -79,6 +79,14 @@ BRANDS = {
     'torre': ['torre-ai', 'torre-co', 'torre-scraper'], 'weremoto': ['weremoto'], 'remotoco': ['remoto-co'],
     'laborum': ['bumeran', 'laborum'], 'elempleo': ['elempleo'], 'upwork': ['upwork'],
     'freelancer': ['freelancer-com'], 'malt': ['malt'], 'eures': ['eures'],
+    # Marcas reconocidas en el barrido del 2026-11-20. Solo el nombre del portal: el filtro sigue cerrando
+    # ante cualquier actor que no sea suyo (un buscador de coches no sirve para ofertas).
+    'trabajos': ['trabajos-com', 'trabajos-jobs'], 'tecnoempleo': ['tecnoempleo'],
+    'talent': ['talent-com', 'talent-jobs', 'talent-scraper'],
+    'milanuncios': ['milanuncios'],
+    'welcomejungle': ['welcome-to-the-jungle', 'welcometothejungle', 'wttj'],
+    'occ-mundial': ['occ-mundial', 'occmundial', 'occ-scraper', 'occ-mx', 'occ-mexico'],
+    'chiletrabajos': ['chiletrabajos'],
     'europe-language': ['europelanguagejobs', 'europe-language-jobs'], 'jobsqd': ['jobsqd'],
     'facebook': ['facebook'], 'linkedin-posts': ['linkedin'], 'skool': ['skool'],
     'telegram': ['telegram'], 'reddit': ['reddit'], 'company': ['greenhouse', 'lever', 'ashby'],
@@ -92,7 +100,8 @@ def actor_matches(source, actor):
         return False
     if any(word in name for word in ['members', 'reactions', 'profile-scraper', 'freelancers']):
         return False
-    if source == 'malt' and not any(word in name for word in ['job', 'mission']):
+    # Malt es el mercado freelance francés: «malta-jobs» (el país) pasaba el filtro por parecerse al nombre.
+    if source == 'malt' and ('malta' in name or not any(word in name for word in ['job', 'mission'])):
         return False
     if source == 'skool' and 'post' not in name:
         return False
