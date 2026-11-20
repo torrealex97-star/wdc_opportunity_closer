@@ -60,27 +60,35 @@ let log = '';
 // `next dev` reescribe `apps/web/next-env.d.ts` y `apps/web/tsconfig.json` en cada arranque para apuntar
 // los tipos a su distDir, y no hay ajuste de Next que lo redirija: siempre se escriben en el directorio del
 // proyecto. Con un distDir propio (para no compartir caché con el `next dev` del operador) el contenido
-// cambia y el repo queda sucio. La prueba guarda los bytes originales antes de arrancar y los devuelve
-// tal cual al terminar, también si algún paso falla. El distDir `.next-e2e*` ya está en .gitignore.
+// cambia y el repo queda sucio. La prueba guarda los bytes versionados y devuelve solo lo que reescribió
+// su propio servidor: un fichero que haya cambiado por otra mano no se pisa, se declara. El distDir
+// `.next-e2e*` ya está en .gitignore.
 const PROJECT_FILES = ['next-env.d.ts', 'tsconfig.json'].map(name => path.join(process.cwd(), 'apps/web', name));
-const originalProjectFiles = new Map<string, Buffer>();
-// Devuelve los ficheros que no quedaron byte a byte como al arrancar. `afterAll` lo comprueba y falla
-// la suite si hay alguno: así una escritura que no se puede revertir (o que otro proceso reescribe
-// después) se ve en la prueba y no en un `git status` que alguien tiene que mirar a mano.
-function restoreProjectFiles(): string[] {
-  for (const [file, contents] of originalProjectFiles) {
-    try { if (!readFileSync(file).equals(contents)) writeFileSync(file, contents); } catch { /* el arranque del servidor no llegó a escribir */ }
+const originalProjectFiles = new Map(PROJECT_FILES.map(file => [file, readFileSync(file)]));
+// Bytes que dejó el servidor de la prueba al arrancar: lo único que se permite sobrescribir al restaurar.
+const serverProjectFiles = new Map<string, Buffer>();
+const readOrNull = (file: string) => { try { return readFileSync(file); } catch { return null; } };
+function captureServerProjectFiles() {
+  for (const file of PROJECT_FILES) {
+    const bytes = readOrNull(file);
+    if (bytes) serverProjectFiles.set(file, bytes);
   }
-  const mismatched: string[] = [];
-  for (const [file, contents] of originalProjectFiles) {
-    const relative = path.relative(process.cwd(), file);
-    try { if (!readFileSync(file).equals(contents)) mismatched.push(relative); } catch { mismatched.push(`${relative} (no se puede leer)`); }
-  }
-  return mismatched;
 }
+function restoreProjectFiles() {
+  for (const [file, original] of originalProjectFiles) {
+    const current = readOrNull(file);
+    // Sin lectura, ya igual o cambiado por otra mano: no se toca. `afterAll` lee el estado final y decide.
+    if (!current || current.equals(original) || !serverProjectFiles.get(file)?.equals(current)) continue;
+    try { writeFileSync(file, original); } catch { /* una escritura fallida se declara en `afterAll` */ }
+  }
+}
+// Se lee del disco, no de lo que se creía haber escrito: cubre una escritura que no se aplicó y un
+// tercero que reescribió el fichero después de restaurarlo.
+const changedProjectFiles = () => PROJECT_FILES
+  .filter(file => { const current = readOrNull(file); return !current || !current.equals(originalProjectFiles.get(file)!); })
+  .map(file => path.relative(process.cwd(), file));
 
 test.beforeAll(async () => {
-  for (const file of PROJECT_FILES) originalProjectFiles.set(file, readFileSync(file));
   // Si el proceso muere sin pasar por afterAll, se restaura igualmente en la salida normal de Node.
   process.once('exit', restoreProjectFiles);
   dataDir = mkdtempSync(path.join(tmpdir(), 'wdc-practice-'));
@@ -129,11 +137,13 @@ test.beforeAll(async () => {
     try {
       const response = await fetch(`${base}/api/admin/session`);
       const data = await response.json() as { authenticated?: boolean };
-      if (data.authenticated) return;
+      if (data.authenticated) { captureServerProjectFiles(); return; }
     } catch { /* el servidor aún compila */ }
     if (next.exitCode !== null) break;
     await sleep(500);
   }
+  // También aquí, para no dejar el repo sucio cuando el arranque falla.
+  captureServerProjectFiles();
   throw new Error(`El servidor de la prueba no arrancó.\n${log.slice(-4000)}`);
 });
 
@@ -142,16 +152,17 @@ test.afterAll(async () => {
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
   await sleep(500);
   // Antes de borrar el distDir: el servidor ya no corre y los ficheros vuelven a su contenido versionado.
-  const mismatched = restoreProjectFiles();
+  restoreProjectFiles();
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   // El caché de Turbopack puede seguir escribiendo al recibir SIGTERM; no es parte del resultado.
   try { if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true }); } catch { /* caché de prueba */ }
-  // Se lanza al final para no saltarse la limpieza. `next dev` reescribe estos dos ficheros al arrancar
-  // con el distDir de la prueba; si tras restaurarlos no coinciden con los bytes guardados, el workspace
-  // queda sucio y la suite lo declara en vez de dejarlo para una revisión manual de `git status`.
+  // Se declara al final para no saltarse la limpieza, y leyendo el disco: si un fichero no volvió a sus
+  // bytes versionados (escritura fallida o edición hecha mientras corría la prueba, que no se pisa),
+  // la suite falla aquí en vez de dejar el diagnóstico a un `git status` manual.
+  const changed = changedProjectFiles();
   expect(
-    mismatched,
-    `La prueba dejó ficheros del proyecto distintos a los guardados al arrancar: ${mismatched.join(', ')}. Revisa qué los reescribió y restaura con «git checkout -- apps/web/next-env.d.ts apps/web/tsconfig.json».`,
+    changed,
+    `Estos ficheros del proyecto no coinciden con los guardados al arrancar: ${changed.join(', ')}. Un fichero modificado durante la prueba no se sobrescribe. Revísalo y, si es la reescritura de Next, restaura con «git checkout -- apps/web/next-env.d.ts apps/web/tsconfig.json».`,
   ).toEqual([]);
 });
 
