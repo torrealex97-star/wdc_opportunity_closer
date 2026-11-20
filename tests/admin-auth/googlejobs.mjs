@@ -36,9 +36,9 @@ const server = http.createServer(async (req, res) => {
     if (mode === 'empty') return send(200, { error: "Google hasn't returned any results for this query." });
     const q = url.searchParams.get('q') ?? '';
     // El mismo anuncio aparece en dos dorks: debe quedar una sola fila.
-    // La ventana de dorks rota por día: el anuncio que se repite entre búsquedas tiene que venir en cualquiera
-    // de ellas para que la prueba mida el dedupe y no el dork que toque hoy.
-    const rows = q.includes('high ticket')
+    // La ventana de dorks rota por día, así que ningún dork concreto está garantizado hoy. La variante con portal
+    // la recibe la PRIMERA búsqueda que llegue (la que sea): la prueba mide el dedupe y no el dork que toque.
+    const rows = searches.length === 1
       ? [job('job-1'), job('job-2', {
           title: 'Setter/Closer',
           share_link: 'https://www.google.com/search?q=closer+ventas&ibp=htl;jobs',
@@ -125,7 +125,8 @@ await step('pide cada dork a Google Jobs en su país, en español y sin paginar'
   // El presupuesto por defecto cubre los dos mercados: 4 dorks de España y 3 de LatAm (dólares).
   assert.equal(searches.filter(s => s.gl === 'es').length, 4);
   assert.equal(searches.filter(s => s.gl !== 'es').length, 3);
-  assert.ok(searches.some(s => s.gl === 'mx') && searches.some(s => s.gl === 'co') && searches.some(s => s.gl === 'ar'));
+  // La rotación diaria elige 3 dorks de LatAm entre mx, co y ar: hoy pueden salir dos países, no siempre los tres.
+  assert.ok(searches.filter(s => s.gl !== 'es').every(s => ['mx', 'co', 'ar'].includes(s.gl)), 'solo mercados LatAm conocidos');
 });
 
 await step('rota la ventana de dorks por día: mismo coste y todo el vocabulario se ejecuta', async () => {
