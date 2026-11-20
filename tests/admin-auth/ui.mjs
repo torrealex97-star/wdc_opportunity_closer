@@ -276,7 +276,7 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   assert.ok(await board.locator('.funnel-row').first().isVisible());
   if (process.env.SHOT4) await board.screenshot({ path: process.env.SHOT4 });
   await page.setViewportSize({ width: 1280, height: 900 });
-  const row = page.locator('tbody tr', { hasText: 'lucia@alumna.dev' }); await row.getByText('1 · media 72').waitFor(); assert.match(await row.innerText(), /1\/9/);
+  const row = page.locator('tbody tr', { hasText: 'lucia@alumna.dev' }); await row.getByText('1 · media 72').waitFor(); assert.match(await row.innerText(), /1\/12/);
   await alumna.goto(BASE + '/alumna'); await alumna.getByText('TU PERFIL', { exact: true }).waitFor();
   await alumna.getByRole('button', { name: 'Salir' }).click(); await alumna.getByRole('heading', { name: 'Tu espacio' }).waitFor();
 });
