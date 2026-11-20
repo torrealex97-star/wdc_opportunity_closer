@@ -361,3 +361,55 @@ export function allAxisLabels(rubrics: RoomRubrics = DEFAULT_RUBRICS): Record<st
   for (const room of ROOMS) for (const axis of rubrics[room.id]) if (!labels[axis.id]) labels[axis.id] = axis.label;
   return labels;
 }
+
+/** La parte comparable de una configuración (la que guarda cada versión del historial). */
+export type PracticeConfigShape = { rubrics: RoomRubrics; priorities: string[]; bant: BantConfig };
+export type AxisField = 'peso' | 'guía' | 'nombre' | 'activo' | 'fuente';
+export type AxisChange = { room: PracticeRoom; axis: string; axisLabel: string; field: AxisField; from: string; to: string };
+export type PracticeConfigDiff = {
+  axes: AxisChange[];
+  added: Array<{ room: PracticeRoom; axisLabel: string }>;
+  removed: Array<{ room: PracticeRoom; axisLabel: string }>;
+  prioritiesAdded: string[];
+  prioritiesRemoved: string[];
+  prioritiesReordered: boolean;
+  bant: Array<{ room: PracticeRoom; enabled: boolean }>;
+  total: number;
+};
+
+/** Qué cambió entre dos versiones: pesos, guías, nombres, activación, fuente, prioridades y BANT.
+ *  El historial guarda la rúbrica completa de cada versión, así que el detalle se calcula al leer y no
+ *  hay que almacenarlo aparte ni recalcular ninguna práctica ya puntuada. */
+export function diffPracticeConfig(prev: PracticeConfigShape, next: PracticeConfigShape): PracticeConfigDiff {
+  const axes: AxisChange[] = [];
+  const added: PracticeConfigDiff['added'] = [];
+  const removed: PracticeConfigDiff['removed'] = [];
+  for (const roomInfo of ROOMS) {
+    const room = roomInfo.id;
+    const before = new Map((prev.rubrics[room] ?? []).map(axis => [axis.id, axis] as const));
+    const after = new Map((next.rubrics[room] ?? []).map(axis => [axis.id, axis] as const));
+    for (const [id, axis] of after) {
+      const old = before.get(id);
+      if (!old) { added.push({ room, axisLabel: axis.label }); continue; }
+      const push = (field: AxisField, from: string, to: string) => axes.push({ room, axis: id, axisLabel: axis.label, field, from, to });
+      if (old.weight !== axis.weight) push('peso', String(old.weight), String(axis.weight));
+      if (old.guide !== axis.guide) push('guía', old.guide, axis.guide);
+      if (old.label !== axis.label) push('nombre', old.label, axis.label);
+      if (old.enabled !== axis.enabled) push('activo', old.enabled ? 'activo' : 'inactivo', axis.enabled ? 'activo' : 'inactivo');
+      if (old.source !== axis.source || old.source_ref !== axis.source_ref) {
+        push('fuente', `${old.source} · ${old.source_ref}`, `${axis.source} · ${axis.source_ref}`);
+      }
+    }
+    for (const [id, axis] of before) if (!after.has(id)) removed.push({ room, axisLabel: axis.label });
+  }
+  const prioritiesAdded = next.priorities.filter(item => !prev.priorities.includes(item));
+  const prioritiesRemoved = prev.priorities.filter(item => !next.priorities.includes(item));
+  const prioritiesReordered = !prioritiesAdded.length && !prioritiesRemoved.length
+    && prev.priorities.join('\u0000') !== next.priorities.join('\u0000');
+  const bant = ROOMS
+    .filter(item => prev.bant[item.id] !== next.bant[item.id])
+    .map(item => ({ room: item.id, enabled: next.bant[item.id] }));
+  const total = axes.length + added.length + removed.length + prioritiesAdded.length
+    + prioritiesRemoved.length + (prioritiesReordered ? 1 : 0) + bant.length;
+  return { axes, added, removed, prioritiesAdded, prioritiesRemoved, prioritiesReordered, bant, total };
+}

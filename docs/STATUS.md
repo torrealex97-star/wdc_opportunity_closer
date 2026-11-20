@@ -1,5 +1,14 @@
 # Estado
 
+## Historial de cambios de los criterios de práctica (sesión 243) — 2026-11-20
+
+- **Petición del propietario**: añadir al panel de criterios un historial de cambios (quién, cuándo y qué pesos o guías se modificaron) para auditar los ajustes sin recalcular las prácticas ya puntuadas.
+- **Qué cambió** (*tested*): la sección «Versiones guardadas» pasa a **«Historial de cambios»**. Cada versión muestra quién y cuándo, y un desplegable con el detalle calculado contra la versión anterior: peso, guía (texto antes y ahora), nombre, activación, fuente y sección de la skill, criterios añadidos o quitados, prioridades añadidas, quitadas o reordenadas y salas con BANT activado o desactivado ([diffPracticeConfig](../apps/web/lib/practiceRubrics.ts), [PracticeSettings](../apps/web/components/PracticeSettings.tsx)). Conserva el botón de restaurar y la semántica de que restaurar crea una versión nueva.
+- **Sin migración ni recálculo**: el historial ya guardaba la rúbrica completa de cada versión (`history` en `practice_rubrics`), así que «qué cambió» se **deriva al leer** con una función pura; no se añade columna, no se reescribe el historial y no se toca ninguna nota guardada. Las prácticas puntuadas conservan la nota con la que se cerraron; el panel lo dice con esas palabras.
+- **Límite conocido y declarado en la vista**: si la versión más antigua retenida ya no tiene a su predecesora en el historial (tope de 20), la fila dice «sin la versión anterior en el historial» en vez de inventar el diff. Para la v1 el diff se calcula contra los valores por defecto de las skills.
+- **Probado** (*tested*): `practice-rubrics.mjs` **14/14 pasos** con el paso nuevo (peso 25→30, guía antes/ahora, activo→inactivo, reorden de prioridades, BANT y total de 5 cambios; dos copias iguales dan 0; comparar no modifica la versión previa), `npm run typecheck`, `npm run design` y `admin-practice.spec.ts` **1/1**: tras guardar, el historial muestra `v1`, el operador, y al desplegar «peso 10 → 100» y «guía actualizada»; el resto del recorrido (recarga, BANT, prioridades, nota 53) sigue pasando.
+- **Límites honestos**: (1) no se probó con dos operadores distintos ni con el historial lleno hasta el tope de 20. (2) Sin captura visual: la verificación es la suite y la prueba de navegador. (3) Sin push: producción aún no incluye el cambio ni el arreglo de `version: 'db'`.
+
 ## Tabla de criterios apilada en paneles estrechos (sesión 242) — 2026-11-20
 
 - **Petición del propietario**: que la tabla de criterios de práctica se apile en tarjetas en pantallas estrechas, para que las guías se lean completas sin desplazamiento horizontal dentro del panel.

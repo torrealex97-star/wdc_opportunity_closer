@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {
   DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, MAX_AXES, ROOMS,
-  allAxisLabels, axesForRoom, roomOf, validateBant, validatePriorities, validateRubrics, weightedScore,
+  allAxisLabels, axesForRoom, diffPracticeConfig, roomOf, validateBant, validatePriorities, validateRubrics, weightedScore,
 } from '../../apps/web/lib/practiceRubrics.ts';
 import { axesFor, debriefInstructions, debriefSchema, needsBant } from '../../apps/web/app/api/practice/prompts.ts';
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief.ts';
@@ -47,6 +47,30 @@ await step('el closer usa las fases y pesos de la skill (10/25/10/15/30/5/5)', (
   assert.equal(DEFAULT_RUBRICS.entrevista.length, 4);
   assert.deepEqual(weights('entrevista'), { tres_p: 30, inteligencia: 25, etica_trabajo: 25, humildad: 20 });
   assert.deepEqual(weights('llamada'), { apertura: 10, descubrimiento: 25, pitch: 10, control: 15, objecion: 30, siguiente: 5, etica: 5 });
+});
+
+await step('el historial de cambios detalla pesos, guías, prioridades y BANT', () => {
+  const before = { rubrics: clone(DEFAULT_RUBRICS), priorities: [...DEFAULT_PRIORITIES], bant: { ...DEFAULT_BANT } };
+  assert.equal(diffPracticeConfig(before, clone(before)).total, 0, 'dos copias iguales no tienen cambios');
+  const after = clone(before);
+  after.rubrics.venta[1].weight = 30;
+  after.rubrics.venta[1].guide = 'Guía nueva del descubrimiento.';
+  after.rubrics.frio[0].enabled = false;
+  after.priorities = [before.priorities[1], before.priorities[0], ...before.priorities.slice(2)];
+  after.bant.entrevista = true;
+  const diff = diffPracticeConfig(before, after);
+  const peso = diff.axes.find(change => change.field === 'peso');
+  assert.deepEqual([peso.room, peso.axis, peso.from, peso.to], ['venta', 'descubrimiento', '25', '30']);
+  const guia = diff.axes.find(change => change.field === 'guía');
+  assert.match(guia.from, /Aclara qué le hizo pedir la llamada/);
+  assert.equal(guia.to, 'Guía nueva del descubrimiento.');
+  const activo = diff.axes.find(change => change.field === 'activo');
+  assert.deepEqual([activo.room, activo.from, activo.to], ['frio', 'activo', 'inactivo']);
+  assert.equal(diff.prioritiesReordered, true);
+  assert.deepEqual(diff.bant, [{ room: 'entrevista', enabled: true }]);
+  assert.equal(diff.total, 5, 'tres ejes, un reorden y un BANT');
+  // Comparar no modifica la rúbrica: la versión anterior queda como estaba (nada que recalcular).
+  assert.equal(before.rubrics.venta[1].weight, 25);
 });
 
 await step('la validación rechaza una rúbrica rota en vez de arreglarla a medias', () => {

@@ -920,8 +920,19 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .rubric-priority-actions button{padding:6px;min-height:34px}
 .rubric-save{margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
 .rubric-versions{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.rubric-versions li{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:10px 12px;background:var(--sheet);border:1px solid var(--line);border-radius:9px;font-size:var(--text-sm);color:var(--secondary)}
-.rubric-versions li>span:nth-child(2){flex:1;min-width:220px}
+.rubric-versions>li{display:block;padding:10px 12px;background:var(--sheet);border:1px solid var(--line);border-radius:9px;font-size:var(--text-sm);color:var(--secondary)}
+.rubric-version-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.rubric-version-head>span:nth-child(2){flex:1;min-width:220px}
+.rubric-version-head button{margin-left:auto}
+/* Historial: quién y cuándo arriba, el detalle de pesos y guías plegado debajo. */
+.rubric-diff{margin-top:8px;font-size:var(--text-xs);line-height:1.6}
+.rubric-diff>p{margin:0}
+.rubric-diff summary{font-size:var(--text-xs);color:var(--accent);min-height:28px}
+.rubric-diff ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.rubric-diff li{display:block;padding:0;border:0;background:none;border-radius:0;font-size:var(--text-xs)}
+.rubric-diff b{color:var(--ink);font-weight:600}
+.rubric-diff-guide{display:grid;gap:2px;margin-top:4px}
+.rubric-diff-guide>span{display:block}
 .rubric-version-id{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
 .rubric-versions button{font-size:var(--text-xs)}
 .practice-bant{margin:20px 0;padding:18px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius)}

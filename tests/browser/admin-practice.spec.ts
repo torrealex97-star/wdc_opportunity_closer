@@ -178,7 +178,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
-  await expect(page.getByText('Versiones guardadas')).toBeVisible();
+  await expect(page.getByText('Historial de cambios')).toBeVisible();
   await expect(page.locator('.rubric-versions li').filter({ hasText: 'v1' })).toBeVisible();
 
   // 3) Recarga real: los tres campos siguen ahí.
@@ -188,6 +188,13 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.locator('#axis-apertura')).toHaveValue('Apertura con prueba social');
   await expect(page.locator('#guide-apertura')).toHaveValue(/prueba de un caso idéntico/);
   await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
+
+  // 3b) El historial dice quién, cuándo y qué peso y guía cambiaron en cada versión.
+  const version = page.locator('.rubric-versions>li').first();
+  await expect(version).toContainText('v1');
+  await version.locator('summary').click();
+  await expect(version.locator('.rubric-diff')).toContainText('peso 10 → 100');
+  await expect(version.locator('.rubric-diff')).toContainText('guía actualizada');
 
   // 4) Puntuación real después del cambio: 100 de apertura sobre 190 de peso total → 53.
   const changed = await score();
