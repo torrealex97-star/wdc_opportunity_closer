@@ -228,7 +228,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
 
   // 3) Recarga real: los tres campos siguen ahí.
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('#weight-apertura')).toHaveValue('100');
   await expect(page.locator('#axis-apertura')).toHaveValue('Apertura con prueba social');
   await expect(page.locator('#guide-apertura')).toHaveValue(/prueba de un caso idéntico/);
@@ -254,7 +254,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByLabel('Activar Rapport y ética')).not.toBeChecked();
   await expect(page.getByText('6/7')).toBeVisible();
   await page.getByLabel('Activar Rapport y ética').check();
@@ -270,7 +270,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible({ timeout: 20_000 });
   await page.getByRole('tab', { name: 'Evaluación de llamadas' }).click();
   await expect(page.locator('#weight-apertura')).toHaveValue('100');
   await expect(page.locator('#axis-apertura')).toHaveValue('Apertura de la llamada revisada');
@@ -283,7 +283,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Entrevista · contratación')).toBeChecked();
+  await expect(page.getByLabel('Entrevista · contratación')).toBeChecked({ timeout: 20_000 });
 
   // 7b) En el panel estrecho la tabla se apila en tarjetas: las etiquetas siguen visibles y la guía se lee
   // entera sin desplazamiento horizontal en el contenedor.
@@ -304,7 +304,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
+  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/, { timeout: 20_000 });
   await expect(page.locator('#priority-1')).toHaveValue('Regla propia del panel para esta prueba.');
 
   // 9) La misma configuración se aplica en el navegador: un roleplay real puntúa con el peso editado.

@@ -47,7 +47,11 @@ test('source setup preloads Spanish keywords, preserves secret and edits URLs', 
   await page.getByLabel('Enlaces a scrapear · uno por línea').fill('https://www.infojobs.net/ofertas-trabajo/closer');
   await page.getByRole('button', { name: 'Guardar conexión', exact: true }).click();
   await expect(page.getByText('Token guardado', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Editar', exact: true }).click();
+  // «Editar» se habilita cuando el guardado confirma y la tarjeta recibe la conexión: con la suite en
+  // paralelo puede llegar después de lo que tarda el clic, así que se espera explícitamente.
+  const edit = page.getByRole('button', { name: 'Editar', exact: true });
+  await expect(edit).toBeEnabled({ timeout: 20_000 });
+  await edit.click();
   await expect(page.getByLabel('Token API de Apify')).toHaveValue('');
   await expect(page.getByLabel('Enlaces a scrapear · uno por línea')).toHaveValue('https://www.infojobs.net/ofertas-trabajo/closer');
   await page.setViewportSize({ width: 390, height: 844 });

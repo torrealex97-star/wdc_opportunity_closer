@@ -14,11 +14,20 @@ import { defineConfig } from '@playwright/test';
 // Lo único que se comparte es el servidor de desarrollo, para lecturas (catálogo, fuentes, progreso) y
 // el proxy al motor. Si una prueba necesita escribir ahí, no es paralelizable: dale su propio servidor
 // como hace `admin-practice.spec.ts`. `PLAYWRIGHT_WORKERS` baja el paralelismo en una máquina lenta.
+//
+// Determinismo con 4 workers: `global-warmup.ts` compila `/` y `/admin` en serie antes de que arranque
+// ningún worker, así que la compilación en frío de `next dev` no la paga la primera prueba que llega
+// (era la causa de los rojos por carga en «Formación», el guardado de oportunidad, el checkbox de BANT
+// y el setup de fuente). Los tiempos son de carga, no del producto: prueba 60 s y aserción 10 s, para
+// que una máquina lenta tarde más sin convertir la lentitud en un falso rojo.
 const workers = Number(process.env.PLAYWRIGHT_WORKERS) || 4;
 
 export default defineConfig({
   testDir: './tests/browser',
+  globalSetup: './tests/browser/global-warmup.ts',
   workers,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   use: {
     baseURL: 'http://127.0.0.1:3100',
     headless: true,

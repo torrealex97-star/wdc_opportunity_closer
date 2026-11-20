@@ -155,16 +155,20 @@ test('un filtro estrecho con pocas ofertas se completa con el hueco ampliado, ro
 
 test('el radar cuenta el catálogo real de la búsqueda', async ({ page }) => {
   const setter = { ...offer, id: 'student-setter', role: 'setter', role_label: 'Setter', original_title: 'Setter comercial', company: 'Otra empresa', compensation: 'Importe no publicado' };
+  // La respuesta espera a que la prueba vea los esqueletos: con un retardo fijo, una máquina con carga
+  // podía pasar del esqueleto a la tarjeta entre dos aserciones y el conteo salía en 0.
+  let releaseSearch = () => {};
+  const searchHeld = new Promise<void>(resolve => { releaseSearch = resolve; });
   await page.route('**/api/backend/opportunities/search', async route => {
+    await searchHeld;
     const body = route.request().postDataJSON();
-    // Retardo real: deja ver el barrido del radar antes de que lleguen las ofertas.
-    await new Promise(resolve => setTimeout(resolve, 250));
     const items = body.role === 'setter' ? [setter] : [offer, setter];
     return route.fulfill({ json: { items, total: items.length, selection_total: 0 } });
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Rastreando el catálogo' })).toBeVisible();
   await expect(page.locator('.opportunity-card.is-skeleton')).toHaveCount(2);
+  releaseSearch();
   await expect(page.getByRole('heading', { name: '2 oportunidades · 2 empresas' })).toBeVisible();
   await expect(page.locator('.radar-blip')).toHaveCount(2);
   await expect(page.locator('.radar-center b')).toHaveText('2');
