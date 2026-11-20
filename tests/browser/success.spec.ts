@@ -19,6 +19,11 @@ test('el Salón del éxito muestra los trece casos y solo carga el vídeo que se
   await expect(page.locator('.success-card').first()).toContainText('confiar plenamente en el método');
   await expect(page.locator('.success-card').first()).toContainText('Romper la barrera del miedo inicial');
 
+  // Cada tarjeta enseña la miniatura real del vídeo (imagen estática de YouTube), diferida.
+  await expect(page.locator('.success-card .success-thumb')).toHaveCount(13);
+  await expect(page.locator('.success-card').first().locator('.success-thumb')).toHaveAttribute('src', 'https://i.ytimg.com/vi/dpdaZecblNk/hqdefault.jpg');
+  await expect(page.locator('.success-card').first().locator('.success-thumb')).toHaveAttribute('loading', 'lazy');
+
   // Nada de trece reproductores cargados de golpe: antes del clic no hay iframes.
   await expect(page.locator('iframe')).toHaveCount(0);
   const briana = page.locator('.success-card').first();

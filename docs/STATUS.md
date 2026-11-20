@@ -1,5 +1,13 @@
 # Estado
 
+## Salón del éxito con las miniaturas reales de YouTube (sesión 248) — 2026-11-20
+
+- **Petición del propietario**: que el Salón del éxito enseñe las miniaturas reales de los vídeos.
+- **Cambio** (*tested*): [successStories](../apps/web/lib/successStories.ts) añade `youtubeThumb(videoId)` (`i.ytimg.com/vi/<id>/hqdefault.jpg`, imagen estática) y [StudentSuccess](../apps/web/components/StudentSuccess.tsx) pinta cada tarjeta con esa miniatura `loading="lazy"` bajo un degradado y el botón de play encima; si la imagen no existe, cae a las iniciales de antes. Sigue habiendo **un solo iframe** y solo al pulsar, así que no se carga el reproductor ni cookies de YouTube antes de tiempo.
+- **Probado** (*tested*): las **13 miniaturas responden 200** en `i.ytimg.com` con los ids actuales; `success.spec.ts` comprueba 13 `img.success-thumb`, la URL de la primera y su `loading`, que no hay iframes antes del clic y que sigue habiendo uno solo al cambiar de vídeo (1/1). `npm run typecheck` y `npm run design` en verde.
+- **Límites honestos**: la revisión es por prueba de navegador y comprobación HTTP de las miniaturas, sin captura visual del resultado.
+- **Pendiente**: la formación aún no sigue la hoja de cálculo del propietario (sin acceso: la hoja no es pública y el navegador compartido no tiene sesión de Google).
+
 ## «Workers Builds: closer-web» en rojo: la conexión de Git de Cloudflare, no el código (sesión 247) — 2026-11-20
 
 - **Petición del propietario**: revisar la configuración de despliegue del repositorio para explicar el check «Workers Builds: closer-web», que falla en `main` y en las PRs sin logs de Cloudflare.

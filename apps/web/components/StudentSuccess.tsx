@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ArrowUpRight, Play, Quote, Sparkles } from 'lucide-react';
-import { SUCCESS_STORIES, youtubeEmbed, youtubeWatch, type SuccessStory } from '../lib/successStories';
+import { SUCCESS_STORIES, youtubeEmbed, youtubeThumb, youtubeWatch, type SuccessStory } from '../lib/successStories';
 
 // Salón del éxito: trece casos reales de alumnas, cada uno con su vídeo y lo que se puede aprender.
 // El objetivo es que quien entre se vea en ellas —mismo método, mismas salas— y salga con ganas de
@@ -11,6 +11,8 @@ import { SUCCESS_STORIES, youtubeEmbed, youtubeWatch, type SuccessStory } from '
 const initials = (name: string) => name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase();
 
 function StoryCard({ story, playing, onPlay }: { story: SuccessStory; playing: boolean; onPlay: () => void }) {
+  // La miniatura es una imagen estática de YouTube; si no existe, la tarjeta enseña las iniciales.
+  const [thumbFailed, setThumbFailed] = useState(false);
   return <article className="success-card">
     <div className="success-media">
       {playing
@@ -23,7 +25,19 @@ function StoryCard({ story, playing, onPlay }: { story: SuccessStory; playing: b
           allowFullScreen
         />
         : <button type="button" className="success-play" onClick={onPlay} aria-label={`Ver el vídeo de ${story.name}`}>
-          <span className="success-face" aria-hidden="true">{initials(story.name)}</span>
+          {thumbFailed
+            ? <span className="success-face" aria-hidden="true">{initials(story.name)}</span>
+            : <img
+              className="success-thumb"
+              src={youtubeThumb(story.videoId)}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              width={480}
+              height={360}
+              onError={() => setThumbFailed(true)}
+            />}
+          <span className="success-scrim" aria-hidden="true" />
           <span className="success-play-icon"><Play size={16} fill="currentColor" /></span>
           <span className="success-play-text">Ver su historia</span>
         </button>}

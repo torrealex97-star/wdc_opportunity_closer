@@ -14,6 +14,11 @@ export type SuccessStory = {
   theme: string;
 };
 
+// Miniatura del vídeo tal como la publica YouTube. Se pide a `i.ytimg.com` (imagen estática), no al
+// reproductor: así la rejilla se ve con las caras reales sin cargar trece iframes ni cookies de YouTube.
+// Si el vídeo no tiene miniatura, el componente cae a las iniciales.
+export const youtubeThumb = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
 export const SUCCESS_STORIES: SuccessStory[] = [
   {
     id: 'briana',
