@@ -648,7 +648,13 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   settle();
   // vista: portales en lenguaje llano, sin nombres técnicos obligatorios
   const view = (await call('/api/admin/apify')).json.portals;
-  assert.deepEqual(view.map(p => p.id), ['indeed', 'infojobs', 'linkedin', 'workana', 'multi']);
+  // Los curados van primero y en su orden; detrás, las fuentes que solo se conectan pagando, con sus buscadores
+  // auditados (`scripts/export_apify_portals.py`). Ningún portal se repite y ninguno se queda sin buscador.
+  const ids = view.map(p => p.id);
+  assert.deepEqual(ids.slice(0, 5), ['indeed', 'infojobs', 'linkedin', 'workana', 'multi']);
+  assert.equal(new Set(ids).size, ids.length, 'ningún portal repetido');
+  assert.ok(view.every(p => p.recipes.length > 0), 'todo portal tiene al menos un buscador');
+  for (const code of ['jooble', 'computrabajo', 'eures']) assert.ok(ids.includes(code), `${code} sin portal de Apify`);
   const ind0 = view.find(p => p.id === 'indeed'); assert.equal(ind0.state, 'off'); assert.match(ind0.headline, /Sin probar/); assert.equal(ind0.daily, false); assert.equal(ind0.recipes.length, 4);
   assert.equal((await post({ action: 'search_now', portal: 'no-existe' })).status, 422);
   const adm = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
