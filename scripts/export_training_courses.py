@@ -24,22 +24,23 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'apps/web/lib/trainingCourses.ts'
 SHEET_URL = 'https://docs.google.com/spreadsheets/d/1DiZKV7G5GCLwWEjZtv3DCbK37K7SVaO4ZIiGTNVrWeI/export?format=xlsx'
 
-# Identificadores históricos de los cursos: la alumna ya tiene avance guardado con ellos (`wdc_training_lessons`)
-# y las referencias del panel los usan. Cambiarlos borraría progreso real.
-COURSE_IDS = [
-    'onboarding',
-    'fundamentos-del-high-ticket',
-    'identidad-profesional-de-la-closer',
-    'fundamentos-de-marketing',
-    'psicologia-de-decision-del-cliente',
-    'estructura-de-la-llamada',
-    'gestion-de-las-objeciones',
-    'domina-el-seguimiento',
-    'comunicacion',
-    'herramientas',
-    'captacion-de-proyectos',
-    'clases-grupales',
-]
+# Identificadores históricos de los cursos, casados por TÍTULO de la hoja: la alumna ya tiene avance guardado con
+# ellos (`wdc_training_lessons`) y las referencias del panel los usan. Van por título, no por posición, para que
+# insertar o reordenar un curso en la hoja no le pegue el identificador de otro (borraría progreso real).
+COURSE_IDS = {
+    'Onboarding': 'onboarding',
+    'Fundamentos del High Ticket': 'fundamentos-del-high-ticket',
+    'Identidad profesional de la closer': 'identidad-profesional-de-la-closer',
+    'Fundamentos de Marketing': 'fundamentos-de-marketing',
+    'Psicología de Decisión del Cliente': 'psicologia-de-decision-del-cliente',
+    'Estructura de la Llamada': 'estructura-de-la-llamada',
+    'Gestión de las objeciones.': 'gestion-de-las-objeciones',
+    'Domina el Seguimiento': 'domina-el-seguimiento',
+    'Comunicación': 'comunicacion',
+    'Herramientas': 'herramientas',
+    'Captación de proyectos': 'captacion-de-proyectos',
+    'Clases Grupales': 'clases-grupales',
+}
 
 
 def clean(value) -> str:
@@ -68,17 +69,34 @@ def fetch(path: Path | None = None):
     return load_workbook(path, data_only=True)
 
 
+def body(worksheet, header_first_cell: str):
+    """Filas de datos de una pestaña, localizadas por su cabecera (no por un número de fila fijo).
+
+    Las hojas llevan un bloque de títulos arriba que el propietario puede ampliar; si eso pasara, un recorte
+    fijo leería la cabecera como si fuera una lección. Se busca la cabecera por su primera celda.
+    """
+    rows = [list(row) for row in worksheet.iter_rows(values_only=True)]
+    for index, row in enumerate(rows):
+        if clean(row[0]).lower() == header_first_cell.lower():
+            return rows[index + 1:]
+    raise SystemExit(f"No se encontró la cabecera {header_first_cell!r} en la pestaña {worksheet.title!r}.")
+
+
 def parse(workbook):
     """Hojas → cursos con sus lecciones (y su carpeta) y los recursos de cada lección, en el orden de la hoja."""
-    summary = [list(row) for row in workbook['Resumen'].iter_rows(values_only=True)][6:]
-    lessons_sheet = [list(row) for row in workbook['Lecciones'].iter_rows(values_only=True)][7:]
-    resources_sheet = [list(row) for row in workbook['Recursos'].iter_rows(values_only=True)][6:]
+    summary = body(workbook['Resumen'], 'Orden')
+    lessons_sheet = body(workbook['Lecciones'], 'Orden curso')
+    resources_sheet = body(workbook['Recursos'], 'Lección ID')
 
     courses = []
     for row in summary:
         order, title = clean(row[0]), clean(row[1])
-        if not order or not title or title.upper() == 'TOTAL':  # tras los cursos vienen TOTAL y el desglose por carpeta
+        if title.upper() == 'TOTAL':  # detrás vienen el TOTAL y el desglose por carpetas: no son cursos
             break
+        if not order or not title:  # filas en blanco entre medias
+            continue
+        if title not in COURSE_IDS:
+            raise SystemExit(f'El curso «{title}» no tiene identificador. Añádelo a COURSE_IDS (sin tocar los existentes).')
         courses.append({'order': int(float(order)), 'title': title, 'duration': duration(row[3]),
                         'summary': clean(row[6]), 'lessons': []})
 
@@ -135,7 +153,7 @@ def render(courses) -> str:
     for course in courses:
         lines += [
             '  {',
-            f"    id: {js(COURSE_IDS[course['order'] - 1])},",
+            f"    id: {js(COURSE_IDS[course['title']])},",
             f"    order: {course['order']},",
             f"    title: {js(course['title'])},",
             f"    summary: {js(course['summary'])},",
@@ -168,9 +186,9 @@ def main(argv=None) -> None:
     parser.add_argument('--file', type=Path, help='xlsx local en vez de descargar la hoja pública')
     args = parser.parse_args(argv)
     courses = parse(fetch(args.file))
-    if len(courses) > len(COURSE_IDS):
-        raise SystemExit(f'La hoja tiene {len(courses)} cursos y solo hay {len(COURSE_IDS)} identificadores: '
-                         'añade los nuevos a COURSE_IDS (sin cambiar los existentes: borrarían el avance guardado).')
+    if len(courses) != len(COURSE_IDS):
+        raise SystemExit(f'La hoja tiene {len(courses)} cursos y hay {len(COURSE_IDS)} identificadores: revisa '
+                         'COURSE_IDS (los identificadores existentes no se cambian: borrarían el avance guardado).')
     OUT.write_text(render(courses), encoding='utf-8')
     print(f"{len(courses)} cursos, {sum(len(c['lessons']) for c in courses)} lecciones, "
           f"{sum(len(l['resources']) for c in courses for l in c['lessons'])} recursos → {OUT.relative_to(ROOT)}")

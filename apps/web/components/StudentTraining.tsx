@@ -88,28 +88,28 @@ export default function StudentTraining() {
           <h2>{course.title}</h2>
           {course.summary && <p>{course.summary}</p>}
           <p className="card-meta"><BookOpen size={14} /> {course.lessons.length} lecciones · <Clock3 size={14} /> {course.duration} · <FileText size={14} /> {course.lessons.reduce((n, lesson) => n + lesson.resources.length, 0)} recursos</p>
-          <div className="meter" role="progressbar" aria-label={`Lecciones estudiadas de ${course.title}`} aria-valuemin={0} aria-valuemax={course.lessons.length} aria-valuenow={checked}><span style={{ width: `${Math.round((checked / course.lessons.length) * 100)}%` }} /></div>
+          <div className="meter" role="progressbar" aria-label={`Lecciones estudiadas de ${course.title}`} aria-valuemin={0} aria-valuemax={course.lessons.length} aria-valuenow={checked}><span style={{ width: `${course.lessons.length ? Math.round((checked / course.lessons.length) * 100) : 0}%` }} /></div>
           <button type="button" className="training-open" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : course.id)}>
             <ChevronDown size={16} aria-hidden="true" style={{ transform: expanded ? 'rotate(180deg)' : undefined }} />
             {expanded ? 'Cerrar curso' : 'Abrir curso'}
           </button>
           {expanded && <div className="training-lesson-groups">
-            {lessonGroups(course.lessons).map(group => <div className="training-folder" key={group.folder ?? 'sin-carpeta'}>
+            {lessonGroups(course.lessons).map((group, groupIndex) => <div className="training-folder" key={`${group.folder ?? 'sin-carpeta'}-${groupIndex}`}>
               {group.folder && <h3 className="training-folder-title">{group.folder}<span> · {group.items.length} lecciones</span></h3>}
               <ol className="training-lessons">
-            {group.items.map(({ lesson, index }) => <li key={lesson.id} data-done={done.has(lesson.id)}>
-              <label className="training-lesson-check">
-                <input type="checkbox" checked={done.has(lesson.id)} disabled={!ready} onChange={event => toggleLesson(course, lesson.id, event.target.checked)} />
-                <span className="training-lesson-order">{String(index + 1).padStart(2, '0')}</span>
-                <span className="training-lesson-title">{lesson.title}</span>
-                {lesson.duration && <span className="training-lesson-time">{lesson.duration}</span>}
-              </label>
-              {lesson.resources.length > 0 && <ul className="training-resources">
-                {lesson.resources.map(resource => <li key={`${lesson.id}-${resource.url}`}>
-                  <a href={resource.url} target="_blank" rel="noreferrer"><FileText size={13} aria-hidden="true" /> {resource.name} <ExternalLink size={12} aria-hidden="true" /></a>
+                {group.items.map(({ lesson, index }) => <li key={lesson.id} data-done={done.has(lesson.id)}>
+                  <label className="training-lesson-check">
+                    <input type="checkbox" checked={done.has(lesson.id)} disabled={!ready} onChange={event => toggleLesson(course, lesson.id, event.target.checked)} />
+                    <span className="training-lesson-order">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="training-lesson-title">{lesson.title}</span>
+                    {lesson.duration && <span className="training-lesson-time">{lesson.duration}</span>}
+                  </label>
+                  {lesson.resources.length > 0 && <ul className="training-resources">
+                    {lesson.resources.map(resource => <li key={`${lesson.id}-${resource.url}`}>
+                      <a href={resource.url} target="_blank" rel="noreferrer"><FileText size={13} aria-hidden="true" /> {resource.name} <ExternalLink size={12} aria-hidden="true" /></a>
+                    </li>)}
+                  </ul>}
                 </li>)}
-              </ul>}
-            </li>)}
               </ol>
             </div>)}
           </div>}
