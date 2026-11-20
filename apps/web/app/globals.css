@@ -1101,3 +1101,38 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .training-method-head{display:grid;gap:4px;padding-top:14px;border-top:1px solid var(--line)}
 .training-method-head h2{font-family:var(--font-display);font-size:27px;font-weight:400;line-height:1.25}
 @media(max-width:700px){.training-method-head h2{font-size:23px}}
+
+/* --- Salón del éxito (2026-11-20) ---
+   Casos reales de alumnas: tarjeta con su vídeo, lo que se aprende y su mensaje. El reproductor
+   solo se monta al pulsar play; antes hay una portada con su monograma, sin fotos inventadas. */
+.success{display:grid;gap:28px}
+.success-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.success-head p{font-size:13px;line-height:1.75;color:var(--secondary);max-width:720px}
+.success-icon{height:64px;width:64px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+.success-lead{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+.success-lead p{font-family:var(--font-display);font-size:19px;line-height:1.6;color:var(--ink);margin-top:8px;max-width:900px}
+.success-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.success-card{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+.success-media{aspect-ratio:16/9;background:var(--accent-soft);border-bottom:1px solid var(--line)}
+.success-play{width:100%;height:100%;border:0;border-radius:0;background:transparent;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--accent);min-height:0}
+.success-play:hover:not(:disabled){background:var(--accent-soft)}
+.success-face{height:56px;width:56px;border-radius:50%;background:var(--sheet);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--font-display);font-size:20px;line-height:1}
+.success-play-icon{height:36px;width:36px;border-radius:50%;background:var(--accent);color:var(--sheet);display:grid;place-items:center;padding-left:2px}
+.success-play-text{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--secondary)}
+.success-frame{width:100%;height:100%;border:0;display:block}
+.success-body{padding:20px 22px 22px;display:grid;gap:10px;align-content:start}
+.success-theme{justify-self:start;font-size:9px;font-weight:650;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:3px 8px}
+.success-body h2{font-family:var(--font-display);font-size:24px;font-weight:400;line-height:1.2;margin:0}
+.success-learn{font-size:12px;line-height:1.7;color:var(--secondary)}
+.success-learn strong{color:var(--ink);font-weight:600}
+.success-message{margin:0;padding:12px 14px;border-left:2px solid var(--sage);background:var(--sage-soft);border-radius:0 8px 8px 0;font-size:12px;line-height:1.65;color:var(--ink);display:flex;gap:8px}
+.success-message svg{color:var(--sage);margin-top:3px}
+.success-link{justify-self:start;display:inline-flex;align-items:center;gap:5px;min-height:32px;font-size:11px;color:var(--secondary);text-decoration:none}
+.success-link:hover{color:var(--accent)}
+.success-close{display:flex;justify-content:space-between;gap:24px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+.success-close h2{font-family:var(--font-display);font-size:28px;font-weight:400;line-height:1.25;margin:8px 0 12px}
+.success-close p{font-size:12px;line-height:1.8;color:var(--secondary);max-width:660px}
+.success-close .success-note{margin-top:12px;font-size:10px;color:var(--secondary)}
+.success-close-icon{color:var(--accent);flex-shrink:0}
+@media(max-width:900px){.success-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.success-head{gap:16px}.success-icon{display:none}.success-lead,.success-close{padding:20px}.success-close{flex-direction:column}.success-lead p{font-size:17px}}
