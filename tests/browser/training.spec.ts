@@ -34,6 +34,30 @@ test('la formación es la hoja del propietario: sus cursos, sus lecciones y sus 
   await expect(identity.locator('.training-resources a')).toHaveAttribute('target', '_blank');
 });
 
+test('las carpetas de la hoja se respetan: «Clases Grupales» enseña sus cuatro grupos', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Formación' }).click();
+
+  const groupCourse = page.locator('.training-grid .training-card').last();
+  await expect(groupCourse.locator('h2')).toHaveText('Clases Grupales');
+  await groupCourse.getByRole('button', { name: 'Abrir curso' }).click();
+
+  // Cuatro carpetas, en el orden y con los tamaños que declara la hoja (9 + 15 + 4 + 7 = 35).
+  const folders = groupCourse.locator('.training-folder');
+  await expect(folders).toHaveCount(4);
+  await expect(folders.locator('h3')).toHaveText([
+    'Clases grupales · 9 lecciones',
+    'Roleplay Cualificación · 15 lecciones',
+    'Objeciones · 4 lecciones',
+    'Llamada completa · 7 lecciones',
+  ]);
+  await expect(groupCourse.locator('.training-lessons > li')).toHaveCount(35);
+  // La numeración sigue siendo la del curso completo, no la de cada carpeta.
+  await expect(groupCourse.locator('.training-lesson-order').first()).toHaveText('01');
+  await expect(groupCourse.locator('.training-lesson-order').last()).toHaveText('35');
+});
+
 test('marcar todas las lecciones de un curso lo registra una sola vez como formación estudiada', async ({ page }) => {
   const logged: Record<string, unknown>[] = [];
   await page.route('**/api/student/activity', route => {

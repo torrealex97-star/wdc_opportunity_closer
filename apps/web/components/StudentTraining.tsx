@@ -10,6 +10,19 @@ import { logActivity } from './studentActivityClient';
 // menos. Cada curso abre sus lecciones y los recursos que cuelgan de ellas, tal como están enlazados
 // allí. La alumna marca la lección que ha estudiado; al completar un curso se registra una sola vez en
 // su actividad (servidor), que es lo que alimenta «Mi progreso» y el panel de la coordinadora.
+// La hoja agrupa las lecciones de «Clases Grupales» en carpetas (Clases grupales, Roleplay Cualificación,
+// Objeciones, Llamada completa); el resto de cursos es una sola lista. Se respeta la agrupación y su orden.
+function lessonGroups(lessons: TrainingCourse['lessons']) {
+  const groups: Array<{ folder: string | null; items: Array<{ lesson: TrainingCourse['lessons'][number]; index: number }> }> = [];
+  lessons.forEach((lesson, index) => {
+    const folder = lesson.folder ?? null;
+    const last = groups[groups.length - 1];
+    if (last && last.folder === folder) last.items.push({ lesson, index });
+    else groups.push({ folder, items: [{ lesson, index }] });
+  });
+  return groups;
+}
+
 const STORE_KEY = 'wdc_training_lessons';
 const LOGGED_KEY = 'wdc_training_courses_logged';
 
@@ -80,8 +93,11 @@ export default function StudentTraining() {
             <ChevronDown size={16} aria-hidden="true" style={{ transform: expanded ? 'rotate(180deg)' : undefined }} />
             {expanded ? 'Cerrar curso' : 'Abrir curso'}
           </button>
-          {expanded && <ol className="training-lessons">
-            {course.lessons.map((lesson, index) => <li key={lesson.id} data-done={done.has(lesson.id)}>
+          {expanded && <div className="training-lesson-groups">
+            {lessonGroups(course.lessons).map(group => <div className="training-folder" key={group.folder ?? 'sin-carpeta'}>
+              {group.folder && <h3 className="training-folder-title">{group.folder}<span> · {group.items.length} lecciones</span></h3>}
+              <ol className="training-lessons">
+            {group.items.map(({ lesson, index }) => <li key={lesson.id} data-done={done.has(lesson.id)}>
               <label className="training-lesson-check">
                 <input type="checkbox" checked={done.has(lesson.id)} disabled={!ready} onChange={event => toggleLesson(course, lesson.id, event.target.checked)} />
                 <span className="training-lesson-order">{String(index + 1).padStart(2, '0')}</span>
@@ -94,7 +110,9 @@ export default function StudentTraining() {
                 </li>)}
               </ul>}
             </li>)}
-          </ol>}
+              </ol>
+            </div>)}
+          </div>}
         </article>;
       })}
     </div>

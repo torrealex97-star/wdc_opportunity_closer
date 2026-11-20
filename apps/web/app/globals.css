@@ -1153,7 +1153,10 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .training-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .training-card-top .status{font-size:10px;display:inline-flex;align-items:center;gap:5px}
 .training-open{align-self:flex-start;min-height:38px;padding:8px 14px;font-size:12px;background:transparent}
-.training-lessons{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:12px}
+.training-lesson-groups{display:grid;gap:18px;margin-top:6px}
+.training-folder-title{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--secondary);margin:0 0 8px;font-weight:600}
+.training-folder-title span{text-transform:none;letter-spacing:0;font-weight:400}
+.training-lessons{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .training-lessons>li{border-top:1px solid var(--line);padding-top:12px}
 .training-lesson-check{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:500;flex-direction:row}
 .training-lesson-order{font-size:10px;letter-spacing:1px;color:var(--secondary);font-variant-numeric:tabular-nums}
