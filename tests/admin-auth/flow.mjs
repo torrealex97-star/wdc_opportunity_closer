@@ -219,14 +219,14 @@ await step('alumnas: invitación, recuperación, login, perfil con consentimient
   const before = await call('/api/student/progress', studentHeaders);
   assert.equal(before.status, 200); assert.equal(before.json.progress.sessions, 1, 'el login cuenta como entrada');
   assert.equal(before.json.progress.practice.count, 0); assert.equal(before.json.progress.training.examBest, null, 'sin examen es null, no 0');
-  assert.equal((await call('/api/student/activity', { cookies: false, method: 'POST', body: { kind: 'training_review', ref: 'precall', detail: { met: 4, total: 4 } } })).status, 401);
+  assert.equal((await call('/api/student/activity', { cookies: false, method: 'POST', body: { kind: 'training_review', ref: 'onboarding', detail: { met: 4, total: 4 } } })).status, 401);
   assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'training_review', ref: 'modulo-falso', detail: { met: 1, total: 1 } } })).status, 422);
   assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'training_exam', ref: 'final', score: 101 } })).status, 422);
-  assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'training_review', ref: 'precall', detail: { met: 4, total: 4 } } })).status, 201);
+  assert.equal((await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'training_review', ref: 'onboarding', detail: { met: 4, total: 4 } } })).status, 201);
   const exam = await call('/api/student/activity', { ...studentHeaders, method: 'POST', body: { kind: 'training_exam', ref: 'final', score: 100, detail: { answers: EXAM_KEY, passed: false } } });
   assert.equal(exam.status, 201); assert.equal(exam.json.passed, true, 'el servidor recalcula el superado');
   const after = await call('/api/student/progress', studentHeaders);
-  assert.deepEqual(after.json.progress.training.modules, ['precall']); assert.equal(after.json.progress.training.examBest, 100); assert.equal(after.json.progress.training.examPassed, true);
+  assert.deepEqual(after.json.progress.training.modules, ['onboarding']); assert.equal(after.json.progress.training.examBest, 100); assert.equal(after.json.progress.training.examPassed, true);
   assert.equal(after.json.progress.recent[0].kind, 'training_exam', 'lo más reciente primero');
   assert.equal(after.json.progress.lifetime.training.examBest, 100, 'el resumen de siempre también trae el examen');
   // La nota la calcula el servidor corrigiendo las respuestas elegidas: un `score` inflado

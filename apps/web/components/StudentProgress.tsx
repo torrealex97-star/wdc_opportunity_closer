@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Award, Flame, LoaderCircle, RotateCw } from 'lucide-react';
 import { REVIEW_REFS } from './trainingRefs';
-import { TRAINING_MODULES } from './trainingContent';
+import { TRAINING_COURSES } from '../lib/trainingCourses';
 import { DEFAULT_CURRICULUM, TOTAL_LESSONS } from '../lib/trainingCurriculum';
 import { scenarioById } from './practiceScenarios';
 import type { Progress } from '../lib/studentActivity';
@@ -17,7 +17,7 @@ type Metrics = { xp: XpResult; mastery: Mastery[]; applications: AppFunnel | nul
 type Retention = { nudge: IdleNudge; review: DirectReview; goals: Goal[] };
 type State = { kind: 'loading' } | { kind: 'login' } | { kind: 'error'; message: string } | { kind: 'ready'; progress: Progress; metrics: Metrics | null; retention: Retention | null };
 const PERIODS = [7, 30, 90] as const;
-const REVIEW_LABELS: Record<string, string> = Object.fromEntries(TRAINING_MODULES.map(m => [m.id, m.title]));
+const REVIEW_LABELS: Record<string, string> = Object.fromEntries(TRAINING_COURSES.map(course => [course.id, course.title]));
 const KIND_LABELS: Record<string, string> = { session: 'Entrada', training_review: 'Formación', training_exam: 'Examen de egreso', practice: 'Sala de práctica' };
 const number = new Intl.NumberFormat('es');
 const dateFmt = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' });
@@ -133,9 +133,8 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
           <AxisGroup title="Prácticas anteriores sin sala" rows={p.axes.filter(a => a.track === null)} />
         </div>
           : <p className="card-meta">— Todavía no hay prácticas puntuadas por eje en este periodo.</p>}</article>
-      <article className="progress-card"><h2>Formación</h2><p className="card-meta">{p.lifetime.training.modules.length} de {REVIEW_REFS.length} módulos repasados y {(p.lifetime.training.lessons?.length ?? 0)} de {TOTAL_LESSONS(DEFAULT_CURRICULUM)} lecciones de la ruta con test superado (en total, no solo este periodo).</p>
-        <ul className="plain-list">{REVIEW_REFS.map(ref => { const done = p.lifetime.training.modules.includes(ref); return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Repasado' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>; })}</ul>
-        <p className="card-meta"><strong>Examen de egreso:</strong> {p.lifetime.training.examBest === null ? '— sin intentar' : `mejor nota ${p.lifetime.training.examBest}/100 (${p.lifetime.training.examPassed ? 'superado' : 'no superado'}, ${p.lifetime.training.examAttempts} ${p.lifetime.training.examAttempts === 1 ? 'intento' : 'intentos'})`}. Es una señal de uso, no una certificación oficial.</p></article>
+      <article className="progress-card"><h2>Formación</h2><p className="card-meta">Los {REVIEW_REFS.length} cursos del Classroom y {(p.lifetime.training.lessons?.length ?? 0)} de {TOTAL_LESSONS(DEFAULT_CURRICULUM)} lecciones de la ruta con test superado (en total, no solo este periodo). Un curso cuenta cuando has marcado todas sus lecciones en Formación.</p>
+        <ul className="plain-list">{REVIEW_REFS.map(ref => { const done = p.lifetime.training.modules.includes(ref); return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Estudiado' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>; })}</ul></article>
       {metrics && <article className="progress-card"><h2>Maestría por escenario</h2><p className="card-meta">{coach ? 'Su' : 'Tu'} nota media en cada práctica de la sala (de siempre, no solo este periodo). Es una estimación del modelo.</p>
         {metrics.mastery.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Escenario</th><th scope="col" className="num">Veces</th><th scope="col" className="num">Media</th><th scope="col" className="num">Mejor</th></tr></thead>
           <tbody>{metrics.mastery.map(m => <tr key={m.ref}><th scope="row">{scenarioById(m.ref)?.title ?? m.ref}</th><td className="num">{m.count}</td><td className="num">{m.avg}</td><td className="num">{m.best}</td></tr>)}</tbody></table></div>

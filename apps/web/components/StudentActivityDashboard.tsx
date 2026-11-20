@@ -2,11 +2,11 @@
 import { useMemo } from 'react';
 import { MIN_GROUP, NUDGE_LIMIT, REFER, funnel, moduleCoverage, needsFollowUp, needsNudge, readyToRefer, retention, scoreBuckets } from '../lib/studentDashboard';
 import type { DashStudent, DashSummary } from '../lib/studentDashboard';
-import { TRAINING_MODULES } from './trainingContent';
+import { TRAINING_COURSES } from '../lib/trainingCourses';
 
 // Panel de coordinación (adaptado del «Panel del manager» de closer-ai-coach, sin sus datos de demostración): qué decisión
 // toma la coordinadora: a quién escribir hoy y qué parte de la formación se está saltando. Cada gráfico lleva su tabla.
-const MODULE_LABELS: Record<string, string> = Object.fromEntries(TRAINING_MODULES.map(item => [item.id, item.title]));
+const MODULE_LABELS: Record<string, string> = Object.fromEntries(TRAINING_COURSES.map(course => [course.id, course.title]));
 
 function Bars({ rows, label }: { rows: { id: string; label: string; count: number; pct: number | null }[]; label: string }) {
   return <>

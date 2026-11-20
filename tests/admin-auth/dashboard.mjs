@@ -7,7 +7,7 @@ const student = (id, status = 'active') => ({ id, email: `${id}@t.dev`, status }
 const sum = (over = {}) => ({ sessions: 1, last_seen: '2026-10-24T09:00:00Z', practice: { count: 0, avg: null }, training: { modules: [], examBest: null, examPassed: false }, ...over });
 const students = [student('a'), student('b'), student('c'), student('d', 'invited'), student('p', 'paused')];
 const summaries = new Map([
-  ['a', sum({ practice: { count: 3, avg: 72 }, training: { modules: ['precall', 'star'], examBest: 100, examPassed: true } })],
+  ['a', sum({ practice: { count: 3, avg: 72 }, training: { modules: ['onboarding', 'herramientas'], examBest: 100, examPassed: true } })],
   ['b', sum({ practice: { count: 1, avg: 35 } })],
   ['c', sum()],
   ['p', sum({ practice: { count: 9, avg: 90 } })], // pausada: no cuenta aunque tenga actividad
@@ -22,7 +22,7 @@ ok('embudo: pausadas fuera, porcentajes sobre las que tienen acceso y hueco sin 
 
 const cover = moduleCoverage(students, summaries);
 assert.equal(cover.length, REVIEW_REFS.length);
-assert.deepEqual(cover.filter(c => c.count).map(c => [c.ref, c.count, c.pct]), [['precall', 1, 25], ['star', 1, 25]]);
+assert.deepEqual(cover.filter(c => c.count).map(c => [c.ref, c.count, c.pct]), [['onboarding', 1, 25], ['herramientas', 1, 25]]);
 ok('cobertura por módulo: solo cuenta alumnas con acceso');
 
 assert.equal(scoreBuckets(students, summaries), null, `con menos de ${MIN_GROUP} alumnas con práctica no hay distribución`);

@@ -1,4 +1,6 @@
-// Módulos de Formación que se registran como «repasados» en el progreso de la alumna. Fichero sin dependencias de
-// servidor: lo importan tanto el navegador (panel de progreso) como la API (validación).
-export const REVIEW_REFS = ['precall', 'logica', 'freezing', 'yellows', 'star', 'cierres', 'descubrimiento', 'objeciones', 'entrevista'] as const;
-export type ReviewRef = (typeof REVIEW_REFS)[number];
+import { TRAINING_COURSES } from '../lib/trainingCourses';
+
+// Refs que cuentan como formación repasada: ahora son los cursos de la hoja del propietario, en su
+// orden. El progreso se registra con el id del curso cuando la alumna marca todas sus lecciones.
+export const REVIEW_REFS: string[] = TRAINING_COURSES.map(course => course.id);
+export type ReviewRef = string;
