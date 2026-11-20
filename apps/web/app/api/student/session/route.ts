@@ -5,6 +5,7 @@ import { authenticateStudent, clearStudentCookies, STUDENT_ACCESS, studentCookie
 import { normalizeEmail, passwordLogin, signOut } from '../../../../lib/supabaseAuth';
 import { linkStudent, studentByEmail } from '../../../../lib/students';
 import { recordActivity } from '../../../../lib/studentActivity';
+import { quoteSeedFor } from '../../../../lib/dailyQuote';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,7 +14,11 @@ const noStore = { 'Cache-Control': 'no-store' };
 export async function GET(request: NextRequest) {
   if (!studentSessionAvailable()) return Response.json({ configured: false, authenticated: false }, { headers: noStore });
   const auth = await authenticateStudent(request);
-  return withCookies(Response.json(auth.ok ? { configured: true, authenticated: true, email: auth.student.email } : { configured: true, authenticated: false }, { headers: noStore }), auth.ok ? auth.setCookies : []);
+  // `quoteSeed` es la semilla de la frase diaria derivada de la cuenta: permite que la misma alumna vea la
+  // misma frase en cualquier navegador sin enviar su identificador. Sin sesión se omite y la vista usa la fija.
+  return withCookies(Response.json(auth.ok
+    ? { configured: true, authenticated: true, email: auth.student.email, quoteSeed: quoteSeedFor(auth.student.user_id) }
+    : { configured: true, authenticated: false }, { headers: noStore }), auth.ok ? auth.setCookies : []);
 }
 
 // Login con email y contraseña. Mensaje único ante cualquier fallo de credenciales.

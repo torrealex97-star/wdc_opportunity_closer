@@ -113,9 +113,11 @@ Reglas de seguridad del importador ([training-import.mjs](../scripts/training-im
 ## Gamificación
 
 - **Frase diaria** ([dailyQuote.ts](../apps/web/lib/dailyQuote.ts)): 16 frases de mentalidad, prospección,
-  rechazo y constancia. El índice es determinista por semilla del navegador y día de Madrid, con paso 5
-  coprimo con 16: la misma persona ve la misma frase durante el día y no repite la de ayer. Se puede
-  guardar y marcar como leída; ambas cosas viven en el navegador (`wdc_quote_*`).
+  rechazo y constancia. El índice es determinista por **cuenta** y día de Madrid, con paso 5 coprimo con 16:
+  la misma alumna ve la misma frase durante el día en cualquier navegador y no repite la de ayer. La semilla
+  la deriva el servidor de la cuenta (`quoteSeed` de `/api/student/session`, opaca: no expone el
+  identificador) y sin sesión se usa una fija. Se puede guardar y marcar como leída; ambas cosas siguen
+  viviendo en el navegador (`wdc_quote_saved`, `wdc_quote_read`).
 - **Confeti al aplicar** ([Celebration.tsx](../apps/web/components/Celebration.tsx),
   [StudentPipeline.tsx](../apps/web/components/StudentPipeline.tsx)): se dispara al **registrar** una
   candidatura enviada, no al abrir el anuncio. Muestra total enviado, enviadas esta semana y el próximo

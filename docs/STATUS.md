@@ -1,5 +1,13 @@
 # Estado
 
+## Frase diaria determinista por cuenta (sesión 241) — 2026-11-20
+
+- **Petición del propietario**: que la frase del día sea determinista por cuenta y día, no por navegador, manteniendo la rotación sin repetición y el guardado local.
+- **Semilla de cuenta** (*tested*): [dailyQuote.ts](../apps/web/lib/dailyQuote.ts) cambia `quoteSeed(storage)` por `quoteSeedFor(account)`: FNV-1a del identificador con prefijo `acct-` y ocho hex, así que la semilla es estable entre equipos y **no expone la cuenta**; sin cuenta devuelve `wdc-anon` (fija y no aleatoria, para que la frase siga siendo determinista por día). La rotación no cambia: paso 5 coprimo con 16 recorre las dieciséis sin repetir y nunca repite dos días seguidos.
+- **Servidor y vista**: `/api/student/session` devuelve `quoteSeed` cuando la sesión es válida ([route.ts](../apps/web/app/api/student/session/route.ts)); [DailyQuote](../apps/web/components/DailyQuote.tsx) espera esa semilla antes de pintar (mientras, el esqueleto de carga, para no enseñar una frase y cambiarla) y cae a la semilla fija si la consulta falla o no hay sesión. Guardar y «ya la he leído» siguen en `localStorage`.
+- **Probado** (*tested*): `training-curriculum.mjs` **50 comprobaciones** (semilla por cuenta y distinta entre cuentas, la semilla no contiene la cuenta, anónima fija, y para tres cuentas 16 días recorren las 16 sin repetir ni repetir dos días seguidos), `npm run typecheck` y `npx playwright test tests/browser/training-curriculum.spec.ts` **1/1** con la frase visible y «Guardar» → «Guardada».
+- **Límites honestos**: (1) el camino con sesión real no se probó en local: el despliegue local no tiene Auth de alumnas configurado, así que `quoteSeed` autenticado está verificado por tipos y por la función, no por HTTP con cookie. (2) Sin push: producción sigue sin este cambio ni el arreglo de `version: 'db'`.
+
 ## Revisión del currículo de Formación contra las skills (sesión 240) — 2026-11-20
 
 - **Petición del propietario**: revisar las 12 lecciones y las 24 preguntas de la ruta de Formación contra `scalix-ventas` y `analisis-llamadas-ventas` y corregir lo que no fuera coherente con el método y los recursos existentes.

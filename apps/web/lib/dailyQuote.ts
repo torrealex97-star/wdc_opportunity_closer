@@ -1,6 +1,6 @@
-// Frase motivadora diaria, determinista por día y navegador. No es aleatoria en cada recarga: la misma
-// persona ve la misma frase durante el día, y el índice avanza con un paso coprimo con la lista para
-// que dos días seguidos nunca repitan la misma frase.
+// Frase motivadora diaria, determinista por cuenta y día. No es aleatoria en cada recarga ni depende del
+// navegador: la misma alumna ve la misma frase durante el día en cualquier equipo, y el índice avanza con
+// un paso coprimo con la lista para que dos días seguidos nunca repitan la misma frase.
 
 export type QuoteCategory = 'Mentalidad' | 'Prospección' | 'Rechazo' | 'Constancia';
 export type DailyQuote = { id: string; text: string; category: QuoteCategory };
@@ -41,21 +41,16 @@ const dayNumber = (dayKey: string) => {
 const madridDayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
 export const quoteDayKey = (date: Date = new Date()) => madridDayFormat.format(date);
 
-/** Frase del día para un navegador (`seed`) y una fecha de Madrid (`YYYY-MM-DD`). */
+/** Frase del día para una semilla de cuenta (`seed`) y una fecha de Madrid (`YYYY-MM-DD`). */
 export function quoteOfDay(seed: string, dayKey: string): DailyQuote {
   const index = (hash(seed) + dayNumber(dayKey) * STRIDE) % QUOTES.length;
   return QUOTES[index];
 }
 
-/** Semilla estable del navegador; si no hay almacenamiento, una semilla fija evita frases distintas por render. */
-export function quoteSeed(storage: Pick<Storage, 'getItem' | 'setItem'> | null): string {
-  const fallback = 'wdc-anon';
-  if (!storage) return fallback;
-  try {
-    const existing = storage.getItem('wdc_quote_seed');
-    if (existing && /^[a-z0-9-]{6,40}$/i.test(existing)) return existing;
-    const created = `seed-${Math.random().toString(36).slice(2, 12)}`;
-    storage.setItem('wdc_quote_seed', created);
-    return created;
-  } catch { return fallback; }
+/** Semilla de la cuenta: el mismo día da la misma frase en cualquier navegador y no expone el identificador.
+ *  Sin cuenta (o sin sesión configurada) la semilla es fija, así que la frase sigue siendo determinista por día. */
+export function quoteSeedFor(account: string | null | undefined): string {
+  const subject = (account ?? '').trim();
+  if (!subject) return 'wdc-anon';
+  return `acct-${hash(subject).toString(16).padStart(8, '0')}`;
 }

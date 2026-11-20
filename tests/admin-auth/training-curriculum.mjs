@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import {
   DEFAULT_CURRICULUM, TOTAL_LESSONS, lessonsOf, resourcesOf, validateCurriculum,
 } from '../../apps/web/lib/trainingCurriculum.ts';
-import { QUOTES, quoteOfDay } from '../../apps/web/lib/dailyQuote.ts';
+import { QUOTES, quoteOfDay, quoteSeedFor } from '../../apps/web/lib/dailyQuote.ts';
 import {
   buildCurriculumFromSheets, curriculumToCsv, parseCsv, planOf, readCsvDirectory, readXlsx, writeCsvTemplate,
 } from '../../scripts/training-import.mjs';
@@ -35,11 +35,22 @@ try {
   ok(lessons.every(item => item.lesson.resources.length >= 1), 'toda lección tiene al menos un recurso');
   ok(['template', 'script', 'checklist', 'link', 'doc', 'video'].includes(resources[0].resource.type), 'tipo de recurso conocido');
 
-  // 2) Frase diaria: misma semilla y día = misma frase; 16 días seguidos no repiten.
-  const seed = 'seed-test-01';
-  eq(quoteOfDay(seed, '2026-11-19').id, quoteOfDay(seed, '2026-11-19').id, 'frase estable el mismo día');
+  // 2) Frase diaria: la semilla sale de la cuenta, no del navegador. Misma cuenta y día = misma frase;
+  // 16 días seguidos recorren las 16 sin repetir y nunca repiten dos días consecutivos.
+  const accounts = ['user-11111111-2222-3333-4444-555555555555', 'user-66666666-7777-8888-9999-000000000000', 'user-abcdefab-cdef-abcd-efab-cdefabcdefab'];
+  const seeds = accounts.map(account => quoteSeedFor(account));
+  eq(seeds.length, new Set(seeds).size, 'cada cuenta tiene su semilla');
+  ok(seeds.every(seed => !accounts.some(account => seed.includes(account) || seed.includes(account.slice(5, 18)))), 'la semilla no expone la cuenta');
+  eq(quoteSeedFor(null), quoteSeedFor(''), 'sin cuenta la semilla es fija');
+  ok(!seeds.includes(quoteSeedFor(null)), 'la semilla anónima no coincide con una cuenta');
   const days = Array.from({ length: QUOTES.length }, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10));
-  eq(new Set(days.map(day => quoteOfDay(seed, day).id)).size, QUOTES.length, 'la rotación recorre todas las frases sin repetir');
+  for (const [index, seed] of seeds.entries()) {
+    eq(quoteOfDay(seed, '2026-11-19').id, quoteOfDay(seed, '2026-11-19').id, `frase estable el mismo día (cuenta ${index + 1})`);
+    const rotation = days.map(day => quoteOfDay(seed, day).id);
+    eq(new Set(rotation).size, QUOTES.length, `la rotación recorre todas las frases sin repetir (cuenta ${index + 1})`);
+    ok(rotation.every((id, position) => position === 0 || id !== rotation[position - 1]), `dos días seguidos nunca repiten (cuenta ${index + 1})`);
+  }
+  ok(new Set(seeds.map(seed => quoteOfDay(seed, '2026-11-19').id)).size > 1, 'cuentas distintas no comparten siempre la frase del día');
 
   // 3) Plantilla CSV versionada → validación → mismo plan. Escribirla dos veces no la altera.
   const files = writeCsvTemplate(tmp);

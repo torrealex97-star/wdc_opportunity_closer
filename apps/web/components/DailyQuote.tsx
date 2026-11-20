@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { Bookmark, Check, Quote, Sparkles } from 'lucide-react';
-import { QUOTES, quoteDayKey, quoteOfDay, quoteSeed, type DailyQuote as QuoteType } from '../lib/dailyQuote';
+import { QUOTES, quoteDayKey, quoteOfDay, quoteSeedFor, type DailyQuote as QuoteType } from '../lib/dailyQuote';
 
 const SAVED_KEY = 'wdc_quote_saved';
 const READ_KEY = 'wdc_quote_read';
@@ -10,8 +10,9 @@ function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(window.localStorage.getItem(key) ?? 'null') ?? fallback; } catch { return fallback; }
 }
 
-// Frase diaria contextualizada: cambia de tema según el día y avanza sin repetir la de ayer. Guardar y
-// marcar como leída viven en este navegador, como el resto de datos personales de la formación.
+// Frase diaria contextualizada: cambia de tema según el día y avanza sin repetir la de ayer. La semilla la
+// deriva el servidor de la cuenta, así que la misma alumna ve la misma frase en cualquier navegador; guardar
+// y marcar como leída siguen viviendo en este navegador, como el resto de datos personales de la formación.
 export default function DailyQuote({ compact = false }: { compact?: boolean }) {
   const [quote, setQuote] = useState<QuoteType | null>(null);
   const [day, setDay] = useState('');
@@ -20,17 +21,29 @@ export default function DailyQuote({ compact = false }: { compact?: boolean }) {
   const [storageOk, setStorageOk] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     let storage: Storage | null = null;
     try { storage = window.localStorage; } catch { storage = null; }
     setStorageOk(Boolean(storage));
     const today = quoteDayKey();
     setDay(today);
-    setQuote(quoteOfDay(quoteSeed(storage), today));
     if (storage) {
       const stored = readJson<unknown>(SAVED_KEY, []);
       setSaved(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : []);
       setReadDay(readJson<unknown>(READ_KEY, '') as string);
     }
+    // La frase espera a la semilla de la cuenta (mientras, sigue el esqueleto de carga): sin eso se vería
+    // una frase y luego otra. Si la consulta falla o no hay sesión, la semilla fija mantiene el determinismo.
+    const withSeed = (payload: { quoteSeed?: unknown } | null) => {
+      if (!alive) return;
+      const seed = typeof payload?.quoteSeed === 'string' && payload.quoteSeed ? payload.quoteSeed : quoteSeedFor(null);
+      setQuote(quoteOfDay(seed, today));
+    };
+    fetch('/api/student/session', { cache: 'no-store' })
+      .then(response => (response.ok ? response.json() : null))
+      .then(withSeed)
+      .catch(() => withSeed(null));
+    return () => { alive = false; };
   }, []);
 
   const savedQuotes = useMemo(() => QUOTES.filter(item => saved.includes(item.id)), [saved]);
