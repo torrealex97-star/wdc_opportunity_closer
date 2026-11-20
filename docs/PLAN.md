@@ -34,6 +34,7 @@ Referencias WDC y adquisición por fuente organizadas en [SOURCE_ACQUISITION](SO
 | 7 | Acceso online y portal | Postgres/Auth/RLS, membresías, pruebas multiusuario; feed/perfil/preferencias/matching de alumnas |
 | 8 | [P11 Conexiones directas](spec/phases/P11_DIRECT_CONNECTIONS.md) | Empresas/recruiters verificados, necesidades, consentimiento, referrals e introductions |
 | 9 | Preparación y candidaturas | Roleplays/entrevistas con Groq detrás de abstracción; seguimiento, aplicaciones asistidas y autoapply autorizado |
+| 10 | [Motor de colocación](spec/19_JOB_ENGINE_AND_PLACEMENT.md) | Fase 1 sin envíos: bandeja de cinco matches del día y Kanban de cinco columnas derivado de estados registrados. Correo entrante y auto-apply quedan bloqueados con sus condiciones en [ADR-020](decisions/ADR-020-motor-de-colocacion-por-fases.md) |
 
 P05B puede usar las fuentes existentes sin esperar toda P04K. Spikes de documentación son preparatorios; mantener una sola fase de implementación activa. Si falta clave Groq, avanzar contrato/fixture/migración sin declarar canary completado. No sustituir P05A por expansión indiscriminada de scrapers.
 
