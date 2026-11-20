@@ -180,31 +180,31 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     </div>
     <p className="card-meta">{rooms.find(item => item.id === room)?.note}</p>
 
-    <div className="table-wrap" style={{ marginTop: 16 }}>
+    <div className="table-wrap rubric-wrap" style={{ marginTop: 16 }}>
       <table className="data-table rubric-table">
         <thead><tr><th scope="col">Activo</th><th scope="col">Criterio</th><th scope="col" className="num">Peso</th><th scope="col">Qué debe demostrar (lo lee la IA)</th><th scope="col">Fuente en la skill</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{axes.map(axis => <tr key={axis.id}>
-          <td>
+          <td data-label="Activo">
             <label className="check-label" title={axis.enabled ? 'Se puntúa y se envía a la IA' : 'No se puntúa ni se envía a la IA'}>
               <input type="checkbox" checked={axis.enabled} onChange={event => patchAxis(axis.id, { enabled: event.target.checked })} aria-label={`Activar ${axis.label}`} />
             </label>
           </td>
-          <td className="primary-cell">
+          <td className="primary-cell" data-label="Criterio">
             <label htmlFor={`axis-${axis.id}`} className="sr-only">Nombre del criterio {axis.id}</label>
             <input id={`axis-${axis.id}`} value={axis.label} maxLength={60} onChange={event => patchAxis(axis.id, { label: event.target.value })} />
             <span className="rubric-id">{axis.id}</span>
           </td>
-          <td className="num">
+          <td className="num" data-label="Peso">
             <label htmlFor={`weight-${axis.id}`} className="sr-only">Peso de {axis.label}</label>
             <input id={`weight-${axis.id}`} className="rubric-weight" type="number" min={1} max={100} value={axis.weight}
               onChange={event => patchAxis(axis.id, { weight: Number(event.target.value) })} />
           </td>
-          <td>
+          <td data-label="Qué debe demostrar">
             <label htmlFor={`guide-${axis.id}`} className="sr-only">Guía de {axis.label}</label>
             <textarea id={`guide-${axis.id}`} rows={Math.min(9, Math.max(3, Math.ceil(axis.guide.length / 42)))} maxLength={400} value={axis.guide}
               onChange={event => patchAxis(axis.id, { guide: event.target.value })} />
           </td>
-          <td>
+          <td data-label="Fuente en la skill">
             <label htmlFor={`source-${axis.id}`} className="sr-only">Skill de {axis.label}</label>
             <select id={`source-${axis.id}`} value={axis.source} onChange={event => patchAxis(axis.id, { source: event.target.value as RubricAxis['source'] })}>
               <option value="analisis-llamadas-ventas">analisis-llamadas-ventas</option>

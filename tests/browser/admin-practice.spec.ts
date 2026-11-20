@@ -233,6 +233,17 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.reload();
   await expect(page.getByLabel('Entrevista · contratación')).toBeChecked();
 
+  // 7b) En el panel estrecho la tabla se apila en tarjetas: las etiquetas siguen visibles y la guía se lee
+  // entera sin desplazamiento horizontal en el contenedor.
+  await page.setViewportSize({ width: 390, height: 900 });
+  const wrap = page.locator('.rubric-wrap');
+  await expect(wrap).toBeVisible();
+  expect(await wrap.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  const wrapBox = (await wrap.boundingBox())!;
+  const guideBox = (await page.locator('#guide-apertura').boundingBox())!;
+  expect(guideBox.width).toBeGreaterThan(wrapBox.width - 60);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   // 8) Reordenar y editar la corrección prioritaria; persiste tras recargar.
   await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
   await page.getByRole('button', { name: 'Subir la prioridad 2' }).click();

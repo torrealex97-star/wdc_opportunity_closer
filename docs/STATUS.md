@@ -1,5 +1,12 @@
 # Estado
 
+## Tabla de criterios apilada en paneles estrechos (sesión 242) — 2026-11-20
+
+- **Petición del propietario**: que la tabla de criterios de práctica se apile en tarjetas en pantallas estrechas, para que las guías se lean completas sin desplazamiento horizontal dentro del panel.
+- **Cambio** (*tested*): cada celda de la tabla declara su etiqueta (`data-label`) en [PracticeSettings](../apps/web/components/PracticeSettings.tsx) y el contenedor pasa a ser consultable (`container-type:inline-size`) en [globals.css](../apps/web/app/globals.css); por debajo de 760 px de ancho **del panel** cada fila se apila como una tarjeta con su etiqueta encima y la guía a todo el ancho, y la cabecera se oculta visualmente pero sigue para lectores de pantalla. La consulta es por contenedor y no por ventana: con la barra lateral, el hueco real del panel es menor que el viewport. Solo tokens de color; sin cambios de datos, API ni contrato.
+- **Probado** (*tested*): `npm run design` (ningún hex fuera de los tokens), `npm run typecheck` y `npx playwright test tests/browser/admin-practice.spec.ts` **1/1**, con el paso nuevo: a 390 px el contenedor no desborda (`scrollWidth - clientWidth ≤ 1`) y la guía ocupa el ancho disponible; los pasos de guardado, recarga, BANT, prioridades y nota ponderada siguen pasando.
+- **Límites honestos**: (1) la comprobación mide geometría, no se revisó con captura ni a otras anchuras. (2) El navegador de la prueba es Chromium: las consultas de contenedor exigen navegadores modernos, igual que el resto del CSS del panel. (3) Sin push: producción aún no incluye este cambio.
+
 ## Frase diaria determinista por cuenta (sesión 241) — 2026-11-20
 
 - **Petición del propietario**: que la frase del día sea determinista por cuenta y día, no por navegador, manteniendo la rotación sin repetición y el guardado local.
