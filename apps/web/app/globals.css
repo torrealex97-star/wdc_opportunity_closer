@@ -796,15 +796,22 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
    Idioma, modalidad y prospección son ejes distintos: la línea «En español · remoto o híbrido»
    los juntaba en una frase y afirmaba una modalidad que el catálogo no siempre cumple. La
    modalidad la declara el anuncio; la prospección solo consta cuando el anuncio la menciona. */
-.student-preferences{align-items:flex-end;justify-content:flex-start;gap:16px 28px}
-.student-preferences .tick-field{flex:0 1 auto;min-width:0;gap:0}
-.student-preferences .tick-field legend{font-weight:550;color:var(--ink)}
-.student-preferences .tick-field .tick-row{display:flex;flex-wrap:wrap;gap:4px 16px}
-.student-preferences .tick-field small{font-weight:400;line-height:1.45;color:var(--secondary)}
-.student-preferences .check-label{flex-direction:row;align-items:center;align-self:center;gap:8px;max-width:320px}
-@media(max-width:700px){.student-preferences .tick-field{flex:1 1 100%;min-width:0}}
-.student-preferences .primary{margin-left:auto}
-@media(max-width:700px){.student-preferences .primary{width:100%;margin-left:0}}
+/* Dos grupos de casillas en su propia columna, cada uno con su pista debajo y las opciones como
+   fichas: antes el fieldset en flex ponía la leyenda, las casillas y la pista en la misma línea, y
+   la pista acababa al lado de las casillas. */
+.student-preferences{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:start;gap:24px 40px}
+.student-preferences .tick-field{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:flex-start;gap:10px;min-width:0}
+.student-preferences .tick-field legend{margin:0;padding:0;font-size:12px;font-weight:550;color:var(--ink)}
+.student-preferences .tick-field .tick-row{display:flex;flex-wrap:wrap;gap:8px}
+.student-preferences .tick-field small{display:block;font-size:11px;font-weight:400;line-height:1.5;color:var(--secondary)}
+.student-preferences .check-label{flex-direction:row;align-items:center;gap:9px;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--sheet);font-size:12px;font-weight:400;max-width:none;cursor:pointer}
+.student-preferences .check-label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.student-preferences .check-label:hover{border-color:var(--accent)}
+.student-preferences>label.check-label{align-self:center;max-width:420px;border:0;background:transparent;padding:0;font-size:12px;color:var(--ink)}
+.student-preferences>.primary{grid-column:2;justify-self:end;align-self:center;min-width:210px}
+@media(max-width:980px){.student-preferences{grid-template-columns:minmax(0,1fr);gap:20px}
+.student-preferences>.primary{grid-column:1;justify-self:stretch;width:100%}
+.student-preferences>label.check-label{max-width:none}}
 
 /* --- Ficha de una alumna desde el panel (2026-11-18) ---
    El diálogo reutiliza el componente de «Mi progreso»: mismo contenido y mismos estados, leído
