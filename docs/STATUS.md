@@ -1,5 +1,22 @@
 # Estado
 
+## Revisión del currículo de Formación contra las skills (sesión 240) — 2026-11-20
+
+- **Petición del propietario**: revisar las 12 lecciones y las 24 preguntas de la ruta de Formación contra `scalix-ventas` y `analisis-llamadas-ventas` y corregir lo que no fuera coherente con el método y los recursos existentes.
+- **Corregido** (*inspected* contra las dos skills y [trainingContent](../apps/web/components/trainingContent.ts)):
+  1. **Descubrimiento — orden y pain cycle** ([trainingCurriculum.ts](../apps/web/lib/trainingCurriculum.ts)): la lección llamaba «pain cycle» a la pregunta de coste a seis meses y saltaba la brecha. Ahora brecha con números → obstáculo cavado («¿por qué?», «cuéntame más», «dame un ejemplo», «¿qué más te frena?») → historial de lo intentado y lo invertido (rúbrica B3) → resumen con etiqueta y confirmación. El guion del recurso y la pregunta del orden se reescribieron con esa secuencia.
+  2. **BANT**: la pregunta de Need era «¿qué pasa si no lo resuelves?», que es coste de inacción, no necesidad. Ahora Need es deseo + obstáculo real; Budget lleva su vara (si está justo, ¿es el problema más importante y compensa?; a quien no puede invertir no se le pasa a la siguiente llamada); Authority exige que quien decide esté en esta llamada o en la siguiente; se distingue «no salió» (?) de «falla» (✗) y con ✗ en Budget o Authority no se avanza.
+  3. **Coste de inacción**: se cuantifica también en tiempo y estatus y se traduce a un día (B4); «después del precio» pasa a «después del número»; la disyuntiva deja de presentarse como petición de venta antes del pitch.
+  4. **Objeciones**: faltaba el triaje y el método AAA, que es como la skill ordena los bucles; la tabla tenía cinco objeciones y ahora tiene las siete con su teoría de fondo (precio = valor, decisor = apoyo y no permiso, tiempo = prioridad, detalle = preferencia, stall = evitar decidir) y la regla de no bajar el precio.
+  5. **Elegir cierre**: «no encadenes cinco cierres» contradecía la skill («quien más veces pide, más vende»; apilar cierres sobre el mismo obstáculo). Ahora el orden es triaje → cinco universales → cinco específicos, con AAA entre cierres, y apilar es correcto si cada cierre responde a lo que ella acaba de decir.
+  6. **Pedir y siguiente paso**: «vuelve a pedir una vez» limitaba el ask; ahora se vuelve a pedir tras gestionar la objeción, el siguiente paso es BAMFAM con dos opciones y reducción de compromiso si dice que no a las dos, y «handshake» se usa como en la rúbrica (presentar y edificar a quien sigue).
+  7. **Apertura**: la agenda no incluía la salida limpia que pide A1; la prueba se aclara como caso parecido o dato del caso, no como discurso.
+  8. **Entrevista**: usaba el STAR de calificación (situación, timing, autoridad, recursos) como estructura de respuesta. Ese STAR es el módulo 5 para cualificar leads, no una fórmula de entrevista: la lección y su guion pasan a rol → a quién vendías → resultado propio → por qué estás aquí, con la regla de no inventar cifras; la pregunta que pedía «la A de STAR» ahora pregunta la estructura.
+  9. **Menores**: ética explícita («no inventes escasez ni resultados», G2) y comprobar que vio el material en la pre-llamada (frame de la skill).
+- **Sincronizado con la base** (*verified*): 10 lecciones, 8 recursos y 2 preguntas actualizados en `closer-ia-ops`; los cuatro MD5 por tabla (módulos, lecciones, recursos, preguntas) coinciden exactamente con el currículo del repo.
+- **Probado** (*tested*): `npm run training:template` (plantilla CSV regenerada), `training-curriculum.mjs` **38 comprobaciones OK**, `npm run typecheck`, `npm run build` y `npx playwright test tests/browser/training-curriculum.spec.ts` **1/1**.
+- **Límites honestos**: (1) producción sigue con el build anterior y su `/api/training` cae al currículo del repo (ya corregido); el arreglo de `version: 'db'` sigue **sin publicar**. (2) El servidor local no tiene `SUPABASE_URL`/clave de servicio: el camino base se comprobó con los hashes por tabla, no por HTTP contra Supabase desde local. (3) No se revisó visualmente con captura; la verificación es build, suite de currículo y Playwright.
+
 ## Ramas cerradas, voz con filtro de eco y módulo 10 en `main` (sesión 238) — 2026-11-19
 
 - **Petición del propietario**: cerrar «mergea todo y llévalo al main»: integrar las piezas válidas de las ramas pendientes, fusionar las PRs de dependabot compatibles, dar veredicto a cada rama y dejar `main` verde y sin trabajo sin subir.

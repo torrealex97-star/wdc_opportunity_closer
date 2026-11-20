@@ -173,8 +173,8 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Tu identidad de closer',
           summary: 'Qué defiende una closer y qué no: curiosidad, criterio y cero sumisión.',
           minutes: 8,
-          content: 'Una closer no entra a agradar: entra a entender si puede ayudar y a decirlo con claridad. El tono es de igual a igual. No pides perdón por llamar, no justificas tu existencia y no conviertes la llamada en un examen que tienes que aprobar.\n\nLa diferencia se nota en las primeras frases. «Perdona que te moleste» coloca a la otra persona por encima y te obliga a recuperar un terreno que ya cediste. «Te llamo porque vi algo en tu caso y quiero comprobar si encaja» sitúa la conversación en un intercambio entre adultas.\n\nTu trabajo no es empujar a nadie: es hacer preguntas que ordenen su situación y decir la verdad sobre lo que ves. Si no encaja, lo dices y sales con la misma dignidad con la que entraste.',
-          key_points: ['El tono de igual a igual se elige antes de hablar.', 'Pedir permiso para preguntar no es pedir perdón por existir.', 'Decir que no encaja también es parte del trabajo.'],
+          content: 'Una closer no entra a agradar: entra a entender si puede ayudar y a decirlo con claridad. El tono es de igual a igual. No pides perdón por llamar, no justificas tu existencia y no conviertes la llamada en un examen que tienes que aprobar.\n\nLa diferencia se nota en las primeras frases. «Perdona que te moleste» coloca a la otra persona por encima y te obliga a recuperar un terreno que ya cediste. «Te llamo porque vi algo en tu caso y quiero comprobar si encaja» sitúa la conversación en un intercambio entre adultas.\n\nTu trabajo no es empujar a nadie: es hacer preguntas que ordenen su situación y decir la verdad sobre lo que ves. Si no encaja, lo dices y sales con la misma dignidad con la que entraste. Y no inventes escasez ni resultados: la venta que aguanta es la que puedes defender al día siguiente.',
+          key_points: ['El tono de igual a igual se elige antes de hablar.', 'Pedir permiso para preguntar no es pedir perdón por existir.', 'Decir que no encaja también es parte del trabajo.', 'No se inventan escasez ni resultados.'],
           resources: [
             {
               id: 'res-identidad-checklist', type: 'checklist', title: 'Checklist de tono y marco',
@@ -205,18 +205,18 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Pre-llamada que llena la agenda',
           summary: 'Los seis momentos entre agendar y entrar en la llamada, con una salida digna.',
           minutes: 10,
-          content: 'La conversación empieza días antes. Una cita a 24 horas se cae mucho menos que una a siete días: agenda entre uno y dos días y vende la llamada en el primer mensaje con tres razones concretas para asistir.\n\nLa secuencia tiene seis momentos: confirmación inmediata con material, presentación personal, vídeo corto la noche anterior, prueba social la mañana de la cita, confirmación logística una hora antes y última confirmación con enlace quince minutos antes. En cada uno hay una acción concreta, no un recordatorio vacío.\n\nEl material preparatorio sirve para matar objeciones antes de que nazcan. Si siembras la objeción de pareja o de dinero antes del precio, cuando aparezca ya tendrás una conversación empezada. Y si la persona no puede asistir, dale una salida digna: reprogramar no es perder, es evitar una llamada vacía.',
+          content: 'La conversación empieza días antes. Una cita a 24 horas se cae mucho menos que una a siete días: agenda entre uno y dos días y vende la llamada en el primer mensaje con tres razones concretas para asistir.\n\nLa secuencia tiene seis momentos: confirmación inmediata con material, presentación personal, vídeo corto la noche anterior, prueba social la mañana de la cita, confirmación logística una hora antes —comprobando que vio el material— y última confirmación con enlace quince minutos antes. En cada uno hay una acción concreta, no un recordatorio vacío.\n\nEl material preparatorio sirve para matar objeciones antes de que nazcan. Si siembras la objeción de pareja o de dinero antes del precio, cuando aparezca ya tendrás una conversación empezada. Y si la persona no puede asistir, dale una salida digna: reprogramar no es perder, es evitar una llamada vacía.',
           key_points: ['Agenda a 24-48 horas, no a una semana.', 'Cada mensaje pide o confirma algo concreto.', 'La salida digna protege la cita siguiente.'],
           resources: [
             {
               id: 'res-pre-llamada-guion', type: 'script', title: 'Secuencia de seis mensajes',
               description: 'Guion base con huecos para adaptar al caso, sin cifras inventadas.',
-              content: '1. Confirmación: «Cita confirmada, [día] a las [hora]. Tres cosas para que aproveches la llamada: 1) [razón concreta], 2) [razón concreta], 3) saldrás con tu siguiente paso. Te dejo la tarea preparatoria: [enlace].»\n2. Presentación: «Soy [nombre], la persona con la que hablarás. Me alegra que hayas dado el paso. Si tienes dudas antes, escríbeme por aquí.»\n3. Noche anterior: vídeo corto y personal: «Mañana a las [hora] nos vemos. He visto tu caso y tengo ideas concretas para [tema].»\n4. Mañana: «Te dejo un caso parecido al tuyo: [caso real o ejemplo sin cifras inventadas]. Mañana te cuento cómo lo abordamos.»\n5. Una hora antes: «Nos vemos en una hora. ¿Prefieres [enlace A] o [enlace B]? Confírmame y te lo paso.»\n6. Quince minutos antes: «Entrando a la sala: [enlace]. Si algo surgió, avísame y reprogramamos; si estás lista, nos vemos en cinco minutos.»',
+              content: '1. Confirmación: «Cita confirmada, [día] a las [hora]. Tres cosas para que aproveches la llamada: 1) [razón concreta], 2) [razón concreta], 3) saldrás con tu siguiente paso. Te dejo la tarea preparatoria: [enlace].»\n2. Presentación: «Soy [nombre], la persona con la que hablarás. Me alegra que hayas dado el paso. Si tienes dudas antes, escríbeme por aquí.»\n3. Noche anterior: vídeo corto y personal: «Mañana a las [hora] nos vemos. He visto tu caso y tengo ideas concretas para [tema].»\n4. Mañana: «Te dejo un caso parecido al tuyo: [caso real o ejemplo sin cifras inventadas]. Mañana te cuento cómo lo abordamos.»\n5. Una hora antes: «Nos vemos en una hora. ¿Pudiste ver el vídeo? ¿Prefieres [enlace A] o [enlace B]? Confírmame y te lo paso.»\n6. Quince minutos antes: «Entrando a la sala: [enlace]. Si algo surgió, avísame y reprogramamos; si estás lista, nos vemos en cinco minutos.»',
             },
             {
               id: 'res-pre-llamada-checklist', type: 'checklist', title: 'Checklist de show-rate',
               description: 'Lo que revisa una closer antes de dar la cita por buena.',
-              content: '· Cita a 24-48 horas.\n· Tres razones para asistir en el primer mensaje.\n· Presentación personal con nombre.\n· Material que responda a una objeción probable.\n· Confirmación logística con enlace.\n· Salida digna si no puede.',
+              content: '· Cita a 24-48 horas.\n· Tres razones para asistir en el primer mensaje.\n· Presentación personal con nombre.\n· Material que responda a una objeción probable.\n· Confirmación logística con enlace.\n· Confirmado si vio el material preparatorio.\n· Salida digna si no puede.',
             },
           ],
           questions: [
@@ -242,13 +242,13 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Apertura con prueba, promesa y plan',
           summary: 'Los primeros 15-20 segundos: por qué está en la llamada, una prueba breve y el plan.',
           minutes: 8,
-          content: 'La apertura no es un discurso de presentación: es una agenda. En 15-20 segundos dices por qué estáis hablando, das una prueba breve de que has entendido su caso y explicas qué vais a hacer juntas.\n\nUsa las notas previas. Si ya contó su situación en el formulario, no le hagas repetirla: «Vi que [situación concreta]; por eso te propongo [plan]». Eso demuestra que la llamada es para ella y no una plantilla.\n\nLa promesa no es un resultado garantizado: es lo que saldrá de la conversación. «Saldrás sabiendo [decisión o siguiente paso]» es una promesa honesta. Después pide permiso para preguntar y empieza el descubrimiento.',
-          key_points: ['La apertura es una agenda, no una presentación.', 'La prueba demuestra que has leído su caso.', 'La promesa describe la conversación, no un resultado garantizado.'],
+          content: 'La apertura no es un discurso de presentación: es una agenda. En 15-20 segundos dices por qué estáis hablando, das una prueba breve de que has entendido su caso y explicas qué vais a hacer juntas, incluida la salida limpia: si no encaja, se lo dices y se lleva algo útil igualmente.\n\nUsa las notas previas. Si ya contó su situación en el formulario, no le hagas repetirla: «Vi que [situación concreta]; por eso te propongo [plan]». Eso demuestra que la llamada es para ella y no una plantilla.\n\nLa prueba puede ser un caso parecido al suyo o un dato que ya tienes de su situación. La promesa no es un resultado garantizado: es lo que saldrá de la conversación. «Saldrás sabiendo [decisión o siguiente paso]» es una promesa honesta. Después pide permiso para preguntar y empieza el descubrimiento.',
+          key_points: ['La apertura es una agenda y termina con una salida limpia.', 'La prueba es un caso parecido o un dato de su caso, no un discurso.', 'La promesa describe la conversación, no un resultado garantizado.'],
           resources: [
             {
               id: 'res-apertura-plantilla', type: 'template', title: 'Plantilla de apertura en tres frases',
               description: 'Rellena los huecos con lo que ya sabes de su caso.',
-              content: '«[Nombre], te llamo porque [motivo concreto que ella dio o que consta en las notas]. Vi que [situación/prueba breve], así que hoy quiero entender [tema] y que salgas con [decisión o siguiente paso]. ¿Te parece si empiezo preguntándote [primera pregunta]?»',
+              content: '«[Nombre], te llamo porque [motivo concreto que ella dio o que consta en las notas]. Vi que [situación/prueba breve], así que hoy quiero entender [tema] y que salgas con [decisión o siguiente paso]; si no encaja, te lo digo y te llevas algo útil igualmente. ¿Te parece si empiezo preguntándote [primera pregunta]?»',
             },
           ],
           questions: [
@@ -282,24 +282,24 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           id: 'descubrimiento-preguntar',
           position: 1,
           title: 'Preguntar antes de presentar',
-          summary: 'Clarify, label y pain cycle: el orden que evita vender a ciegas.',
+          summary: 'La brecha, el pain cycle y el historial: el orden que evita vender a ciegas.',
           minutes: 10,
-          content: 'Presentar antes de descubrir es adivinar. La secuencia empieza por aclarar qué le hizo pedir la llamada, sigue con el hueco entre dónde está y dónde quiere estar, y termina con el coste de no actuar.\n\nClarify: «¿Qué te hizo buscar esto ahora?». Label: «Suena como que [emoción o situación]». Pain cycle: «¿Qué pasa si dentro de seis meses sigue igual?». No son preguntas para rellenar un formulario: son preguntas que le obligan a decir en voz alta lo que ya sabe.\n\nDespués resumes con sus palabras y pides confirmación. Si el resumen no es correcto, ella lo corrige: eso también es descubrimiento. Nunca discutas una corrección; agrégala.',
-          key_points: ['Primero aclarar, después etiquetar y por último llevar al coste.', 'El resumen se hace con sus palabras, no con las tuyas.', 'Una corrección de la clienta es información, no un ataque.'],
+          content: 'Presentar antes de descubrir es adivinar. Primero la brecha con sus números: dónde está hoy y dónde quiere estar. Sin brecha no hay motivo para cambiar nada, así que no se avanza sin ella.\n\nDespués el obstáculo, que es el pain cycle de verdad: «¿qué te frena?», «¿por qué?», «cuéntame más», «dame un ejemplo», «¿qué más te frena?». Dos de esas son órdenes, no preguntas: mantienen el mando sin interrogar. Se cava hasta que aparezca dinero, plazo o una persona, y se baja uno o dos niveles más allá de la primera respuesta.\n\nLuego el historial: qué ha intentado ya y cuánto ha invertido. Todo lo que ya probó es una ventaja, porque está en la llamada justamente porque aquello no lo resolvió.\n\nSe cierra con el resumen en tres frases y su etiqueta: «Para asegurar que te entiendo: probaste X, pasó Y, y ahora dudas de volver a invertir. Suena a que el problema real no es A ni B, sino que necesitas C. ¿Es así?». Si corrige, se acepta y se agrega: esa corrección es información, no un ataque.',
+          key_points: ['La brecha se concreta con sus números antes de hablar del problema.', 'El pain cycle se cava con «¿por qué?» y «dame un ejemplo», no con una sola pregunta.', 'El historial (qué probó y cuánto invirtió) es una ventaja, no un tema incómodo.', 'El resumen lleva su etiqueta y se confirma con ella.', 'Una corrección de la clienta es información, no un ataque.'],
           resources: [
             {
-              id: 'res-descubrimiento-guion', type: 'script', title: 'Guion de descubrimiento en cuatro preguntas',
+              id: 'res-descubrimiento-guion', type: 'script', title: 'Guion de descubrimiento en cuatro pasos',
               description: 'Una secuencia corta para no disparar a ciegas.',
-              content: '1. «¿Qué te hizo buscar [servicio] ahora y no hace seis meses?»\n2. «¿Dónde estás hoy con [tema] y dónde quieres estar?»\n3. «¿Qué te impide llegar ahí por tu cuenta?»\n4. «Si dentro de seis meses todo sigue igual, ¿qué habrá pasado?»\nDespués: «Déjame ver si lo entiendo: [resumen con sus palabras]. ¿Es eso?»',
+              content: '1. Brecha: «¿Dónde estás hoy con [tema] y dónde quieres estar?». Si no hay número, se pide: «¿cuánto y en qué plazo?».\n2. Obstáculo: «¿Qué te frena para llegar ahí?» → «¿Por qué?» → «Cuéntame más», «dame un ejemplo concreto», «¿qué más te frena?».\n3. Historial: «¿Qué has intentado ya y cuánto has invertido en resolverlo?».\n4. Resumen con etiqueta: «Para asegurar que te entiendo: probaste X, pasó Y, y ahora dudas de volver a invertir. Suena a que el problema real no es A ni B, sino que necesitas C. ¿Es así?».',
             },
           ],
           questions: [
             {
               id: 'descubrimiento-preguntar-q1', type: 'multiple',
               prompt: '¿Cuál es el orden correcto del descubrimiento?',
-              options: ['Presentar → preguntar → cerrar', 'Aclarar → etiquetar → llevar al coste → resumir', 'Precio → objeciones → preguntas', 'Calificar → presentar → descalificar'],
+              options: ['Presentar → preguntar → cerrar', 'Brecha con números → obstáculo (pain cycle) → historial → resumen confirmado', 'Precio → objeciones → preguntas', 'Calificar → presentar → descalificar'],
               correct: 1,
-              explanation: 'El descubrimiento va de lo que ya sabe (clarify) a lo que siente (label) y a lo que cuesta seguir igual (pain cycle), cerrando con un resumen confirmado.',
+              explanation: 'Primero la brecha (dónde está y dónde quiere estar), después el obstáculo cavado con «¿por qué?» y ejemplos, luego lo que ya intentó y cuánto invirtió, y al final el resumen con su etiqueta y su confirmación. Presentar antes de eso es vender a ciegas.',
             },
             {
               id: 'descubrimiento-preguntar-q2', type: 'case',
@@ -316,13 +316,13 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Cuantificar el coste de seguir igual',
           summary: 'La brecha, el coste y el silencio después del número.',
           minutes: 10,
-          content: 'La venta lógica no consiste en decir un precio más alto: consiste en poner dos caminos delante. Uno, seguir como ahora. Dos, cambiar. La diferencia entre los dos, en el horizonte que ella misma ha dicho, es el coste de inacción.\n\nHaz la cuenta con sus cifras, no con las tuyas. Si no tiene una cifra, no la inventes: pregunta qué dato le falta y trabaja con un rango declarado. Después de soltar el número, guarda silencio. Ni «¿qué te parece?» ni «¿cómo lo ves?». Quien habla primero después del precio suele ser quien lo rebaja.\n\nEl cierre de este paso es una disyuntiva honesta: «Tú decides: seguir igual o empezar». No es una amenaza; es devolverle la decisión que ya estaba tomando.',
-          key_points: ['Usa sus cifras y declara cuando falta un dato.', 'Después del número, silencio.', 'La disyuntiva devuelve la decisión, no la impone.'],
+          content: 'La venta lógica no consiste en decir un precio más alto: consiste en poner dos caminos delante. Uno, seguir como ahora. Dos, cambiar. La diferencia entre los dos, en el horizonte que ella misma ha dicho, es el coste de inacción.\n\nSe cuantifica en dinero, en tiempo y en estatus: qué deja de ingresar, qué meses pierde y qué posición deja de ocupar. Haz la cuenta con sus cifras, no con las tuyas, y tradúcela a un día ([brecha mensual] ÷ 30): el coste de inacción se entiende mejor por día que por año. Si no tiene una cifra, no la inventes: pregunta qué dato le falta y trabaja con un rango declarado.\n\nDespués de soltar el número, guarda silencio. Ni «¿qué te parece?» ni «¿cómo lo ves?». Quien habla primero después del número suele ser quien lo rebaja.\n\nEl cierre de este paso es una disyuntiva honesta —«tú decides: seguir igual o empezar»—, pero sirve para que vea el coste, no para pedir la venta: la petición llega después del pitch, cuando ya sabe qué compra.',
+          key_points: ['Usa sus cifras y declara cuando falta un dato.', 'Cuantifica en dinero, tiempo y estatus, y tradúcelo a un día.', 'Después del número, silencio.', 'La disyuntiva muestra el coste; la venta se pide después del pitch.'],
           resources: [
             {
               id: 'res-coste-plantilla', type: 'template', title: 'Plantilla de coste de inacción',
               description: 'Tres datos y una frase; sin cifras inventadas.',
-              content: 'Dato 1: ingreso actual [importe/mes].\nDato 2: objetivo [importe/mes] en [plazo].\nBrecha mensual: [objetivo − actual].\nCoste en el plazo: [brecha × meses].\nFrase: «Tienes dos caminos. Uno: seguir como ahora. Dos: cerrar la brecha de [brecha] al mes. En [plazo], la diferencia entre los dos caminos es [coste]. Tú decides.»\nDespués: silencio.',
+              content: 'Dato 1: ingreso actual [importe/mes].\nDato 2: objetivo [importe/mes] en [plazo].\nBrecha mensual: [objetivo − actual].\nCoste en el plazo: [brecha × meses].\nCoste diario: [brecha mensual ÷ 30].\nTiempo: [meses u horas que pierde].\nEstatus: [qué posición deja de ocupar].\nFrase: «Tienes dos caminos. Uno: seguir como ahora. Dos: cerrar la brecha de [brecha] al mes. En [plazo], la diferencia entre los dos caminos es [coste]. Tú decides.»\nDespués: silencio.',
             },
           ],
           questions: [
@@ -348,13 +348,13 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'BANT antes del precio',
           summary: 'Presupuesto, autoridad, necesidad y momento: qué preguntar y cuándo parar.',
           minutes: 8,
-          content: 'BANT no es un interrogatorio: es una forma de no cerrar a ciegas. Presupuesto, autoridad, necesidad y momento se recogen durante el descubrimiento, antes de pedir dinero.\n\nPresupuesto: «¿Qué margen tienes pensado para resolver esto?». Autoridad: «¿Hay alguien más que tenga que estar de acuerdo?». Necesidad: «¿Qué pasa si no lo resuelves?». Momento: «¿Para cuándo necesitas que esté funcionando?». Cada respuesta se apunta con una cita, no con una interpretación.\n\nSi falta una letra, no significa que la venta esté muerta: significa que todavía no sabes si está viva. Pregunta antes de presentar y decide después si merece la pena seguir. La decisión de avanzar o parar también se declara.',
-          key_points: ['BANT se recoge antes del precio.', 'Cada letra lleva una cita, no una suposición.', 'Si falta información, se pregunta; no se rellena.'],
+          content: 'BANT no es un interrogatorio: es una forma de no cerrar a ciegas. Las cuatro letras se recogen durante el descubrimiento, antes de pedir dinero.\n\nBudget: «¿Qué margen tienes pensado para resolver esto?». La vara es que pueda invertirlo. Si está justo, pregunta si es su problema más importante y si le compensa; a quien no puede invertir no se le pasa a la siguiente llamada.\n\nAuthority: «¿Hay alguien más que tenga que estar de acuerdo?». La vara es que quien decide esté en esta llamada o en la siguiente; si no, estás cualificando a una mensajera.\n\nNeed: el estado deseado en sus palabras y un obstáculo real que se lo impide: «¿qué te frena para conseguir [lo que dijo que quería]?». Un deseo sin obstáculo no es necesidad.\n\nTiming: «¿Para cuándo necesitas que esté funcionando?»; la vara es que quiera resolverlo ya, no «algún día». Un desplazamiento de seis meses también contesta.\n\nCada respuesta se apunta con una cita, no con una interpretación. Distingue «no salió» (?) de «falla» (✗): con un ✗ en Budget o Authority no se avanza; con un ? se pregunta antes de decidir. La decisión de avanzar o parar se declara en voz alta.',
+          key_points: ['BANT se recoge antes del precio, sin sonar a formulario.', 'Need es deseo más obstáculo real, no el coste de esperar.', 'Con ✗ en Budget o Authority no se avanza; con ? se pregunta antes de decidir.', 'Cada letra lleva una cita, no una suposición.'],
           resources: [
             {
               id: 'res-bant-checklist', type: 'checklist', title: 'Checklist BANT con evidencia',
               description: 'Cuatro letras, una cita y una decisión.',
-              content: '· Presupuesto: ¿qué margen tiene? Cita: «…»\n· Autoridad: ¿decide sola? Cita: «…»\n· Necesidad: ¿qué pasa si no lo resuelve? Cita: «…»\n· Momento: ¿para cuándo? Cita: «…»\nDecisión: avanzar / parar / faltan datos. Si faltan, la siguiente pregunta es…',
+              content: '· Budget: ¿qué margen tiene? ¿es su problema más importante? Cita: «…»\n· Authority: ¿decide sola? ¿quién más interviene y estará en la siguiente llamada? Cita: «…»\n· Need: ¿qué quiere y qué le frena? Cita: «…»\n· Timing: ¿para cuándo? ¿qué pasa si espera seis meses? Cita: «…»\nDecisión: avanzar / parar. Con ✗ en Budget o Authority no se avanza; con ? se pregunta antes de decidir.',
             },
           ],
           questions: [
@@ -390,13 +390,13 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Aislar y validar sin «pero»',
           summary: 'La objeción que oyes casi nunca es la objeción que frena la decisión.',
           minutes: 10,
-          content: 'Antes de responder una objeción, aísla: «Además de eso, ¿hay algo más que te impida decidir?». Si hay otra cosa, esa es la objeción real. Responder a la primera sin aislar es disparar a un blanco que se mueve.\n\nDespués valida con «y», nunca con «pero». «Entiendo que el precio te preocupa, y al mismo tiempo lo que me contaste antes era [coste]». El «pero» borra lo anterior; el «y» sostiene las dos cosas y permite avanzar.\n\nNo defiendas el producto, no justifiques el precio y no expliques lo buena que eres. Devuelve una pregunta que haga pensar: «¿Qué tendría que pasar para que esto tuviera sentido para ti?».',
-          key_points: ['Aísla antes de responder.', 'Valida con «y», no con «pero».', 'Una pregunta devuelve la conversación a la clienta.'],
+          content: 'Una objeción es una señal de compra: a quien no le interesa no le hace falta discutir. Antes de responder, haz triaje con una pregunta direccional: «¿crees que esto podría acercarte a tu objetivo?». Si dice que sí, pide el siguiente paso; si no, «¿cuál es tu principal preocupación?».\n\nAísla antes de rebatir: «Además de eso, ¿hay algo más que te impida decidir?» y, si es un «lo pienso», la batería completa: ¿qué temes que pase?, ¿qué variables usas para decidir?, ¿qué lo haría un sí?, ¿qué lo haría un no?. La primera objeción casi nunca es la que frena la decisión.\n\nEntre cierre y cierre, usa AAA: reconoce lo que dijo (Acknowledge), asócialo con algo positivo o con alguien que estaba en su situación (Associate) y haz la siguiente pregunta (Ask). No contradigas ni uses «pero»: «entiendo que el precio te preocupa, y al mismo tiempo lo que me contaste antes era [coste]».\n\nNo defiendas el producto, no justifiques el precio y no expliques lo buena que eres. Devuelve una pregunta que haga pensar: «¿Qué tendría que pasar para que esto tuviera sentido para ti?».',
+          key_points: ['Una objeción es señal de compra, no un no.', 'Aísla antes de rebatir: la primera objeción rara vez es la real.', 'Entre cierres, AAA: reconoce, asocia y pregunta.', 'Valida con «y», no con «pero».', 'No se baja el precio: se cambian términos o componentes.'],
           resources: [
             {
               id: 'res-objeciones-tabla', type: 'doc', title: 'Tabla de objeciones y respuesta',
-              description: 'Las cinco objeciones más comunes, con qué preguntar antes de rebatir.',
-              content: '· «Es caro» → «¿Con qué lo estás comparando?» → reencuadre de valor.\n· «Tengo que hablarlo con mi pareja» → «¿Qué necesitas de esa conversación?» → apoyo, no permiso.\n· «Ya lo intenté y no funcionó» → «¿Qué faltó la última vez?» → no quemarse dos veces.\n· «No es el momento» → «¿Qué tendría que cambiar para que lo fuera?» → momento real.\n· «No confío en los cursos» → «¿Qué tendría que ser distinto para que confiaras?» → prueba concreta.',
+              description: 'Las siete objeciones con la teoría de fondo y qué preguntar antes de rebatir.',
+              content: '· Precio («es caro»): ¿es liquidez o valor? → «¿con qué lo estás comparando?». No se baja el precio: se cambian términos o componentes.\n· «Lo pienso»: es evitación → batería de preguntas hasta la objeción real, y si no hay, día y hora.\n· Pareja o socio: es apoyo, no permiso → «¿qué pasaría si dijera que no?».\n· Tiempo: es prioridad, no agenda → «¿qué es lo menos importante y lo cambiarías por esto?».\n· Miedo a que no funcione: es riesgo percibido → qué faltó la última vez y qué es distinto, sin prometer resultados.\n· «Estoy mirando otra opción»: «si costaran lo mismo, ¿cuál eliges?» y que diga ella por qué.\n· «Envíamelo»: es una salida amable → resolver lo principal ahora y cerrar día y hora.',
             },
           ],
           questions: [
@@ -422,8 +422,8 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Elegir el cierre que pide la llamada',
           summary: 'No todos los cierres sirven para todas las objeciones.',
           minutes: 12,
-          content: 'Un cierre es una frase que ayuda a decidir, no un truco para empujar. La biblioteca del método tiene diez: desde presentar el precio como decidido hasta normalizar los nervios o explicar el mecanismo.\n\nLa clave es elegir según lo que acaba de decir la clienta. Si invoca a su pareja, el cierre es apoyo, no permiso. Si dice que es mucho dinero, el cierre reencuadra el valor. Si necesita entender el sistema, el cierre muestra el mecanismo. Si duda en el último segundo, el cierre recuerda lo cerca que está.\n\nNo encadenes cinco cierres. Elige uno, dilo con calma y deja espacio. Si no funciona, vuelve a preguntar antes de probar otro: la objeción cambió o no era la real.',
-          key_points: ['El cierre se elige por la objeción, no por costumbre.', 'Un cierre se dice y se sostiene; no se encadenan.', 'Si no funciona, vuelve a preguntar.'],
+          content: 'Un cierre es una frase que ayuda a decidir, no un truco para empujar. El orden del método es triaje → cinco cierres universales → cinco específicos, y entre uno y otro, AAA.\n\nLos universales sirven casi siempre: la razón (su objeción es la razón para hacerlo), el hipotético («si esto no fuera un problema, ¿lo harías?»), zoom out (salir del detalle y volver al resultado), del 1 al 10 y mejor caso / peor caso. Los específicos atacan la teoría de fondo: el tiempo es prioridad, el dinero es valor, el decisor es apoyo y no permiso, el detalle es preferencia y el stall es evitar decidir.\n\nLa biblioteca de diez de la ruta (Decadere, Six Inches, Support Not Permission…) es el repertorio para esas teorías: elige el que pide la objeción que acaba de decir. Si invoca a su pareja, apoyo; si dice que es mucho dinero, valor; si necesita entender el sistema, mecanismo; si duda en el último segundo, lo cerca que está.\n\nApilar cierres es correcto si cada uno responde a lo que ella acaba de decir: se escucha, se reconoce, se pregunta y se vuelve a pedir sobre el mismo obstáculo. Lo que no funciona es soltar cierres en serie sin escuchar, ni cambiar de obstáculo para esquivar el que duele.',
+          key_points: ['El orden es triaje → universales → específicos.', 'Cada cierre responde a la objeción que acaba de decir.', 'Apilar cierres vale si se escucha entre uno y otro (AAA).', 'Si no avanza, vuelve a preguntar antes de cambiar de cierre.'],
           resources: [
             {
               id: 'res-cierres-biblioteca', type: 'doc', title: 'Biblioteca de diez cierres',
@@ -454,8 +454,8 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           title: 'Pedir, callar y siguiente paso',
           summary: 'El precio, el silencio y un día y una hora; «ya te escribo» no es un cierre.',
           minutes: 8,
-          content: 'Pedir la venta es una frase corta y directa: «¿Empezamos?». No es una sugerencia ni una pregunta retórica. Después del precio, el silencio es parte del cierre: sostenerlo no es perder el control, es dar tiempo a decidir.\n\nSi la respuesta es no, vuelve a pedir una vez con una decisión pequeña: una llamada, una fecha, un siguiente paso. Si sigue siendo no, agenda la siguiente conversación dentro de la llamada, con día y hora. «Te mando información» o «ya te escribo» no es un siguiente paso: es una forma educada de desaparecer.\n\nEl handshake cierra el bucle: repite lo acordado, confirma quién hace qué y cuándo, y despídete sin seguir vendiendo después del sí.',
-          key_points: ['Pide la venta con una frase directa.', 'El silencio después del precio forma parte del cierre.', 'Un siguiente paso tiene día y hora, no «ya te escribo».'],
+          content: 'Pedir la venta es una frase corta y directa: «¿Empezamos?». No es una sugerencia ni una pregunta retórica. Después del precio, el silencio es parte del cierre: sostenerlo no es perder el control, es dar tiempo a decidir.\n\nSi la respuesta es no, no es el final: se gestiona la objeción y se vuelve a pedir. Quien más veces pide, más vende; lo que no se hace es repetir la misma frase sin haber cambiado nada ni bajar el precio para cerrar.\n\nSi sigue siendo no, se agenda la siguiente conversación dentro de la llamada (BAMFAM), con dos opciones de día y hora y la persona que tiene que estar. «Te mando información» o «ya te escribo» no es un siguiente paso: es una forma educada de desaparecer. Si dice que no a las dos, se reduce el compromiso (quince minutos) antes de colgar.\n\nCon el sí, se cierra la logística: repite lo acordado, confirma quién hace qué y cuándo, y despídete sin seguir vendiendo. Si la entrega pasa a otra persona, preséntala edificándola y pásale el contexto: handshake, no handoff.',
+          key_points: ['Pide la venta con una frase directa y sostén el silencio.', 'Tras el primer no se gestiona la objeción y se vuelve a pedir, sin bajar el precio.', 'El siguiente paso es BAMFAM con dos opciones de día y hora.', 'Después del sí, logística: quién hace qué y cuándo.'],
           resources: [
             {
               id: 'res-cierre-checklist', type: 'checklist', title: 'Checklist del cierre',
@@ -531,24 +531,24 @@ export const DEFAULT_CURRICULUM: Curriculum = {
           id: 'aplicacion-entrevista',
           position: 2,
           title: 'La entrevista comercial',
-          summary: 'STAR, evidencia y las preguntas que casi siempre caen.',
+          summary: 'Evidencia, estructura y las preguntas que casi siempre caen.',
           minutes: 12,
-          content: 'En una entrevista comercial no evalúan si recitas el método: evalúan si puedes contar lo que has hecho con evidencia y si sabes escuchar. La estructura STAR te ayuda a no perderte: situación, timing, autoridad y recursos.\n\nCuando te pregunten por experiencia, usa rol → qué vendías y a quién → un resultado propio → por qué estás aquí. Cuando te pregunten por una objeción difícil, cuenta qué preguntaste antes de rebatir y qué harías distinto. Cuando te pregunten por presión, muestra el hábito que usas después de un no.\n\nTen preparadas dos preguntas propias sobre cómo se mide el éxito y de dónde vienen los leads. Las preguntas dicen más de tu criterio que muchas respuestas. Y no hables mal de nadie: es la bandera roja más citada.',
-          key_points: ['Usa STAR para ordenar la evidencia.', 'Cuenta qué preguntaste, no solo qué respondiste.', 'Lleva dos preguntas propias preparadas.'],
+          content: 'En una entrevista comercial no evalúan si recitas el método: evalúan si puedes contar lo que has hecho con evidencia y si sabes escuchar. La fórmula del banco de preguntas es rol → qué vendías y a quién → un resultado propio → por qué estás aquí; si te piden un caso concreto, cuéntalo en ese orden y termina con lo que harías distinto.\n\nCuando te pregunten por una objeción difícil, cuenta qué preguntaste antes de rebatir: enseñar el descubrimiento vale más que recitar cierres. Cuando te pregunten por presión, muestra el hábito que usas después de un no.\n\nTen preparadas dos preguntas propias sobre cómo se mide el éxito y de dónde vienen los leads. Las preguntas dicen más de tu criterio que muchas respuestas. Y no hables mal de nadie: es la bandera roja más citada. Si te piden una cifra que no tienes, dilo y explica cómo la medirías: una cifra redonda inventada se desmonta con una repregunta.',
+          key_points: ['La respuesta va de rol → a quién vendías → resultado propio → por qué estás aquí.', 'Cuenta qué preguntaste antes de rebatir, no solo qué respondiste.', 'Lleva dos preguntas propias preparadas.', 'No inventes cifras: declara el dato que falta y cómo lo medirías.'],
           resources: [
             {
-              id: 'res-entrevista-guion', type: 'script', title: 'Guion de respuesta con STAR',
-              description: 'Una estructura para cualquier pregunta de experiencia.',
-              content: 'Situación: «En [contexto], mi trabajo era [responsabilidad].»\nTiming: «El reto era [por qué ahora / qué urgencia].»\nAutoridad: «Yo decidía [parte] y coordinaba con [quién].»\nRecursos: «Contaba con [herramientas/equipo] y [restricción].»\nResultado: «Conseguí [resultado verificable]. Lo que haría distinto: [aprendizaje].»',
+              id: 'res-entrevista-guion', type: 'script', title: 'Guion de respuesta en cuatro pasos',
+              description: 'Una estructura para contar experiencia con evidencia.',
+              content: 'Rol: «Trabajé como [rol] en [tipo de empresa], vendiendo [producto] a [tipo de cliente].»\nResultado: «Mi resultado propio fue [dato verificable]; si no tengo la cifra, explico cómo se medía.»\nDescubrimiento: «Antes de rebatir preguntaba [qué preguntabas]; gracias a eso [qué pasó].»\nPor qué estás aquí: «Quiero [objetivo concreto] y el puesto pide [por qué encaja].»\nCierre: «¿Cómo medís el éxito en los primeros 90 días? ¿De dónde vienen los leads?».',
             },
           ],
           questions: [
             {
               id: 'aplicacion-entrevista-q1', type: 'multiple',
-              prompt: '¿Qué significa la A de STAR?',
-              options: ['Actitud', 'Autoridad para decidir', 'Aprendizaje', 'Agenda'],
+              prompt: '¿Cuál es la estructura correcta para contar tu experiencia?',
+              options: ['Todas tus aptitudes en una lista.', 'Rol → a quién vendías → un resultado propio → por qué estás aquí.', 'Solo el nombre de la empresa anterior.', 'Una disculpa por tu falta de experiencia.'],
               correct: 1,
-              explanation: 'En STAR, la autoridad comprueba si la persona podía decidir o si dependía de un tercero. Es una señal de cualificación, no de personalidad.',
+              explanation: 'La fórmula del banco de entrevista conecta tu rol, el tipo de cliente, un resultado verificable y tu motivo para estar ahí; el resto de detalles se cuentan si los piden. Una lista de aptitudes no demuestra nada.',
             },
             {
               id: 'aplicacion-entrevista-q2', type: 'case',
