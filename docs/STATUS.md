@@ -1,5 +1,12 @@
 # Estado
 
+## Aprendizajes y funcionamiento al día en los MD (sesión 262) — 2026-11-20
+
+- **Petición del propietario**: «actualiza todos los aprendizajes y funcionamiento en los mds».
+- **Qué se actualizó** (*inspected*; no cambia código): [AGENTS.md](../AGENTS.md) suma cinco reglas permanentes —cobertura de pago validada contra metadatos y con el bloqueo medido, reparto por aprobadas por dólar, artefactos generados en la forma que se consume, dos procesos de Next sobre `.next`, y documentos compartidos con trabajo ajeno—. [docs/LEARNINGS_GROWTH_OPS.md](LEARNINGS_GROWTH_OPS.md) estrena §7 con el porqué de nueve hallazgos (falsos positivos por nombre, categorías por defecto del actor, pruebas que fijan listas cerradas, efectos laterales al importar). [docs/EXTERNAL_SOURCES.md](EXTERNAL_SOURCES.md) §6-7 explica el catálogo de **27 portales y 70 buscadores**, cómo se regenera y quién cobra primero. [docs/SOURCES.md](SOURCES.md) deja el barrido con sus cifras y las doce fuentes sin actor compatible. [docs/DAILY_CATALOG.md](DAILY_CATALOG.md) enlaza ese reparto. [docs/handoff/README.md](handoff/README.md) añade las dos reglas de convivencia y [docs/ACTIVE_HANDOFF.md](ACTIVE_HANDOFF.md) resume el estado en una viñeta.
+- **Comprobado** (*inspected*): los enlaces nuevos resuelven y las cifras del texto coinciden con el código ejecutado —`PORTALS` **27** y **70** buscadores, `source_audit.json` con **20** barridos y exactamente las mismas **12** fuentes sin actor—. No hay pruebas de ejecución que hacer: es un cambio solo de documentación.
+- **Límites honestos**: no se reescribieron las secciones históricas de `SOURCES.md` (§2-6 son de octubre) ni las de `LEARNINGS_GROWTH_OPS.md`; `docs/ACTIVE_HANDOFF.md` mantiene su recorte de ~150 líneas, así que el detalle sigue en STATUS. El bloque de la otra sesión en `AGENTS.md` se respetó y se devolvió al árbol sin commitear.
+
 ## El mes se reparte por ofertas aprobadas por dólar, no por recogidas (sesión 261) — 2026-11-20
 
 - **Petición del propietario**: cambiar el reparto del presupuesto para que priorice las ofertas que acaba aprobando (cualificadas) por dólar en vez de las recogidas, con una prueba que lo demuestre y el porqué visible en el panel.

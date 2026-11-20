@@ -20,6 +20,11 @@ Architecture revision: docs/decisions/ADR-007-groq-opportunity-surfaces.md and d
 - Every migration: behaviour test with `BEGIN … ROLLBACK` (saved under `tests/db/`) and Supabase advisors afterwards; version the SQL in `supabase/migrations/` in the same PR that applies it.
 - Student data: never send student profile data to an LLM without a processing agreement and zero retention. Matching stays deterministic.
 - Evidence wording in STATUS and PRs: *inspected* (read), *tested* (executed in a controlled or simulated environment), *verified* (confirmed against the real service). Never claim a higher level than was reached.
+- Paid coverage (Apify catalog): a source gets a search engine only when a store actor is validated from public metadata (exists, not deprecated, build `SUCCEEDED`, input schema read). Never invent one. A source without a compatible actor keeps "sin proveedor verificado" and its blocking —queries, totals, rejected actors— stays recorded in `source_audit.json`. An actor whose contract is not the source's is excluded with a written reason.
+- Paid budget allocation: rank routes by **approved offers per dollar**, not by harvested items, with numerator and cost from the same window. A missing count is not zero: the route goes last and the panel says why.
+- Generated artefacts: emit them in the shape the app consumes (typed module, same fields), not a JSON the app translates at runtime. One place per string.
+- Two Next processes on the same `.next` corrupt Turbopack's cache (`Failed to open database … invalid digit found in string`). Check for a live `next dev` before building; `next build --webpack` uses a separate cache; never delete `.next` under another session.
+- Shared documents: when another agent has uncommitted work in the same file (`STATUS`, `AGENTS`), commit `HEAD` + your own hunks and put their block back in the tree afterwards; never `git add` the whole file.
 
 ## Design and charts
 

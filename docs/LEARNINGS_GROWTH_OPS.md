@@ -1,6 +1,6 @@
 # Aprendizajes de Growth Ops aplicables a Career Platform
 
-Fecha: 2026-10-17 · Origen: repositorio `growth-ops-app` del mismo propietario, **leído en solo lectura** (clon superficial; nada se ha escrito allí).
+Fecha: 2026-10-17 (añadidos propios de este repo en §7, 2026-11-20) · Origen: repositorio `growth-ops-app` del mismo propietario, **leído en solo lectura** (clon superficial; nada se ha escrito allí).
 Este documento NO copia datos, tenants, personas ni credenciales de Growth Ops: solo reglas y procedimientos generales. `AGENTS.md` de este repo sigue mandando (independencia de otros proyectos: ni secretos, ni BD, ni despliegues).
 
 ## 1. Qué se leyó (y qué no)
@@ -77,6 +77,20 @@ Copiadas a `.agents/skills/` con enlaces simbólicos en `.claude/skills/` (patr�
 5. Datos de alumnas: nunca a un LLM sin acuerdo de tratamiento; el matching sigue siendo determinista.
 6. Vocabulario inspeccionado / probado / verificado en STATUS.
 
-## 7. Siguiente paso sugerido
+## 7. Aprendizajes propios (sesiones 249-261, 2026-11-20)
+
+Reglas que salieron de **medir en este repo**, no de Growth Ops. Las que ya están en el código y en `AGENTS.md` se anuncian allí; aquí queda el porqué.
+
+1. **Cobertura de pago sin gastar crédito.** La tienda pública de Apify (`GET /v2/store?search=…`) y los metadatos de cada actor (`/v2/acts/<actor>` y `/builds/default`) son gratuitos y no piden token. Un barrido con **varias consultas por fuente** y metadatos validados (`isDeprecated`, build `SUCCEEDED`, esquema de entrada leído) es la forma honesta de subir cobertura sin ejecutar nada. Lo que no se pudo conectar se queda con su bloqueo **medido** —consultas, totales declarados y actores descartados— dentro de `source_audit.json`.
+2. **Un actor con el nombre correcto puede ser de otro sitio.** `yogen48-owner/malta-jobs` (Malta, el país) pasaba el filtro de `malt` porque «malt» es subcadena de «malta»; los actores de **Remote.co** (EE. UU.) ganaban a **Remoto.co** (LATAM) por lo mismo. La marca se compara con el portal real y, cuando el contrato no encaja, se **excluye con motivo escrito** (lista `EXCLUDED` del exportador) en vez de rellenar el panel.
+3. **Los actores traen valores por defecto que no son los tuyos.** El de Milanuncios descarga **coches** si no le dices categoría: sin plantilla «funciona» y devuelve lo que nadie pidió. Cuando el actor declara la categoría en su propia ficha, se fija con `inputTemplate` y el portal se limita a ese actor.
+4. **Repartir dinero por lo recogido premia al ruidoso.** El plan mensual ordena por **ofertas aprobadas por dólar** (`approvedPerUsd`), no por recogidas, y numerador y coste salen de la **misma ventana** (`first_seen_at` desde la ejecución más antigua del historial). Sin recuento fiable no hay rendimiento: la ruta va al final **declarada**, nunca se le supone cero.
+5. **Generar en la forma que se consume.** Un JSON generado obliga a un import con atributo (solo para el arnés de Node) y a traducirlo en tiempo de ejecución. Generar el módulo TypeScript con la forma del panel eliminó la traducción, el atributo y los campos que nadie leía.
+6. **Dos procesos de Next sobre `.next` corrompen la caché** (`Failed to open database … invalid digit found in string`). No se compila mientras otra sesión tenga `next dev` vivo: `next build --webpack` usa otra caché y lo evita; borrar `.next` bajo sus pies sí rompe su sesión.
+7. **Una prueba que fija una lista cerrada caduca a la primera ampliación.** La del panel exigía los cinco portales curados exactos y se puso roja al pasar a veinte; ahora fija el prefijo curado, la unicidad y que todo portal tenga buscador. Al ampliar un catálogo, la prueba protege el **invariante**, no el recuento de ayer.
+8. **Con otra sesión en el mismo árbol**, `git add` de un documento compartido arrastra su trabajo sin commitear: se compone el commit desde `HEAD` + lo propio y su bloque se devuelve al árbol después (regla en `docs/handoff/README.md`).
+9. **Un efecto lateral al importar un módulo puede enrojecer la suite según el orden** (`scripts/audit_sources.py` lanzaba el audit real por red al importarse y reescribía la evidencia a mitad de las pruebas). El trabajo pesado va bajo `if __name__ == '__main__'`, y las pruebas importan funciones, no el efecto.
+
+## 8. Siguiente paso sugerido
 
 Incremento **1.4: presupuesto de tiempo del cron y escrituras que no se ignoran** (puntos 1 y 3), antes de añadir más fuentes o activar el revisor en `live`.

@@ -2,7 +2,7 @@
 
 > **Lee esto primero** al retomar el trabajo, junto con `AGENTS.md`, `docs/STATUS.md` y el último commit de `main`.
 > Documento corto a propósito (≤ ~150 líneas). Histórico → `docs/handoff/archive/`. Trabajos vivos → `docs/handoff/claims/` (`npm run handoff`). Reglas → `docs/handoff/README.md`. Diseño y estado pieza a pieza de los módulos IA Winner → [docs/plans/IA_WINNER_MODULOS.md](plans/IA_WINNER_MODULOS.md).
-> Última actualización: 2026-11-19.
+> Última actualización: 2026-11-20.
 
 Leyenda: ✅ hecho y probado · 🟡 parcial · ⬜ pendiente (construible) · ⛔ bloqueado por el dueño o por una decisión. **Lo pendiente o bloqueado NO está hecho.**
 
@@ -15,6 +15,8 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
 **Otros agentes y ramas (revisado el 2026-10-26):** otro agente (firma «Codebuff», autor Alex Torre) fusionó **#45**: el motor retira con motivo lo que su puerta determinista descarta, el cron clasifica el pool y el panel tiene el botón «Clasificar y publicar solas»; la cola abre en las excepciones (detalle en `docs/STATUS.md`, sesión 107). Dejó además `docs/PORTING_REVIEW.md` (qué más se puede traer de las apps anteriores; de ahí salen las fases 12-15). Las dos ramas antiguas (`feat/formacion-progreso` y `claude/cloud-student-view`) quedaron **cerradas y borradas** el 2026-11-19 (sesión 238): estaban superadas por `main`; de `claude/beautiful-fermat-acaj61` se portaron el eco de voz y el módulo 10 en `ad0bb7b`, y sus retos ya estaban cubiertos. No quedan PRs abiertas. Las ramas ya fusionadas (`feat/*`, `docs/*`) siguen existiendo: ver tarea 11.
 
 ## 2. Estado de `main`
+
+- **Catálogo de Apify y reparto del dinero (sesiones 256-261, 2026-11-20)**: la pestaña «Búsqueda automática» pasa de **20 a 27 portales y de 48 a 70 buscadores**, generados desde la auditoría pública de la tienda (`scripts/export_apify_portals.py` → `apps/web/lib/apifyPortals.ts`; el JSON intermedio se retiró). Siete fuentes nuevas con buscador (Tecnoempleo, Talent, Welcome to the Jungle, OCC Mundial, Chiletrabajos, Trabajos.com y Milanuncios con su categoría de empleo fijada); doce siguen sin actor compatible y su bloqueo está **medido** en `source_audit.json`, y Google queda fuera a propósito (dorks de SerpApi, ADR-009). El tope mensual del panel reparte por **ofertas aprobadas por dólar**, no por recogidas, y cada tarjeta explica su puesto o declara que no hay recuento. Probado: 10 comprobaciones de portales, `paid-budget.mjs`, `run.sh` 46/46 y 13/13, typecheck, build y CI en verde. Límite: ningún actor de pago se ha ejecutado; es cobertura de metadatos.
 
 - **E2E en paralelo (sesión 245, 2026-11-20)**: la suite vuelve a `workers: 4` (`PLAYWRIGHT_WORKERS` lo ajusta). Las escrituras que faltaban por simular eran actividad (`POST /api/student/activity`, 7 pruebas) y búsqueda de catálogo (`POST /api/backend/opportunities/search`, 3); ahora pasan por `page.route`. `tests/browser/stubs.ts` corta con 501 cualquier escritura no simulada y falla la prueba, así que un hueco futuro se ve en vez de ensuciar el estado compartido. `admin-practice` sigue con su servidor y base propias. Probado: 55/6 con 4 workers, 43,5 s frente a 62,4 s con uno; typecheck 0. Límites: el guardián no cubre `page.request`; la suite aún necesita el servidor en :3100 para lecturas. Sin publicar. Detalle en `docs/STATUS.md` (sesión 245).
 
