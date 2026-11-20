@@ -227,6 +227,19 @@
   "upstream_filters": []
  },
  {
+  "code": "weremoto",
+  "name": "WeRemoto",
+  "category": "Internacional",
+  "website": "https://www.weremoto.com",
+  "acquisition_method": "Listado público (HTML + JSON-LD)",
+  "validation_status": "Conector en el backend local · el motor cloud aún no lo recoge",
+  "requires": "input",
+  "note": "Bolsa remota hispana: portada con 30 tarjetas y sin búsqueda por parámetros (medido 2026-11-20). Se leen las de venta y su ficha publica el JobPosting con descripción y fecha; sin países en la ficha, la oferta se marca «por confirmar» en vez de suponer LATAM.",
+  "upstream_filters": [
+   "Sin filtros en origen: 30 tarjetas fijas"
+  ]
+ },
+ {
   "code": "ats-ashby-pennylane",
   "name": "Pennylane · Ashby",
   "category": "Empresas",
@@ -378,17 +391,6 @@
   "validation_status": "Sin proveedor verificado",
   "requires": "input",
   "note": "Empleo y talento: validar páginas y campos de cada búsqueda.",
-  "upstream_filters": []
- },
- {
-  "code": "weremoto",
-  "name": "WeRemoto",
-  "category": "LATAM",
-  "website": "https://www.weremoto.com",
-  "acquisition_method": "Adaptador específico pendiente",
-  "validation_status": "Sin proveedor verificado",
-  "requires": "input",
-  "note": "Bolsa remota hispana; extracción de páginas públicas por validar.",
   "upstream_filters": []
  },
  {

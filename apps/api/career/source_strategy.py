@@ -21,6 +21,8 @@ PUBLIC = {
     'workingnomads': ('API pública', [], 'Descarga global cacheada una hora; sin filtros upstream verificados. Validación local.'),
     'virtualvocations': ('RSS general', [], 'Feed sin filtro de categoría; acepta perfiles de ventas y se filtra al importar.'),
     'remotejobs': ('RSS general', [], 'Feed sin filtro de categoría; acepta perfiles de ventas y se filtra al importar.'),
+    'weremoto': ('Listado público (HTML + JSON-LD)', ['Sin filtros en origen: 30 tarjetas fijas'],
+                 'Portada de weremoto.com: 30 tarjetas sin búsqueda ni paginación por parámetros (medido 2026-11-20); el descarte por perfil es local y la ficha publica su JobPosting.'),
     'jobicy': ('API pública por industria', ['Industria ventas (slug seller)'], 'Descarga de la industria Sales; el resto de requisitos se comprueba al importar.'),
     'remotefirstjobs': ('RSS de ventas', [], 'Feed de la categoría ventas con descripción completa; validación local final.'),
     'jobspresso': ('RSS general', [], 'Ofertas curadas sin filtro de categoría; se filtra al importar.'),

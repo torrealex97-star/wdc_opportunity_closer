@@ -191,6 +191,16 @@ def normalize(source, row):
             "published_at": date_value(row.get("pubDate")), "expires_at": None, "work_mode": "remote",
             "salary_min": None, "salary_max": None, "salary_currency": None, "salary_period": None,
         }
+    if source == "weremoto":
+        # Tarjeta + ficha de weremoto.com: el título y la empresa vienen de la tarjeta, la descripción, la fecha
+        # y los países del `JobPosting` que publica la propia ficha. Sin países en la ficha, la lista queda vacía
+        # y el filtro de mercado la declara «por confirmar»; no se completa con LATAM por ser una bolsa hispana.
+        item = normalize_mapped(row, {
+            "title": "title", "company": "company", "description": "description",
+            "source_url": "url", "locations": "locations", "published_at": "posted_at",
+        })
+        item["work_mode"] = "remote"  # la bolsa publica solo empleo remoto (TELECOMMUTE en su ficha)
+        return item
     if source.startswith("jobtoday"):
         # Payload embebido de jobtoday.com/es (estructura verificada 2026-09-23).
         # Sin datos no se inventa nada: ubicación vacía va a revisión, salary desconocido queda nulo.

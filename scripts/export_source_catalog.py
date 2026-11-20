@@ -46,6 +46,14 @@ CLOUD_OPERATIONAL = {
     'ats-teamtailor-producthackers': {'name': 'ProductHackers · Teamtailor'},
 }
 
+# Conector propio que vive en el backend local y que el motor cloud todavía no recoge (ADR-018). Se declara
+# para que el panel no anuncie una recogida que el cloud no hace: el método y la nota son reales, y el estado
+# dice dónde funciona. Cuando se porte al Worker, se borra de aquí y el panel lo verá operativo de verdad.
+BACKEND_ONLY = {
+    'weremoto': {'requires': 'input',
+                 'validation_status': 'Conector en el backend local · el motor cloud aún no lo recoge'},
+}
+
 # Fuentes que el cloud recoge y el backend local no tiene: se añaden con su ficha completa.
 CLOUD_ADDED = [
     {'code': 'openradar', 'name': 'openradar', 'category': 'Internacional', 'website': 'https://openradar.fun',
@@ -101,7 +109,7 @@ def build():
         # Dos filas del mismo portal (REGISTRY y catálogo de pendientes): se funden en una, sin pisar
         # lo que ya está declarado.
         seen.update({k: v for k, v in row.items() if seen.get(k) in (None, '', [])})
-    for code, facts in CLOUD_OPERATIONAL.items():
+    for code, facts in {**CLOUD_OPERATIONAL, **BACKEND_ONLY}.items():
         if code in by_code:
             by_code[code].update(facts)
     for row in CLOUD_ADDED:

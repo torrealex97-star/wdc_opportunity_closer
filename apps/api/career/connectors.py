@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import html
 import json
 import re
 import time
@@ -176,6 +177,78 @@ class JobToday:
             batch.append(Candidate(str(external_id), row))
         if batch:
             yield batch
+
+
+def html_text(value: str) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).strip()
+
+
+class WeRemoto:
+    """Bolsa remota hispana (weremoto.com, LATAM) sobre su HTML público. No hay API.
+
+    Medido el 2026-11-20: la portada sirve **30 tarjetas** renderizadas por el servidor y **no admite búsqueda
+    ni paginación por parámetros** (`?search=`, `?query=` y `?page=` devuelven exactamente las mismas 30), así
+    que el descarte por perfil de venta es local, como en Jobicy. La tarjeta solo trae título, empresa, la
+    modalidad y el día; la descripción y la fecha vienen de la ficha, que publica su `JobPosting` en JSON-LD.
+    Se lee únicamente lo que la página declara: si la ficha no publica países, la oferta viaja sin ellos y el
+    pipeline la marca «por confirmar» en vez de suponer LATAM.
+    """
+    code = "weremoto"
+    name = "WeRemoto"
+    provider = "public_html_next_v1"
+    # Ficha del panel: lo medido, sin prometer cobertura.
+    note = ("Bolsa remota hispana: portada con 30 tarjetas y sin búsqueda por parámetros (medido 2026-11-20). "
+            "Se leen las de venta y su ficha publica el JobPosting con descripción y fecha; sin países en la ficha, "
+            "la oferta se marca «por confirmar» en vez de suponer LATAM.")
+    # El listado responde a cualquier UA, pero el navegador es lo que ve un visitante: menos riesgo de cambios.
+    BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
+    CARD = re.compile(r'<h3[^>]*><a[^>]*href="(/job-posts/id-[^"]+)"[^>]*>(.*?)</a></h3><p[^>]*>(.*?)</p>', re.S)
+    # Perfiles de venta de la academia; el resto de la lista ni se pide.
+    SALES = re.compile(r'\b(sales|selling|vendedor|vendedora|ventas|comercial|closer|setter|account executive|sdr|business development|televenta|telemarketing)\b', re.I)
+    # Tope de fichas por pasada: las de venta de un día caben de sobra y el motor tiene presupuesto de peticiones.
+    MAX_DETAILS = 8
+
+    def __init__(self):
+        self.url = "https://www.weremoto.com"
+
+    async def batches(self, query):
+        html = await fetch(self.url, ttl=3600, user_agent=self.BROWSER_UA)
+        cards = [{"path": path, "title": html_text(title), "company": html_text(company)}
+                 for path, title, company in self.CARD.findall(html)]
+        if not cards:
+            raise ProviderError("WeRemoto no incluye sus tarjetas de empleo; el formato ha cambiado")
+        rows = []
+        for card in cards:
+            if not self.SALES.search(card["title"]):
+                continue
+            row = {"id": card["path"], "title": card["title"], "company": card["company"],
+                   "url": self.url + card["path"]}
+            row.update(await self.detail(card["path"]))
+            rows.append(Candidate(row["url"], row))
+            if len(rows) >= self.MAX_DETAILS:
+                break
+        if rows:
+            yield rows
+
+    async def detail(self, path):
+        """Ficha: descripción, fecha exacta, empresa y países del `JobPosting` publicado por el portal."""
+        html = await fetch(self.url + path, ttl=3600, user_agent=self.BROWSER_UA)
+        for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
+            try:
+                data = json.loads(block)
+            except ValueError:
+                continue
+            if not isinstance(data, dict) or data.get("@type") != "JobPosting":
+                continue
+            organization = data.get("hiringOrganization") if isinstance(data.get("hiringOrganization"), dict) else {}
+            places = data.get("applicantLocationRequirements") or []
+            if isinstance(places, dict):
+                places = [places]
+            return {"description": html_text(data.get("description")),
+                    "posted_at": data.get("datePosted"),
+                    "company": html_text(organization.get("name")) or None,
+                    "locations": [html_text(p.get("name")) for p in places if isinstance(p, dict) and p.get("name")]}
+        return {}
 
 
 class Jobicy:
@@ -537,3 +610,4 @@ class GetOnBoard:
 
 REGISTRY[GetOnBoard.code] = GetOnBoard()
 REGISTRY[FreeHire().code] = FreeHire()
+REGISTRY[WeRemoto.code] = WeRemoto()

@@ -96,8 +96,9 @@ def test_auth_and_empty_state(client):
     assert client.get("/v1/config", headers={"Authorization": ""}).status_code == 401
     assert client.get("/v1/search-runs").json() == []
     assert client.get("/v1/config").json()["mode"] == "local"
-    # 22 públicas + 2 JobToday (cobertura A2) + FreeHire (capa FREE de SPEC-002, disponible sin configurar).
-    assert sum(s["available"] for s in client.get("/v1/config").json()["sources"]) == 25
+    # 22 públicas + 2 JobToday (cobertura A2) + FreeHire (capa FREE de SPEC-002, disponible sin configurar)
+    # + WeRemoto (conector propio, sesión 266).
+    assert sum(s["available"] for s in client.get("/v1/config").json()["sources"]) == 26
     freehire = next(s for s in client.get("/v1/config").json()["sources"] if s["code"] == "freehire")
     assert freehire["available"] is True and freehire["requires"] == "none"
 

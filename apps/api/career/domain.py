@@ -461,7 +461,7 @@ TTL_HOURS_BY_KIND = {
 DEFAULT_TTL_HOURS = 24  # fuente desconocida = TTL corto conservador
 AGGREGATOR_SOURCES = {'himalayas', 'weworkremotely', 'jobicy', 'remotive', 'remoteok', 'arbeitnow',
                       'workingnomads', 'virtualvocations', 'remotejobs', 'remotefirstjobs',
-                      'jobspresso', 'remotojob', 'getonbrd-public', 'freehire'}
+                      'jobspresso', 'remotojob', 'getonbrd-public', 'freehire', 'weremoto'}
 
 # Título en mayúsculas/minúsculas-insensible y sin acentos (folded del pipeline).
 _TITLE_MIN_CHARS = 5

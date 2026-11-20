@@ -33,7 +33,6 @@ CATALOG = [
     ("infoempleo", "Infoempleo", "España", "https://www.infoempleo.com", "", "Páginas públicas: necesita validar extracción y paginación."),
     ("trabajos", "Trabajos.com", "España", "https://www.trabajos.com", "", "Portal generalista: configurar búsquedas de comercial remoto."),
     ("torre", "Torre", "LATAM", "https://torre.ai", "", "Empleo y talento: validar páginas y campos de cada búsqueda."),
-    ("weremoto", "WeRemoto", "LATAM", "https://www.weremoto.com", "", "Bolsa remota hispana; extracción de páginas públicas por validar."),
     ("remotoco", "Remoto.co", "LATAM", "https://www.remoto.co", "", "Trabajo remoto LATAM; configurar enlaces concretos y validar vigencia."),
     ("laborum", "Laborum / Bumeran", "LATAM", "https://www.bumeran.com", "", "Portales regionales; se requiere proveedor compatible con el país."),
     ("elempleo", "El Empleo", "LATAM", "https://www.elempleo.com", "", "Ventas regionales; exigir evidencia de remoto o híbrido."),
@@ -656,7 +655,7 @@ def source_infos(organization):
         saved_sources = {r[0] for r in db.execute('SELECT DISTINCT p.source FROM catalog_entries c JOIN jobs j ON j.org_id=c.org_id AND j.id=c.job_id JOIN job_postings p ON p.org_id=j.org_id AND p.id=j.posting_id WHERE c.org_id=? AND c.expires_at>?', (organization, now()))}
     public = [{"code": c.code, "name": c.name, "available": True,
                "category": ("España" if c.code.startswith("jobtoday") else "LATAM" if c.code == "getonbrd-public" else "Internacional"),
-               "note": "API/feed público. Cobertura española variable; atribución y enlace original conservados.",
+               "note": getattr(c, 'note', "API/feed público. Cobertura española variable; atribución y enlace original conservados."),
                "website": c.url if hasattr(c, "url") else "https://himalayas.app" if c.code == "himalayas"
                           else "https://freehire.me" if c.code == "freehire" else "https://weworkremotely.com"} for c in REGISTRY.values()]
     public += [{"code": c.code, "name": c.name, "available": True, "category": "Empresas",
