@@ -264,10 +264,16 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
 .practice-aside{display:grid;gap:14px;align-content:start}
 .practice-aside h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--secondary);font-weight:600}
 .practice-aside ol{list-style:none;counter-reset:goal;display:grid;gap:10px}
-.practice-aside li{counter-increment:goal;display:flex;gap:10px;font-size:12.5px;line-height:1.6;color:var(--secondary)}
-.practice-aside li::before{content:counter(goal,decimal-leading-zero);font-family:var(--font-display);color:var(--accent);font-size:14px;line-height:1.3}
+.practice-aside ol li{counter-increment:goal;display:flex;gap:10px;font-size:12.5px;line-height:1.6;color:var(--secondary)}
+.practice-aside ol li::before{content:counter(goal,decimal-leading-zero);font-family:var(--font-display);color:var(--accent);font-size:14px;line-height:1.3}
 .practice-hint{display:flex;gap:10px;padding:12px;background:var(--inset);border-radius:8px;color:var(--secondary)}
 .practice-hint p{font-size:11.5px;line-height:1.65}
+.practice-live{display:grid;gap:6px;padding:12px;background:var(--sheet);border:1px solid var(--line);border-radius:8px}
+.practice-live h3{font-size:12px;display:flex;align-items:center;gap:6px}
+.practice-live ul{list-style:none;display:grid;gap:6px;margin:0;padding:0}
+.practice-live li{font-size:11.5px;display:grid;gap:2px}
+.practice-live q{color:var(--secondary);font-style:italic}
+.practice-live p,.practice-live small{font-size:11px;color:var(--secondary)}
 .practice-hint svg{color:var(--accent);margin-top:2px}
 .practice-note{font-size:10.5px;color:var(--secondary);line-height:1.75}
 .practice-debrief{max-width:900px}

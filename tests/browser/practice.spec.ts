@@ -362,3 +362,48 @@ test('el test del formulario de cualificación corrige cada respuesta y explica 
   await page.getByRole('button', { name: 'Revisar mi presentación' }).click();
   await expect(page.locator('.qualify-criteria li[data-ok="false"]').first()).toBeVisible();
 });
+
+test('las señales en vivo aparecen tras responder, citan la frase y se declaran posibles', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.route('**/api/student/activity', route => route.fulfill({ status: 201, json: { ok: true } }));
+  await page.route('**/api/practice', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { labels: {} } });
+    return route.fulfill({ json: { reply: 'Sigue, te escucho.' } });
+  });
+  await page.goto('/');
+  await openRoom(page);
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  // Sin respuestas de la alumna no hay nada que señalar: el panel no se pinta (no es un «0 señales»).
+  await expect(page.getByTestId('live-signals')).toHaveCount(0);
+  await page.getByLabel('Tu respuesta').fill('Entiendo lo que me dices, pero tienes que decidir hoy mismo.');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  const live = page.getByTestId('live-signals');
+  await expect(live).toBeVisible();
+  await expect(live).toContainText('Validaste con «pero»');
+  await expect(live).toContainText('tienes que decidir hoy mismo');
+  await expect(live).toContainText('Posibles');
+  await expect(live).toContainText('El feedback final decide');
+  // Las señales son de TODA la conversación: una segunda respuesta no borra la primera.
+  await page.getByLabel('Tu respuesta').fill('¿Qué es lo que más te preocupa de decidir ahora?');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  await expect(page.locator('.practice-turn.is-mine')).toHaveCount(2);
+  await expect(live).toContainText('Validaste con «pero»');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('si la respuesta no dispara ninguna señal, el panel lo dice en vez de quedarse mudo', async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', emptyCatalog);
+  await page.route('**/api/student/activity', route => route.fulfill({ status: 201, json: { ok: true } }));
+  await page.route('**/api/practice', route => route.request().method() === 'GET' ? route.fulfill({ json: { labels: {} } }) : route.fulfill({ json: { reply: 'Dime.' } }));
+  await page.goto('/');
+  await openRoom(page);
+  await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
+  await page.getByLabel('Tu respuesta').fill('Hola Marta, soy Ana. ¿Te viene bien que te robe tres minutos para entender cómo gestionáis los seguimientos?');
+  await page.getByRole('button', { name: 'Enviar respuesta' }).click();
+  const live = page.getByTestId('live-signals');
+  await expect(live).toBeVisible();
+  // O no hay señales y lo dice, o las que salen son de esa frase: nunca un panel vacío sin explicación.
+  await expect(live.locator('p, li').first()).toBeVisible();
+  await expect(live).toContainText('El feedback final decide');
+});

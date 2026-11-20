@@ -11,6 +11,7 @@ import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
 import { isEcho } from '../lib/voiceEcho';
+import { analyzeSignals } from '../app/api/practice/signals';
 import { MIN_AXIS_SAMPLES, nextPractice, type NextPracticeChoice } from '../lib/nextPractice';
 import { AXIS_LABELS } from '../lib/practiceAxes';
 import { BANT_LABELS, DECISION_LABELS, type PracticeBant } from '../lib/practiceRubrics';
@@ -229,6 +230,9 @@ export default function StudentPractice({ track, mode = 'roleplay', onTrackChang
   }, [turns, busy]);
 
   const studentTurns = useMemo(() => turns.filter(turn => turn.role === 'user').length, [turns]);
+  // Señales «en vivo»: las MISMAS reglas deterministas del feedback final (analyzeSignals), calculadas en el navegador sobre lo
+  // dicho hasta ahora. Sin IA, sin red y sin guardar nada; no sustituyen al feedback ni puntúan.
+  const liveSignals = useMemo(() => scenario && studentTurns > 0 ? analyzeSignals(turns, scenario.kind) : [], [turns, scenario, studentTurns]);
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const atLimit = turns.length >= TURN_LIMIT;
   // Quien tiene la palabra manda: si el interlocutor está leyendo, el orbe dice «hablando» aunque el micrófono esté abierto para interrumpir.
@@ -359,6 +363,13 @@ export default function StudentPractice({ track, mode = 'roleplay', onTrackChang
         <aside className="practice-aside">
           <h2>Lo que practicas</h2>
           <ol>{scenario.objectives.map(objective => <li key={objective}>{objective}</li>)}</ol>
+          {studentTurns > 0 && <div className="practice-live" data-testid="live-signals" aria-live="polite">
+            <h3><Gauge size={14} />Señales hasta ahora</h3>
+            {liveSignals.length
+              ? <ul>{liveSignals.map(signal => <li key={signal.id}><strong>{signal.label}</strong>{signal.quote && <q>{signal.quote}</q>}</li>)}</ul>
+              : <p>Ninguna por ahora. Sigue así.</p>}
+            <small>Posibles, calculadas sin IA con tus frases. El feedback final decide.</small>
+          </div>}
           {offerSession && <div className="practice-hint"><BriefcaseBusiness size={16} /><p>Practicas para {offerSession.title}{offerSession.company ? ` en ${offerSession.company}` : ''}. El anuncio es público; lo que no publica, no se inventa.</p></div>}
           <div className="practice-hint"><MessageSquare size={16} /><p>{voiceRoom ? 'Habla como en la llamada real: frases cortas, una pregunta cada vez. El dictado escribe lo que dices; tú decides cuándo enviarlo.' : 'Escribe como en WhatsApp: una o dos frases y una sola pregunta por mensaje. Un párrafo largo se contesta tarde.'}</p></div>
           <div className="practice-hint"><Target size={16} /><p>No hay respuestas perfectas. Si te bloqueas, pide contexto o propón un siguiente paso.</p></div>
