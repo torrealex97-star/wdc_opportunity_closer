@@ -32,13 +32,16 @@ Reglas:
 - Si hay una sola voz y no hay forma de saber quién es el cliente, marca todas las líneas como VENDEDOR.
 - Máximo 16000 caracteres de salida. No añadas comentarios.`;
 
-const decode = (value: string) => value
-  .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ');
+// Entidades en una sola pasada: decodificar `&amp;` y después `&lt;` convertiría `&amp;lt;` en `<`,
+// que no es lo que decía el HTML.
+const ENTITIES: Record<string, string> = { amp: '&', quot: '"', '#39': "'", lt: '<', gt: '>', nbsp: ' ' };
+const decode = (value: string) => value.replace(/&(amp|quot|#39|lt|gt|nbsp);/g, (entity, name: string) => ENTITIES[name] ?? entity);
 
+// Los cierres de script/style admiten atributos y espacios (`</script >`); el filtro no puede depender
+// de que estén limpios o el texto del script acabaría en la transcripción.
 const stripHtml = (html: string) => decode(html
-  .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
   .replace(/<\/(p|div|li|br|h[1-6])>/gi, '\n')
   .replace(/<[^>]+>/g, ' '))
   .replace(/[ \t]+/g, ' ')
@@ -70,10 +73,12 @@ async function fromYouTube(id: string): Promise<{ ok: true; text: string } | { o
 // Fathom publica la transcripción en su página de compartir. Se busca el bloque con hablantes y, si
 // no aparece, el texto visible como último recurso (el modelo después separa quién habla).
 async function fromPage(url: URL): Promise<{ ok: true; text: string } | { ok: false; detail: string }> {
+  const host = url.hostname.replace(/^www\./, '');
   const response = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0', 'accept-language': 'es' }, redirect: 'follow' }).catch(() => null);
   if (!response?.ok) return { ok: false, detail: `No se pudo abrir el enlace (HTTP ${response?.status ?? 'sin respuesta'}).` };
   const html = await response.text();
-  if (/accounts\.google\.com|sign in to continue/i.test(html) && url.hostname.includes('drive.google.com')) {
+  // Comparación exacta del host: un subdominio o un dominio que contenga el texto no es Drive.
+  if (host === 'drive.google.com' && /accounts\.google\.com|sign in to continue/i.test(html)) {
     return { ok: false, detail: 'Ese enlace de Drive no es público. Compártelo como «cualquiera con el enlace» o pega la transcripción.' };
   }
   const transcript = html.match(/"transcript"\s*:\s*(\[[\s\S]*?\])\s*[,}]/);
