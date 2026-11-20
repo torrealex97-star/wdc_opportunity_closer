@@ -140,4 +140,8 @@ def log_alert(payload, stream=None):
         pass
 
 
-asyncio.run(main())
+# Solo al ejecutarlo (`python -m scripts.audit_sources`). Antes corría también al IMPORTARLO —y los tests
+# importan `slug_alerts`/`write_launchd_alert`—, así que cada pasada de la suite lanzaba el audit real por
+# red, reescribía `source_audit.json` a mitad de las pruebas y dejaba desfasado lo exportado desde él.
+if __name__ == '__main__':
+    asyncio.run(main())

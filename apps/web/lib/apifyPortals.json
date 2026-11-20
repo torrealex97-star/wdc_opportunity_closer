@@ -1,0 +1,489 @@
+{
+ "sources": [
+  {
+   "code": "jooble",
+   "name": "Jooble",
+   "category": "España",
+   "plain": "Búsqueda española aportada por WDC. Validar descripción, duplicados y scraper.",
+   "checked_at": "2026-11-20T16:18:19.746810+00:00",
+   "recipes": [
+    {
+     "actor": "ahmed_jasarevic/jooble-scraper",
+     "title": "Jooble Scraper [$1/1K] | Jobs & Salaries",
+     "build": "0.0.50",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "agentx/jooble-jobs-scraper",
+     "title": "Jooble Jobs Scraper: Salary, Remote, 65 Countries",
+     "build": "1.0.51",
+     "required": [
+      "max_results",
+      "keyword",
+      "country"
+     ],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "simplyhired",
+   "name": "SimplyHired",
+   "category": "España",
+   "plain": "Búsqueda de closer y ventas aportada por WDC. Validar cobertura del proveedor.",
+   "checked_at": "2026-11-20T16:18:19.747441+00:00",
+   "recipes": [
+    {
+     "actor": "shahidirfan/Simplyhired-Job-Scraper",
+     "title": "SimplyHired Job Scraper",
+     "build": "0.0.58",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "memo23/simplyhired-jobs-scraper",
+     "title": "SimplyHired Jobs Scraper [$0.9/1K 💰] Salaries & Companies",
+     "build": "0.0.74",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "easyapi/simplyhired-job-scraper",
+     "title": "SimplyHired Job Scraper 🔍",
+     "build": "0.0.8",
+     "required": [
+      "searchUrls"
+     ],
+     "pricing": [
+      "FLAT_PRICE_PER_MONTH",
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "computrabajo",
+   "name": "Computrabajo",
+   "category": "LATAM",
+   "plain": "Portales por país. Activar descripción completa y modalidad.",
+   "checked_at": "2026-11-20T16:18:19.747914+00:00",
+   "recipes": [
+    {
+     "actor": "shahidirfan/Computrabajo-Jobs-Scraper",
+     "title": "Computrabajo Jobs Scraper",
+     "build": "0.0.18",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "santamaria-automations/computrabajo-scraper",
+     "title": "Computrabajo Jobs Scraper: Empleos, Salaries, 19 Countries",
+     "build": "1.3.5",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "haketa/computrabajo-scraper",
+     "title": "Computrabajo Scraper — Latin America Jobs, Salary & Companies",
+     "build": "0.1.5",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "infoempleo",
+   "name": "Infoempleo",
+   "category": "España",
+   "plain": "Páginas públicas: necesita validar extracción y paginación.",
+   "checked_at": "2026-11-20T16:18:19.747932+00:00",
+   "recipes": [
+    {
+     "actor": "bibian/infoempleo-jobs-scraper",
+     "title": "Infoempleo Scraper: Spain Job Postings & Salaries",
+     "build": "0.1.24",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "torre",
+   "name": "Torre",
+   "category": "LATAM",
+   "plain": "Empleo y talento: validar páginas y campos de cada búsqueda.",
+   "checked_at": "2026-11-20T16:18:19.747936+00:00",
+   "recipes": [
+    {
+     "actor": "scrapers_lat/torre-scraper",
+     "title": "Torre Jobs, Skills & Compensation Scraper",
+     "build": "0.1.25",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "laborum",
+   "name": "Laborum / Bumeran",
+   "category": "LATAM",
+   "plain": "Portales regionales; se requiere proveedor compatible con el país.",
+   "checked_at": "2026-11-20T16:18:19.747940+00:00",
+   "recipes": [
+    {
+     "actor": "memo23/bumeran-job-scraper",
+     "title": "Bumeran Job Scraper — Argentina Jobs to JSON/CSV",
+     "build": "0.1.27",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "shahidirfan/bumeran-jobs-scraper",
+     "title": "Bumeran Jobs Scraper",
+     "build": "1.0.1",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "blackfalcondata/bumeran-scraper",
+     "title": "Bumeran Scraper [Just 💰$1] — LATAM Jobs (7 Countries)",
+     "build": "0.1.101",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "elempleo",
+   "name": "El Empleo",
+   "category": "LATAM",
+   "plain": "Ventas regionales; exigir evidencia de remoto o híbrido.",
+   "checked_at": "2026-11-20T16:18:19.747942+00:00",
+   "recipes": [
+    {
+     "actor": "logiover/elempleo-colombia-job-scraper",
+     "title": "elempleo Colombia Job Scraper — Empleos, No Login",
+     "build": "1.0.28",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "corvuslab/elempleo-scraper",
+     "title": "elempleo Job Scraper — Full Descriptions & COP Salaries",
+     "build": "0.1.20",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "scrapers_lat/elempleo-scraper",
+     "title": "elempleo Scraper - Colombia Jobs, Salaries, Vacantes & Empleos",
+     "build": "0.1.32",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "upwork",
+   "name": "Upwork",
+   "category": "Freelance",
+   "plain": "Proyectos de closer y setter; filtrar Spanish y requisitos del cliente.",
+   "checked_at": "2026-11-20T16:18:19.747944+00:00",
+   "recipes": [
+    {
+     "actor": "neatrat/upwork-job-scraper",
+     "title": "Upwork Job Scraper",
+     "build": "0.0.117",
+     "required": [],
+     "pricing": [
+      "FLAT_PRICE_PER_MONTH",
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "blackfalcondata/upwork-scraper",
+     "title": "Upwork Job Scraper - Job Alerts with Client Intel",
+     "build": "0.6.133",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "eures",
+   "name": "EURES",
+   "category": "Europa",
+   "plain": "Movilidad europea; español y trabajo a distancia deben constar en la oferta.",
+   "checked_at": "2026-11-20T16:18:19.747948+00:00",
+   "recipes": [
+    {
+     "actor": "dadhalfdev/eures-jobs-scraper",
+     "title": "EURES Jobs Scraper",
+     "build": "0.1.4",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "shahidirfan/eures-job-scraper",
+     "title": "Eures Job Scraper",
+     "build": "1.0.14",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "easyapi/eures-job-scraper",
+     "title": "EURES Job Scraper",
+     "build": "0.0.3",
+     "required": [
+      "searchUrl"
+     ],
+     "pricing": [
+      "FLAT_PRICE_PER_MONTH",
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "facebook",
+   "name": "Facebook · grupos y páginas",
+   "category": "Comunidades",
+   "plain": "Añadir URLs concretas. Grupos privados requieren acceso autorizado y proveedor compatible.",
+   "checked_at": "2026-11-20T16:18:19.747957+00:00",
+   "recipes": [
+    {
+     "actor": "apify/facebook-groups-scraper",
+     "title": "Facebook Groups Scraper",
+     "build": "0.0.405",
+     "required": [
+      "startUrls"
+     ],
+     "pricing": [
+      "FLAT_PRICE_PER_MONTH",
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "apify/facebook-posts-scraper",
+     "title": "Facebook Posts Scraper",
+     "build": "0.0.422",
+     "required": [
+      "startUrls"
+     ],
+     "pricing": [
+      "FLAT_PRICE_PER_MONTH",
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "scraper_one/facebook-posts-search",
+     "title": "Facebook Posts Search",
+     "build": "0.0.387",
+     "required": [
+      "query"
+     ],
+     "pricing": [
+      "FREE",
+      "PAY_PER_EVENT"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "linkedin-posts",
+   "name": "LinkedIn · publicaciones",
+   "category": "Comunidades",
+   "plain": "Mapear texto y enlace del post; admitir solo contratación explícita.",
+   "checked_at": "2026-11-20T16:18:19.747959+00:00",
+   "recipes": [
+    {
+     "actor": "harvestapi/linkedin-profile-posts",
+     "title": "LinkedIn Profile Posts Scraper (No Cookies)",
+     "build": "0.0.86",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    },
+    {
+     "actor": "harvestapi/linkedin-post-search",
+     "title": "Linkedin Post Search Scraper (No Cookies)",
+     "build": "0.0.114",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "skool",
+   "name": "Skool",
+   "category": "Comunidades",
+   "plain": "Comunidades concretas; el acceso de miembro no se presupone público.",
+   "checked_at": "2026-11-20T16:18:19.747960+00:00",
+   "recipes": [
+    {
+     "actor": "memo23/skool-posts-with-comments-scraper",
+     "title": "Skool Classroom Media/Video · Posts · Nested Comments",
+     "build": "0.0.136",
+     "required": [
+      "startUrls",
+      "cookies"
+     ],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "telegram",
+   "name": "Telegram · canales públicos",
+   "category": "Comunidades",
+   "plain": "Canales públicos de empleo; mapear texto, fecha y permalink.",
+   "checked_at": "2026-11-20T16:18:19.747962+00:00",
+   "recipes": [
+    {
+     "actor": "lofomachines/telegram-keyword-search-scraper",
+     "title": "Telegram Keyword Search Scraper",
+     "build": "0.1.35",
+     "required": [
+      "mode"
+     ],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "tri_angle/telegram-scraper",
+     "title": "Telegram Scraper",
+     "build": "0.0.23",
+     "required": [
+      "profiles"
+     ],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "reddit",
+   "name": "Reddit",
+   "category": "Comunidades",
+   "plain": "Comunidades de trabajo remoto; evitar autopromoción y candidatos buscando empleo.",
+   "checked_at": "2026-11-20T16:18:19.747964+00:00",
+   "recipes": [
+    {
+     "actor": "harshmaur/reddit-scraper",
+     "title": "Reddit Scraper - Posts, Comments, Search & Subreddits",
+     "build": "0.0.808",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "trudax/reddit-scraper-lite",
+     "title": "Reddit Scraper Lite",
+     "build": "6.3.2",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    },
+    {
+     "actor": "fatihtahta/reddit-scraper-search-fast",
+     "title": "Reddit Scraper | Enterprise Grade",
+     "build": "1.17.6",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "company",
+   "name": "Empresas · páginas de empleo / ATS",
+   "category": "Empresas",
+   "plain": "Añadir webs de empresas, agencias, academias y sus bolsas ATS.",
+   "checked_at": "2026-11-20T16:18:19.747965+00:00",
+   "recipes": [
+    {
+     "actor": "johnvc/greenhouse-job-board-api",
+     "title": "Greenhouse Job Board API | Jobs, Companies & New Postings",
+     "build": "0.0.43",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT"
+     ]
+    },
+    {
+     "actor": "fantastic-jobs/greenhouse-jobs-api",
+     "title": "Greenhouse Jobs API",
+     "build": "0.0.39",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    },
+    {
+     "actor": "jobo.world/greenhouse-jobs-scraper-api",
+     "title": "Greenhouse Jobs Scraper & API",
+     "build": "2.13.1",
+     "required": [],
+     "pricing": [
+      "PAY_PER_EVENT",
+      "PRICE_PER_DATASET_ITEM"
+     ]
+    }
+   ]
+  }
+ ]
+}

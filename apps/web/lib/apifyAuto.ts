@@ -134,7 +134,10 @@ export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now()
   return PORTALS.map(p => {
     const rows = actors.filter(a => a.source === p.source), ids = new Set(rows.map(a => a.id)), mine = runs.filter(r => ids.has(r.actor_id)).sort((a, b) => b.started_at.localeCompare(a.started_at));
     const recipes = p.recipes.map(r => { const row = rows.find(a => a.actor === r.actor); const s = recipeState(row?.id, runs, now);
-      return { name: r.name, state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : 'Aún sin probar' }; });
+      // Los buscadores generados desde la auditoría declaran qué campos exige el actor: se dice en la tarjeta
+      // para que nadie se pregunte por qué un intento no arrancó por falta de un dato.
+      const needs = r.needs?.length ? ` · pide ${r.needs.join(', ')}` : '';
+      return { name: r.name, state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : `Aún sin probar${needs}` }; });
     const good = mine.find(isGood), daily = rows.some(a => a.schedule_daily);
     const last = good ? { when: ago(good.finished_at ?? good.started_at, now), items: good.harvested, cost: good.cost_usd == null ? null : Number(good.cost_usd) } : null;
     const failedN = recipes.filter(r => r.state === 'failed').length;

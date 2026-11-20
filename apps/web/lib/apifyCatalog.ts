@@ -1,10 +1,19 @@
 // Catálogo de «portales» y sus buscadores de repuesto. Quien administra la app elige PORTALES («Indeed», «InfoJobs»…);
 // los nombres técnicos de los buscadores (actores de Apify) son un detalle interno: si uno falla, la app prueba el siguiente.
 //
-// IMPORTANTE (honestidad): los buscadores de esta lista son CANDIDATOS tomados de la tienda de Apify; su existencia y precio
-// no se han verificado contra el servicio real desde este entorno. Por eso la app no se fía de ninguno: valida la ficha y el
-// esquema al lanzar, vigila el resultado de cada ejecución y pasa al siguiente si falla o devuelve 0 ofertas.
-export type Recipe = { actor: string; name: string };
+// Dos capas:
+//  1. CURADOS: portales con texto escrito para el operador y, si hace falta, plantilla de entrada.
+//  2. GENERADOS (`apifyPortals.json`, escrito por `scripts/export_apify_portals.py`): una entrada por fuente del
+//     catálogo que solo se puede conectar por pago y TIENE actores auditados en la tienda de Apify. No se
+//     inventa ningún actor; lo que no está auditado no aparece y el panel lo declara «sin proveedor verificado».
+//
+// IMPORTANTE (honestidad): los buscadores son CANDIDATOS con metadatos revisados; metadatos no es una extracción
+// validada. Por eso la app no se fía de ninguno: valida la ficha y el esquema al lanzar, vigila el resultado de
+// cada ejecución y pasa al siguiente si falla o devuelve 0 ofertas.
+// Atributo de importación: así el módulo también se puede ejecutar en Node (pruebas de cobertura), no solo en Next.
+import generated from './apifyPortals.json' with { type: 'json' };
+
+export type Recipe = { actor: string; name: string; needs?: string[] };
 export type Portal = {
   id: string; source: string; name: string; plain: string; caution?: string;
   maxItems: number; testItems: number; query?: string; sites?: string[]; recipes: Recipe[];
@@ -14,7 +23,7 @@ export type Portal = {
   inputTemplate?: Record<string, unknown>;
 };
 
-export const PORTALS: Portal[] = [
+const CURATED: Portal[] = [
   {
     id: 'indeed', source: 'apify-indeed', name: 'Indeed (España)', maxItems: 200, testItems: 10, query: 'closer de ventas',
     plain: 'Uno de los portales con más ofertas comerciales en España.',
@@ -61,6 +70,26 @@ export const PORTALS: Portal[] = [
     recipes: [{ actor: 'aakash19/jobspy', name: 'Buscador multi-portal' }],
   },
 ];
+
+// Redes y comunidades: sus condiciones limitan el uso automático (ADR-011). La advertencia viaja en la tarjeta
+// para que la decisión de activarlas sea explícita, igual que en LinkedIn.
+const SOCIAL = new Set(['facebook', 'telegram', 'reddit', 'skool', 'linkedin-posts']);
+const SOCIAL_CAUTION = 'Es una red o comunidad: sus condiciones limitan el uso automático. Se busca poco volumen y es una decisión tuya (ADR-011). Viene apagado.';
+const CURATED_CODES = new Set(CURATED.map(p => p.id));
+
+const GENERATED: Portal[] = generated.sources
+  .filter(s => !CURATED_CODES.has(s.code))
+  .map(s => ({
+    id: s.code, source: `apify-${s.code}`, name: s.name,
+    // La tarjeta siempre tiene algo que decir de la fuente; nunca un hueco en blanco.
+    plain: s.plain || `Fuente del catálogo (${s.category || 'sin categoría'}); se busca con un proveedor de pago.`,
+    ...(SOCIAL.has(s.code) ? { caution: SOCIAL_CAUTION } : {}),
+    maxItems: 100, testItems: 10,
+    recipes: s.recipes.map(r => ({ actor: r.actor, name: r.title, ...(r.required.length ? { needs: r.required } : {}) })),
+  }))
+  .filter(p => p.recipes.length > 0);
+
+export const PORTALS: Portal[] = [...CURATED, ...GENERATED];
 
 export const portalBySource = (source: string) => PORTALS.find(p => p.source === source);
 export const portalById = (id: string) => PORTALS.find(p => p.id === id);
