@@ -676,21 +676,25 @@
       "status": "metadata_checked"
     },
     "weremoto": {
-      "checked_at": "2026-11-20T17:32:48.898108+00:00",
+      "checked_at": "2026-11-20T18:45:41.614109+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "WeRemoto",
           "weremoto remote jobs",
-          "we remote jobs latam"
+          "we remote jobs latam",
+          "we remoto",
+          "trabajos remotos latam"
         ],
         "totals": {
           "WeRemoto": 28,
           "weremoto remote jobs": 5,
-          "we remote jobs latam": 10
+          "we remote jobs latam": 10,
+          "we remoto": 275,
+          "trabajos remotos latam": 0
         },
-        "reviewed": 22,
+        "reviewed": 31,
         "discarded": [
           "ribtools/webmotors-scraper",
           "dami_studio/webmotors-scraper",
@@ -713,26 +717,39 @@
           "quietbyte/remote-jobs-by-country",
           "datadesk-io/remote-jobs-scraper",
           "centorprat/remote-jobs-aggregator",
-          "corridordata/global-remote-hiring-signals"
+          "corridordata/global-remote-hiring-signals",
+          "parsebird/wwr-jobs-scraper",
+          "inlifeprojects/weworkremotely-jobs-scraper",
+          "orgupdate/we-work-remotely-jobs-scraper",
+          "get_anything/remote-jobs-aggregator",
+          "piotrv1001/we-work-remotely-scraper",
+          "jp_data_tools/weworkremotely-scraper",
+          "feedforge/remote-jobs-scraper",
+          "solidcode/weworkremotely-scraper",
+          "tinyrex/remote-jobs-scraper"
         ]
       }
     },
     "remotoco": {
-      "checked_at": "2026-11-20T17:32:48.898325+00:00",
+      "checked_at": "2026-11-20T18:45:41.620439+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Remoto.co",
           "remoto co empleos latam",
-          "remoto.co jobs"
+          "remoto.co jobs",
+          "remoto co",
+          "empleos remotos colombia"
         ],
         "totals": {
-          "Remoto.co": 361,
+          "Remoto.co": 355,
           "remoto co empleos latam": 1,
-          "remoto.co jobs": 21
+          "remoto.co jobs": 21,
+          "remoto co": 8197,
+          "empleos remotos colombia": 0
         },
-        "reviewed": 11,
+        "reviewed": 18,
         "discarded": [
           "unfenced-group/remote-co-scraper",
           "orgupdate/remote-co-jobs-scraper",
@@ -744,7 +761,14 @@
           "powerbox/remote-jobslisting-scraper",
           "hello.datawizards/RemoteJobs-Scraper",
           "santamaria-automations/computrabajo-scraper",
-          "shahidirfan/Remote-Job-Scraper"
+          "shahidirfan/Remote-Job-Scraper",
+          "scrapers_lat/infojobs-br-scraper",
+          "boliveira/gupy-vagas",
+          "latinamericadata/gupy-vagas-brasil",
+          "haketa/computrabajo-scraper",
+          "getascraper/gupy-jobs-scraper",
+          "hipersoft/tecnoempleo-scraper",
+          "agentx/jooble-jobs-scraper"
         ]
       }
     },
@@ -1045,21 +1069,25 @@
       "status": "not_found"
     },
     "malt": {
-      "checked_at": "2026-11-20T17:33:17.934103+00:00",
+      "checked_at": "2026-11-20T18:45:41.620625+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Malt",
           "malt job offers",
-          "malt missions freelance"
+          "malt missions freelance",
+          "malt freelance",
+          "malt missions spain"
         ],
         "totals": {
-          "Malt": 68223,
+          "Malt": 68274,
           "malt job offers": 4,
-          "malt missions freelance": 88
+          "malt missions freelance": 88,
+          "malt freelance": 107,
+          "malt missions spain": 16
         },
-        "reviewed": 17,
+        "reviewed": 23,
         "discarded": [
           "silentflow/malt-scraper",
           "silentflow/malt-scraper-ppr",
@@ -1077,7 +1105,13 @@
           "muira_datamasters/malt-scraper",
           "dataspryva/malt-freelancer-skill-and-rate-finder",
           "eliai/seo-audit-report",
-          "blond_terrarium/seo-page-audit-crawler"
+          "blond_terrarium/seo-page-audit-crawler",
+          "offerastudio/malt-freelancers-scraper",
+          "parseforge/malt-freelancers-scraper",
+          "offerastudio/site-seo-crawler-audit",
+          "wholesome_spring/seo-audit-crawler",
+          "dabooti/image-alt-asset-auditor",
+          "kaleidoscopelabs/instagram-post-scraper"
         ]
       }
     },
@@ -1154,19 +1188,21 @@
       "status": "metadata_checked"
     },
     "europe-language": {
-      "checked_at": "2026-11-20T17:32:48.898481+00:00",
+      "checked_at": "2026-11-20T18:45:41.620764+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "europe language jobs",
           "europe language jobs scraper",
-          "european language jobs spain"
+          "european language jobs spain",
+          "europelanguagejobs"
         ],
         "totals": {
           "europe language jobs": 76,
           "europe language jobs scraper": 69,
-          "european language jobs spain": 15
+          "european language jobs spain": 15,
+          "europelanguagejobs": 0
         },
         "reviewed": 25,
         "discarded": [
@@ -1199,19 +1235,21 @@
       }
     },
     "jobsqd": {
-      "checked_at": "2026-11-20T17:32:48.898485+00:00",
+      "checked_at": "2026-11-20T18:45:41.620772+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Jobsqd",
           "jobsqd jobs",
-          "jobsqd.com"
+          "jobsqd.com",
+          "jobsqd"
         ],
         "totals": {
           "Jobsqd": 133,
           "jobsqd jobs": 0,
-          "jobsqd.com": 16
+          "jobsqd.com": 16,
+          "jobsqd": 133
         },
         "reviewed": 16,
         "discarded": [
@@ -2101,19 +2139,23 @@
       }
     },
     "primer-empleo": {
-      "checked_at": "2026-11-20T17:32:48.898499+00:00",
+      "checked_at": "2026-11-20T18:45:41.620775+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Primer Empleo",
           "primer empleo ofertas",
-          "primerempleo.com"
+          "primerempleo.com",
+          "primerempleo",
+          "empleo jovenes espana"
         ],
         "totals": {
           "Primer Empleo": 111,
           "primer empleo ofertas": 0,
-          "primerempleo.com": 0
+          "primerempleo.com": 0,
+          "primerempleo": 0,
+          "empleo jovenes espana": 0
         },
         "reviewed": 10,
         "discarded": [
@@ -2131,22 +2173,36 @@
       }
     },
     "jobfluent": {
-      "checked_at": "2026-11-20T17:32:48.898500+00:00",
+      "checked_at": "2026-11-20T18:45:41.620778+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Jobfluent",
           "jobfluent jobs",
-          "jobfluent.com"
+          "jobfluent.com",
+          "jobfluent",
+          "job fluent"
         ],
         "totals": {
           "Jobfluent": 0,
           "jobfluent jobs": 0,
-          "jobfluent.com": 0
+          "jobfluent.com": 0,
+          "jobfluent": 0,
+          "job fluent": 15
         },
-        "reviewed": 0,
-        "discarded": []
+        "reviewed": 9,
+        "discarded": [
+          "solidactors/remote-ai-jobs-feed",
+          "neuro-scraper/gulftalent-jobs-scraper",
+          "blackfalcondata/gulftalent-scraper",
+          "sian.agency/gulftalent-jobs-scraper",
+          "dami_studio/gulftalent-jobs-scraper",
+          "memo23/gulftalent-scraper",
+          "solidcode/gulftalent-scraper",
+          "scrapers_lat/torre-scraper",
+          "madeingermany/gulftalent-scraper"
+        ]
       }
     },
     "welcomejungle": {
@@ -2262,22 +2318,44 @@
       }
     },
     "closers-avenue": {
-      "checked_at": "2026-11-20T17:32:48.898504+00:00",
+      "checked_at": "2026-11-20T18:45:41.620782+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "ClosersAvenue",
           "closersavenue.com",
-          "closers avenue jobs"
+          "closers avenue jobs",
+          "closers avenue",
+          "closersavenue",
+          "sales closer"
         ],
         "totals": {
           "ClosersAvenue": 0,
           "closersavenue.com": 0,
-          "closers avenue jobs": 0
+          "closers avenue jobs": 0,
+          "closers avenue": 9,
+          "closersavenue": 0,
+          "sales closer": 1290
         },
-        "reviewed": 0,
-        "discarded": []
+        "reviewed": 15,
+        "discarded": [
+          "aboo.script/stubhub-ie-scraper",
+          "ichigowa/market-status-api",
+          "eze007/prediction-markets-data",
+          "scrapesage/coinmarketcap-scraper",
+          "alizarin_refrigerator-owner/wwe-api",
+          "khadinakbar/tradingview-screener",
+          "nabeelbaghoor/stock-forex-crypto-api",
+          "brick_joey_yto/hyperliquid-monitor",
+          "gochujang/hyperliquid-spot-tracker",
+          "pshivam/website-closers-scraper",
+          "springlike_meadowland/website-tech-stack-detector",
+          "piotrv1001/1688-image-search-scraper",
+          "changeable_peddler/career-page-hiring-signal-extractor",
+          "theshark/1688-image-search-scraper",
+          "fetch_cat/workable-jobs-scraper"
+        ]
       }
     },
     "google": {
@@ -2402,29 +2480,43 @@
       }
     },
     "remotolist": {
-      "checked_at": "2026-11-20T17:32:48.898508+00:00",
+      "checked_at": "2026-11-20T18:45:41.620785+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "RemotoList",
-          "remotolist.com empleo remoto"
+          "remotolist.com empleo remoto",
+          "remotolist",
+          "remote list jobs"
         ],
         "totals": {
           "RemotoList": 4,
-          "remotolist.com empleo remoto": 0
+          "remotolist.com empleo remoto": 0,
+          "remotolist": 4,
+          "remote list jobs": 3082
         },
-        "reviewed": 4,
+        "reviewed": 14,
         "discarded": [
           "scrapersdelight/realestate-com-au-scraper",
           "contactminerlabs/harcourts-real-estate-agents-email-scraper",
           "contactminerlabs/ray-white-real-estate-agents-email-scraper-advanced",
-          "contactminerlabs/raine-horne-real-estate-agents-email-scraper"
+          "contactminerlabs/raine-horne-real-estate-agents-email-scraper",
+          "scrapewise/cutshort-jobs-scraper",
+          "contented_catwalk/greenhouse-lever-ashby-jobs",
+          "logiover/wellfound-scraper",
+          "silentflow/instahyre-jobs-scraper",
+          "solidactors/remote-ai-jobs-feed",
+          "cliqtomedia/xing-jobs-scraper",
+          "turboextract/remote-jobs-aggregator",
+          "atsdatalabs/remote-jobs-api",
+          "gio21/workingnomads-remote-jobs-scraper",
+          "dami_studio/catho-jobs-scraper"
         ]
       }
     },
     "domestika": {
-      "checked_at": "2026-11-20T17:32:48.898510+00:00",
+      "checked_at": "2026-11-20T18:45:41.620787+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
@@ -2680,22 +2772,30 @@
       }
     },
     "portal-empleo-mx": {
-      "checked_at": "2026-11-20T17:32:48.898515+00:00",
+      "checked_at": "2026-11-20T18:45:41.620789+00:00",
       "candidates": [],
       "status": "not_found",
       "sweep": {
         "queries": [
           "Portal del Empleo (México)",
           "portal del empleo mexico ofertas",
-          "empleo.gob.mx"
+          "empleo.gob.mx",
+          "portal del empleo",
+          "empleo gob mx",
+          "vacantes gobierno mexico"
         ],
         "totals": {
           "Portal del Empleo (México)": 0,
           "portal del empleo mexico ofertas": 0,
-          "empleo.gob.mx": 0
+          "empleo.gob.mx": 0,
+          "portal del empleo": 1,
+          "empleo gob mx": 0,
+          "vacantes gobierno mexico": 0
         },
-        "reviewed": 0,
-        "discarded": []
+        "reviewed": 1,
+        "discarded": [
+          "santamaria-automations/lavoro-cdt-ch-scraper"
+        ]
       }
     }
   },
