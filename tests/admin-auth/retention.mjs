@@ -41,7 +41,7 @@ await step('revisión directa: <60 en las tres últimas prácticas; una buena o 
   assert.equal(directReview([]).eligible, false);
 });
 await step('objetivos de la semana: lunes a domingo de Madrid; candidaturas ilegibles = null, no 0', () => {
-  const rows = [practice('2026-10-26'), practice('2026-10-27'), practice('2026-10-28'), practice('2026-10-25'), { kind: 'training_review', ref: 'precall', score: null, created_at: at('2026-10-27') }, { kind: 'training_review', ref: 'precall', score: null, created_at: at('2026-10-28') }];
+  const rows = [practice('2026-10-26'), practice('2026-10-27'), practice('2026-10-28'), practice('2026-10-25'), { kind: 'training_review', ref: 'onboarding', score: null, created_at: at('2026-10-27') }, { kind: 'training_review', ref: 'onboarding', score: null, created_at: at('2026-10-28') }];
   const [p, a, m] = weeklyGoals(rows, 2, NOW);
   assert.deepEqual([p.current, p.done, a.current, a.done, m.current, m.done], [3, true, 2, false, 1, true]); // el domingo 25 es de la semana pasada
   const unknown = weeklyGoals(rows, null, NOW)[1]; assert.equal(unknown.current, null); assert.equal(unknown.done, false);

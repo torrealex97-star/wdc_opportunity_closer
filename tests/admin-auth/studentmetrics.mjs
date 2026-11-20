@@ -12,7 +12,7 @@ assert.deepEqual([empty.xp, empty.level, empty.floor, empty.next], [0, 1, 0, 100
 assert.equal(xpAndLevel([], null).xp, 0, 'sin poder leer las candidaturas no se inventan puntos');
 const rows = [
   row('session', '2026-10-20T09:00:00Z'), row('session', '2026-10-20T18:00:00Z'), row('session', '2026-10-21T09:00:00Z'),
-  row('training_review', '2026-10-20T10:00:00Z', { ref: 'precall' }), row('training_review', '2026-10-20T10:05:00Z', { ref: 'precall' }), row('training_review', '2026-10-20T10:10:00Z', { ref: 'star' }),
+  row('training_review', '2026-10-20T10:00:00Z', { ref: 'onboarding' }), row('training_review', '2026-10-20T10:05:00Z', { ref: 'onboarding' }), row('training_review', '2026-10-20T10:10:00Z', { ref: 'fundamentos-del-high-ticket' }),
   row('training_review', '2026-10-20T10:15:00Z', { ref: 'modulo-falso' }),
   row('training_exam', '2026-10-21T10:00:00Z', { ref: 'final', score: 100 }),
   row('practice', '2026-10-21T11:00:00Z', { ref: 'venta-fria', score: 70 }),

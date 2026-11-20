@@ -246,13 +246,14 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   // Progreso: una práctica y un repaso registrados con su sesión; la vista muestra solo datos reales y su tabla alternativa.
   const logged = await alumna.evaluate(async () => {
     const send = body => fetch('/api/student/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.status);
-    return [await send({ kind: 'practice', ref: 'precio', score: 72, detail: { axes: { empatia: 80, cierre: 64 }, difficulty: 'Media', mode: 'texto' } }), await send({ kind: 'training_review', ref: 'precall', detail: { met: 4, total: 4 } })];
+    return [await send({ kind: 'practice', ref: 'precio', score: 72, detail: { axes: { empatia: 80, cierre: 64 }, difficulty: 'Media', mode: 'texto' } }), await send({ kind: 'training_review', ref: 'onboarding', detail: { met: 4, total: 4 } })];
   });
   assert.deepEqual(logged, [201, 201]);
   await alumna.goto(BASE + '/'); await alumna.getByRole('button', { name: 'Mi progreso' }).click(); await alumna.getByRole('heading', { name: 'Tu progreso.' }).waitFor();
   await alumna.locator('.stat-strip').waitFor();
   const strip = await alumna.locator('.stat-strip').innerText(); assert.match(strip, /1\s*prácticas/); assert.match(strip, /72\s*nota media/);
-  assert.match(await alumna.locator('.student-progress').innerText(), /1 de 9 módulos repasados/);
+  // La formación cuenta cursos: el repaso registrado deja Onboarding como estudiado.
+  assert.match(await alumna.locator('.student-progress .plain-list li', { hasText: 'Onboarding' }).innerText(), /Estudiado/);
   await alumna.getByTestId('this-week').waitFor(); const week = await alumna.getByTestId('this-week').innerText(); assert.match(week, /Completar 3 prácticas en la sala · \d\/3/); assert.match(week, /Enviar 5 candidaturas · \d\/5/); assert.ok(!/sin practicar/.test(week), 'una práctica de hoy no avisa de inactividad');
   await alumna.getByTestId('level').waitFor(); assert.match(await alumna.getByTestId('level').innerText(), /Nivel \d+ · \d+ XP/);
   assert.match(await alumna.locator('.student-progress').innerText(), /Tasa de respuesta\s*100 %/, 'una enviada y respondida = 100 %');
