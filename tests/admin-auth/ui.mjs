@@ -177,6 +177,8 @@ await step('Búsqueda automática (modo sencillo): portales en lenguaje llano, p
   assert.match(text, /prueba otro sola/); assert.ok(!/scraper|actor|proxy/i.test(text), 'la explicación no usa jerga');
   const card = page.getByTestId('portal-indeed'); await card.waitFor();
   assert.match(await card.innerText(), /Indeed \(España\)[\s\S]*Sin probar|Funciona|Esperando/);
+  // El porqué del reparto se lee en la tarjeta: aprobadas medidas por dólar, o el hueco declarado.
+  assert.match(await page.getByTestId('portal-priority-indeed').innerText(), /Reparto del mes: .*(aprobadas|Sin recuento)/);
   assert.ok(!/boncross|chuckling|actor/i.test(await card.innerText()), 'los nombres técnicos no se ven hasta abrir «repuesto»');
   await card.locator('summary').click(); assert.match(await card.innerText(), /Buscador de Indeed A/); assert.match(await card.innerText(), /Se usan por orden/);
   state.apifyFailActors = new Set(['boncross~indeed-jobs']); const before = state.apifyCalls.length;

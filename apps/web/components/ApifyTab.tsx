@@ -6,7 +6,8 @@ import { CircleCheck, CircleDashed, CircleX, CloudDownload, LoaderCircle, Pencil
 // nada se lanza solo salvo los actores marcados como diarios, con tope mensual y límites por ejecución.
 type Actor = { id: string; label: string; actor: string; source: string; input_template: Record<string, unknown> | null; max_items: number; memory_mb: number; timeout_s: number; schedule_daily: boolean };
 type Run = { id: string; actor_id: string; run_id: string; status: string; started_at: string; finished_at: string | null; items_total: number | null; harvested: number; cost_usd: number | null; error: string | null };
-type PortalView = { id: string; name: string; plain: string; caution?: string; daily: boolean; maxItems: number; state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string; recipes: Array<{ name: string; state: string; detail: string }> };
+type PortalView = { id: string; name: string; plain: string; caution?: string; daily: boolean; maxItems: number; state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string; recipes: Array<{ name: string; state: string; detail: string }>;
+  priority: { approved: number | null; usd: number; per_usd: number | null; rank: number | null; note: string } };
 const RUN_CAP = 2, TEST_CAP = 0.5; // topes duros que la app pide a Apify (mismos valores que lib/apify.ts)
 // Estado = texto + icono (nunca solo color).
 const STATE_META = { ok: { cls: 'status ok', Icon: CircleCheck }, running: { cls: 'status', Icon: LoaderCircle }, trying: { cls: 'status', Icon: TriangleAlert }, down: { cls: 'status bad', Icon: CircleX }, new: { cls: 'status', Icon: CircleDashed }, off: { cls: 'status', Icon: CircleDashed } } as const;
@@ -86,8 +87,8 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
         <button className="primary" disabled={working !== '' || !limit.trim() || Number(limit) < 1 || Number(limit) > 5000}>Guardar límite</button>
       </form>}
       <p className="card-meta" id="monthly-limit-hint">{dailyCount
-        ? `Se reparte entre los ${dailyCount} portales con búsqueda diaria: unos ${perPortal} USD por portal y mes, con un tope de ${RUN_CAP} USD por búsqueda. Los de mejor rendimiento medido van primero; si el mes no llega, la búsqueda se aplaza y la tarjeta del portal dice cuánto queda.`
-        : 'En cuanto actives «Buscar cada día» en algún portal, el límite se reparte entre ellos por rendimiento medido.'}</p>
+        ? `Se reparte entre los ${dailyCount} portales con búsqueda diaria: unos ${perPortal} USD por portal y mes, con un tope de ${RUN_CAP} USD por búsqueda. Van primero los que dan más ofertas aprobadas por dólar (lo recogido que no apruebas no justifica el gasto); si el mes no llega, la búsqueda se aplaza y la tarjeta del portal dice cuánto queda.`
+        : 'En cuanto actives «Buscar cada día» en algún portal, el límite se reparte entre ellos por ofertas aprobadas por dólar.'}</p>
     </article>}
     {data?.portals && <>
       <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}><h2 className="section-title" style={{ margin: 0 }}>Portales de empleo</h2>
@@ -100,6 +101,7 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
           <p className="card-meta">{p.plain}</p>
           {p.caution && <p className="inline-hint">{p.caution}</p>}
           <p style={{ margin: '8px 0' }}>{p.detail}</p>
+          <p className="card-meta" data-testid={`portal-priority-${p.id}`}><strong>Reparto del mes:</strong> {p.priority.note}</p>
           {owner ? <div className="admin-toolbar" style={{ margin: '8px 0' }}>
             <button disabled={working !== '' || !data.has_key} onClick={() => { if (window.confirm(`Prueba pequeña en ${p.name}: máximo 10 ofertas y un tope de ${TEST_CAP} USD. ¿Lanzarla?`)) void run(`test-${p.id}`, async () => (await post({ action: 'search_now', portal: p.id, test: true }) as { message: string }).message); }}>{working === `test-${p.id}` ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />} Probar con 10 ofertas</button>
             <button className="primary" disabled={working !== '' || !data.has_key} onClick={() => { if (window.confirm(`Buscar ofertas en ${p.name}. Gasta crédito de Apify: tope de ${RUN_CAP} USD por búsqueda (hasta ${p.maxItems} ofertas) y${data.budget.spent === null ? ' no se pudo leer lo gastado este mes' : ` este mes llevas ${data.budget.spent.toFixed(2)} de ${data.budget.limit} USD`}. ¿Seguir?`)) void run(`go-${p.id}`, async () => (await post({ action: 'search_now', portal: p.id }) as { message: string }).message); }}>{working === `go-${p.id}` ? <LoaderCircle size={14} className="spin" /> : <CloudDownload size={14} />} Buscar ahora</button>

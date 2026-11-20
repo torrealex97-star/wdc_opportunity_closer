@@ -2,10 +2,10 @@ import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, publicBaseUrl, withCookies } from '../../../../lib/adminAuth';
 import { ACTOR_RE, apifyToken, fetchSchema, harvestPending, listActors, listRuns, monthSpent, PRESETS } from '../../../../lib/apify';
 import { readBudget, writeBudget } from '../../../../lib/paidBudget';
-import { ORG, SOURCE_RE } from '../../../../lib/external';
+import { approvedBySource, ORG, SOURCE_RE } from '../../../../lib/external';
 import { startRun } from '../../../../lib/apify';
-import { portalViews, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
-import { portalById } from '../../../../lib/apifyCatalog';
+import { measuredSince, portalViews, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
+import { PORTALS, portalById } from '../../../../lib/apifyCatalog';
 import { serviceRest } from '../../../../lib/supabaseAuth';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
   if (!actors || !runs) return Response.json({ detail: 'No se pudo leer los actores.' }, { status: 503 });
   // El límite que manda es el guardado por el propietario; `source` y `error` declaran de dónde sale (y si el
   // control del panel aún no está activo, p. ej. migración sin aplicar) para que el panel no finja que manda.
-  return reply(auth!, { portals: portalViews(actors, runs), actors, runs, presets: PRESETS, budget: { spent: spent === null ? null : Number(spent.toFixed(4)), limit: budget.usd, source: budget.source, updated_by: budget.updated_by, updated_at: budget.updated_at, error: budget.error }, has_key: Boolean(token) });
+  // Las aprobadas se cuentan en la misma ventana que el historial de ejecuciones: así el «por qué» del reparto
+  // (aprobadas por dólar) sale del mismo periodo que el coste. Si no se pueden contar, el panel lo dice en la tarjeta.
+  const since = measuredSince(runs);
+  const approved = since ? await approvedBySource(PORTALS.map(p => p.source), since).catch(() => null) : null;
+  return reply(auth!, { portals: portalViews(actors, runs, Date.now(), approved), actors, runs, presets: PRESETS, budget: { spent: spent === null ? null : Number(spent.toFixed(4)), limit: budget.usd, source: budget.source, updated_by: budget.updated_by, updated_at: budget.updated_at, error: budget.error }, has_key: Boolean(token) });
 }
 
 export async function POST(request: NextRequest) {

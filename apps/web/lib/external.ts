@@ -261,6 +261,20 @@ export async function statsBySource(): Promise<SourceStat[] | null> {
   return stats.some(stat => stat === null) ? null : stats as SourceStat[];
 }
 
+// Ofertas APROBADAS por fuente desde una fecha: de lo que trajo cada portal, lo que el propietario validó. Es la
+// medida con la que se reparte el gasto, comparada con el coste de las ejecuciones del mismo periodo. `null` = no
+// se pudo contar alguna (hueco declarado, nunca cero).
+export async function approvedBySource(sources: string[], since: string): Promise<Record<string, number> | null> {
+  const counts = await Promise.all(sources.map(async source => {
+    const n = await countExact([`org_id=eq.${ORG}`, `source=eq.${encodeURIComponent(source)}`,
+      `first_seen_at=gte.${encodeURIComponent(since)}`, 'editorial_status=in.(approved,published)']);
+    return [source, n] as const;
+  }));
+  // Un solo recuento fallido invalida el conjunto: una suma incompleta se leería como rendimiento real.
+  if (counts.some(([, n]) => n === null)) return null;
+  return Object.fromEntries(counts as Array<[string, number]>);
+}
+
 // Anuncios vivos que además se vieron en otra fuente (`also_seen` no vacío). Es la medida de cuánta
 // atribución es «primera fuente que lo vio» y no exclusividad. `null` = no se pudo contar (hueco, no cero).
 export async function sharedLiveOffers(): Promise<number | null> {

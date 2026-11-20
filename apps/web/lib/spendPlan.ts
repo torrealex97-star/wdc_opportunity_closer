@@ -14,9 +14,14 @@ export function parseMonthlyUsd(value: unknown): number | null {
   return usd >= MIN_MONTHLY_USD && usd <= MAX_MONTHLY_USD ? usd : null;
 }
 
-// Cada ruta de pago (un portal, un actor) recibe como mucho su parte del dinero que queda, y las de mejor
-// rendimiento medido van primero. Sin medición no se le supone rendimiento: va al final, declarado.
-export type Route = { code: string; yield_per_usd: number | null };
+// Cada ruta de pago (un portal, un actor) recibe como mucho su parte del dinero que queda, y las de más
+// **ofertas aprobadas por dólar** van primero: lo que se recoge sin aprobarlo no justifica el gasto. Sin medición
+// no se le supone rendimiento: va al final, declarado.
+export type Route = {
+  code: string;
+  /** Ofertas aprobadas por dólar medido. `null` = sin medición o sin coste: no se le supone rendimiento. */
+  qualified_per_usd: number | null;
+};
 export type Plan = {
   order: string[]; caps: Record<string, number>; deferred: Array<{ code: string; reason: string }>;
   remaining: number; per_route_usd: number | null;
@@ -28,7 +33,7 @@ export function spendPlan(limitUsd: number, spentUsd: number | null, routes: Rou
   }
   const ranked = routes
     .map((r, i) => ({ ...r, i }))
-    .sort((a, b) => (b.yield_per_usd ?? -1) - (a.yield_per_usd ?? -1) || a.i - b.i);
+    .sort((a, b) => (b.qualified_per_usd ?? -1) - (a.qualified_per_usd ?? -1) || a.i - b.i);
   let remaining = Math.max(0, round2(limitUsd - spentUsd));
   const caps: Record<string, number> = {}, order: string[] = [], deferred: Array<{ code: string; reason: string }> = [];
   for (let i = 0; i < ranked.length; i++) {
@@ -46,10 +51,30 @@ export function spendPlan(limitUsd: number, spentUsd: number | null, routes: Rou
   return { order, caps, deferred, remaining, per_route_usd: ranked.length ? Math.floor((limitUsd / ranked.length) * 100) / 100 : null };
 }
 
-/** Ofertas recogidas por dólar registrado de una ruta. null = sin medición (no se le supone rendimiento). */
+/** Coste registrado de las ejecuciones cerradas de una ruta. 0 = ninguna terminó con coste conocido. */
+export function measuredCost(runs: Array<{ cost_usd: number | null; status: string; finished_at: string | null }>): number {
+  return round2(runs.filter(r => r.status === 'SUCCEEDED' && r.finished_at && Number(r.cost_usd) > 0)
+    .reduce((sum, r) => sum + Number(r.cost_usd), 0));
+}
+
+/**
+ * Ofertas que el propietario aprobó por dólar gastado en su portal. Es la medida con la que se reparte el mes:
+ * 400 recogidas y 2 aprobadas valen menos que 40 recogidas y 12 aprobadas. `approved` null = no se pudo contar
+ * (hueco, no cero) y `null` de vuelta = esa ruta no tiene rendimiento que presumir, así que va al final.
+ */
+export function approvedPerUsd(
+  runs: Array<{ cost_usd: number | null; status: string; finished_at: string | null }>, approved: number | null,
+): number | null {
+  if (approved === null || approved < 0) return null;
+  const cost = measuredCost(runs);
+  if (cost <= 0) return null;
+  return round2(approved / cost);
+}
+
+/** Ofertas recogidas por dólar (sin filtrar por aprobación). Se conserva para leer el embudo, no para repartir. */
 export function measuredYield(runs: Array<{ cost_usd: number | null; harvested: number; status: string; finished_at: string | null }>): number | null {
-  const done = runs.filter(r => r.status === 'SUCCEEDED' && r.finished_at && Number(r.cost_usd) > 0);
-  const cost = done.reduce((sum, r) => sum + Number(r.cost_usd), 0);
-  if (!done.length || cost <= 0) return null;
-  return round2(done.reduce((sum, r) => sum + r.harvested, 0) / cost);
+  const cost = measuredCost(runs);
+  if (cost <= 0) return null;
+  return round2(runs.filter(r => r.status === 'SUCCEEDED' && r.finished_at && Number(r.cost_usd) > 0)
+    .reduce((sum, r) => sum + r.harvested, 0) / cost);
 }

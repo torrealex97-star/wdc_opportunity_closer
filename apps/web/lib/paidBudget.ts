@@ -5,7 +5,7 @@ import { serviceRest } from './supabaseAuth';
 // Control del gasto en medios de pago. UN límite mensual por organización, que el propietario cambia desde el
 // panel, y el reparto que sale de él (reglas en `spendPlan.ts`): no se gasta más de lo que dice el límite y,
 // cuando no queda, cada búsqueda se aplaza con su motivo en vez de lanzarse a ciegas.
-export { DEFAULT_MONTHLY_USD, MAX_MONTHLY_USD, MIN_MONTHLY_USD, MIN_RUN_USD, measuredYield, parseMonthlyUsd, spendPlan } from './spendPlan';
+export { DEFAULT_MONTHLY_USD, MAX_MONTHLY_USD, MIN_MONTHLY_USD, MIN_RUN_USD, approvedPerUsd, measuredCost, measuredYield, parseMonthlyUsd, spendPlan } from './spendPlan';
 export type { Plan, Route } from './spendPlan';
 
 export type BudgetSource = 'propietario' | 'entorno' | 'defecto';

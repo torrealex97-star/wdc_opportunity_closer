@@ -656,6 +656,9 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   assert.ok(view.every(p => p.recipes.length > 0), 'todo portal tiene al menos un buscador');
   for (const code of ['jooble', 'computrabajo', 'eures']) assert.ok(ids.includes(code), `${code} sin portal de Apify`);
   const ind0 = view.find(p => p.id === 'indeed'); assert.equal(ind0.state, 'off'); assert.match(ind0.headline, /Sin probar/); assert.equal(ind0.daily, false); assert.equal(ind0.recipes.length, 4);
+  // El reparto se explica por aprobadas por dólar (o declara que no hay recuento): nunca un puesto sin motivo.
+  assert.equal(view.every(p => p.priority && /aprobadas|Sin recuento/.test(p.priority.note)), true);
+  assert.equal(ind0.priority.rank, null, 'sin búsqueda diaria no se finge un puesto en el reparto');
   assert.equal((await post({ action: 'search_now', portal: 'no-existe' })).status, 422);
   const adm = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
   assert.equal((await post({ action: 'search_now', portal: 'indeed' })).status, 403, 'solo el propietario gasta crédito'); jar = adm;

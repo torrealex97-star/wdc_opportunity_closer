@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
-import { ORG } from './external';
-import { measuredYield, readBudget, spendPlan } from './paidBudget';
+import { approvedBySource, ORG } from './external';
+import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
 import { PORTALS, portalBySource, portalById, type Portal, type Recipe } from './apifyCatalog';
 import { serviceRest } from './supabaseAuth';
 
@@ -81,8 +81,15 @@ export async function recoverAfter(run: RunRow, actor: ActorRow, result: Harvest
 }
 
 // Cron: cada portal activado hace UNA búsqueda al día (con repuestos); los actores sueltos siguen la lógica antigua.
-// El orden y el tope de cada búsqueda salen del límite mensual guardado: primero los portales con mejor
-// rendimiento medido (ofertas recogidas por dólar) y, si el mes no da para más, se aplaza y se dice por qué.
+// El orden y el tope de cada búsqueda salen del límite mensual guardado: primero los portales de más **ofertas
+// aprobadas por dólar** —lo recogido sin aprobarlo no justifica el gasto— y, si el mes no da para más, se aplaza
+// y se dice por qué.
+// Ventana de medida: desde la ejecución más antigua del historial leído, para que aprobadas y coste hablen del
+// mismo periodo. Sin historial no hay medición y no se le supone rendimiento a nadie.
+export function measuredSince(runs: Array<{ started_at: string }>): string | null {
+  const times = runs.map(r => Date.parse(r.started_at)).filter(Number.isFinite);
+  return times.length ? new Date(Math.min(...times)).toISOString() : null;
+}
 export async function dailyAuto(publicBase: string, opts: { start?: boolean; deadline?: number } = {}) {
   const [actors, runs] = [await listActors() ?? [], await listRuns(80) ?? []]; const started: Array<{ actor: string; ok: boolean; error?: string }> = []; const now = Date.now();
   const pending = (opts.start === false ? [] : PORTALS).filter(portal => {
@@ -92,9 +99,14 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
   });
   if (pending.length) {
     const [budget, spent] = await Promise.all([readBudget(), monthSpent()]);
+    const since = measuredSince(runs);
+    // Si las aprobadas no se pueden contar, el reparto se queda sin medición (van todos al final, en orden del
+    // catálogo) en vez de suponer cero aprobadas y castigar a un portal por un fallo de lectura.
+    const approved = since ? await approvedBySource(pending.map(p => p.source), since).catch(() => null) : null;
     const plan = spendPlan(budget.usd, spent, pending.map(p => {
       const ids = new Set(actors.filter(a => a.source === p.source).map(a => a.id));
-      return { code: p.id, yield_per_usd: measuredYield(runs.filter(r => ids.has(r.actor_id))) };
+      const mine = runs.filter(r => ids.has(r.actor_id));
+      return { code: p.id, qualified_per_usd: approvedPerUsd(mine, approved ? approved[p.source] ?? 0 : null) };
     }), RUN_CAP_USD);
     for (const code of plan.order) {
       const portal = pending.find(p => p.id === code); if (!portal) continue;
@@ -117,6 +129,13 @@ export type PortalView = {
   state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string;
   last: { when: string; items: number; cost: number | null } | null;
   recipes: Array<{ name: string; state: RecipeState; detail: string }>;
+  // Por qué este portal está donde está en el reparto del mes: aprobadas medidas, coste y puesto.
+  priority: { approved: number | null; usd: number; per_usd: number | null; rank: number | null; note: string };
+};
+const priorityNote = (approved: number | null, usd: number, per: number | null, rank: number | null) => {
+  if (approved === null) return 'Sin recuento de aprobadas: no se le supone rendimiento, así que va al final del reparto.';
+  if (per === null) return `${approved} aprobadas y ${usd > 0 ? `${usd.toFixed(2)} USD gastados` : 'ningún coste registrado'}: sin coste no hay rendimiento que comparar, así que va al final.`;
+  return `${approved} aprobadas por ${usd.toFixed(2)} USD (${per} por dólar)${rank ? ` · ${rank}º en el reparto del mes` : ' · aún sin búsqueda diaria'}.`;
 };
 const ago = (iso: string, now: number) => { const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60000)); return m < 60 ? `hace ${m} min` : m < 48 * 60 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} días`; };
 // Mensajes técnicos → frase que entiende cualquiera.
@@ -130,9 +149,19 @@ export function plainError(error: string | null | undefined): string {
   if (/0 ofertas|devolvi/i.test(e)) return 'No encontró ofertas.';
   return e.length > 140 ? `${e.slice(0, 137)}…` : e;
 }
-export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now()): PortalView[] {
-  return PORTALS.map(p => {
-    const rows = actors.filter(a => a.source === p.source), ids = new Set(rows.map(a => a.id)), mine = runs.filter(r => ids.has(r.actor_id)).sort((a, b) => b.started_at.localeCompare(a.started_at));
+export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now(), approved: Record<string, number> | null = null): PortalView[] {
+  const measured = PORTALS.map(p => {
+    const rows = actors.filter(a => a.source === p.source), ids = new Set(rows.map(a => a.id));
+    const mine = runs.filter(r => ids.has(r.actor_id));
+    const ap = approved ? approved[p.source] ?? 0 : null;
+    return { p, rows, mine, ap, usd: measuredCost(mine), per: approvedPerUsd(mine, ap) };
+  });
+  // Solo compiten los portales con búsqueda diaria y rendimiento medido: el resto se enseña sin puesto en vez de
+  // con uno falso. Las aprobadas mandan sobre lo recogido (400 recogidas con 2 aprobadas pierden contra 40 con 12).
+  const ranked = measured.filter(m => m.per !== null && m.rows.some(a => a.schedule_daily)).sort((a, b) => b.per! - a.per!);
+  const rank = new Map(ranked.map((m, i) => [m.p.id, i + 1]));
+  return measured.map(({ p, rows, mine: unsorted, ap, usd, per }) => {
+    const mine = [...unsorted].sort((a, b) => b.started_at.localeCompare(a.started_at));
     const recipes = p.recipes.map(r => { const row = rows.find(a => a.actor === r.actor); const s = recipeState(row?.id, runs, now);
       // Los buscadores generados desde la auditoría declaran qué campos exige el actor: se dice en la tarjeta
       // para que nadie se pregunte por qué un intento no arrancó por falta de un dato.
@@ -148,6 +177,7 @@ export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now()
     else if (failedN > 0) { state = 'trying'; headline = 'Un buscador falló; se usa el siguiente'; detail = 'No tienes que hacer nada: la app cambia de buscador sola.'; }
     else if (!mine.length) { state = daily ? 'new' : 'off'; headline = daily ? 'Activado, aún sin primera búsqueda' : 'Sin probar'; detail = 'Pulsa «Probar con 10 ofertas»: cuesta céntimos y comprueba que todo funciona.'; }
     else { state = 'trying'; headline = 'Esperando la próxima búsqueda'; detail = 'Pulsa «Buscar ahora» o espera a la búsqueda diaria.'; }
-    return { id: p.id, name: p.name, plain: p.plain, caution: p.caution, daily, maxItems: p.maxItems, state, headline, detail, last, recipes };
+    return { id: p.id, name: p.name, plain: p.plain, caution: p.caution, daily, maxItems: p.maxItems, state, headline, detail, last, recipes,
+      priority: { approved: ap, usd, per_usd: per, rank: rank.get(p.id) ?? null, note: priorityNote(ap, usd, per, rank.get(p.id) ?? null) } };
   });
 }
