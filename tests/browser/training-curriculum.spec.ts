@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 import { DEFAULT_CURRICULUM, resourcesOf } from '../../apps/web/lib/trainingCurriculum';
 
 // La ruta importable, sus tests y el hub de recursos con el currículo versionado (la API se simula para

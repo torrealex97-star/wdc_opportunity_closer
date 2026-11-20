@@ -535,7 +535,7 @@ export function debriefInstructions(
   priorities: string[] = DEFAULT_PRIORITIES,
   bantConfig: BantConfig = DEFAULT_BANT,
 ) {
-  const review = scenario.rubric === 'llamada';
+  const review = scenario.review === true || scenario.rubric === 'llamada';
   const definitions = axesFor(scenario, rubrics);
   const axes = definitions
     .map(axis => `- ${axis.id}: ${axis.guide} (peso ${axis.weight}%)`)
@@ -558,6 +558,7 @@ Reglas:
 - ${review ? 'La persona evaluada es la VENDEDORA: solo puedes citar frases literales de sus intervenciones. El CLIENTE es el interlocutor; sus palabras son el hecho para BANT y para entender qué pasó, no para puntuar a la vendedora. Si una intervención no demuestra el criterio, deja quote vacío; nunca la inventes.' : 'Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.'}
 - No inventes resultados, cifras, empresas ni contrataciones. No atribuyas logros que no estén en la conversación.
 - Puntúa los ${count} ejes de 0 a 100 como estimación docente: 0-40 ausente o contraproducente, 41-60 parcial, 61-80 correcto, 81-100 sólido. No regales puntuaciones altas.
+- En cada eje, además de la nota: «right» con lo que hizo bien en ese paso (una frase concreta) y «improve» con la mejora de ese paso (una frase accionable). Si el paso no aparece en la llamada, dilo en «improve» en vez de inventar una cita.
 - focus: LA CORRECCIÓN PRIORITARIA, una sola, en una frase. Elígela con el orden de abajo y no des una lista de fallos.
 - strengths: hasta 3 cosas concretas que hizo bien. improvements: hasta 3 mejoras accionables.
 - model: una forma posible de decir mejor una de sus frases, con sus propias palabras y sin inventar datos. No es «la respuesta correcta».
@@ -603,12 +604,14 @@ export function debriefSchema(scenario: PracticeScenario, rubrics: RoomRubrics =
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['id', 'score', 'note', 'quote'],
+          required: ['id', 'score', 'note', 'quote', 'right', 'improve'],
           properties: {
             id: { type: 'string', enum: definitions.map(axis => axis.id) },
             score: { type: 'integer', minimum: 0, maximum: 100 },
             note: { type: 'string' },
             quote: { type: 'string' },
+            right: { type: 'string' },
+            improve: { type: 'string' },
           },
         },
       },

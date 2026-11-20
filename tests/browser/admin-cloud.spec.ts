@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page, type Route } from './stubs';
 
 // Panel de administración contra el engine cloud (CloudAdminPanel). El servidor
 // solo monta ese panel cuando tiene CAREER_ENGINE_URL, así que este spec exige un

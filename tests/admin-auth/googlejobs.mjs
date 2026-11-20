@@ -35,17 +35,16 @@ const server = http.createServer(async (req, res) => {
     if (mode === 'error') return send(200, { error: 'Invalid API key' });
     if (mode === 'empty') return send(200, { error: "Google hasn't returned any results for this query." });
     const q = url.searchParams.get('q') ?? '';
-    // El mismo anuncio aparece en dos dorks: debe quedar una sola fila.
-    // La ventana de dorks rota por día: el anuncio que se repite entre búsquedas tiene que venir en cualquiera
-    // de ellas para que la prueba mida el dedupe y no el dork que toque hoy.
-    const rows = q.includes('high ticket')
-      ? [job('job-1'), job('job-2', {
-          title: 'Setter/Closer',
-          share_link: 'https://www.google.com/search?q=closer+ventas&ibp=htl;jobs',
-          apply_options: [{ title: 'InfoJobs', link: 'https://www.infojobs.net/oferta/job-2' }],
-          detected_extensions: { posted_at: 'ayer' },
-        }), job('job-2')]
-      : [job('job-1'), job('job-2'), job('job-3', { share_link: 'javascript:alert(1)', link: null, apply_options: [] })];
+    // El mismo anuncio aparece en dos dorks: debe quedar una sola fila. Se devuelve en todas las
+    // búsquedas (no solo en la del dork «high ticket») porque la ventana de dorks rota por día: así la
+    // prueba mide el dedupe y el enlace del portal cualquier día, no solo cuando toca ese término.
+    void q;
+    const rows = [job('job-1'), job('job-2', {
+      title: 'Setter/Closer',
+      share_link: 'https://www.google.com/search?q=closer+ventas&ibp=htl;jobs',
+      apply_options: [{ title: 'InfoJobs', link: 'https://www.infojobs.net/oferta/job-2' }],
+      detected_extensions: { posted_at: 'ayer' },
+    }), job('job-2'), job('job-3', { share_link: 'javascript:alert(1)', link: null, apply_options: [] })];
     return send(200, { jobs_results: rows });
   }
   if (url.pathname === '/rest/v1/integration_connections') {
@@ -125,7 +124,11 @@ await step('pide cada dork a Google Jobs en su país, en español y sin paginar'
   // El presupuesto por defecto cubre los dos mercados: 4 dorks de España y 3 de LatAm (dólares).
   assert.equal(searches.filter(s => s.gl === 'es').length, 4);
   assert.equal(searches.filter(s => s.gl !== 'es').length, 3);
-  assert.ok(searches.some(s => s.gl === 'mx') && searches.some(s => s.gl === 'co') && searches.some(s => s.gl === 'ar'));
+  // Qué países de LatAm entran cambia con la ventana del día; lo que no puede faltar es la cobertura:
+  // España y al menos un mercado en dólares, cada dork en el `gl` que declara su vocabulario.
+  assert.ok(searches.some(s => s.gl === 'es'), 'falta España en la ventana');
+  assert.ok(searches.some(s => s.gl !== 'es'), 'falta LatAm en la ventana');
+  for (const search of searches) assert.ok(GOOGLE_JOBS_DORKS.some(d => d.q === search.q && d.gl === search.gl));
 });
 
 await step('rota la ventana de dorks por día: mismo coste y todo el vocabulario se ejecuta', async () => {

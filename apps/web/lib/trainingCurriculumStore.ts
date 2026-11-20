@@ -16,10 +16,21 @@ const asArray = <T>(value: unknown): T[] => {
   return [];
 };
 
-type ModuleRow = { id: string; position: number; title: string; description: string; objectives: unknown; deep_dive: string | null };
-type LessonRow = { id: string; module_id: string; position: number; title: string; summary: string; minutes: number; content: string; key_points: unknown };
-type ResourceRow = { id: string; lesson_id: string; type: string; title: string; description: string; url: string | null; content: string | null };
-type QuestionRow = { id: string; lesson_id: string; position: number; type: string; prompt: string; options: unknown; correct: number; explanation: string };
+type ModuleRow = { id: string; position: number; title: string; description: string; objectives: unknown; deep_dive: string | null; updated_at: string };
+type LessonRow = { id: string; module_id: string; position: number; title: string; summary: string; minutes: number; content: string; key_points: unknown; updated_at: string };
+type ResourceRow = { id: string; lesson_id: string; type: string; title: string; description: string; url: string | null; content: string | null; updated_at: string };
+type QuestionRow = { id: string; lesson_id: string; position: number; type: string; prompt: string; options: unknown; correct: number; explanation: string; updated_at: string };
+
+// La versión que se sirve es la fecha de la última importación (el `updated_at` más reciente de las cuatro
+// tablas). Antes se enviaba `'db'`, que el validador rechaza por corto: el currículo bueno de la base caía
+// siempre al del repositorio y lo declaraba «no válido».
+const versionOf = (rows: Array<{ updated_at: string }>): string | null => {
+  const latest = rows.reduce((max, row) => {
+    const at = Date.parse(row.updated_at ?? '');
+    return Number.isFinite(at) && at > max ? at : max;
+  }, Number.NEGATIVE_INFINITY);
+  return Number.isFinite(latest) ? new Date(latest).toISOString().slice(0, 10) : null;
+};
 
 async function rows<T>(table: string, select: string, order: string): Promise<T[] | null> {
   const response = await serviceRest(`${table}?org_id=eq.${ORG}&select=${select}&order=${order}`).catch(() => null);
@@ -32,10 +43,10 @@ export async function loadTrainingCurriculum(force = false): Promise<LoadedCurri
   if (!force && cache && Date.now() - cache.at < TTL_MS) return cache.value;
   if (!allowlistConfigured()) return defaults(null);
   const [modules, lessons, resources, questions] = await Promise.all([
-    rows<ModuleRow>('training_modules', 'id,position,title,description,objectives,deep_dive', 'position.asc'),
-    rows<LessonRow>('training_lessons', 'id,module_id,position,title,summary,minutes,content,key_points', 'position.asc'),
-    rows<ResourceRow>('training_resources', 'id,lesson_id,type,title,description,url,content', 'id.asc'),
-    rows<QuestionRow>('training_questions', 'id,lesson_id,position,type,prompt,options,correct,explanation', 'position.asc'),
+    rows<ModuleRow>('training_modules', 'id,position,title,description,objectives,deep_dive,updated_at', 'position.asc'),
+    rows<LessonRow>('training_lessons', 'id,module_id,position,title,summary,minutes,content,key_points,updated_at', 'position.asc'),
+    rows<ResourceRow>('training_resources', 'id,lesson_id,type,title,description,url,content,updated_at', 'id.asc'),
+    rows<QuestionRow>('training_questions', 'id,lesson_id,position,type,prompt,options,correct,explanation,updated_at', 'position.asc'),
   ]);
   if (!modules || !lessons || !resources || !questions) {
     const value = defaults('No se pudo leer el currículo de la base (¿migración 20261120_training_curriculum.sql aplicada?). Se usa la versión del repositorio.');
@@ -44,6 +55,12 @@ export async function loadTrainingCurriculum(force = false): Promise<LoadedCurri
   }
   if (!modules.length) {
     const value = defaults('La base no tiene currículo importado todavía. Se usa la versión del repositorio.');
+    cache = { at: Date.now(), value };
+    return value;
+  }
+  const version = versionOf([...modules, ...lessons, ...resources, ...questions]);
+  if (!version) {
+    const value = defaults('El currículo de la base no tiene fecha de importación legible. Se usa la versión del repositorio.');
     cache = { at: Date.now(), value };
     return value;
   }
@@ -60,7 +77,7 @@ export async function loadTrainingCurriculum(force = false): Promise<LoadedCurri
     bucket.questions.push({ id: question.id, type: question.type as CurriculumQuestion['type'], prompt: question.prompt, options: asArray<string>(question.options).map(String), correct: question.correct, explanation: question.explanation });
   }
   const assembled = {
-    version: 'db',
+    version,
     modules: modules.map(module => ({
       id: module.id,
       position: module.position,

@@ -11,7 +11,8 @@ import { clientIp, createTurnBudget } from '../../../lib/practiceBudget';
 import { callModel, hasModelKey, providerFailure, resolveModel } from '../../../lib/aiProvider';
 import { allAxisLabels } from '../../../lib/practiceRubrics';
 import { loadPracticeConfig } from '../../../lib/practiceRubricStore';
-import { CALL_REVIEW_SCENARIO, parseCallTranscript } from '../../../lib/callReview';
+import { callReviewScenario, parseCallTranscript } from '../../../lib/callReview';
+import { resolveCallType } from '../../../lib/callType';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +38,7 @@ const MAX_TOTAL_CHARS = 18000;
 const DAILY_TURNS = Number(process.env.PRACTICE_DAILY_TURNS || 400);
 const IP_DAILY_TURNS = 60;
 
-type Body = { scenario?: unknown; messages?: unknown; mode?: unknown; transcript?: unknown; application_id?: unknown; include_profile?: unknown };
+type Body = { scenario?: unknown; messages?: unknown; mode?: unknown; transcript?: unknown; application_id?: unknown; include_profile?: unknown; call_type?: unknown };
 
 // Topes por instancia (ver lib/practiceBudget): la IP no puede salir de un valor que elija quien llama y el mapa
 // tiene tope duro. En serverless son best-effort, por eso además se limita cada petición (turnos y caracteres) y el
@@ -86,21 +87,25 @@ export async function POST(request: NextRequest) {
     if (budget.spend(`ip:${clientIp(request.headers)}`, IP_DAILY_TURNS) === null || budget.spend('global', DAILY_TURNS) === null) {
       return Response.json({ detail: 'La evaluación de llamadas ha llegado a su límite de hoy. Vuelve mañana.' }, { status: 429 });
     }
+    // El tipo se deduce de la propia llamada salvo que quien revisa lo haya elegido: una llamada en
+    // frío no se puntúa con la rúbrica del closer (ni al revés).
+    const callType = resolveCallType(body.call_type, parsed.turns);
+    const scenario = callReviewScenario(callType.type);
     const transcript = parsed.turns.map(turn => `${turn.role === 'user' ? 'VENDEDOR' : 'CLIENTE'}: ${turn.content}`).join('\n');
     const result = await callModel({
       model: MODEL,
       messages: [
-        { role: 'system', content: debriefInstructions(CALL_REVIEW_SCENARIO, null, criteria.rubrics, criteria.priorities, criteria.bant) },
-        { role: 'user', content: `Transcripción:\n${transcript}\n\nDevuelve el feedback con el esquema indicado.` },
+        { role: 'system', content: debriefInstructions(scenario, null, criteria.rubrics, criteria.priorities, criteria.bant) },
+        { role: 'user', content: `Tipo de llamada: ${callType.type === 'frio' ? 'llamada en frío (prospección)' : 'llamada de cierre con cita previa'}.\nTranscripción:\n${transcript}\n\nDevuelve el feedback con el esquema indicado.` },
       ],
       temperature: 0.3,
-      maxTokens: 900,
-      schema: { name: 'call_review', schema: debriefSchema(CALL_REVIEW_SCENARIO, criteria.rubrics, criteria.bant) },
+      maxTokens: 1100,
+      schema: { name: 'call_review', schema: debriefSchema(scenario, criteria.rubrics, criteria.bant) },
     });
     if (!result.ok) return providerFailure(result.error, 'La evaluación de llamadas');
-    const debrief = cleanDebrief(result.content, parsed.turns, CALL_REVIEW_SCENARIO, criteria.rubrics, criteria.bant);
+    const debrief = cleanDebrief(result.content, parsed.turns, scenario, criteria.rubrics, criteria.bant);
     if (!debrief) return providerFailure('invalid_output', 'La evaluación de llamadas');
-    return Response.json({ debrief: { ...debrief, signals: analyzeSignals(parsed.turns, 'venta') } }, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ debrief: { ...debrief, signals: analyzeSignals(parsed.turns, scenario.kind) }, call_type: callType }, { headers: { 'Cache-Control': 'no-store' } });
   }
   const scenario = typeof body.scenario === 'string' ? scenarioById(body.scenario) : null;
   if (!scenario) return Response.json({ detail: 'Situación desconocida' }, { status: 422 });

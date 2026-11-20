@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 const offer = { id: 'student-fixture', role: 'closer', role_label: 'Closer', original_title: 'Closer de ventas', company: 'Empresa de prueba', compensation: 'Salario base de 600 USD + comisiones.', compensation_note: 'La parte variable no es un ingreso garantizado.', modality: 'Remoto', location: 'España', language: 'Anuncio en español', experience: 'Experiencia: 2 años en ventas.', schedule: 'Jornada: tiempo completo.', contract: 'Contrato: freelance.', description: 'Buscamos una closer para nuestro equipo de ventas. Trabajo remoto.', published_at: new Date().toISOString(), expires_at: new Date(Date.now() + 864000000).toISOString(), source_name: 'Portal de empleo', source_url: 'https://example.com/job', starred: false };
 

@@ -109,6 +109,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice.mjs
 # Criterios de las skills: pesos por fase, BANT con evidencia y una sola corrección prioritaria.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice-rubrics.mjs
+# Salón del éxito: las trece alumnas, cada vídeo con su id y ninguna tarjeta sin aprendizaje ni mensaje.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/successstories.mjs
 # Panel → persistencia local (SQLite temporal) → nota: el peso guardado manda en el feedback.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/practice-persistence.mjs
 # Formulario de cualificación: ocho preguntas, una respuesta de autoridad por pregunta y presentación revisada sin IA.

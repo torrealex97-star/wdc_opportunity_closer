@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
+
+// La vista de alumna lanza una búsqueda al montar, y esa búsqueda se guarda como ejecución en el motor:
+// se simula en toda la prueba para no escribir en el estado compartido entre workers.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/backend/opportunities/search', route => route.fulfill({ json: { items: [], total: 0 } }));
+});
 
 // La sala puede practicar una candidatura concreta. El navegador solo manda el id: el anuncio y
 // el formulario los resuelve el servidor (ver lib/practiceContext), y el panel lo dice.
@@ -44,8 +50,7 @@ test('la sala practica la entrevista de una candidatura con su anuncio', async (
     return route.fulfill({ json: { reply: '¿Y qué resultados medías?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
-  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
+  await page.getByRole('button', { name: 'Entrevistas' }).click();
   const panel = page.getByRole('region', { name: 'Practica una candidatura tuya' });
   await expect(panel).toBeVisible();
   const profileTick = panel.getByRole('checkbox', { name: /Usar mi formulario base/ });
@@ -114,8 +119,7 @@ test('el dictado se registra como práctica por voz, con su duración', async ({
     return route.fulfill({ json: { reply: 'Bien. ¿Y el siguiente paso?' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
-  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
+  await page.getByRole('button', { name: 'Entrevistas' }).click();
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   await page.getByRole('button', { name: 'Dictar la respuesta' }).click();
   await expect(page.getByLabel('Tu respuesta')).toHaveValue(/he cerrado doce mil euros/);

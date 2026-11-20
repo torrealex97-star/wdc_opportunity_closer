@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 
 test('operator can configure search, inspect sources and use mobile navigation', async ({ page }) => {
   await page.route('**/api/backend/source-connections', route => route.fulfill({ json: [] }));

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -57,7 +57,40 @@ let dataDir = '';
 let distDir = '';
 let log = '';
 
+// `next dev` reescribe `apps/web/next-env.d.ts` y `apps/web/tsconfig.json` en cada arranque para apuntar
+// los tipos a su distDir, y no hay ajuste de Next que lo redirija: siempre se escriben en el directorio del
+// proyecto. Con un distDir propio (para no compartir caché con el `next dev` del operador) el contenido
+// cambia y el repo queda sucio. La prueba guarda los bytes versionados y devuelve solo lo que reescribió
+// su propio servidor: un fichero que haya cambiado por otra mano no se pisa, se declara. El distDir
+// `.next-e2e*` ya está en .gitignore.
+const PROJECT_FILES = ['next-env.d.ts', 'tsconfig.json'].map(name => path.join(process.cwd(), 'apps/web', name));
+const originalProjectFiles = new Map(PROJECT_FILES.map(file => [file, readFileSync(file)]));
+// Bytes que dejó el servidor de la prueba al arrancar: lo único que se permite sobrescribir al restaurar.
+const serverProjectFiles = new Map<string, Buffer>();
+const readOrNull = (file: string) => { try { return readFileSync(file); } catch { return null; } };
+function captureServerProjectFiles() {
+  for (const file of PROJECT_FILES) {
+    const bytes = readOrNull(file);
+    if (bytes) serverProjectFiles.set(file, bytes);
+  }
+}
+function restoreProjectFiles() {
+  for (const [file, original] of originalProjectFiles) {
+    const current = readOrNull(file);
+    // Sin lectura, ya igual o cambiado por otra mano: no se toca. `afterAll` lee el estado final y decide.
+    if (!current || current.equals(original) || !serverProjectFiles.get(file)?.equals(current)) continue;
+    try { writeFileSync(file, original); } catch { /* una escritura fallida se declara en `afterAll` */ }
+  }
+}
+// Se lee del disco, no de lo que se creía haber escrito: cubre una escritura que no se aplicó y un
+// tercero que reescribió el fichero después de restaurarlo.
+const changedProjectFiles = () => PROJECT_FILES
+  .filter(file => { const current = readOrNull(file); return !current || !current.equals(originalProjectFiles.get(file)!); })
+  .map(file => path.relative(process.cwd(), file));
+
 test.beforeAll(async () => {
+  // Si el proceso muere sin pasar por afterAll, se restaura igualmente en la salida normal de Node.
+  process.once('exit', restoreProjectFiles);
   dataDir = mkdtempSync(path.join(tmpdir(), 'wdc-practice-'));
   // Caché de Turbopack propia por ejecución: reutilizar `.next-e2e` tras matar un servidor deja el
   // directorio de persistencia a medias y el siguiente arranque falla.
@@ -104,11 +137,13 @@ test.beforeAll(async () => {
     try {
       const response = await fetch(`${base}/api/admin/session`);
       const data = await response.json() as { authenticated?: boolean };
-      if (data.authenticated) return;
+      if (data.authenticated) { captureServerProjectFiles(); return; }
     } catch { /* el servidor aún compila */ }
     if (next.exitCode !== null) break;
     await sleep(500);
   }
+  // También aquí, para no dejar el repo sucio cuando el arranque falla.
+  captureServerProjectFiles();
   throw new Error(`El servidor de la prueba no arrancó.\n${log.slice(-4000)}`);
 });
 
@@ -116,9 +151,19 @@ test.afterAll(async () => {
   if (next?.pid) { try { process.kill(-next.pid, 'SIGTERM'); } catch { /* ya cerrado */ } }
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
   await sleep(500);
+  // Antes de borrar el distDir: el servidor ya no corre y los ficheros vuelven a su contenido versionado.
+  restoreProjectFiles();
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   // El caché de Turbopack puede seguir escribiendo al recibir SIGTERM; no es parte del resultado.
   try { if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true }); } catch { /* caché de prueba */ }
+  // Se declara al final para no saltarse la limpieza, y leyendo el disco: si un fichero no volvió a sus
+  // bytes versionados (escritura fallida o edición hecha mientras corría la prueba, que no se pisa),
+  // la suite falla aquí en vez de dejar el diagnóstico a un `git status` manual.
+  const changed = changedProjectFiles();
+  expect(
+    changed,
+    `Estos ficheros del proyecto no coinciden con los guardados al arrancar: ${changed.join(', ')}. Un fichero modificado durante la prueba no se sobrescribe. Revísalo y, si es la reescritura de Next, restaura con «git checkout -- apps/web/next-env.d.ts apps/web/tsconfig.json».`,
+  ).toEqual([]);
 });
 
 async function score(): Promise<{ score: number; label: string }> {
@@ -178,7 +223,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
-  await expect(page.getByText('Versiones guardadas')).toBeVisible();
+  await expect(page.getByText('Historial de cambios')).toBeVisible();
   await expect(page.locator('.rubric-versions li').filter({ hasText: 'v1' })).toBeVisible();
 
   // 3) Recarga real: los tres campos siguen ahí.
@@ -188,6 +233,13 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.locator('#axis-apertura')).toHaveValue('Apertura con prueba social');
   await expect(page.locator('#guide-apertura')).toHaveValue(/prueba de un caso idéntico/);
   await expect(page.getByText('Cambios sin guardar')).toHaveCount(0);
+
+  // 3b) El historial dice quién, cuándo y qué peso y guía cambiaron en cada versión.
+  const version = page.locator('.rubric-versions>li').first();
+  await expect(version).toContainText('v1');
+  await version.locator('summary').click();
+  await expect(version.locator('.rubric-diff')).toContainText('peso 10 → 100');
+  await expect(version.locator('.rubric-diff')).toContainText('guía actualizada');
 
   // 4) Puntuación real después del cambio: 100 de apertura sobre 190 de peso total → 53.
   const changed = await score();
@@ -233,6 +285,17 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.reload();
   await expect(page.getByLabel('Entrevista · contratación')).toBeChecked();
 
+  // 7b) En el panel estrecho la tabla se apila en tarjetas: las etiquetas siguen visibles y la guía se lee
+  // entera sin desplazamiento horizontal en el contenedor.
+  await page.setViewportSize({ width: 390, height: 900 });
+  const wrap = page.locator('.rubric-wrap');
+  await expect(wrap).toBeVisible();
+  expect(await wrap.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  const wrapBox = (await wrap.boundingBox())!;
+  const guideBox = (await page.locator('#guide-apertura').boundingBox())!;
+  expect(guideBox.width).toBeGreaterThan(wrapBox.width - 60);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   // 8) Reordenar y editar la corrección prioritaria; persiste tras recargar.
   await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
   await page.getByRole('button', { name: 'Subir la prioridad 2' }).click();
@@ -246,7 +309,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
 
   // 9) La misma configuración se aplica en el navegador: un roleplay real puntúa con el peso editado.
   await page.goto(base);
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('button', { name: 'Práctica' }).click();
   await page.getByRole('tab', { name: 'Closer · voz' }).click();
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   const reply = page.getByLabel('Tu respuesta');
@@ -263,7 +326,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
 
   // 10) La evaluación de una llamada real usa su propio criterio editado y la misma nota ponderada.
   await page.getByRole('button', { name: 'Elegir otra situación' }).click();
-  await page.getByRole('tab', { name: 'Revisar llamada' }).click();
+  await page.getByRole('button', { name: 'Revisión de llamada' }).click();
   await page.getByLabel('Transcripción').fill([
     'VENDEDOR: Hola, te llamo por el formulario que dejaste. ¿Te importa que te haga una pregunta?',
     'CLIENTE: Dime, tengo cinco minutos.',

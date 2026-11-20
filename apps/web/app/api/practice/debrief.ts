@@ -7,7 +7,7 @@ import {
   type BantConfig, type BantLetter, type BantStatus, type PracticeBant, type PracticeDecision, type RoomRubrics,
 } from '../../../lib/practiceRubrics';
 
-export type PracticeAxis = { id: string; label: string; score: number; note: string; quote: string };
+export type PracticeAxis = { id: string; label: string; score: number; note: string; quote: string; right?: string; improve?: string };
 
 export type PracticeDebrief = {
   summary: string;
@@ -67,8 +67,11 @@ export function cleanDebrief(raw: string, turns: PracticeTurn[], scenario: Pract
     if (!axis) return null;
     const score = clampScore(axis.score);
     if (score === null) return null;
-    // Una cita inventada se elimina; el eje y su nota se mantienen.
-    axes.push({ id: definition.id, label: definition.label, score, note: text(axis.note, 300), quote: literal(axis.quote) });
+    // Una cita inventada se elimina; el eje y su nota se mantienen. `right`/`improve` son opcionales
+    // para no rechazar un feedback antiguo que aún no los traía.
+    const right = text(axis.right, 240);
+    const improve = text(axis.improve, 240);
+    axes.push({ id: definition.id, label: definition.label, score, note: text(axis.note, 300), quote: literal(axis.quote), ...(right ? { right } : {}), ...(improve ? { improve } : {}) });
   }
 
   const summary = text(value.summary, 500);

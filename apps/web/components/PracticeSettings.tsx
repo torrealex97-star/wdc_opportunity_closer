@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, CircleAlert, History, LoaderCircle, Plus, RotateCcw, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import {
-  BANT_LABELS, DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, ROOMS,
-  type BantConfig, type BantLetter, type PracticeRoom, type RoomRubrics, type RubricAxis,
+  BANT_LABELS, DEFAULT_BANT, DEFAULT_PRIORITIES, DEFAULT_RUBRICS, ROOMS, diffPracticeConfig,
+  type BantConfig, type BantLetter, type PracticeConfigDiff, type PracticeRoom, type RoomRubrics, type RubricAxis,
 } from '../lib/practiceRubrics';
 
 // Criterios de la sala y del análisis de llamadas. Edita lo que el servidor aplica al puntuar:
@@ -160,6 +160,33 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     ? 'Base local de desarrollo (SQLite). En producción se usa Supabase; este aviso no aparece allí.'
     : null;
 
+  // El historial guarda la rúbrica completa de cada versión: «qué cambió» se calcula al leer contra la
+  // versión anterior (o contra los valores por defecto, si es la v1). No se guarda un diff aparte y no
+  // se toca ninguna práctica ya puntuada.
+  const roomLabel = (id: PracticeRoom) => rooms.find(item => item.id === id)?.label ?? id;
+  const versions = meta.history.map((entry, index) => {
+    const previous = index > 0
+      ? meta.history[index - 1].config
+      : entry.version === 1 ? { rubrics: DEFAULT_RUBRICS, priorities: DEFAULT_PRIORITIES, bant: DEFAULT_BANT } : null;
+    return { entry, diff: previous ? diffPracticeConfig(previous, entry.config) : null };
+  }).reverse();
+
+  function diffLines(diff: PracticeConfigDiff) {
+    const lines = diff.axes.map(change => <li key={`${change.room}-${change.axis}-${change.field}`}>
+      <b>{roomLabel(change.room)}</b> · {change.axisLabel}: {change.field === 'guía'
+        ? 'guía actualizada'
+        : change.field === 'activo' ? change.to : `${change.field} ${change.from} → ${change.to}`}
+      {change.field === 'guía' && <span className="rubric-diff-guide"><span>Antes: {change.from}</span><span>Ahora: {change.to}</span></span>}
+    </li>);
+    for (const item of diff.added) lines.push(<li key={`añadido-${item.room}-${item.axisLabel}`}><b>{roomLabel(item.room)}</b> · criterio añadido: {item.axisLabel}</li>);
+    for (const item of diff.removed) lines.push(<li key={`quitado-${item.room}-${item.axisLabel}`}><b>{roomLabel(item.room)}</b> · criterio quitado: {item.axisLabel}</li>);
+    for (const item of diff.prioritiesAdded) lines.push(<li key={`prioridad-añadida-${item}`}>Prioridad añadida: {item}</li>);
+    for (const item of diff.prioritiesRemoved) lines.push(<li key={`prioridad-quitada-${item}`}>Prioridad quitada: {item}</li>);
+    if (diff.prioritiesReordered) lines.push(<li key="prioridades-reordenadas">Prioridades reordenadas</li>);
+    for (const item of diff.bant) lines.push(<li key={`bant-${item.room}`}><b>{roomLabel(item.room)}</b> · BANT {item.enabled ? 'activado' : 'desactivado'}</li>);
+    return lines;
+  }
+
   return <section aria-label="Criterios de práctica">
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
     {meta.source === 'defaults' && meta.reason && <div className="alert" role="status"><span>{meta.reason}</span></div>}
@@ -180,31 +207,31 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
     </div>
     <p className="card-meta">{rooms.find(item => item.id === room)?.note}</p>
 
-    <div className="table-wrap" style={{ marginTop: 16 }}>
+    <div className="table-wrap rubric-wrap" style={{ marginTop: 16 }}>
       <table className="data-table rubric-table">
         <thead><tr><th scope="col">Activo</th><th scope="col">Criterio</th><th scope="col" className="num">Peso</th><th scope="col">Qué debe demostrar (lo lee la IA)</th><th scope="col">Fuente en la skill</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{axes.map(axis => <tr key={axis.id}>
-          <td>
+          <td data-label="Activo">
             <label className="check-label" title={axis.enabled ? 'Se puntúa y se envía a la IA' : 'No se puntúa ni se envía a la IA'}>
               <input type="checkbox" checked={axis.enabled} onChange={event => patchAxis(axis.id, { enabled: event.target.checked })} aria-label={`Activar ${axis.label}`} />
             </label>
           </td>
-          <td className="primary-cell">
+          <td className="primary-cell" data-label="Criterio">
             <label htmlFor={`axis-${axis.id}`} className="sr-only">Nombre del criterio {axis.id}</label>
             <input id={`axis-${axis.id}`} value={axis.label} maxLength={60} onChange={event => patchAxis(axis.id, { label: event.target.value })} />
             <span className="rubric-id">{axis.id}</span>
           </td>
-          <td className="num">
+          <td className="num" data-label="Peso">
             <label htmlFor={`weight-${axis.id}`} className="sr-only">Peso de {axis.label}</label>
             <input id={`weight-${axis.id}`} className="rubric-weight" type="number" min={1} max={100} value={axis.weight}
               onChange={event => patchAxis(axis.id, { weight: Number(event.target.value) })} />
           </td>
-          <td>
+          <td data-label="Qué debe demostrar">
             <label htmlFor={`guide-${axis.id}`} className="sr-only">Guía de {axis.label}</label>
             <textarea id={`guide-${axis.id}`} rows={Math.min(9, Math.max(3, Math.ceil(axis.guide.length / 42)))} maxLength={400} value={axis.guide}
               onChange={event => patchAxis(axis.id, { guide: event.target.value })} />
           </td>
-          <td>
+          <td data-label="Fuente en la skill">
             <label htmlFor={`source-${axis.id}`} className="sr-only">Skill de {axis.label}</label>
             <select id={`source-${axis.id}`} value={axis.source} onChange={event => patchAxis(axis.id, { source: event.target.value as RubricAxis['source'] })}>
               <option value="analisis-llamadas-ventas">analisis-llamadas-ventas</option>
@@ -258,13 +285,20 @@ export default function PracticeSettings({ onSessionLost }: { onSessionLost: () 
       <span className="card-meta"><SlidersHorizontal size={14} /> Se aplica a la próxima réplica y al próximo feedback.</span>
     </div>
 
-    <h2 className="section-title">Versiones guardadas</h2>
-    <p className="card-meta" style={{ marginBottom: 12 }}>Cada guardado crea una versión con la rúbrica completa. Restaurar una versión la guarda como una versión nueva: el historial no se reescribe. Se conservan las últimas 20.</p>
-    {meta.history.length === 0 ? <p className="card-meta">— Todavía no hay versiones: la configuración activa son los criterios por defecto de las skills.</p> : <ul className="rubric-versions">
-      {[...meta.history].reverse().map(item => <li key={item.version}>
-        <span className="rubric-version-id"><History size={14} /> v{item.version}</span>
-        <span>{item.note ?? 'Guardado'} · {item.by || 'operador'} · {item.at ? formatDate(item.at, VERSION_DATE) : 'sin fecha'}</span>
-        <button type="button" onClick={() => void restore(item.version)} disabled={saving}>Restaurar</button>
+    <h2 className="section-title">Historial de cambios</h2>
+    <p className="card-meta" style={{ marginBottom: 12 }}>Cada guardado crea una versión con la rúbrica completa: quién, cuándo y qué pesos o guías cambiaron respecto a la anterior. Restaurar guarda una versión nueva y no reescribe el historial; se conservan las últimas 20. Es solo de lectura: no recalcula las prácticas ya puntuadas.</p>
+    {versions.length === 0 ? <p className="card-meta">— Todavía no hay versiones: la configuración activa son los criterios por defecto de las skills.</p> : <ul className="rubric-versions">
+      {versions.map(({ entry, diff }) => <li key={entry.version}>
+        <div className="rubric-version-head">
+          <span className="rubric-version-id"><History size={14} /> v{entry.version}</span>
+          <span>{entry.note ?? 'Guardado'} · {entry.by || 'operador'} · {entry.at ? formatDate(entry.at, VERSION_DATE) : 'sin fecha'}</span>
+          <button type="button" onClick={() => void restore(entry.version)} disabled={saving}>Restaurar</button>
+        </div>
+        <div className="rubric-diff">
+          {!diff ? <p className="card-meta">— Sin la versión anterior en el historial: no se puede detallar qué cambió.</p>
+            : diff.total === 0 ? <p className="card-meta">Sin cambios respecto a la versión anterior.</p>
+              : <details><summary>{diff.total === 1 ? '1 cambio' : `${diff.total} cambios`}</summary><ul>{diffLines(diff)}</ul></details>}
+        </div>
       </li>)}
     </ul>}
   </section>;

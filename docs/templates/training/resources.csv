@@ -8,36 +8,41 @@ id,lesson_id,type,title,description,url,content
 2. Presentación: «Soy [nombre], la persona con la que hablarás. Me alegra que hayas dado el paso. Si tienes dudas antes, escríbeme por aquí.»
 3. Noche anterior: vídeo corto y personal: «Mañana a las [hora] nos vemos. He visto tu caso y tengo ideas concretas para [tema].»
 4. Mañana: «Te dejo un caso parecido al tuyo: [caso real o ejemplo sin cifras inventadas]. Mañana te cuento cómo lo abordamos.»
-5. Una hora antes: «Nos vemos en una hora. ¿Prefieres [enlace A] o [enlace B]? Confírmame y te lo paso.»
+5. Una hora antes: «Nos vemos en una hora. ¿Pudiste ver el vídeo? ¿Prefieres [enlace A] o [enlace B]? Confírmame y te lo paso.»
 6. Quince minutos antes: «Entrando a la sala: [enlace]. Si algo surgió, avísame y reprogramamos; si estás lista, nos vemos en cinco minutos.»"
 "res-pre-llamada-checklist","fundamentos-pre-llamada","checklist","Checklist de show-rate","Lo que revisa una closer antes de dar la cita por buena.","","· Cita a 24-48 horas.
 · Tres razones para asistir en el primer mensaje.
 · Presentación personal con nombre.
 · Material que responda a una objeción probable.
 · Confirmación logística con enlace.
+· Confirmado si vio el material preparatorio.
 · Salida digna si no puede."
-"res-apertura-plantilla","fundamentos-apertura","template","Plantilla de apertura en tres frases","Rellena los huecos con lo que ya sabes de su caso.","","«[Nombre], te llamo porque [motivo concreto que ella dio o que consta en las notas]. Vi que [situación/prueba breve], así que hoy quiero entender [tema] y que salgas con [decisión o siguiente paso]. ¿Te parece si empiezo preguntándote [primera pregunta]?»"
-"res-descubrimiento-guion","descubrimiento-preguntar","script","Guion de descubrimiento en cuatro preguntas","Una secuencia corta para no disparar a ciegas.","","1. «¿Qué te hizo buscar [servicio] ahora y no hace seis meses?»
-2. «¿Dónde estás hoy con [tema] y dónde quieres estar?»
-3. «¿Qué te impide llegar ahí por tu cuenta?»
-4. «Si dentro de seis meses todo sigue igual, ¿qué habrá pasado?»
-Después: «Déjame ver si lo entiendo: [resumen con sus palabras]. ¿Es eso?»"
+"res-apertura-plantilla","fundamentos-apertura","template","Plantilla de apertura en tres frases","Rellena los huecos con lo que ya sabes de su caso.","","«[Nombre], te llamo porque [motivo concreto que ella dio o que consta en las notas]. Vi que [situación/prueba breve], así que hoy quiero entender [tema] y que salgas con [decisión o siguiente paso]; si no encaja, te lo digo y te llevas algo útil igualmente. ¿Te parece si empiezo preguntándote [primera pregunta]?»"
+"res-descubrimiento-guion","descubrimiento-preguntar","script","Guion de descubrimiento en cuatro pasos","Una secuencia corta para no disparar a ciegas.","","1. Brecha: «¿Dónde estás hoy con [tema] y dónde quieres estar?». Si no hay número, se pide: «¿cuánto y en qué plazo?».
+2. Obstáculo: «¿Qué te frena para llegar ahí?» → «¿Por qué?» → «Cuéntame más», «dame un ejemplo concreto», «¿qué más te frena?».
+3. Historial: «¿Qué has intentado ya y cuánto has invertido en resolverlo?».
+4. Resumen con etiqueta: «Para asegurar que te entiendo: probaste X, pasó Y, y ahora dudas de volver a invertir. Suena a que el problema real no es A ni B, sino que necesitas C. ¿Es así?»."
 "res-coste-plantilla","descubrimiento-coste","template","Plantilla de coste de inacción","Tres datos y una frase; sin cifras inventadas.","","Dato 1: ingreso actual [importe/mes].
 Dato 2: objetivo [importe/mes] en [plazo].
 Brecha mensual: [objetivo − actual].
 Coste en el plazo: [brecha × meses].
+Coste diario: [brecha mensual ÷ 30].
+Tiempo: [meses u horas que pierde].
+Estatus: [qué posición deja de ocupar].
 Frase: «Tienes dos caminos. Uno: seguir como ahora. Dos: cerrar la brecha de [brecha] al mes. En [plazo], la diferencia entre los dos caminos es [coste]. Tú decides.»
 Después: silencio."
-"res-bant-checklist","descubrimiento-bant","checklist","Checklist BANT con evidencia","Cuatro letras, una cita y una decisión.","","· Presupuesto: ¿qué margen tiene? Cita: «…»
-· Autoridad: ¿decide sola? Cita: «…»
-· Necesidad: ¿qué pasa si no lo resuelve? Cita: «…»
-· Momento: ¿para cuándo? Cita: «…»
-Decisión: avanzar / parar / faltan datos. Si faltan, la siguiente pregunta es…"
-"res-objeciones-tabla","cierre-objeciones","doc","Tabla de objeciones y respuesta","Las cinco objeciones más comunes, con qué preguntar antes de rebatir.","","· «Es caro» → «¿Con qué lo estás comparando?» → reencuadre de valor.
-· «Tengo que hablarlo con mi pareja» → «¿Qué necesitas de esa conversación?» → apoyo, no permiso.
-· «Ya lo intenté y no funcionó» → «¿Qué faltó la última vez?» → no quemarse dos veces.
-· «No es el momento» → «¿Qué tendría que cambiar para que lo fuera?» → momento real.
-· «No confío en los cursos» → «¿Qué tendría que ser distinto para que confiaras?» → prueba concreta."
+"res-bant-checklist","descubrimiento-bant","checklist","Checklist BANT con evidencia","Cuatro letras, una cita y una decisión.","","· Budget: ¿qué margen tiene? ¿es su problema más importante? Cita: «…»
+· Authority: ¿decide sola? ¿quién más interviene y estará en la siguiente llamada? Cita: «…»
+· Need: ¿qué quiere y qué le frena? Cita: «…»
+· Timing: ¿para cuándo? ¿qué pasa si espera seis meses? Cita: «…»
+Decisión: avanzar / parar. Con ✗ en Budget o Authority no se avanza; con ? se pregunta antes de decidir."
+"res-objeciones-tabla","cierre-objeciones","doc","Tabla de objeciones y respuesta","Las siete objeciones con la teoría de fondo y qué preguntar antes de rebatir.","","· Precio («es caro»): ¿es liquidez o valor? → «¿con qué lo estás comparando?». No se baja el precio: se cambian términos o componentes.
+· «Lo pienso»: es evitación → batería de preguntas hasta la objeción real, y si no hay, día y hora.
+· Pareja o socio: es apoyo, no permiso → «¿qué pasaría si dijera que no?».
+· Tiempo: es prioridad, no agenda → «¿qué es lo menos importante y lo cambiarías por esto?».
+· Miedo a que no funcione: es riesgo percibido → qué faltó la última vez y qué es distinto, sin prometer resultados.
+· «Estoy mirando otra opción»: «si costaran lo mismo, ¿cuál eliges?» y que diga ella por qué.
+· «Envíamelo»: es una salida amable → resolver lo principal ahora y cerrar día y hora."
 "res-cierres-biblioteca","cierre-elegir","doc","Biblioteca de diez cierres","Fórmula, cuándo usarlo y un ejemplo sin importes inventados.","","1. Decadere: «El programa son [importe]. El proceso te lo envío ahora.»
 2. Closer or Further: «¿Esta conversación nos acerca a empezar o nos aleja?»
 3. Six Inches: «Estás a un paso; lo único que falta es decidir.»
@@ -70,11 +75,11 @@ Quedo a vuestra disposición para [siguiente paso: llamada, prueba, entrevista].
 
 Un saludo,
 [nombre]"
-"res-entrevista-guion","aplicacion-entrevista","script","Guion de respuesta con STAR","Una estructura para cualquier pregunta de experiencia.","","Situación: «En [contexto], mi trabajo era [responsabilidad].»
-Timing: «El reto era [por qué ahora / qué urgencia].»
-Autoridad: «Yo decidía [parte] y coordinaba con [quién].»
-Recursos: «Contaba con [herramientas/equipo] y [restricción].»
-Resultado: «Conseguí [resultado verificable]. Lo que haría distinto: [aprendizaje].»"
+"res-entrevista-guion","aplicacion-entrevista","script","Guion de respuesta en cuatro pasos","Una estructura para contar experiencia con evidencia.","","Rol: «Trabajé como [rol] en [tipo de empresa], vendiendo [producto] a [tipo de cliente].»
+Resultado: «Mi resultado propio fue [dato verificable]; si no tengo la cifra, explico cómo se medía.»
+Descubrimiento: «Antes de rebatir preguntaba [qué preguntabas]; gracias a eso [qué pasó].»
+Por qué estás aquí: «Quiero [objetivo concreto] y el puesto pide [por qué encaja].»
+Cierre: «¿Cómo medís el éxito en los primeros 90 días? ¿De dónde vienen los leads?»."
 "res-habito-plan","aplicacion-habito","template","Plan semanal de práctica y aplicación","Un mínimo realista, con espacio para el día después del no.","","Semana del [fecha]
 · Prácticas: [2] sesiones de [15] minutos. Tema: [eje flojo].
 · Recurso a preparar: [plantilla/guion].

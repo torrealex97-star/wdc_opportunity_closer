@@ -132,7 +132,7 @@ export function PersonaFace({ persona, size = 'md' }: { persona: PracticePersona
   return <span className={`persona-face is-${persona.tone} size-${size}`} aria-hidden="true">{persona.initials}</span>;
 }
 
-export default function StudentPractice({ track, onTrackChange }: { track: PracticeTrack; onTrackChange: (track: PracticeTrack) => void }) {
+export default function StudentPractice({ track, mode = 'roleplay', onTrackChange }: { track: PracticeTrack; mode?: 'roleplay' | 'entrevista' | 'review'; onTrackChange: (track: PracticeTrack) => void }) {
   const [category, setCategory] = useState<string>('todas');
   const [view, setView] = useState<View>('scenarios');
   const [scenario, setScenario] = useState<PracticeScenario | null>(null);
@@ -318,7 +318,9 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   }
 
   if (view === 'formulario') return <div className="practice"><StudentQualificationForm onBack={() => setView('scenarios')} /></div>;
-  if (view === 'review') return <div className="practice"><CallReview onBack={() => setView('scenarios')} /></div>;
+  // La revisión de una llamada es su propia entrada del menú: dentro de la práctica solo se llega por esa
+  // sección, no como una pestaña más de las salas.
+  if (mode === 'review' || view === 'review') return <div className="practice"><CallReview onBack={() => onTrackChange('closer')} /></div>;
 
   if (view === 'room' && scenario) {
     const voiceRoom = TRACK_CHANNEL[scenario.track] === 'voz';
@@ -436,7 +438,9 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
   const text = TRACK_TEXT[track];
   const categories = categoriesFor(track);
   const pool = PRACTICE_SCENARIOS.filter(item => item.track === track);
-  const shown = category === 'todas' ? pool : pool.filter(item => item.category === category);
+  // Cambiar de sala (o de Práctica a Entrevistas) no arrastra un filtro de categoría que ya no existe ahí.
+  const activeCategory = categories.some(item => item.id === category) ? category : 'todas';
+  const shown = activeCategory === 'todas' ? pool : pool.filter(item => item.category === activeCategory);
   return <section className="practice">
     <div className="practice-head">
       <div>
@@ -447,14 +451,13 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
       <span className="practice-icon">{track === 'entrevista' ? <Users size={26} strokeWidth={1.4} /> : track === 'setter' ? <MessageSquare size={26} strokeWidth={1.4} /> : <Phone size={26} strokeWidth={1.4} />}</span>
     </div>
     <div className="practice-rooms" role="tablist" aria-label="Salas de práctica">
-      {(['closer', 'setter', 'frio', 'entrevista'] as PracticeTrack[]).map(item => {
+      {(mode === 'entrevista' ? ['entrevista'] as PracticeTrack[] : ['closer', 'setter', 'frio'] as PracticeTrack[]).map(item => {
         const Icon = TRACK_ICONS[item];
         return <button key={item} type="button" role="tab" aria-selected={track === item && view === 'scenarios'} className={`practice-room-tab ${track === item && view === 'scenarios' ? 'is-active' : ''}`} onClick={() => { onTrackChange(item); setCategory('todas'); setView('scenarios'); }}>
           <Icon size={16} />{TRACK_TEXT[item].nav}
         </button>;
       })}
-      <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('review')}><ScanLine size={16} />Revisar llamada</button>
-      <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('formulario')}><ShieldCheck size={16} />Formulario · test</button>
+      {mode !== 'entrevista' && <button type="button" role="tab" aria-selected={false} className="practice-room-tab" onClick={() => setView('formulario')}><ShieldCheck size={16} />Formulario · test</button>}
     </div>
     {challenges.length > 0 && <section className="practice-prepared" aria-label="Retos de tu coach">
       <div className="practice-prepared-head"><Target size={18} /><div><span className="eyebrow">RETOS DE TU COACH</span><h2>Lo que te ha pedido practicar</h2><p>Un reto se cumple con una práctica de ese escenario, después de asignarlo y dentro del plazo; si tiene nota mínima, también hay que alcanzarla. El estado sale de tu actividad, no se marca a mano.</p></div></div>
@@ -490,11 +493,11 @@ export default function StudentPractice({ track, onTrackChange }: { track: Pract
     <div className="practice-categories">
       <span className="practice-categories-label">{text.categoriesLabel}</span>
       <div role="group" aria-label={text.categoriesLabel}>
-        <button type="button" aria-pressed={category === 'todas'} onClick={() => setCategory('todas')}>Todas</button>
-        {categories.map(item => <button key={item.id} type="button" aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>)}
+        <button type="button" aria-pressed={activeCategory === 'todas'} onClick={() => setCategory('todas')}>Todas</button>
+        {categories.map(item => <button key={item.id} type="button" aria-pressed={activeCategory === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>)}
       </div>
     </div>
-    {category !== 'todas' && <p className="practice-category-hint">{categories.find(item => item.id === category)?.hint}</p>}
+    {activeCategory !== 'todas' && <p className="practice-category-hint">{categories.find(item => item.id === activeCategory)?.hint}</p>}
     <div className="practice-scenarios" data-track={track}>
       {shown.map(item => <article className="practice-card" key={item.id} data-category={item.category}>
         <div className="practice-card-top">

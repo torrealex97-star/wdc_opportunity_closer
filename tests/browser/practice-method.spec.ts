@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './stubs';
 import { analyzeSignals } from '../../apps/web/app/api/practice/signals';
 import type { PracticeTurn } from '../../apps/web/app/api/practice/signals';
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief';
