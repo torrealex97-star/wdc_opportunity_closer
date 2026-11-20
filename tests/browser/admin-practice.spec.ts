@@ -64,10 +64,19 @@ let log = '';
 // tal cual al terminar, también si algún paso falla. El distDir `.next-e2e*` ya está en .gitignore.
 const PROJECT_FILES = ['next-env.d.ts', 'tsconfig.json'].map(name => path.join(process.cwd(), 'apps/web', name));
 const originalProjectFiles = new Map<string, Buffer>();
-function restoreProjectFiles() {
+// Devuelve los ficheros que no quedaron byte a byte como al arrancar. `afterAll` lo comprueba y falla
+// la suite si hay alguno: así una escritura que no se puede revertir (o que otro proceso reescribe
+// después) se ve en la prueba y no en un `git status` que alguien tiene que mirar a mano.
+function restoreProjectFiles(): string[] {
   for (const [file, contents] of originalProjectFiles) {
     try { if (!readFileSync(file).equals(contents)) writeFileSync(file, contents); } catch { /* el arranque del servidor no llegó a escribir */ }
   }
+  const mismatched: string[] = [];
+  for (const [file, contents] of originalProjectFiles) {
+    const relative = path.relative(process.cwd(), file);
+    try { if (!readFileSync(file).equals(contents)) mismatched.push(relative); } catch { mismatched.push(`${relative} (no se puede leer)`); }
+  }
+  return mismatched;
 }
 
 test.beforeAll(async () => {
@@ -133,10 +142,17 @@ test.afterAll(async () => {
   await new Promise<void>(resolve => model?.close(() => resolve()) ?? resolve());
   await sleep(500);
   // Antes de borrar el distDir: el servidor ya no corre y los ficheros vuelven a su contenido versionado.
-  restoreProjectFiles();
+  const mismatched = restoreProjectFiles();
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   // El caché de Turbopack puede seguir escribiendo al recibir SIGTERM; no es parte del resultado.
   try { if (distDir) rmSync(path.join(process.cwd(), 'apps/web', distDir), { recursive: true, force: true }); } catch { /* caché de prueba */ }
+  // Se lanza al final para no saltarse la limpieza. `next dev` reescribe estos dos ficheros al arrancar
+  // con el distDir de la prueba; si tras restaurarlos no coinciden con los bytes guardados, el workspace
+  // queda sucio y la suite lo declara en vez de dejarlo para una revisión manual de `git status`.
+  expect(
+    mismatched,
+    `La prueba dejó ficheros del proyecto distintos a los guardados al arrancar: ${mismatched.join(', ')}. Revisa qué los reescribió y restaura con «git checkout -- apps/web/next-env.d.ts apps/web/tsconfig.json».`,
+  ).toEqual([]);
 });
 
 async function score(): Promise<{ score: number; label: string }> {
