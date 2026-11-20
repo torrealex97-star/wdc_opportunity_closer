@@ -1,6 +1,6 @@
 import { test, expect } from './stubs';
-import { analyzeSignals } from '../../apps/web/app/api/practice/signals';
-import type { PracticeTurn } from '../../apps/web/app/api/practice/signals';
+import { analyzeSignals } from '../../apps/web/lib/practiceSignals';
+import type { PracticeTurn } from '../../apps/web/lib/practiceSignals';
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief';
 import { stageFor } from '../../apps/web/app/api/practice/prompts';
 import { scenarioById } from '../../apps/web/components/practiceScenarios';

@@ -8,7 +8,7 @@ import {
 } from '../../apps/web/lib/practiceRubrics.ts';
 import { axesFor, debriefInstructions, debriefSchema, needsBant } from '../../apps/web/app/api/practice/prompts.ts';
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief.ts';
-import { analyzeSignals } from '../../apps/web/app/api/practice/signals.ts';
+import { analyzeSignals } from '../../apps/web/lib/practiceSignals.ts';
 import { scenarioById } from '../../apps/web/components/practiceScenarios.ts';
 import { CALL_REVIEW_SCENARIO, callReviewScenario, parseCallTranscript } from '../../apps/web/lib/callReview.ts';
 import { detectCallType, resolveCallType } from '../../apps/web/lib/callType.ts';

@@ -11,7 +11,7 @@ import JarvisOrb from './JarvisOrb';
 import type { OrbState } from './JarvisOrb';
 import { useVoiceInput } from './useVoiceInput';
 import { isEcho } from '../lib/voiceEcho';
-import { analyzeSignals } from '../app/api/practice/signals';
+import { analyzeSignals } from '../lib/practiceSignals';
 import { MIN_AXIS_SAMPLES, nextPractice, type NextPracticeChoice } from '../lib/nextPractice';
 import { AXIS_LABELS } from '../lib/practiceAxes';
 import { BANT_LABELS, DECISION_LABELS, type PracticeBant } from '../lib/practiceRubrics';

@@ -1,6 +1,6 @@
 import type { PracticeScenario } from '../../../components/practiceScenarios';
 import { axesFor } from './prompts';
-import type { PracticeTurn } from './signals';
+import type { PracticeTurn } from '../../../lib/practiceSignals';
 import {
   BANT_STATUSES, DEFAULT_BANT, DEFAULT_RUBRICS, PRACTICE_DECISIONS,
   roomOf, weightedScore,

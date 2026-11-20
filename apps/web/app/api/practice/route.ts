@@ -5,8 +5,8 @@ import { loadPracticeContext, type PracticeContext } from '../../../lib/practice
 import { scenarioById } from '../../../components/practiceScenarios';
 import { buildPersonaPrompt, debriefInstructions, debriefSchema } from './prompts';
 import { cleanDebrief } from './debrief';
-import { analyzeSignals } from './signals';
-import type { PracticeTurn } from './signals';
+import { analyzeSignals } from '../../../lib/practiceSignals';
+import type { PracticeTurn } from '../../../lib/practiceSignals';
 import { clientIp, createTurnBudget } from '../../../lib/practiceBudget';
 import { callModel, hasModelKey, providerFailure, resolveModel } from '../../../lib/aiProvider';
 import { allAxisLabels } from '../../../lib/practiceRubrics';

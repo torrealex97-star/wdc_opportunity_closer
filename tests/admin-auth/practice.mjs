@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { PRACTICE_SCENARIOS, INTERVIEWER_TYPES, TRACK_CHANNEL, categoriesFor, scenarioById } from '../../apps/web/components/practiceScenarios.ts';
 import { buildPersonaPrompt, axesFor, debriefInstructions, debriefSchema } from '../../apps/web/app/api/practice/prompts.ts';
-import { analyzeSignals } from '../../apps/web/app/api/practice/signals.ts';
+import { analyzeSignals } from '../../apps/web/lib/practiceSignals.ts';
 
 const results = [];
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message.split('\n')[0]]); } };
