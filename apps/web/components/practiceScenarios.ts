@@ -23,6 +23,8 @@ export type PracticeScenario = {
   persona: PracticePersona;
   // Solo la evaluación de una llamada real usa una rúbrica propia; el resto de la sala, la de su kind.
   rubric?: 'llamada';
+  // Revisión posterior de una llamada real (no es un roleplay): el prompt y la UI lo dicen distinto.
+  review?: boolean;
   title: string;
   context: string;
   summary: string;
@@ -121,7 +123,8 @@ export const INTENSITY_LABELS: Record<PracticeScenario['intensity'], string> = {
 
 // Sala y categoría de cada situación. El closer se agrupa por momento de la llamada; el setter,
 // por momento de su conversación escrita; el frío, por lo que cuesta la llamada; y la entrevista,
-// por tipo de entrevistador.
+// por tipo de entrevistador. `venta-fria` vive en closer porque la persona ya dejó sus datos y espera
+// la llamada: es la primera llamada de cierre, no una llamada en frío (esas viven en la sala frío).
 const SCENARIO_META: Record<string, { track: PracticeTrack; category: PracticeScenario['category'] }> = {
   'venta-fria': { track: 'closer', category: 'apertura' },
   'closer-descubrimiento': { track: 'closer', category: 'descubrimiento' },
@@ -162,9 +165,9 @@ const SEEDS: ScenarioSeed[] = [
   {
     id: 'venta-fria',
     kind: 'venta',
-    title: 'Llamada en frío a una directora de marketing',
-    context: 'Empresa ficticia de software para clínicas · 25 personas',
-    summary: 'Te dan treinta segundos para ganarte la conversación. Practicas la apertura, la pregunta que descubre dolor y la petición de siguiente paso.',
+    title: 'Primera llamada a una directora que dejó sus datos',
+    context: 'Empresa ficticia de software para clínicas · 25 personas · cita de 10 minutos',
+    summary: 'Ella pidió información y ha aceptado diez minutos, pero no te espera con tiempo de sobra. Practicas la apertura con permiso, la pregunta que descubre dolor y la petición de siguiente paso.',
     objectives: ['Abrir con contexto y pedir permiso', 'Descubrir un problema concreto', 'Cuantificar el coste de seguir igual', 'Cerrar un siguiente paso con día y hora'],
     opening: '¿Sí? Dime, que estoy entre reuniones.',
     level: 'Closer · primera llamada',

@@ -10,7 +10,8 @@ import { axesFor, debriefInstructions, debriefSchema, needsBant } from '../../ap
 import { cleanDebrief } from '../../apps/web/app/api/practice/debrief.ts';
 import { analyzeSignals } from '../../apps/web/app/api/practice/signals.ts';
 import { scenarioById } from '../../apps/web/components/practiceScenarios.ts';
-import { CALL_REVIEW_SCENARIO, parseCallTranscript } from '../../apps/web/lib/callReview.ts';
+import { CALL_REVIEW_SCENARIO, callReviewScenario, parseCallTranscript } from '../../apps/web/lib/callReview.ts';
+import { detectCallType, resolveCallType } from '../../apps/web/lib/callType.ts';
 
 const results = [];
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message.split('\n')[0]]); } };
@@ -244,6 +245,31 @@ await step('una llamada real se evalúa con la rúbrica `llamada`, BANT y solo e
   assert.equal(debrief.scenario, CALL_REVIEW_SCENARIO.title);
   assert.equal(parsed.ok && parseCallTranscript('Sin etiquetas').ok, false);
   assert.equal(parseCallTranscript('VENDEDOR: Hola.').ok, false);
+});
+
+await step('el tipo de llamada se detecta y elige la rúbrica de cierre o de frío', () => {
+  const cold = parseCallTranscript('VENDEDOR: Hola, ¿hablo con Marta? Soy Ana de WDC.\nCLIENTE: ¿Quién eres? No te conozco.\nVENDEDOR: Te llamo porque trabajáis con clínicas.');
+  const warm = parseCallTranscript('VENDEDOR: Hola Marta, te llamo por el formulario que dejaste.\nCLIENTE: Sí, dime, tengo cinco minutos.\nVENDEDOR: ¿Qué te hizo buscar una solución ahora?');
+  assert.ok(cold.ok && warm.ok);
+  assert.equal(detectCallType(cold.turns).type, 'frio');
+  assert.equal(detectCallType(warm.turns).type, 'closer');
+  // Lo elegido a mano manda sobre la detección.
+  assert.equal(resolveCallType('closer', cold.turns).type, 'closer');
+  assert.equal(resolveCallType('auto', cold.turns).source, 'detectada');
+  // Cada tipo se puntúa con su rúbrica: el cierre con la de evaluación de llamadas, el frío con la suya.
+  assert.equal(callReviewScenario('closer').rubric, 'llamada');
+  assert.equal(roomOf(callReviewScenario('closer').kind, callReviewScenario('closer').rubric), 'llamada');
+  assert.equal(callReviewScenario('frio').rubric, undefined);
+  assert.equal(roomOf(callReviewScenario('frio').kind, callReviewScenario('frio').rubric), 'frio');
+  assert.equal(callReviewScenario('frio').review, true);
+  // Cada eje puede traer el punto correcto y la mejora de ese paso, sin ser obligatorios.
+  const review = JSON.parse(payload());
+  review.axes = DEFAULT_RUBRICS.llamada.map((axis, index) => ({ id: axis.id, score: 50, note: '', quote: '', ...(index === 0 ? { right: 'Abrió pidiendo permiso.', improve: 'Nombró el motivo antes de preguntar.' } : {}) }));
+  const debrief = cleanDebrief(JSON.stringify(review), warm.turns, callReviewScenario('closer'));
+  assert.ok(debrief);
+  assert.equal(debrief.axes[0].right, 'Abrió pidiendo permiso.');
+  assert.equal(debrief.axes[0].improve, 'Nombró el motivo antes de preguntar.');
+  assert.equal(debrief.axes[1].right, undefined);
 });
 
 await step('las señales nuevas miden ratio de habla y precio antes de descubrir', () => {

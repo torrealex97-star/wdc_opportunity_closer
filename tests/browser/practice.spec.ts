@@ -36,9 +36,9 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/student/activity', route => route.fulfill({ status: 201, json: { ok: true } }));
 });
 
-// La sala tiene una sola entrada en el menú y cuatro salas por rol dentro; closer es la primera.
+// El menú separa Práctica (roleplay por rol), Entrevistas y Revisión de llamada; closer es la primera sala.
 const openRoom = async (page: import('@playwright/test').Page, tab = 'Closer · voz') => {
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('button', { name: 'Práctica' }).click();
   await page.getByRole('tab', { name: tab }).click();
 };
 
@@ -316,7 +316,10 @@ test('las salas separan closer, setter, frío y entrevista, y filtran por catego
   await expect(page.locator('.practice-card')).toHaveCount(3);
   // La carita del personaje (monograma) y su papel son visibles antes de practicar.
   await expect(page.locator('.practice-card').first().locator('.practice-persona .persona-face')).toHaveText(/^[A-Z]{2}$/);
-  await page.getByRole('tab', { name: 'Entrevista · voz' }).click();
+  // Las entrevistas están en su propia entrada del menú, no como una pestaña más de práctica.
+  await page.getByRole('button', { name: 'Entrevistas' }).click();
+  await expect(page.getByRole('tab', { name: 'Closer · voz' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Entrevista · voz' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.practice-card')).toHaveCount(9);
   await page.getByRole('button', { name: 'Dueño directo', exact: true }).click();
   await expect(page.locator('.practice-card')).toHaveCount(1);
@@ -344,7 +347,7 @@ test('la sala de setter es de chat y deja el orbe de voz fuera', async ({ page }
 test('el test del formulario de cualificación corrige cada respuesta y explica lo que lee quien contrata', async ({ page }) => {
   await page.route('**/api/backend/opportunities/search', emptyCatalog);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('button', { name: 'Práctica' }).click();
   await page.getByRole('tab', { name: 'Formulario · test' }).click();
   await expect(page.getByRole('heading', { name: 'El formulario que sí te llama.' })).toBeVisible();
   for (let i = 0; i < 8; i++) {

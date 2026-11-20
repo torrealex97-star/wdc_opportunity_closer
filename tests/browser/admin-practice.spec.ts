@@ -282,7 +282,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
 
   // 9) La misma configuración se aplica en el navegador: un roleplay real puntúa con el peso editado.
   await page.goto(base);
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('button', { name: 'Práctica' }).click();
   await page.getByRole('tab', { name: 'Closer · voz' }).click();
   await page.locator('.practice-card').first().getByRole('button', { name: 'Practicar' }).click();
   const reply = page.getByLabel('Tu respuesta');
@@ -299,7 +299,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
 
   // 10) La evaluación de una llamada real usa su propio criterio editado y la misma nota ponderada.
   await page.getByRole('button', { name: 'Elegir otra situación' }).click();
-  await page.getByRole('tab', { name: 'Revisar llamada' }).click();
+  await page.getByRole('button', { name: 'Revisión de llamada' }).click();
   await page.getByLabel('Transcripción').fill([
     'VENDEDOR: Hola, te llamo por el formulario que dejaste. ¿Te importa que te haga una pregunta?',
     'CLIENTE: Dime, tengo cinco minutos.',

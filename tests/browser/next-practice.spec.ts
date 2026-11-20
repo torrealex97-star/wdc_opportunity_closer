@@ -30,7 +30,7 @@ test('la sala recomienda la siguiente práctica con su motivo y la arranca', asy
   await page.route('**/api/student/progress*', route => route.fulfill({ json: payload }));
   await page.route('**/api/student/applications', route => route.fulfill({ status: 401, json: { detail: 'Entra con tu cuenta.' } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sala de práctica' }).click();
+  await page.getByRole('button', { name: 'Práctica' }).click();
   const card = page.getByRole('region', { name: 'Tu siguiente práctica' });
   await expect(card).toBeVisible();
   await expect(card.getByText('TU SIGUIENTE PRÁCTICA')).toBeVisible();
