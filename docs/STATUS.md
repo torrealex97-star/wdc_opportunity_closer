@@ -17,6 +17,43 @@
   `node scripts/handoff.mjs check` OK. **No** se ejecutó typecheck, build ni Playwright: no se tocó código.
 - **Ficha**: `buffy-worker-builds` se archiva y su bloqueo queda cerrado.
 
+## Migraciones del panel de fuentes aplicadas en la base real (sesión 282) — 2026-11-21
+
+- **Petición del propietario**: aplicar en el Supabase real `20261121_provider_budget.sql` y
+  `20261121_source_route_order.sql`, con su prueba `BEGIN…ROLLBACK` y los advisors después, y dejar la
+  documentación de estado coherente sin tocar `docs/OWNER_GUIDE.md` (trabajo sin versionar de otra sesión).
+- **Aplicadas y verificadas en BD real** (*verified*): proyecto `closer-ia-ops`
+  (`jzchuizybyubtkownhlw`). `provider_budget` quedó registrada como **20261121180401**: tabla con PK
+  `(org_id, provider)`, RLS activo, `anon`/`authenticated` sin privilegios y 4 filas sembradas a **5,00 USD**
+  (brightdata, serpapi, zenrows, scrapingbee). `source_settings.route_order` quedó como **20261121180440**:
+  `text[]`, `NOT NULL`, defecto `'{}'`, sin filas con orden personalizado. Ambas son aditivas e idempotentes;
+  no se modificó ningún dato existente.
+- **Pruebas de BD** (*tested*): `tests/db/provider_budget.sql` (PK, RLS, semilla, upsert sin duplicar,
+  `updated_by`, rechazo de `apify` y de topes fuera de 0–5.000) y `tests/db/source_route_order.sql` (tipo y
+  defecto, guardado del orden sin reactivar una fuente pausada, vuelta a `'{}'` y PK) pasan con
+  `BEGIN…ROLLBACK` contra la base real y no dejan filas. La primera ejecución de la prueba del presupuesto
+  falló solo por usar `by` como variable PL/pgSQL (reservada); se corrigió y se repitió.
+- **Advisors** (*verified*): sin hallazgos nuevos atribuibles a estas migraciones. `provider_budget` aparece
+  en «RLS enabled, no policy», el patrón intencional del panel (solo service role); el aviso de contraseñas
+  filtradas y los FK/índices sin uso son anteriores.
+- **Qué cambia en el panel** (*inspected*): el bloque «Orden de vías» deja de responder **503** y de mostrar
+  «No se pudo leer el orden personalizado»; guarda con ↑/↓, pasa a «personalizado», persiste al recargar y
+  «Volver al orden por coste» escribe `'{}'`. JobSpy y el hueco agéntico siguen al final. El tope de gasto
+  **no cambia**: `capUsd()` sigue leyendo `BRIGHTDATA_MONTHLY_USD` y sus equivalentes, y no lee
+  `provider_budget`.
+- **Lo que sigue pendiente**: (1) conectar `provider_budget` al adaptador (cambio de código separado; hoy
+  cambiar `monthly_usd` en la tabla no altera el tope); (2) una clave real de Bright Data/SerpApi: todo sigue
+  «documentada · sin probar» y no se ha hecho ninguna llamada de pago; (3) pulsar el guardado del orden en el
+  panel desplegado, que no se ha verificado; (4) proxies sanos de JobSpy y una página de empresa real.
+- **Qué viaja en esta PR**: `tests/db/provider_budget.sql` y `tests/db/source_route_order.sql` (nuevos), las
+  cabeceras de las dos migraciones con la versión aplicada, los documentos que la reflejan (`EXTERNAL_SOURCES`,
+  ADR-011, ADR-021 y el archivo), la guía del dueño (tareas 3 y 20) y la corrección de la tarea 20 del relevo
+  (la tabla existe pero el tope efectivo sigue en el entorno). La ficha es
+  `buffy-panel-fuentes-aplicado`.
+- **Comprobado (solo documentación y BD)** (*tested*): `npm run handoff` OK; `node tests/orphan-refs.mjs`
+  PASS (42 rutas); enlaces con 0 rotos y `pytest tests/test_docs_links.py` en verde. **No** se ejecutó
+  typecheck, build ni Playwright: no se tocó código de la app.
+
 ## Tareas del dueño sin duplicados: Resend y las claves de portales en una sola tarea (sesión 281) — 2026-11-21
 
 - **Petición del propietario**: «En la sección de tareas del dueño de `docs/ACTIVE_HANDOFF.md` hay pendientes repetidos: la clave de Resend aparece en las tareas 3 y 15, y las claves de InfoJobs/Adzuna/Jooble en la 8 y la 16(d). Únelos en una sola tarea cada uno, sin perder ninguna acción exacta ni ningún límite, y sin tocar el resto»; después, subirlo en una PR y fusionarlo con merge commit.
@@ -24,7 +61,7 @@
 - **Claves de portales** (*inspected*): quedan solo en la tarea 8, que gana el límite que estaba en la 16(d) («España es el mínimo de 20/día»); la 16(d) conserva el plan de SerpApi (3 → 8-10 consultas LATAM) y remite a la tarea 8.
 - **Alcance** (*verified*): un solo fichero tocado, `docs/ACTIVE_HANDOFF.md` (+5 −4); ninguna otra tarea se reescribió y el relevo pasa de 129 a 130 líneas.
 - **Comprobado (solo documentación)** (*tested*): `scripts/fix_docs_links.py --check` → **0 enlaces** en 120 ficheros; `pytest tests/test_docs_links.py` → **5 pasan**; `node scripts/handoff.mjs check` → OK. **No** se ejecutó typecheck, build ni Playwright: el incremento no toca código.
-- **Límites honestos**: unir redacciones no cambia ningún estado real. Las dos migraciones del panel de fuentes siguen **sin aplicar** y las claves (Resend, Bright Data, SerpApi, InfoJobs/Adzuna/Jooble) siguen sin existir en el entorno. La lista salta la 15 porque esa entrada ya está dentro de la 3.
+- **Límites honestos**: unir redacciones no cambia ningún estado real. Las dos migraciones del panel de fuentes estaban sin aplicar al cerrar esa entrada; se aplicaron el 2026-11-21 (sesión 282: versiones 20261121180401 y 20261121180440). Las claves (Resend, Bright Data, SerpApi, InfoJobs/Adzuna/Jooble) siguen sin existir en el entorno. La lista salta la 15 porque esa entrada ya está dentro de la 3.
 
 - **Fusionado** (*verified*): PR #104 con merge commit **`264388f`**, sin squash ni rebase; `verify` y `web-admin` en verde en el head `14aa946` y en el anterior. La ficha se borra y queda en `docs/handoff/archive/2026-11.md`.
 
@@ -32,7 +69,7 @@
 
 - **Petición del propietario**: «Deja guardado en el md la misión objetivo y demás cosas que hemos hecho aquí, fusiona mergea todo online», después de pedir que las tareas del dueño del relevo recogieran lo que dejaron pendiente las sesiones 274-278: las migraciones `20261121_provider_budget.sql` y `20261121_source_route_order.sql`, y las claves reales de Bright Data/SerpApi.
 - **Misión, por escrito** (*inspected*): [`docs/ACTIVE_HANDOFF.md`](ACTIVE_HANDOFF.md) abre con la sección **«0. Misión objetivo»**: que ningún pendiente que solo puede resolver el dueño quede escondido en `STATUS`, que el detalle vive allí y que aquí va cada tarea con su siguiente acción exacta y su límite declarado.
-- **Tarea 20 del dueño** (*inspected*, contrastada con las migraciones y con las sesiones 274/276/277/278): las dos migraciones están escritas y **sin aplicar** —`provider_budget` es la tabla nueva que sustituye el tope por variable de entorno, y `source_route_order` añade `route_order text[]` a `source_settings`, sin la cual el orden por fuente responde 503—, y las claves de Bright Data (con zona Unlocker o suplencia de ZenRows/ScrapingBee) y SerpApi siguen sin probarse fuera del mock: no se ha hecho ni una llamada de pago. Se añaden las dos dependencias que `STATUS` 278 declara junto a ellas (una página de empresa real y proxies sanos de JobSpy) para no dar a entender que con las claves ya estaría todo verificado.
+- **Tarea 20 del dueño** (*inspected*, contrastada con las migraciones y con las sesiones 274/276/277/278): las dos migraciones estaban escritas y sin aplicar cuando se redactó la tarea —`provider_budget` es la tabla nueva que sustituye el tope por variable de entorno, y `source_route_order` añade `route_order text[]` a `source_settings`, sin la cual el orden por fuente respondía 503—; se aplicaron el 2026-11-21 (sesión 282: versiones 20261121180401 y 20261121180440), y las claves de Bright Data (con zona Unlocker o suplencia de ZenRows/ScrapingBee) y SerpApi siguen sin probarse fuera del mock: no se ha hecho ni una llamada de pago. Se añaden las dos dependencias que `STATUS` 278 declara junto a ellas (una página de empresa real y proxies sanos de JobSpy) para no dar a entender que con las claves ya estaría todo verificado.
 - **Lo hecho antes en esta misma sesión** (*verified*): los 13 duplicados sin seguimiento borrados, el `E741` de `scripts/export_training_courses.py` fuera (la salida del exportador no cambia), el relevo con las sesiones 262-273 y el PR #102 fusionado en `60eff0b` con `verify` y `web-admin` verdes; en local, `pytest` **214 pasan, 1 omitida** y `ruff` **All checks passed**.
 - **Comprobado (solo documentación)** (*tested*): `scripts/fix_docs_links.py --check` → **0 enlaces** en 120 ficheros; `pytest tests/test_docs_links.py` → **5 pasan**; `node scripts/handoff.mjs check` → OK. **No** se ha ejecutado typecheck, build ni Playwright: el incremento no toca código y así se declara.
 - **Límites honestos**: es un cambio de documentación; lo único que demuestra es que los enlaces resuelven y el relevo cuadra. Nada se ha probado contra servicios reales (sigue sin `GROQ_API_KEY` y sin claves de Bright Data/SerpApi) ni contra Supabase (sin DDL aplicado).
@@ -79,11 +116,12 @@ digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocke
     el contrato y el coste fuera del mock; (2) claves/proxies sanos de JobSpy para que `proxies.healthy` deje de
     ser `false`; (3) una página de empresa real, porque la revisión se probó con fixture local. La evidencia
     existente es `fetch` simulado, fixtures, la prueba de 10.001 filas y la suite interactiva.
-  - **Depende de tu orden para aplicar DDL**: (1) `20261121_provider_budget.sql`, que sustituye el tope por
-    entorno por la tabla de presupuesto; (2) `20261121_source_route_order.sql`, sin la cual el orden
-    personalizado responde 503. Hasta entonces el tope por entorno y el orden por coste funcionan; no se aplicó
-    ninguna migración. Fusionado en `e24efc1` (PR #101); el push a `main` disparó «Web deploy» y publicó
-    `closer-web`, con el dominio respondiendo 200.
+  - **DDL (hecho el 2026-11-21, sesión 282)**: (1) `20261121_provider_budget.sql`, que sustituye el tope por
+    entorno por la tabla de presupuesto, aplicada como versión **20261121180401**; (2) `20261121_source_route_order.sql`,
+    sin la cual el orden personalizado respondía 503, aplicada como **20261121180440**. Ambas con prueba
+    `BEGIN…ROLLBACK` en `tests/db/`. El tope efectivo **sigue leyéndose del entorno** hasta que el adaptador lea
+    la tabla. Fusionado en `e24efc1` (PR #101); el push a `main` disparó «Web deploy» y publicó `closer-web`,
+    con el dominio respondiendo 200.
 
 ## Tope mensual: todas las ejecuciones desde el día 1, no las últimas 200 (sesión 277) — 2026-11-21
 
@@ -116,8 +154,9 @@ digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocke
   recibe ese orden, así que la misma cascada que se enseña es la que se ejecuta. El override se guarda en
   `source_settings.route_order` por `GET/PATCH /api/admin/source-routes` (solo propietario) y el panel lo
   pinta en un bloque «Orden de vías» con subir/bajar y «Volver al orden por coste». La migración
-  [`20261121_source_route_order.sql`](../supabase/migrations/20261121_source_route_order.sql) queda escrita y
-  **sin aplicar**; sin la columna, el panel declara que usa el orden por coste y el guardado responde 503.
+  [`20261121_source_route_order.sql`](../supabase/migrations/20261121_source_route_order.sql) quedó escrita y
+  sin aplicar hasta el 2026-11-21 (aplicada en la sesión 282, versión 20261121180440); sin la columna, el panel
+  declaraba que usaba el orden por coste y el guardado respondía 503.
 - **Caída y saltos**: sin clave de Bright Data, la ruta de Google Jobs queda `omitida` con «Sin clave de
   brightdata» y la cascada sigue a SerpApi sin `error`; con Bright Data, SERP va antes que SerpApi. JobSpy
   sin `proxiesHealthy` queda `omitida` al final con «Sin proxies sanos» y no se ejecuta. La ruta Unlocker
@@ -137,8 +176,9 @@ digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocke
   —guarda un override de InfoJobs, recarga el panel, comprueba que SerpApi aparece antes que la API oficial y
   lo borra— y «Cómo conectarla abre la guía paso a paso».
 - **Límites honestos**: no hay claves reales de Bright Data, ZenRows ni ScrapingBee; todo se probó contra el
-  mock y `fetch` simulado, sin llamadas de pago. Las migraciones de presupuesto y de orden siguen escritas y
-  **sin aplicar**. No se ha hecho commit, push, PR, merge ni despliegue. No se ha tocado el rediseño visual
+  mock y `fetch` simulado, sin llamadas de pago. Las migraciones de presupuesto y de orden estaban escritas y sin
+  aplicar; se aplicaron el 2026-11-21 (sesión 282: versiones 20261121180401 y 20261121180440). No se ha hecho
+  commit, push, PR, merge ni despliegue. No se ha tocado el rediseño visual
   del panel: el bloque de orden es funcional y usa los controles existentes.
 
 ## «Workers Builds: closer-web»: comprobado otra vez y sigue fuera del repositorio (sesión 275) — 2026-11-21
@@ -175,8 +215,9 @@ digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocke
   «APIs: Probar Bright Data hace una búsqueda, la anota y descuenta del tope» comprueba `ok`, el detalle de
   0,0015 USD, la fila `brightdata-probe`, el gasto de 0,0015 USD y el saldo por debajo de 5 USD.
 - **Límites honestos**: no hay clave real de Bright Data, ZenRows ni ScrapingBee; todo se probó contra el
-  mock y un `fetch` simulado, sin ninguna llamada de pago. La migración `20261121_provider_budget.sql` sigue
-  escrita y **sin aplicar** (DDL requiere orden del propietario). No se ha hecho commit, push ni despliegue.
+  mock y un `fetch` simulado, sin ninguna llamada de pago. La migración `20261121_provider_budget.sql` quedó
+  escrita y sin aplicar hasta el 2026-11-21, cuando se aplicó (sesión 282, versión 20261121180401). No se ha
+  hecho commit, push ni despliegue.
   El rediseño visual del panel no forma parte de este incremento.
 
 ## PR #100 fusionado: los cuatro arreglos de la formación entran en `main` (sesión 273) — 2026-11-21
@@ -3520,8 +3561,9 @@ Supabase/Auth/RLS, portal de alumnas, clasificación IA y gold set, publicación
   completa sigue debajo, por tandas de 25, con los mismos filtros de siempre.
 - **Bright Data** deja de ser un hueco: cliente `providers/brightdata.ts` (SERP Google Jobs + Unlocker),
   ajustes `API key:zona SERP[:zona Unlocker]`, prueba de una petición con aviso de coste y contabilidad en
-  `external_ingest_runs` (`proveedor=… · coste_usd=…`). Tope `BRIGHTDATA_MONTHLY_USD` (5 USD) mientras no se
-  aplique `20261121_provider_budget.sql`, que queda escrita y **sin aplicar**. SerpApi sigue como respaldo.
+  `external_ingest_runs` (`proveedor=… · coste_usd=…`). Tope `BRIGHTDATA_MONTHLY_USD` (5 USD); la tabla
+  `20261121_provider_budget.sql` se aplicó el 2026-11-21 (sesión 282, versión 20261121180401), pero el
+  adaptador aún no la lee. SerpApi sigue como respaldo.
 - **Cascada** pura en `sourceRoutes.ts`: gratis → clave → Bright Data → SerpApi → Apify → JobSpy → Unlocker
   → agente. Para en la primera ruta con ofertas, declara las omitidas con su motivo y nunca hace una llamada
   de pago sin clave o sin tope.
@@ -3559,4 +3601,5 @@ Supabase/Auth/RLS, portal de alumnas, clasificación IA y gold set, publicación
   design`, `next build --webpack`, `pytest tests/test_source_catalog_export.py` y
   `pytest tests/test_jobspy_collect.py`.
 - *limits*: Bright Data se prueba contra el mock, no contra el servicio real (no hay clave ni gasto); la
-  página de empresa se sirve del fixture. La migración `20261121_provider_budget.sql` sigue sin aplicar.
+  página de empresa se sirve del fixture. La migración `20261121_provider_budget.sql` se aplicó el 2026-11-21
+  (sesión 282, versión 20261121180401); el tope efectivo sigue leyéndose del entorno.

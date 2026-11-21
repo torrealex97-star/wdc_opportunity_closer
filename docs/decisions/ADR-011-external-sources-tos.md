@@ -33,4 +33,4 @@ El motor cloud solo recoge fuentes públicas verificadas y no alcanza el volumen
 - **Páginas de empresa:** se lee la página pública y su JSON-LD/RSS; no se inventa una oferta desde HTML
   suelto ni se añade una empresa sin URL que responda 200 con ofertas.
 - **Coste:** cada petición de pago se anota en `external_ingest_runs` y se compara con
-  `BRIGHTDATA_MONTHLY_USD` (y equivalentes). La tabla `provider_budget` está escrita y **no aplicada**.
+  `BRIGHTDATA_MONTHLY_USD` (y equivalentes). La tabla `provider_budget` está aplicada (versión **20261121180401**), aunque el tope efectivo sigue leyéndose del entorno hasta que el adaptador la lea.
