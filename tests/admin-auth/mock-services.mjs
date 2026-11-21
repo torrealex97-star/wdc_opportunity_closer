@@ -93,9 +93,9 @@ export function startMocks({ authPort, enginePort }) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         return res.end('<!doctype html><html><head><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Closer Unlocker","datePosted":"2026-11-20","description":"Ventas B2B por teléfono","hiringOrganization":{"name":"Acme Unlocker"},"jobLocation":{"address":{"addressLocality":"Madrid","addressCountry":"ES"}},"url":"https://acme.test/careers/unlocker"}</script></head></html>');
       }
-      // Contrato de la documentación: `format: raw` y `brd_json=1` EN LA URL. Sin él Bright Data devuelve el
+      // Contrato de la documentación: `brd_json=1` EN LA URL (`format` raw o json: el cliente desenvuelve el envoltorio). Sin él Bright Data devuelve el
       // HTML de Google (aquí, un 200 con HTML), que es lo que rompía la integración con la clave real.
-      if (body.zone !== 'serp_zone' || body.format !== 'raw' || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
+      if (body.zone !== 'serp_zone' || !['raw', 'json'].includes(body.format) || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
       if (!String(body.url).includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><body>Google</body></html>'); }
       return send(res, 200, { jobs: { items: [
         { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
