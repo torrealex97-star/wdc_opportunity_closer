@@ -5,6 +5,15 @@ import { deleteConnection, isProvider, listConnections, PROVIDERS, saveConnectio
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Migración que amplía el CHECK de proveedores de `integration_connections`, por lote de claves nuevas.
+// Solo se usa para que el error diga qué falta cuando la base aún no la tiene aplicada.
+const MIGRATIONS: Partial<Record<string, string>> = {
+  resend: '20261026_integration_resend.sql',
+  brightdata: '20261121_integration_connections_providers.sql',
+  zenrows: '20261121_integration_connections_providers.sql',
+  scrapingbee: '20261121_integration_connections_providers.sql',
+};
+
 // Claves de APIs de proveedores. El navegador nunca recibe una clave: solo los últimos 4 caracteres.
 // Ver y probar: cualquier operador. Guardar o borrar: solo el propietario.
 async function gate(request: NextRequest, ownerOnly: boolean) {
@@ -37,7 +46,15 @@ export async function PUT(request: NextRequest) {
   const secret = typeof body.secret === 'string' ? body.secret.trim() : '';
   if (!isProvider(body.provider)) return Response.json({ detail: 'Proveedor no válido.' }, { status: 422 });
   if (secret.length < 8 || secret.length > 400 || /\s/.test(secret)) return Response.json({ detail: 'La clave no parece válida.' }, { status: 422 });
-  if (!await saveConnection(body.provider, secret, auth!.admin.email)) return Response.json({ detail: body.provider === 'resend' ? 'No se pudo guardar la clave de Resend. Si es la primera vez, falta aplicar la migración 20261026_integration_resend.sql (la aplica el propietario).' : 'No se pudo guardar la clave.' }, { status: 503 });
+  if (!await saveConnection(body.provider, secret, auth!.admin.email)) {
+    // Guardar una clave de un proveedor que el CHECK de la base aún no admite responde 503: el mensaje
+    // dice qué migración falta en vez de un «no se pudo» sin salida.
+    const migration = MIGRATIONS[body.provider];
+    const detail = migration
+      ? `No se pudo guardar la clave. Si es la primera vez, falta aplicar la migración ${migration} (la aplica el propietario).`
+      : 'No se pudo guardar la clave.';
+    return Response.json({ detail }, { status: 503 });
+  }
   return reply(auth!, { ok: true, last4: secret.slice(-4) });
 }
 

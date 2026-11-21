@@ -1,5 +1,36 @@
 # Estado
 
+## Las claves nuevas del panel (Bright Data, ZenRows y ScrapingBee) ya se guardan (sesión 285) — 2026-11-21
+
+- **Petición del propietario**: «cuando intento añadir la api de bright data, etc de las nuevas no se guardan,
+  haz code review y soluciona todo».
+- **Causa raíz** (*verified* contra la base real, proyecto `jzchuizybyubtkownhlw`): `integration_connections`
+  seguía con el `CHECK` de `20261026_integration_resend.sql`, que admite **ocho** proveedores. `brightdata`,
+  `zenrows` y `scrapingbee` estaban en `PROVIDERS` ([integrations.ts](../apps/web/lib/integrations.ts)) y en la
+  cascada de [sourceRoutes.ts](../apps/web/lib/sourceRoutes.ts) desde la sesión 281, pero no en la restricción.
+  Reproducido: `insert … ('brightdata', …)` → **23514** `violates check constraint
+  "integration_connections_provider_check"`. La ruta traducía ese fallo a un 503 «No se pudo guardar la clave.»
+  sin decir la causa, así que el panel parecía ignorar la clave.
+- **Arreglo** (*verified*): migración
+  [20261121_integration_connections_providers.sql](../supabase/migrations/20261121_integration_connections_providers.sql),
+  aditiva y reversible, aplicada en la base real como versión **20261121200117**: el `CHECK` admite ahora once
+  proveedores. Su prueba de comportamiento es
+  [tests/db/integration_connections_providers.sql](../tests/db/integration_connections_providers.sql).
+- **Code review: tres fallos más, corregidos**
+  1. `isProvider` usaba `v in PROVIDERS`, que acepta nombres heredados del prototipo (`toString`,
+     `constructor`): ahora exige clave propia con `hasOwnProperty` y esos nombres responden 422.
+  2. El `last4` de Bright Data guardaba los últimos cuatro de la **zona**, no de la clave (`API key:zona`), y el
+     panel mostraba «Clave …zona»: ahora usa la parte de la clave.
+  3. El 503 solo nombraba la migración de Resend; ahora también la de este lote de claves, para que el error
+     diga qué aplicar en vez de un «no se pudo» sin salida.
+- **Comprobado** (*tested*): `npm run typecheck` **OK**; la prueba de BD con `BEGIN…ROLLBACK` contra la base
+  real **falla antes** de la migración (23514 en `brightdata`) y **pasa después** (los once se aceptan,
+  `inventado` sigue rechazado), sin dejar filas; `tests/admin-auth/flow.mjs` amplía el paso de APIs con las tres
+  claves nuevas, el `last4` de la clave de Bright Data y `toString` → 422 (lo ejecuta `web-admin` en el CI).
+- **Límites**: no hay clave real de Bright Data en este entorno, así que **no** se ha llamado al proveedor ni se
+  ha pulsado «Guardar» en el panel desplegado; lo verificado es la restricción de la base y el contrato de la
+  ruta con servicios simulados. Las cuatro claves ya guardadas no se tocaron.
+
 ## «Workers Builds: closer-web»: conexión de Git desconectada, el check desaparece (sesión 283) — 2026-11-21
 
 - **Petición del propietario**: «ya está desconectado», después de la sesión 275, donde quedó probado que la

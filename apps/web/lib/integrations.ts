@@ -46,7 +46,10 @@ export const PROVIDERS = {
 /** Proveedores cuya prueba hace una petición real y se cobra (se avisa en la tarjeta). */
 export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'zenrows', 'scrapingbee']);
 export type Provider = keyof typeof PROVIDERS;
-export const isProvider = (v: unknown): v is Provider => typeof v === 'string' && v in PROVIDERS;
+// `in` también acepta nombres heredados del prototipo (`toString`, `constructor`): se comprueba que la clave
+// sea propia, o el panel guardaría filas para un proveedor que no existe.
+export const isProvider = (v: unknown): v is Provider =>
+  typeof v === 'string' && Object.prototype.hasOwnProperty.call(PROVIDERS, v);
 
 export type ConnectionRow = { provider: Provider; last4: string; updated_by: string; updated_at: string; last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: string | null };
 
@@ -56,10 +59,14 @@ export async function listConnections(): Promise<ConnectionRow[] | null> {
   return Array.isArray(rows) ? rows : null;
 }
 
+/** Últimos 4 de la CLAVE, no de la zona: Bright Data se guarda como `API key:zona SERP[:zona Unlocker]`. */
+const last4Of = (provider: Provider, secret: string) =>
+  (provider === 'brightdata' ? secret.split(':')[0] : secret).slice(-4);
+
 export async function saveConnection(provider: Provider, secret: string, by: string): Promise<boolean> {
   const response = await serviceRest('integration_connections?on_conflict=provider', {
     method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ provider, secret_ciphertext: encryptSecret(secret), last4: secret.slice(-4), updated_by: by, updated_at: new Date().toISOString(), last_test_at: null, last_test_ok: null, last_test_detail: null }),
+    body: JSON.stringify({ provider, secret_ciphertext: encryptSecret(secret), last4: last4Of(provider, secret), updated_by: by, updated_at: new Date().toISOString(), last_test_at: null, last_test_ok: null, last_test_detail: null }),
   });
   return response.ok;
 }
