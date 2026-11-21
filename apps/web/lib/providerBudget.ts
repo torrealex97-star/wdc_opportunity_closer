@@ -90,17 +90,18 @@ export function spendNote(input: { route: string; provider: MeteredProvider; req
   return parts.filter(Boolean).join(' · ');
 }
 
-/** ¿Queda dinero para una petición más? Sin tope legible no se lanza gasto nuevo. */
-export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env): { ok: boolean; reason?: string; cap: number; spent: number | null } {
+/**
+ * ¿Queda dinero para lanzar? Sin tope legible no se lanza gasto nuevo. `requests` es el **peor caso**
+ * de peticiones que puede hacer la llamada (por ejemplo 2 si reintenta una vez): se reserva entero para
+ * que un reintento no pueda dejar el gasto por encima del tope.
+ */
+export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env, requests = 1): { ok: boolean; reason?: string; cap: number; spent: number | null } {
   const cap = capUsd(provider, env);
   if (cap <= 0) return { ok: false, reason: 'El tope mensual de este proveedor es 0: no se lanza nada.', cap, spent: spentUsd };
   if (spentUsd === null) return { ok: false, reason: 'No se pudo leer lo gastado este mes; por seguridad no se lanza gasto nuevo.', cap, spent: null };
-  if (spentUsd + PROVIDER_METERS[provider].usdPerRequest > cap) {
+  const worstCase = PROVIDER_METERS[provider].usdPerRequest * Math.max(1, requests);
+  if (spentUsd + worstCase > cap) {
     return { ok: false, reason: `Quedan ${Math.max(0, cap - spentUsd).toFixed(2)} USD de ${cap} USD este mes.`, cap, spent: spentUsd };
   }
   return { ok: true, cap, spent: spentUsd };
 }
-
-/** Coste estimado antes de lanzar: peticiones × precio unitario del proveedor. */
-export const estimateUsd = (provider: MeteredProvider, requests: number) =>
-  Math.round(requests * PROVIDER_METERS[provider].usdPerRequest * 1e6) / 1e6;

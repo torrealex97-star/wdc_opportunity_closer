@@ -102,8 +102,10 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
 
 ## 12. Bright Data: Google Jobs y Web Unlocker (2026-11-21)
 
-- **Clave:** Panel → APIs → Bright Data. Formato `API key:zona SERP` (y `:zona Unlocker` si se quiere leer
-  HTML). Se guarda cifrada; el panel solo muestra los últimos 4 caracteres. Guardar no gasta.
+- **Clave:** Panel → APIs → Bright Data. Se pega **solo la API key** (la que da Bright Data); el panel lee
+  las zonas activas con `GET /zone/get_active_zones` (gratis) y usa la de tipo SERP. Si se prefiere fijarlas a
+  mano: `API key:zona SERP` (y `:zona Unlocker` si se quiere leer HTML). Se guarda cifrada; el panel solo
+  muestra los últimos 4 caracteres. Guardar no gasta.
 - **Google Jobs:** `POST https://api.brightdata.com/request` con `Authorization: Bearer` y
   `{zone, url, format:"json"}`; la URL de Google lleva `ibp=htl%3Bjobs`. La respuesta documentada trae
   `jobs.items[]` con título, empresa, ubicación, fuente, descripción, enlace y etiquetas. Sin título o sin
@@ -117,8 +119,9 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
 - **Web Unlocker:** devuelve HTML; solo se usa donde hay extractor JSON-LD/RSS y con cortesía por dominio.
   No se usa para los 27 portales a ciegas. El resultado se atribuye a `brightdata-<portal>`
   (p. ej. `brightdata-company`) y su gasto se anota con la misma nota que SERP, así que descuenta del tope.
-- **Prueba:** «Probar» en APIs hace **una** búsqueda real, comprueba el tope y anota el gasto; si no puede
-  anotarlo, falla cerrada. En este entorno no hay clave: el cliente se ha probado con `fetch` simulado y un
+- **Prueba:** «Probar» en APIs valida primero la clave y la zona con la API de cuenta (gratis: un 401 es
+  clave rechazada y una zona inexistente o que no es SERP se declara con su nombre) y solo después hace **una**
+  búsqueda real, comprueba el tope y anota el gasto; si no puede anotarlo, falla cerrada. En este entorno no hay clave: el cliente se ha probado con `fetch` simulado y un
   fixture con la forma documentada, no con una llamada real. Hasta la primera ejecución con clave, el panel
   lo marca «documentada · sin probar».
 - **Orden por fuente:** `source_settings.route_order` guarda un override de ids `fuente:proveedor`
