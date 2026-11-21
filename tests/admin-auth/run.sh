@@ -65,6 +65,7 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/googlejobs.mjs
 # Rutas por fuente: orden por coste, contrato de Bright Data, extractor y cascada sin gastar sin clave/tope.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/brightdata.mjs
 # Tope mensual: todas las ejecuciones desde el día 1, paginadas; nunca las últimas 200.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spend-window.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/fallback.mjs

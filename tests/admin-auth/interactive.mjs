@@ -57,6 +57,7 @@ try {
     })).status);
     assert.equal(status, 200);
     assert.equal(state.connections.get('brightdata')?.last4, 'zone');
+    assert.equal(state.ingestRuns.some(row => row.source === 'brightdata-probe'), false, 'Guardar no anota ningún gasto');
   });
 
   await step('APIs: «Probar» Bright Data hace una búsqueda, la anota y descuenta del tope', async () => {
@@ -143,22 +144,55 @@ try {
       await card.waitFor();
       const button = card.getByRole('button', { name: 'Probar ruta' });
       assert.equal(await button.isEnabled(), true, 'con zona Unlocker la ruta debe estar lista');
+      let routePosts = 0;
+      const countRoutePost = request => {
+        if (request.url().includes('/api/admin/source-routes') && request.method() === 'POST') routePosts += 1;
+      };
+      page.on('request', countRoutePost);
+      page.once('dialog', dialog => dialog.dismiss());
+      await button.click();
+      await card.getByText(/Sin URL pública no se llama/).waitFor();
+      assert.equal(routePosts, 0, 'cancelar el prompt no debe enviar ninguna petición');
+      page.once('dialog', dialog => dialog.accept('http://acme.test/careers'));
+      await button.click();
+      await card.getByText(/debe ser pública y HTTPS/).waitFor();
+      assert.equal(routePosts, 0, 'una URL HTTP se rechaza en el navegador antes de la API');
+      page.off('request', countRoutePost);
       let prompted = false;
+      let promptMessage = '';
+      const submitted = 'https://acme.test/careers/desde-boton';
       page.once('dialog', async dialog => {
         prompted = dialog.type() === 'prompt';
-        await dialog.accept('https://acme.test/careers');
+        promptMessage = dialog.message();
+        await dialog.accept(submitted);
       });
+      const requestPromise = page.waitForRequest(request => request.url().includes('/api/admin/source-routes') && request.method() === 'POST');
       const responsePromise = page.waitForResponse(response => response.url().includes('/api/admin/source-routes') && response.request().method() === 'POST');
       await button.click();
+      const request = await requestPromise;
       const response = await responsePromise;
       assert.equal(response.status(), 200);
       const body = await response.json();
       assert.equal(prompted, true, 'el botón debe abrir un prompt, no usar la web del catálogo');
+      assert.match(promptMessage, /JSON-LD/);
+      assert.match(promptMessage, /no la portada/);
+      assert.equal(JSON.parse(request.postData() ?? '{}').url, submitted, 'la URL escrita viaja en el cuerpo de la petición, no la portada');
       assert.equal(body.received, 1);
       assert.equal(body.cost_usd, 0.0015);
       await card.getByText(/1 detectada\(s\) en el HTML/).waitFor({ timeout: 20000 });
+      const offers = await page.evaluate(async () => (await fetch('/api/admin/external?source=brightdata-company&page_size=10')).json());
+      assert.equal(offers.total, 1, 'la página del botón se ingiere con la atribución del portal');
+      assert.equal(offers.offers[0].source, 'brightdata-company', 'atribución brightdata-<portal>');
+      const unlockerRun = offers.runs.find(run => run.source === 'brightdata-company' && /proveedor=brightdata/.test(run.note ?? ''));
+      assert.ok(unlockerRun, 'la ejecución del botón queda en external_ingest_runs');
+      assert.match(unlockerRun.note ?? '', /coste_usd=0\.001500/);
       const summary = await page.evaluate(async () => (await fetch('/api/admin/source-routes?summary=1')).json());
-      assert.ok(Math.abs(summary.spent.brightdata - 0.006) < 1e-9, 'la prueba del botón también descuenta el tope');
+      assert.ok(Math.abs(summary.spent.brightdata - 0.006) < 1e-9, 'la prueba del botón también descuenta el tope de Bright Data');
+      const missing = await page.request.post(BASE + '/api/admin/source-routes', {
+        data: { action: 'test', source: 'company', route: 'company:unlocker' },
+      });
+      assert.equal(missing.status(), 422, 'sin URL no se usa la portada del catálogo');
+      assert.match((await missing.json()).detail, /no se usa la portada/);
       const invalid = await page.request.post(BASE + '/api/admin/source-routes', {
         data: { action: 'test', source: 'company', route: 'company:unlocker', url: 'http://acme.test/careers' },
       });
@@ -224,18 +258,25 @@ try {
   });
 
   await step('Empresas: «Revisar ahora» extrae el JobPosting y enseña el resultado', async () => {
+    // Una pasada automática del ATS de Fever sin ofertas vivas también es una revisión: debe salir su
+    // fecha real, no el guion fijo. La revisión manual de Bastida todavía no existe.
+    state.ingestRuns.push({ org_id: 'cloud-wdc', source: 'ats-greenhouse-feverup', via: 'ats', received: 0, accepted: 0, rejected: 0, note: 'pasada del motor', created_at: '2026-11-20T09:00:00.000Z' });
     await page.getByRole('button', { name: 'Empresas', exact: true }).click();
     await page.getByRole('heading', { name: 'Empresas, una a una.' }).waitFor();
     const row = page.locator('tr', { hasText: 'Bastida Farina' }).first();
     await row.waitFor();
+    assert.equal((await row.locator('[data-testid="company-review-bastida-farina"]').innerText()).trim(), 'Sin revisar', 'sin revisión no se inventa una fecha');
+    const atsRow = page.locator('tr', { hasText: 'Fever' }).first();
+    await atsRow.waitFor();
+    assert.match(await atsRow.locator('[data-testid="company-review-ats-greenhouse-feverup"]').innerText(), /\d/, 'la pasada del ATS deja su fecha aunque no haya ofertas vivas');
     await row.getByRole('button', { name: 'Revisar ahora' }).click();
     await row.getByText(/1 guardada\(s\)/).waitFor({ timeout: 15000 });
     await page.waitForFunction(() => {
       const cell = document.querySelector('[data-testid="company-review-bastida-farina"]');
-      return Boolean(cell && cell.textContent && cell.textContent.trim() !== '—');
+      return Boolean(cell && cell.textContent && /\d/.test(cell.textContent));
     }, null, { timeout: 15000 });
     const review = await row.locator('[data-testid="company-review-bastida-farina"]').innerText();
-    assert.notEqual(review.trim(), '—', 'la última revisión debe salir de la ejecución ya guardada');
+    assert.match(review, /\d/, 'la última revisión debe salir de la ejecución ya guardada');
     const text = await row.innerText();
     assert.match(text, /1 en la página/);
     assert.match(text, /1 nueva\(s\)/);
@@ -253,6 +294,20 @@ try {
     assert.match(await row.innerText(), /0 nueva\(s\)/);
     const offers = await page.evaluate(async () => (await fetch('/api/admin/external?source=company&page_size=10')).json());
     assert.equal(offers.total, 1, 'la huella impide duplicar la misma oferta');
+  });
+
+  await step('Empresas: la última revisión persiste al recargar y el ATS conserva la suya', async () => {
+    await page.reload();
+    await page.getByRole('button', { name: 'Empresas', exact: true }).click();
+    await page.getByRole('heading', { name: 'Empresas, una a una.' }).waitFor();
+    const row = page.locator('tr', { hasText: 'Bastida Farina' }).first();
+    await row.waitFor();
+    assert.match(await row.locator('[data-testid="company-review-bastida-farina"]').innerText(), /\d/, 'la fecha guardada se relee tras recargar');
+    const atsRow = page.locator('tr', { hasText: 'Fever' }).first();
+    assert.match(await atsRow.locator('[data-testid="company-review-ats-greenhouse-feverup"]').innerText(), /\d/);
+    const payload = await page.evaluate(async () => (await fetch('/api/admin/companies')).json());
+    const bastida = payload.companies.find(company => company.code === 'bastida-farina');
+    assert.ok(bastida?.last_review, 'la API devuelve last_review, no solo el texto de la tabla');
   });
 
   await step('sin errores de consola ni respuestas 4xx/5xx en los dos flujos', async () => {

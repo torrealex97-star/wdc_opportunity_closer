@@ -50,15 +50,23 @@ export function parseBrightDataSecret(secret: string): BrightDataConfig | null {
   return { apiKey, serpZone: serpZone || null, unlockerZone: unlockerZone || null };
 }
 
+export type BrightDataErrorKind = 'auth' | 'zone' | 'transport' | 'payload' | 'http' | 'input';
+
 export class BrightDataError extends Error {
   readonly status: number | null;
   /** Intentos hechos: si hubo error de red, el primero pudo facturarse aunque no llegara respuesta. */
   readonly attempts: number;
-  constructor(message: string, status: number | null = null, attempts = 0) {
+  /** Tipo estable para que el panel no tenga que adivinar por el texto del mensaje. */
+  readonly kind: BrightDataErrorKind;
+  constructor(message: string, status: number | null = null, attempts = 0, kind?: BrightDataErrorKind) {
     super(message);
     this.name = 'BrightDataError';
     this.status = status;
     this.attempts = attempts;
+    this.kind = kind ?? (status === 401 || status === 403 ? 'auth'
+      : status === 422 ? 'zone'
+        : status === null || status === 429 || status === 503 ? 'transport'
+          : 'http');
   }
 }
 
@@ -216,7 +224,9 @@ async function postRequest(
     }
     const text = await response.text().catch(() => '');
     if (response.ok) return { text, attempts: attempt };
-    const retryable = response.status === 429 || response.status >= 500;
+    // Solo los dos códigos que la documentación declara transitorios. Un 500/502 no se reintenta:
+    // un segundo intento se cobra y no mejora la respuesta.
+    const retryable = response.status === 429 || response.status === 503;
     last = new BrightDataError(`Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`, response.status, attempt);
     // Un 401/403 no mejora reintentando: la clave o la zona están mal.
     if (!retryable || attempt === BRIGHTDATA_MAX_ATTEMPTS) throw last;
@@ -324,20 +334,23 @@ export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUs
  */
 export async function serpJobs(config: BrightDataConfig, options: SerpJobsOptions): Promise<SerpJobsResult> {
   const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now() } = options;
-  if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
-  if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
+  if (!query.trim()) throw new BrightDataError('La búsqueda está vacía', null, 0, 'input');
+  if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422, 0, 'zone');
   const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'json', fetchImpl, timeoutMs);
   let payload: unknown;
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, attempts);
+    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, attempts, 'payload');
   }
   const unwrapped = unwrapPayload(payload);
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
-  if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
+  if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts, 'payload');
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const rawItems = Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
+  const items = Array.isArray(jobs?.items) ? jobs.items : Array.isArray(body.jobs_results) ? body.jobs_results : null;
+  // Un 200 sin la forma documentada puede ser una zona equivocada: se declara, no se convierte en «0 ofertas».
+  if (!items) throw new BrightDataError('Bright Data respondió sin jobs.items[]; revisa que la zona sea SERP API.', 200, attempts, 'payload');
+  const rawItems = items.length;
   return {
     candidates: jobsFromPayload(payload, now),
     // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.
@@ -351,10 +364,22 @@ export type UnlockResult = { html: string; requests: number; costUsd: number };
 
 /** HTML de una página con anti-bot. Solo se usa donde hay un extractor probado (JSON-LD/RSS). */
 export async function unlockHtml(config: BrightDataConfig, url: string, options: { timeoutMs?: number; fetchImpl?: FetchLike } = {}): Promise<UnlockResult> {
-  if (!config.unlockerZone) throw new BrightDataError('Falta la zona de Web Unlocker (API key:zona SERP:zona Unlocker)', 422);
-  if (!/^https:\/\//i.test(url)) throw new BrightDataError('El Unlocker solo acepta enlaces HTTPS públicos', 422);
+  if (!config.unlockerZone) throw new BrightDataError('Falta la zona de Web Unlocker (API key:zona SERP:zona Unlocker)', 422, 0, 'zone');
+  if (!/^https:\/\//i.test(url)) throw new BrightDataError('El Unlocker solo acepta enlaces HTTPS públicos', 422, 0, 'input');
   const { timeoutMs = 20_000, fetchImpl = fetch } = options;
   const { text, attempts } = await postRequest(config, config.unlockerZone, url, 'raw', fetchImpl, timeoutMs);
-  if (!text.trim()) throw new BrightDataError('El Unlocker devolvió una página vacía', 200, attempts);
+  if (!text.trim()) throw new BrightDataError('El Unlocker devolvió una página vacía', 200, attempts, 'payload');
   return { html: text, requests: attempts, costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST };
+}
+
+/**
+ * Forma del plan con la URL explícita: `unlock(config, { url })`. `unlockHtml` sigue exportado para
+ * quien ya lo llama con la URL como segundo argumento; ambas rutas comparten el mismo cliente y
+ * reintentos, no hay dos implementaciones que puedan divergir.
+ */
+export async function unlock(
+  config: BrightDataConfig,
+  options: { url: string; timeoutMs?: number; fetchImpl?: FetchLike },
+): Promise<UnlockResult> {
+  return unlockHtml(config, options.url, { timeoutMs: options.timeoutMs, fetchImpl: options.fetchImpl });
 }

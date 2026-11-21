@@ -1,5 +1,145 @@
 # Estado
 
+## Empresas: la última revisión real, también la del ATS sin ofertas vivas (sesión 295) — 2026-11-21
+
+- **Petición del propietario**: guardar y mostrar la última revisión real por empresa en la pestaña Empresas, en
+  lugar del «—» fijo, con su prueba.
+- **Causa** (*inspected*): `companyReviewHistory` solo miraba las notas manuales `company:<code>` y la última
+  oferta del dominio. Una pasada automática de un ATS que no dejó ofertas vivas no aparecía, y una empresa sin
+  revisión seguía pintando el mismo «—» que un fallo de lectura.
+- **Cambios** (*tested*): `companyReviewHistory(sources)` pide solo las fuentes de la watchlist y añade
+  `bySource` con la ejecución más reciente de cada fuente. En `GET /api/admin/companies`, un ATS usa esa fecha
+  real (`source` propio) y, si no existe, cae a `last_seen`; la revisión manual sigue mandando por `byCode` y
+  el respaldo por dominio se conserva. En la tabla, la fecha se pinta si existe; si no, se dice `Sin revisar`
+  (o `Sin revisar (solo búsqueda)` en LinkedIn) y `Dato no disponible` cuando falló la lectura del historial,
+  sin convertir un hueco en una fecha inventada ni en un guion ambiguo.
+- ***tested***: `interactive.mjs` siembra una ejecución del ATS de Fever con 0 ofertas vivas y comprueba que la
+  fila muestra fecha; comprueba que Bastida empieza en `Sin revisar`, que tras «Revisar ahora» muestra fecha y
+  que, **tras recargar la página**, la fecha persiste y `GET /api/admin/companies` devuelve `last_review`.
+  `bash tests/admin-auth/run.sh` PASS: **13/13** pasos de interfaz y **13/13** flujos interactivos;
+  `npm run typecheck` 0 errores; `npx --no-install next build apps/web --webpack` PASS; `pytest -q`
+  **214 passed, 1 skipped** (205,89 s; el omitido es JobSpy no instalado).
+- ***limits***: la pasada del ATS y la revisión manual se prueban contra el mock y el fixture local; no hay una
+  ejecución real nueva contra un ATS. No hay DDL en esta sesión ni cambio de esquema: se usan las ejecuciones
+  que ya guarda `external_ingest_runs`. Se deja en un commit local; sin push, PR ni merge.
+
+## Cierre auditado del plan de Bright Data y orden de vías (sesión 294) — 2026-11-21
+
+- **Petición del propietario**: cerrar el plan aprobado punto por punto, reparar lo que falte y dejar evidencia de
+  archivos y pruebas, con panel, `pytest`, `typecheck` y build en verde; sin commit/push/PR/merge ni DDL.
+- **Reparado en esta pasada**: la nota de gasto de Bright Data usa «búsqueda(s)» en vez de «petición(es)» (es lo
+  que se cobra y lo que dice el panel); el camino real del Unlocker llama a `unlock(config, {url})`, la forma del
+  plan, en vez de a `unlockHtml`; la ADR-021 decía «reintento en 429/5xx» cuando el cliente solo reintenta **429 y
+  503** (un 500/502 no), y citaba `unlockHtml` como única puerta; Hermes/Manus tiene ahora insignia visible en el
+  panel (`data-testid="agent-gap"`) y una comprobación de interfaz que exige «No disponible», además de la
+  constante pura ya probada.
+- **Contrato demostrado**: `apps/web/lib/providers/brightdata.ts` (`serpJobs`, `unlock`, zonas gratis, error
+  tipado, reintento único 429/503), fixtures `tests/fixtures/brightdata/serp-jobs.json` y `page.html`, y
+  `tests/admin-auth/brightdata.mjs`. La tarjeta cifra `API key:zona SERP[:zona Unlocker]`, «Guardar» no gasta y
+  «Probar» hace una sola búsqueda avisada y anotada. El tope `BRIGHTDATA_MONTHLY_USD` (5 por defecto) reserva el
+  peor caso y cada intento deja `proveedor=brightdata · coste_usd=…` en `external_ingest_runs`; el marcador suma
+  las notas del mes. Atribución `brightdata-google` / `brightdata-<portal>` en deduplicación y etiquetas. Orden
+  por coste editable y JobSpy al final, saltado y declarado sin proxies sanos (razón visible y prueba de
+  `jobspy_collect.py`).
+- ***tested***: `brightdata.mjs` PASS; `source-routes.mjs` PASS; `bash tests/admin-auth/run.sh` PASS (**13/13**
+  pasos de interfaz y **12/12** flujos interactivos, ejecutado dos veces con el build nuevo); `npm run typecheck`
+  0 errores; `npx --no-install next build apps/web --webpack` PASS; `.venv/bin/python -m pytest -q` **214 passed,
+  1 skipped** en 242,28 s (el omitido es JobSpy no instalado).
+- ***limits***: no hay claves reales de Bright Data/SerpApi/ZenRows/ScrapingBee ni proxies; todo se prueba con
+  `fetch` simulado y fixtures, así que Bright Data sigue «documentada · sin probar» hasta la primera ejecución
+  real. La migración `20261121_provider_budget.sql` **ya estaba aplicada** en `closer-ia-ops` (versión
+  `20261121180401`) por una orden anterior; esta sesión **no ejecutó DDL** y no la revirtió porque hacerlo exigiría
+  un `drop` destructivo no autorizado. El tope efectivo sigue leyéndose del entorno, no de `provider_budget`. Se
+  deja en un commit local, sin push, PR ni merge.
+
+## El Unlocker valida la URL en el navegador y no manda peticiones condenadas a 422 (sesión 293) — 2026-11-21
+
+- **Petición del propietario**: revisar «Probar ruta» de la vía Unlocker; si la fuente no trae una URL válida,
+  pedirla o dejar el botón desactivado con el motivo, sin enviar una petición que acabe en 422; añadir la prueba de
+  interfaz si falta.
+- **Cambios**: el botón ya pedía la URL, pero ahora además la valida en el navegador (`publicHttpsUrl`): cancela o
+  deja vacío el prompt → mensaje y **cero** peticiones; escribe una URL HTTP o malformada → mensaje «debe ser
+  pública y HTTPS» y **cero** peticiones. Solo una URL HTTPS válida llega al `POST`; la API conserva la misma
+  validación como defensa. La fuente sin URL utilizable sigue pidiéndola al pulsar, no usa la portada del catálogo.
+- ***tested***: el paso interactivo del Unlocker descarta el prompt y comprueba que no hay `POST`; acepta
+  `http://…` y comprueba otro cero de peticiones con el motivo visible; después acepta una URL HTTPS y verifica el
+  cuerpo enviado, la oferta `brightdata-company`, la nota `proveedor=brightdata`/`coste_usd=0.001500` y el gasto de
+  0,006 USD. `bash tests/admin-auth/run.sh` completo PASS (13/13 pasos de interfaz y 12/12 flujos interactivos);
+  `npm run typecheck` 0 errores y `next build apps/web --webpack` PASS.
+- ***limits***: sin llamadas reales a proveedores; HTML y respuestas son mocks. No hay cambio de diseño, solo
+  validación y copy. No se aplicó DDL ni se hizo commit/push; `pytest` no se repitió porque el cambio es de
+  TypeScript/UI.
+
+## El KPI «Gratis y operativas» y la agrupación comparten la exclusión de JobSpy (sesión 292) — 2026-11-21
+
+- **Petición del propietario**: que JobSpy no cuente como operativo en el KPI «Gratis y operativas» sin proxies
+  sanos, reutilizando la condición de la agrupación, y con su prueba.
+- **Cambios**: `hasFreeOperationalRoute(routes)` en `lib/sourceRoutes.ts` concentra la condición que ya usaba
+  `groupForSource` (coste gratis, no bloqueada y proveedor distinto de JobSpy). El panel usa esa misma función
+  para calcular `freeSources`; se eliminó la copia inline del KPI. JobSpy sigue fuera de «Directo, gratis» y su
+  lanzamiento se decide en `routeReadiness` con `proxiesHealthy`, no por ser una vía de coste cero.
+- ***tested***: `tests/admin-auth/source-routes.mjs` comprueba que una lista formada solo por la vía JobSpy de
+  Indeed **no** es gratuita operativa, que un feed del motor como Remote OK **sí** lo es, y mantiene la agrupación
+  de Indeed sin claves en Google Jobs (no en gratis por JobSpy). `npm run typecheck` 0 errores, `next build
+  apps/web --webpack` PASS y `bash tests/admin-auth/run.sh` completo PASS (13/13 pasos de interfaz y 12/12 flujos
+  interactivos).
+- ***limits***: no hay proxies reales en este entorno, así que no se probó una ejecución de JobSpy con proxies
+  sanos; la agrupación/KPI no recibe el estado de proxies y mantiene JobSpy fuera de «Directo, gratis» por diseño,
+  mientras la tarjeta de la vía sí declara si puede lanzarse. Sin cambio visual más allá del recuento; no se aplicó
+  DDL ni se hizo commit/push, y `pytest` no se repitió porque el cambio es de TypeScript/UI.
+
+## «Probar ruta» del Unlocker usa la URL pública escrita, no la portada del catálogo (sesión 291) — 2026-11-21
+
+- **Petición del propietario**: que el botón de la vía Unlocker pida o acepte la URL pública con JSON-LD/RSS y la
+  envíe a la API, en vez de usar la portada del catálogo; y una prueba interactiva que pase por ese botón y
+  compruebe la atribución `brightdata-<portal>` y el gasto.
+- **Cambios**: el prompt del panel ahora pide «URL pública con JSON-LD JobPosting o RSS (no la portada)», recorta
+  espacios y, si se cancela o queda vacío, lo declara sin llamar al proveedor. En la API, la URL del Unlocker es
+  **obligatoria**: se rechaza vacía o inválida con 422 y solo se acepta HTTPS antes de elegir proveedor. Se eliminó
+  el respaldo `entry.website` que convertía la portada del catálogo en URL de la prueba. La URL viaja en el cuerpo
+  `{action:'test', source, route, url}` y se usa como base del extractor.
+- ***tested***: el paso interactivo «Probar ruta» del Unlocker acepta la URL en el diálogo, captura la petición y
+  comprueba que el cuerpo lleva **esa** URL (no la del catálogo), que la oferta queda con `source`
+  `brightdata-company`, que la ejecución de `external_ingest_runs` lleva `proveedor=brightdata` y
+  `coste_usd=0.001500`, y que el gasto acumulado sube a 0,006 USD. También comprueba que sin URL se responde 422
+  con el motivo de «no se usa la portada» y que una URL HTTP se rechaza con 422 antes de llamar. `bash
+  tests/admin-auth/run.sh` completo PASS (13/13 pasos de interfaz y 12/12 flujos interactivos); `npm run
+  typecheck` 0 errores y `next build apps/web --webpack` PASS.
+- ***limits***: sin llamada real a Bright Data/ZenRows/ScrapingBee; el HTML y las respuestas son los mocks de la
+  suite. No hay cambio de diseño, solo copy y validación; no se aplicó DDL en esta sesión y el tope sigue leyéndose
+  de las variables de entorno por proveedor. `pytest` no se repitió porque el cambio es solo de TypeScript/UI.
+
+## El Unlocker se anuncia con el proveedor que de verdad se lanza, y gasta contra SU tope (sesión 290) — 2026-11-21
+
+- **Petición del propietario**: que la vía Unlocker no se marque lista si la clave de Bright Data no incluye zona
+  de Unlocker, que la disponibilidad coincida con el proveedor que realmente se lanza (ZenRows, ScrapingBee o
+  Bright Data) y que el gasto use el tope de ese proveedor; con pruebas simuladas para una clave SERP sin zona y
+  para dos proveedores con saldos distintos.
+- **Causa** (*inspected*): `routeReadiness` elegía el primer proveedor con clave en el orden de presentación
+  (`brightdata`, `zenrows`, `scrapingbee`) y comprobaba **su** saldo, mientras el POST lanzaba por otra prioridad
+  (`zenrows` → `scrapingbee` → `brightdata`). Con una clave de Bright Data y otra de ZenRows, el panel podía decir
+  «lista» mirando el tope de Bright Data y luego lanzar ZenRows (o al revés). Además, el GET del panel rellenaba un
+  saldo ilegible con el tope entero, así que podía pintar disponible lo que el POST rechaza por precaución.
+- **Cambios**: una sola función, `unlockerProviderFor(state)` en `lib/sourceRoutes.ts`, elige el proveedor real:
+  primero ZenRows, luego ScrapingBee y por último Bright Data; exige clave, la segunda zona cuando es Bright Data y
+  saldo legible para el **peor caso de dos intentos** (lo mismo que reserva `canSpend(..., 2)`), y salta al
+  siguiente si el anterior está agotado o ilegible. `routeReadiness` y el POST
+  de `source-routes` usan esa misma elección, y `canSpend(provider, …)` se llama con el proveedor elegido, con su
+  `*_MONTHLY_USD` y su precio. El GET ya no sustituye un gasto ilegible por el tope completo. Una clave SERP sin
+  zona no se marca lista y explica cómo añadir `:zona Unlocker`.
+- ***tested***: `tests/admin-auth/source-routes.mjs` añade la clave SERP sin zona (no lista y no se lanza como
+  Unlocker), los dos proveedores con saldos distintos en ambos sentidos (ZenRows agotado → Bright Data; Bright Data
+  sin zona/saldo → ZenRows), ambos agotados (motivo visible), un saldo de 0,002 USD que no cubre los dos intentos
+  reservados, y que la nota de ZenRows suma a ZenRows y **no** a Bright Data. También se endureció el contrato de Bright Data en `tests/admin-auth/brightdata.mjs` (fetch simulado
+  y fixtures documentados: 429/503 con **un** reintento, 500 sin reintento, errores `auth`/`zone`/`transport`/`payload`,
+  payload sin `jobs.items[]` que no se convierte en cero, `unlock({url})`, tope y «Guardar» sin gasto);
+  `source-routes.mjs` y `brightdata.mjs` pasan, `npm run typecheck` 0 errores, `next build apps/web --webpack`
+  PASS y `bash tests/admin-auth/run.sh` completo PASS (13/13 pasos de interfaz y 12/12 flujos interactivos).
+- ***limits***: sin claves reales de Bright Data, ZenRows ni ScrapingBee, así que **no se llamó a ningún proveedor**:
+  la selección se prueba con estados y `fetch` simulados. `pytest` no se repitió porque este cambio es solo de
+  TypeScript; la migración `20261121_provider_budget.sql` no se aplicó en esta sesión y el tope sigue leyéndose de
+  las variables de entorno (una por proveedor), no de la tabla. Sin cambios visuales, así que no hay captura nueva.
+
 ## La clave correcta de Bright Data deja de rechazarse: se acepta sola y clave y zona se validan gratis antes de gastar (sesión 288) — 2026-11-21
 
 - **Petición del propietario**: la clave de Bright Data se estaba rechazando sin motivo cuando era la correcta.

@@ -3,7 +3,7 @@
 // que sin clave o sin tope NO se hace ninguna llamada de pago y que JobSpy va al final.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
+import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, hasFreeOperationalRoute, orderRoutes, unlockerProviderFor, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
 import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
@@ -47,6 +47,11 @@ assert.equal(routeReadiness(jobspyRoute, state({ keys: new Set(['jobspy']), prox
 assert.equal(groupForSource(routesForSource(entry('himalayas')), new Set()).toString(), 'direct');
 assert.equal(groupForSource(routesForSource(entry('himalayas')), new Set(['brightdata'])), 'multi');
 assert.equal(groupForSource(routesForSource(entry('indeed')), new Set()).toString(), 'google', 'Indeed sin claves se agrupa por Google Jobs, no como gratis por JobSpy');
+// El KPI «Gratis y operativas» usa esta misma condición: JobSpy queda fuera de las vías gratuitas
+// operativas; su lanzamiento se decide aparte, con los proxies sanos de `routeReadiness`.
+const jobspyOnly = routesForSource(entry('indeed')).filter(route => route.provider === 'jobspy');
+assert.equal(hasFreeOperationalRoute(jobspyOnly), false, 'JobSpy no se cuenta como vía gratuita operativa');
+assert.equal(hasFreeOperationalRoute(routesForSource(entry('remoteok'))), true, 'un feed del motor sí cuenta como gratis y operativo');
 
 // 3. Contrato de la petición a Bright Data y mapeo del fixture documentado.
 // La API key sola es un secreto válido (es lo que emite Bright Data): antes se descartaba por «formato»
@@ -117,13 +122,9 @@ assert.match(probeBody.url, /brd_json=1/);
 assert.equal(BRIGHTDATA_USD_PER_REQUEST, PROVIDER_METERS.brightdata.usdPerRequest, 'el precio del proveedor y el del medidor del tope no pueden divergir');
 
 const calls = [];
-const fixture = {
-  jobs: { items: [
-    { title: 'Closer high ticket', company: 'Acme', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B', link: 'https://www.infojobs.net/oferta/1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
-    { title: 'Sin enlace', company: 'Nadie', location: 'Madrid', source: 'X' },
-    { title: 'Setter', company: 'Beta', location: 'Bogotá', source: 'LinkedIn', link: 'https://www.linkedin.com/jobs/view/2' },
-  ] },
-};
+// Misma forma documentada que usa `brightdata.mjs`: solo title, company, location, source,
+// description, link y tags. Sin fecha ni campos que la documentación no muestre.
+const fixture = JSON.parse(readFileSync(new URL('../fixtures/brightdata/serp-jobs.json', import.meta.url), 'utf8'));
 const fakeFetch = async (target, init) => { calls.push({ target, init }); return new Response(JSON.stringify(fixture), { status: 200 }); };
 const result = await serpJobs(config, { query: 'closer de ventas', fetchImpl: fakeFetch, now: Date.parse('2026-11-21T12:00:00Z') });
 assert.equal(calls.length, 1, 'una búsqueda = una petición');
@@ -139,7 +140,7 @@ assert.equal(result.candidates.length, 2, 'sin enlace no hay oferta verificable'
 assert.equal(result.costUsd, 0.0015);
 assert.equal(result.candidates[0].company, 'Acme');
 assert.match(result.candidates[0].description, /Remoto/);
-assert.ok(result.candidates[0].posted_at?.startsWith('2026-11-19'));
+assert.equal(result.candidates[0].posted_at, null, 'sin fecha en la respuesta documentada no se inventa');
 assert.equal(jobsFromPayload({ jobs_results: [{ title: 'T', company_name: 'C', location: 'L', link: 'https://x.test/1', via: 'V' }] }).length, 1, 'acepta la forma de SerpApi si la zona cambia');
 
 await assert.rejects(() => serpJobs({ apiKey: 'abc12345key', serpZone: null, unlockerZone: null }, { query: 'x' }), /zona SERP/, 'sin zona no se lanza una petición que se cobraría');
@@ -251,9 +252,31 @@ assert.equal(routeReadiness(unlocker, state()).ok, false);
 assert.match(routeReadiness(unlocker, state()).reason, /Sin clave de brightdata ni zenrows ni scrapingbee/);
 assert.equal(routeReadiness(unlocker, state({ keys: new Set(['zenrows']), budget: { zenrows: 5 } })).ok, true, 'ZenRows también desbloquea el extractor');
 assert.equal(routeReadiness(unlocker, state({ keys: new Set(['brightdata']), budget: { brightdata: 5 } })).ok, true);
-assert.equal(routeReadiness(unlocker, state({ keys: new Set(['brightdata']), budget: { brightdata: 5 }, unlockerReady: false })).ok, false, 'sin zona Unlocker no está lista');
-assert.match(routeReadiness(unlocker, state({ keys: new Set(['brightdata']), budget: { brightdata: 5 }, unlockerReady: false })).reason, /zona Unlocker/);
+const serpOnly = state({ keys: new Set(['brightdata']), budget: { brightdata: 5 }, unlockerReady: false });
+assert.equal(routeReadiness(unlocker, serpOnly).ok, false, 'sin zona Unlocker no está lista');
+assert.match(routeReadiness(unlocker, serpOnly).reason, /zona Unlocker/);
+assert.equal(unlockerProviderFor(serpOnly), null, 'una clave SERP sin zona no se lanza como Unlocker');
 assert.equal(routeReadiness(unlocker, state({ keys: new Set(['brightdata', 'zenrows']), budget: { brightdata: 5, zenrows: 5 }, unlockerReady: false })).ok, true, 'otra clave de HTML puede sustituir la zona ausente');
+
+// 5f. Dos proveedores con saldos distintos: se elige el que de verdad se lanza y se mira SU tope.
+const zenrowsSinSaldo = state({ keys: new Set(['brightdata', 'zenrows']), budget: { brightdata: 5, zenrows: 0 } });
+assert.equal(unlockerProviderFor(zenrowsSinSaldo), 'brightdata', 'si ZenRows está agotado, se lanza Bright Data');
+assert.equal(routeReadiness(unlocker, zenrowsSinSaldo).ok, true, 'la disponibilidad sigue al proveedor elegido');
+const brightdataSinSaldo = state({ keys: new Set(['brightdata', 'zenrows']), budget: { brightdata: 0, zenrows: 5 }, unlockerReady: false });
+assert.equal(unlockerProviderFor(brightdataSinSaldo), 'zenrows', 'si Bright Data no tiene zona ni saldo, se lanza ZenRows');
+assert.equal(routeReadiness(unlocker, brightdataSinSaldo).ok, true);
+const ambosSinSaldo = state({ keys: new Set(['brightdata', 'zenrows']), budget: { brightdata: 0, zenrows: 0 }, unlockerReady: false });
+assert.equal(unlockerProviderFor(ambosSinSaldo), null);
+assert.match(routeReadiness(unlocker, ambosSinSaldo).reason, /Tope mensual agotado para brightdata, zenrows/);
+const casiSinSaldo = state({ keys: new Set(['brightdata']), budget: { brightdata: 0.002 } });
+assert.equal(unlockerProviderFor(casiSinSaldo), null, '0,002 USD no cubre los dos intentos que reserva el POST');
+assert.match(routeReadiness(unlocker, casiSinSaldo).reason, /Tope mensual agotado/);
+assert.equal(canSpend('zenrows', 0, { ZENROWS_MONTHLY_USD: '5' }).ok, true, 'el tope de ZenRows es el suyo');
+assert.equal(canSpend('zenrows', 5, { ZENROWS_MONTHLY_USD: '5' }).ok, false);
+assert.equal(canSpend('brightdata', 5, {}).ok, false, 'el tope de Bright Data no se mezcla con el de ZenRows');
+const zenrowsNote = spendNote({ route: '7/7', provider: 'zenrows', requests: 1, costUsd: 0.002, detail: 'company · unlocker' });
+assert.equal(spentFromNotes([{ note: zenrowsNote }], 'zenrows').usd, 0.002, 'la nota de ZenRows suma a ZenRows');
+assert.equal(spentFromNotes([{ note: zenrowsNote }], 'brightdata').usd, null, 'la nota de ZenRows no consume el saldo de Bright Data');
 assert.equal(brightDataSource('company'), 'brightdata-company', 'el HTML se atribuye a brightdata-<portal>');
 const unlockerNote = spendNote({ route: '7/7', provider: 'brightdata', requests: 1, costUsd: 0.0015, detail: 'company · unlocker' });
 assert.equal(spentFromNotes([{ note: unlockerNote }], 'brightdata').usd, 0.0015);

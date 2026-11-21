@@ -1,6 +1,6 @@
 # ADR-021 · Cascada de rutas por fuente y Bright Data como vía de Google Jobs
 
-- **Estado:** aceptado e implementado (2026-11-21). Migraciones aplicadas en Supabase real el 2026-11-21 (versiones 20261121180401 y 20261121180440); sin verificación en panel desplegado.
+- **Estado:** aceptado e implementado (2026-11-21). Las migraciones ya estaban aplicadas en la base real por una orden anterior (versiones 20261121180401 y 20261121180440); esta implementación no ejecutó DDL. Sin verificación en panel desplegado.
 - **Sustituye en parte:** ADR-009 (coste) y ADR-011 (fuentes externas y condiciones de uso), sin revocarlos.
 - **Ámbito:** panel de Fuentes, proveedores de búsqueda, JobSpy y páginas de empresa.
 
@@ -44,8 +44,8 @@ mismas para todas.
 - `POST https://api.brightdata.com/request` con `Authorization: Bearer`, cuerpo `{zone, url, format}`.
 - Google Jobs con `ibp=htl%3Bjobs`; parsea `jobs.items[]` (`title`, `company`, `location`, `source`,
   `description`, `link`, `tags`) y descarta lo que no tenga título o enlace verificable.
-- Reintento **una** vez en 429/5xx; 401/403 se declaran sin reintentar. Error tipado con estado.
-- `unlockHtml` para la zona Web Unlocker; devuelve HTML y el coste de la petición.
+- Reintento **una** vez solo en 429/503; un 500/502 no se reintenta, y 401/403 se declaran sin reintentar. Error tipado con `kind` (`auth`, `zone`, `transport`, `payload`, `http`, `input`).
+- `unlock(config, { url })` para la zona Web Unlocker; devuelve HTML y el coste de la petición. `unlockHtml` sigue exportado como alias compatible y comparte el mismo cliente.
 
 La clave se guarda tal como la da Bright Data (la **API key sola**) o, si se prefiere fijarlas, como
 `API key:zona SERP[:zona Unlocker]`; va cifrada como las demás. Con la clave sola, las zonas se descubren en
@@ -63,10 +63,12 @@ sus APIs. El tope es `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto), también ahor
 anota en `external_ingest_runs` con `proveedor=brightdata · coste_usd=…` y el panel suma **todas** las
 ejecuciones desde el día 1 del mes paginando hasta el final (sin tope artificial de 10.000); si una página
 falla, no autoriza gasto. La
-migración [`20261121_provider_budget.sql`](../../supabase/migrations/20261121_provider_budget.sql) está
-**aplicada** en `closer-ia-ops` (versión **20261121180401**): 4 filas sembradas a 5 USD, RLS y sin acceso
-desde `anon`/`authenticated`; su prueba es [`tests/db/provider_budget.sql`](../../tests/db/provider_budget.sql)
-(`BEGIN…ROLLBACK`). Ojo: el tope efectivo **sigue leyéndose del entorno** porque `capUsd()` todavía no lee
+migración [`20261121_provider_budget.sql`](../../supabase/migrations/20261121_provider_budget.sql) está en
+el repo. **No la ha aplicado esta implementación**: la base real `closer-ia-ops` ya la tenía aplicada de una
+sesión anterior (versión **20261121180401**, 4 filas sembradas a 5 USD, RLS y sin acceso desde
+`anon`/`authenticated`), y revertirla exigiría un `drop` destructivo que no se ha ejecutado. Su prueba es
+[`tests/db/provider_budget.sql`](../../tests/db/provider_budget.sql) (`BEGIN…ROLLBACK`), no ejecutada en
+esta verificación. Ojo: el tope efectivo **sigue leyéndose del entorno** porque `capUsd()` todavía no lee
 `monthly_usd`; conectar la tabla es un cambio de código aparte.
 
 ### 3. Cascada
@@ -133,12 +135,13 @@ el orden y «Volver al orden por coste» lo borra.
   panel desplegado.
 - El Unlocker se prueba con un HTML simulado que pasa por `extractJobPostings`; se atribuye a
   `brightdata-<portal>` y su nota de gasto se suma al mismo tope que SERP.
-- Comprobado: `tests/admin-auth/source-routes.mjs` (rutas, dos fuentes con y sin Bright Data, caída a
-  SerpApi, JobSpy sin proxies, Unlocker, override de orden, contrato, cascada, guías y empresas),
-  `npm run typecheck`, `npx next build apps/web --webpack`, `npm run design`, `pytest
-  tests/test_source_catalog_export.py`, `bash tests/admin-auth/run.sh` y las pruebas de BD
-  `tests/db/provider_budget.sql` y `tests/db/source_route_order.sql` (`BEGIN…ROLLBACK` contra la base real).
-  Ver STATUS para el resultado de cada uno.
+- Comprobado en la auditoría de cierre (2026-11-21): `tests/admin-auth/source-routes.mjs` (rutas, dos
+  fuentes con y sin Bright Data, caída a SerpApi, JobSpy sin proxies, Unlocker, override de orden, contrato,
+  cascada, guías y empresas), `tests/admin-auth/brightdata.mjs`, `npm run typecheck`, `npx next build apps/web
+  --webpack`, `pytest -q` (**214 passed, 1 skipped**; el omitido es JobSpy no instalado) y `bash
+  tests/admin-auth/run.sh` (**13/13** pasos de interfaz y **12/12** flujos interactivos). Las pruebas de BD
+  `tests/db/provider_budget.sql` y `tests/db/source_route_order.sql` (`BEGIN…ROLLBACK`) se ejecutaron al
+  aplicar las migraciones, no en esta pasada; esta pasada no ejecutó DDL. Ver STATUS para el detalle.
 
 ## Referencias
 

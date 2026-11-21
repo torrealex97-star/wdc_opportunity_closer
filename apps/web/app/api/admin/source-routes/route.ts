@@ -8,7 +8,7 @@ import { extractJobPostings } from '../../../../lib/jobPosting';
 import { canSpend, capUsd, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
 import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
-import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
+import { routeReadiness, routesForCatalog, unlockerProviderFor, type RouteState } from '../../../../lib/sourceRoutes';
 import sourceCatalog from '../../../../lib/sourceCatalog.json';
 
 export const dynamic = 'force-dynamic';
@@ -89,9 +89,10 @@ export async function GET(request: NextRequest) {
   const spent: Record<string, number | null> = {};
   const notes = (rows ?? []).map(row => ({ note: row.note }));
   for (const provider of ['brightdata', 'serpapi', 'zenrows', 'scrapingbee'] as MeteredProvider[]) {
+    // Si el gasto no se pudo leer (rows === null), el saldo es `null`, no el tope entero: el panel
+    // no debe pintar disponible lo que el POST va a rechazar por precaución.
     budget[provider] = state.budget[provider] ?? null;
     spent[provider] = rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
-    if (budget[provider] === null && state.keys.has(provider)) budget[provider] = capUsd(provider);
   }
   const configuredProxies = Boolean((process.env.JOBSPY_PROXIES ?? '').trim());
   return     reply(auth!, {
@@ -211,9 +212,26 @@ export async function POST(request: NextRequest) {
   }
 
   if (route.provider === 'unlocker') {
-    const url = typeof body.url === 'string' ? body.url : entry.website;
-    if (!url) return Response.json({ detail: 'Falta una URL pública con JSON-LD o RSS.' }, { status: 422 });
-    const provider = state.keys.has('zenrows') ? 'zenrows' : state.keys.has('scrapingbee') ? 'scrapingbee' : 'brightdata';
+    // La portada del catálogo no sirve como sustituto: el extractor necesita una página concreta
+    // con JSON-LD JobPosting o RSS. Se exige explícitamente y se valida antes de elegir proveedor.
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (!url) {
+      return Response.json({ detail: 'Indica la URL pública con JSON-LD JobPosting o RSS; no se usa la portada del catálogo.' }, { status: 422 });
+    }
+    let parsed: URL;
+    try { parsed = new URL(url); } catch {
+      return Response.json({ detail: 'La URL pública no es válida. Indica una URL HTTPS con JSON-LD JobPosting o RSS.' }, { status: 422 });
+    }
+    if (parsed.protocol !== 'https:') {
+      return Response.json({ detail: 'Solo se aceptan URL públicas HTTPS con JSON-LD JobPosting o RSS.' }, { status: 422 });
+    }
+    // Misma elección que `routeReadiness`: proveedor con clave, zona y saldo legible. Nunca se
+    // presenta lista una vía y se lanza otra con un tope distinto.
+    const provider = unlockerProviderFor(state);
+    if (!provider) {
+      const reason = routeReadiness(route, state).reason || 'Ningún proveedor de HTML puede lanzarse ahora.';
+      return Response.json({ detail: reason }, { status: 409 });
+    }
     const secret = await getSecret(provider);
     if (!secret) return Response.json({ detail: `Sin clave de ${provider}.` }, { status: 409 });
     // Igual que en SERP: se reservan los dos intentos del cliente de HTML.

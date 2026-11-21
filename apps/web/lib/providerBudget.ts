@@ -2,8 +2,10 @@
 //
 // Apify tenía su propio tope mensual (`paid_budget`, editable en el panel). Bright Data, SerpApi y los
 // proxys de HTML no lo tenían: este módulo les da un tope por variable de entorno, un formato de nota
-// único y un lector que suma lo ya registrado. Sin tabla nueva y sin migración aplicada: si mañana se
-// crea `provider_budget`, se lee de ahí y el entorno queda como respaldo, igual que hace Apify.
+// único y un lector que suma lo ya registrado. La migración `20261121_provider_budget.sql` existe (el
+// propietario la aplicó en una sesión anterior), pero `capUsd` todavía NO lee `monthly_usd`: el tope
+// efectivo es la variable de entorno (`BRIGHTDATA_MONTHLY_USD` por defecto 5). Conectar la tabla queda
+// pendiente; hasta entonces, este comentario y el panel deben decirlo, no fingir que ya se lee de la BD.
 //
 // Un hueco no es un cero: sin tope legible o sin notas, el gasto devuelve `null` y el panel lo declara.
 
@@ -83,7 +85,8 @@ export function spendNote(input: { route: string; provider: MeteredProvider; req
   const parts = [
     `ruta ${input.route}`,
     `proveedor=${input.provider}`,
-    `${input.requests} petición(es)`,
+    // Bright Data se cobra por búsqueda; el resto de medidores, por petición/página.
+    `${input.requests} ${input.provider === 'brightdata' ? 'búsqueda(s)' : 'petición(es)'}`,
     `coste_usd=${input.costUsd.toFixed(6)}`,
     input.detail,
   ];

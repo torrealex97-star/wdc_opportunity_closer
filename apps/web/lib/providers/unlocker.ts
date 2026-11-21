@@ -1,4 +1,4 @@
-import { resolveBrightDataConfig, unlockHtml, BrightDataError } from './brightdata';
+import { resolveBrightDataConfig, unlock, BrightDataError } from './brightdata';
 
 // Proveedores que devuelven el HTML de una página (no una lista estructurada). Se usan SOLO donde ya
 // existe un extractor probado —JSON-LD `JobPosting` o RSS—, nunca como sustituto de un portal que la app
@@ -62,7 +62,7 @@ export async function fetchHtml(
     // La API key sola es válida: la zona del Unlocker se descubre en la cuenta (gratis) si no vino escrita.
     const { config } = await resolveBrightDataConfig(secret, { timeoutMs, fetchImpl });
     if (!config) throw new BrightDataError('Formato de clave de Bright Data incorrecto', 422);
-    return unlockHtml(config, url, { timeoutMs, fetchImpl });
+    return unlock(config, { url, timeoutMs, fetchImpl });
   }
   const preset = UNLOCKER_PRESETS[provider];
   const target = preset.build!(secret, url);

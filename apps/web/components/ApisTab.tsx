@@ -124,7 +124,7 @@ export default function ApisTab({ owner, onSessionLost }: { owner: boolean; onSe
       return <article className="source-card" key={c.provider}>
         <div className="card-head"><div><h3>{c.name}</h3><p className="card-meta" style={{ marginTop: 4 }}>{PURPOSE[c.provider]}</p></div><span className={state[1]}>{state[0]}</span></div>
         {c.configured && <p className="card-meta">Clave …{c.last4}{c.last_test_at ? ` · ${c.last_test_detail} (${fmt(c.last_test_at)})` : ''}{c.updated_by ? ` · cambiada por ${c.updated_by}, ${fmt(c.updated_at)}` : ''}</p>}
-        {SPEND.has(c.provider) && <p className="inline-hint">Probar esta clave hace 1 petición real y se cobra (~0,0015–0,002 USD). Guardar no gasta.</p>}
+        {SPEND.has(c.provider) && <p className="inline-hint">Probar esta clave hace 1 {c.provider === 'brightdata' ? 'búsqueda' : 'petición'} real y se cobra (~{c.provider === 'brightdata' ? '0,0015' : '0,002'} USD). Guardar no gasta.</p>}
         <form className="card-form" onSubmit={e => { e.preventDefault(); void run(c.provider, async () => { await api({ method: 'PUT', body: JSON.stringify({ provider: c.provider, secret: secrets[c.provider] }) }); setSecrets(s => ({ ...s, [c.provider]: '' })); return `Clave de ${c.name} guardada.`; }); }}>
           {owner && <input id={`key-${c.provider}`} type="password" autoComplete="off" placeholder={c.configured ? 'Pegar una clave nueva para sustituirla' : 'Pegar la clave de API'} value={secrets[c.provider] ?? ''} onChange={e => setSecrets(s => ({ ...s, [c.provider]: e.target.value }))} aria-label={`Clave de ${c.name}`} />}
           {owner && <button className="primary" disabled={busy !== null || !(secrets[c.provider] ?? '').trim()}><KeyRound size={14} /> Guardar</button>}

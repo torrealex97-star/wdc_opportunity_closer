@@ -332,7 +332,7 @@ export async function sharedLiveOffers(): Promise<number | null> {
   return countExact([`org_id=eq.${ORG}`, `expires_at=gt.${now}`, 'also_seen=not.eq.%7B%7D']);
 }
 
-export type CompanyReviewHistory = { byCode: Record<string, string>; byHost: Record<string, string>; unknown: boolean };
+export type CompanyReviewHistory = { byCode: Record<string, string>; byHost: Record<string, string>; bySource: Record<string, string>; unknown: boolean };
 
 /**
  * Última revisión por empresa usando SOLO datos ya guardados: la nota de la ejecución manual
@@ -340,11 +340,16 @@ export type CompanyReviewHistory = { byCode: Record<string, string>; byHost: Rec
  * dominio. No hay tabla ni columna nueva; si una de las dos lecturas falla, `unknown` lo declara y el
  * panel no convierte un hueco en «nunca revisada».
  */
-export async function companyReviewHistory(): Promise<CompanyReviewHistory> {
+export async function companyReviewHistory(sources: string[] = []): Promise<CompanyReviewHistory> {
   const hostOf = (value: string) => { try { return new URL(value).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+  // La revisión automática de un ATS no deja una oferta si la bolsa está vacía, pero sí una ejecución.
+  // Se piden solo las fuentes de la lista de empresas (no toda la tabla) para no traer el histórico de
+  // Apify/SerpApi entero; sin lista se mantiene la lectura antigua de la fuente 'company'.
+  const wanted = [...new Set(sources)].filter(source => SOURCE_RE.test(source));
+  const runFilter = wanted.length ? `source=in.(${wanted.join(',')})` : 'source=eq.company';
   const [runs, offers] = await Promise.all([
-    pagedRest<{ note: string | null; created_at: string }>(
-      `external_ingest_runs?org_id=eq.${ORG}&source=eq.company&select=note,created_at`,
+    pagedRest<{ source: string; note: string | null; created_at: string }>(
+      `external_ingest_runs?org_id=eq.${ORG}&${runFilter}&select=source,note,created_at`,
       'created_at.desc', Number.POSITIVE_INFINITY,
     ),
     pagedRest<{ url: string; last_seen_at: string }>(
@@ -354,15 +359,17 @@ export async function companyReviewHistory(): Promise<CompanyReviewHistory> {
   ]);
   const byCode: Record<string, string> = {};
   const byHost: Record<string, string> = {};
+  const bySource: Record<string, string> = {};
   for (const row of runs?.rows ?? []) {
     const code = /company:([a-z0-9-]{2,40})/.exec(row.note ?? '')?.[1];
     if (code && (!byCode[code] || row.created_at > byCode[code])) byCode[code] = row.created_at;
+    if (row.source && (!bySource[row.source] || row.created_at > bySource[row.source])) bySource[row.source] = row.created_at;
   }
   for (const row of offers?.rows ?? []) {
     const host = hostOf(row.url);
     if (host && (!byHost[host] || row.last_seen_at > byHost[host])) byHost[host] = row.last_seen_at;
   }
-  return { byCode, byHost, unknown: !runs || !offers };
+  return { byCode, byHost, bySource, unknown: !runs || !offers };
 }
 
 export async function recentRuns(limit = 8): Promise<Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }> | null> {
