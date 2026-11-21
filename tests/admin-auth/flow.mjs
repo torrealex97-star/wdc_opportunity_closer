@@ -101,9 +101,9 @@ await step('baja: no puedes quitarte a ti ni al último propietario; quitar cort
 });
 await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en claro; probar válida/ inválida', async () => {
   let r = await call('/api/admin/connections'); assert.equal(r.status, 200);
-  // 11 proveedores: los 8 de siempre + Bright Data, ZenRows y ScrapingBee (rutas de pago/HTML).
-  assert.equal(r.json.connections.length, 11); assert.ok(r.json.connections.every(c => !c.configured));
-  for (const provider of ['brightdata', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
+  // 12 proveedores: los 8 de siempre + Bright Data, ZenRows y ScrapingBee (rutas de pago/HTML) + JSearch.
+  assert.equal(r.json.connections.length, 12); assert.ok(r.json.connections.every(c => !c.configured));
+  for (const provider of ['brightdata', 'jsearch', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'nope', secret: 'good-key-1234' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'corta' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'groq' } })).status, 404); // sin clave guardada
@@ -131,6 +131,10 @@ await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en 
   assert.equal((await call('/api/admin/connections')).json.connections.find(c => c.provider === 'brightdata').last4, '1234');
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'zenrows', secret: 'zen-key-1234' } })).status, 200);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'scrapingbee', secret: 'bee-key-1234' } })).status, 200);
+  // JSearch se guarda con su clave; su «Probar» no se pulsa aquí porque hace una búsqueda real contra
+  // OpenWeb Ninja (el mock solo redirige las bases de SerpApi y Bright Data).
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'jsearch', secret: 'jsearch-key-1234' } })).status, 200);
+  assert.equal((await call('/api/admin/connections')).json.connections.find(c => c.provider === 'jsearch').last4, '1234');
   // Un nombre heredado del prototipo no es un proveedor: no se guarda nada.
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'toString', secret: 'good-key-1234' } })).status, 422);
   const o = (await call('/api/admin/overview')).json.paid;

@@ -6,11 +6,12 @@
 //   1. API/feed oficial gratis (motor, backend, ATS)        0
 //   2. API oficial con clave (InfoJobs, Adzuna, Jooble)     0 con cuota
 //   3. Google Jobs vía Bright Data SERP                     0,0015 USD/búsqueda
-//   4. Google Jobs vía SerpApi                              0,025 USD/búsqueda
-//   5. Apify                                                pago por resultado
-//   6. JobSpy                                              0, pero solo con proxies sanos y al final
-//   7. Web Unlocker / ZenRows / ScrapingBee                 ~0,0015–0,002 USD/página
-//   8. Hermes / Manus                                       no disponibles (ADR-009)
+//   4. Google Jobs vía JSearch (OpenWeb Ninja)              0,0025 USD/petición
+//   5. Google Jobs vía SerpApi                              0,025 USD/búsqueda
+//   6. Apify                                                pago por resultado
+//   7. JobSpy                                              0, pero solo con proxies sanos y al final
+//   8. Web Unlocker / ZenRows / ScrapingBee                 ~0,0015–0,002 USD/página
+//   9. Hermes / Manus                                       no disponibles (ADR-009)
 //
 // Módulo puro: no importa clientes de red, Supabase ni variables de entorno. Lo usan el panel (cliente)
 // y las rutas de API (servidor), y las pruebas lo ejecutan tal cual. Sin clave no hay ruta «conectada»:
@@ -18,7 +19,7 @@
 
 import { PORTALS } from './apifyCatalog';
 
-export type RouteProvider = 'engine' | 'backend' | 'official' | 'brightdata' | 'serpapi' | 'apify' | 'jobspy' | 'unlocker' | 'agent';
+export type RouteProvider = 'engine' | 'backend' | 'official' | 'brightdata' | 'jsearch' | 'serpapi' | 'apify' | 'jobspy' | 'unlocker' | 'agent';
 export type RouteCost = 'free' | 'quota' | 'metered' | 'paid' | 'unavailable';
 export type RouteEvidence = 'operativo' | 'medido' | 'documentado' | 'bloqueado' | 'no_disponible';
 
@@ -61,11 +62,13 @@ export const ROUTE_STAGE: Record<RouteProvider, number> = {
   backend: 0,
   official: 1,
   brightdata: 2,
-  serpapi: 3,
-  apify: 4,
-  jobspy: 5,
-  unlocker: 6,
-  agent: 7,
+  // JSearch es la misma búsqueda de Google Jobs que SerpApi, diez veces más barata: ese es su escalón.
+  jsearch: 3,
+  serpapi: 4,
+  apify: 5,
+  jobspy: 6,
+  unlocker: 7,
+  agent: 8,
 };
 
 export const COST_LABEL: Record<RouteCost, string> = {
@@ -164,10 +167,17 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
       evidence: 'documentado', evidenceNote: 'Contrato y precio verificados en su documentación; sin clave aquí, se prueba con fixture.',
       requiresKey: 'brightdata',
     });
+    add({
+      provider: 'jsearch', label: 'Google Jobs · JSearch', cost: 'metered', costUsd: 0.0025, stage: 3,
+      requirement: 'API key de JSearch (OpenWeb Ninja) en Panel → APIs.',
+      detail: `Misma búsqueda de Google Jobs que SerpApi por 0,0025 USD por petición (25 USD por 10.000, 200 gratis al mes). Entra antes que SerpApi justo por precio, no por marca.`,
+      evidence: 'documentado', evidenceNote: 'Endpoint, campos y tarifa revisados en su documentación; sin clave aquí, se prueba con fixture.',
+      requiresKey: 'jsearch',
+    });
   }
   if (googleQuery && SERPAPI_SOURCES.has(code)) {
     add({
-      provider: 'serpapi', label: 'Google Jobs · SerpApi', cost: 'metered', costUsd: 0.025, stage: 3,
+      provider: 'serpapi', label: 'Google Jobs · SerpApi', cost: 'metered', costUsd: 0.025, stage: 4,
       requirement: 'API key de SerpApi en Panel → APIs.',
       detail: 'Respaldo cuando no hay Bright Data. Misma búsqueda, 0,025 USD por búsqueda y sin paginación.',
       evidence: 'documentado', evidenceNote: 'Usado ya por el motor; el coste se anota en la nota de cada ejecución.',
@@ -177,7 +187,7 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
 
   if (APIFY_PORTALS.has(`apify-${code}`) || APIFY_PORTALS.has(code)) {
     add({
-      provider: 'apify', label: 'Actor de Apify', cost: 'paid', costUsd: null, stage: 4,
+      provider: 'apify', label: 'Actor de Apify', cost: 'paid', costUsd: null, stage: 5,
       requirement: 'Token de Apify y presupuesto mensual con saldo.',
       detail: 'Se lanza un actor auditado para este portal. Se paga por resultado y los datos llegan después del lanzamiento; nunca se da por hecho.',
       evidence: 'documentado', evidenceNote: 'Actores con metadatos revisados; la extracción se valida al lanzar.',
@@ -187,7 +197,7 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
 
   if (JOBSPY_SOURCES.has(code)) {
     add({
-      provider: 'jobspy', label: 'JobSpy · GitHub Actions', cost: 'free', costUsd: 0, stage: 5,
+      provider: 'jobspy', label: 'JobSpy · GitHub Actions', cost: 'free', costUsd: 0, stage: 6,
       requirement: 'Proxies sanos en JOBSPY_PROXIES (200 en menos de 8 s). Sin ninguno, no se lanza.',
       detail: 'Última vía sin coste directo. Se ejecuta fuera del servidor y solo con proxies validados; sin proxies se declara y no se intenta.',
       evidence: 'documentado', evidenceNote: 'Script y workflow del repo; depende de proxies que no están en este entorno.',
@@ -197,7 +207,7 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
 
   if (HTML_EXTRACTOR.has(code) && host) {
     add({
-      provider: 'unlocker', label: 'Web Unlocker + extractor', cost: 'metered', costUsd: 0.0015, stage: 6,
+      provider: 'unlocker', label: 'Web Unlocker + extractor', cost: 'metered', costUsd: 0.0015, stage: 7,
       requirement: 'Zona Web Unlocker de Bright Data, o clave de ZenRows/ScrapingBee.',
       detail: 'Descarga el HTML y aplica el extractor común (JSON-LD JobPosting o RSS). No se usa en portales sin extractor probado.',
       evidence: 'documentado', evidenceNote: 'Extractor probado con fixtures; la lectura real exige clave y una URL con JSON-LD o RSS.',
@@ -355,7 +365,7 @@ export function groupForSource(routes: SourceRoute[], keys: Set<string>): Source
   if (free && keyed) return 'multi';
   if (free) return 'direct';
   if (routes.some(route => route.provider === 'official')) return 'keyed';
-  if (routes.some(route => route.provider === 'brightdata' || route.provider === 'serpapi')) return 'google';
+  if (routes.some(route => route.provider === 'brightdata' || route.provider === 'jsearch' || route.provider === 'serpapi')) return 'google';
   if (routes.some(route => route.provider === 'apify')) return 'apify';
   if (routes.some(route => route.provider === 'unlocker' || route.provider === 'jobspy')) return 'other';
   return 'none';

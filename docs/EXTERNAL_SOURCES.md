@@ -16,6 +16,7 @@ Google Jobs indexa InfoJobs, LinkedIn, Computrabajo, Bumerán, OCCMundial y port
 3. **Coste**: 0,025 USD por búsqueda → **0,175 USD/día** (≈5,25 USD/mes) en plan de pago; en el plan gratuito salen de las 250 búsquedas/mes. `SERPAPI_JOBS_MAX_DORKS` fija cuántas se lanzan (7 por defecto, 0 apaga, máximo 10). Para gastar más hay que subir esa variable en Vercel → Settings → Environment Variables; el panel muestra el coste por pasada.
 4. Sin tiempo en el cron se corta y lo declara (`truncated`); lo ya recogido se guarda y la siguiente pasada continúa.
 5. La fuente se pausa como cualquier otra desde Fuentes externas (código `google-jobs`).
+6. **Atajo más barato desde el panel**: con una clave de JSearch (OpenWeb Ninja) guardada en Panel → APIs, la cascada de cada fuente prueba Google Jobs por **JSearch a 0,0025 USD/petición** antes que por SerpApi a 0,025. El cron de arriba sigue yendo por SerpApi hasta que se cambie a propósito; el escalón nuevo se usa al pulsar «Probar ruta». Sin clave o sin tope legible (`JSEARCH_MONTHLY_USD`, 5 USD por defecto) no se lanza.
 
 ## 1 ter. Respaldo por portal: si su API oficial falta, se busca en Google acotado a ese portal
 Cuando un portal del SOP no tiene API oficial conectada (sin clave, clave rechazada o caída) se busca su inventario con Google + SerpApi (`site:<portal>`), en su país y en español. Así no queda un mercado sin ofertas porque falte una clave: **la API oficial manda y SerpApi solo cubre el hueco**.
@@ -135,7 +136,7 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
   HTTP 200 y menos de 8 s. Solo los sanos se usan, rotados por sitio.
 - Sin ningún proxy sano **no se lanza**: se declara «no se intentó» y el workflow publica qué proxy falló y
   por qué. El modo directo solo se activa con `JOBSPY_ALLOW_DIRECT=1`, asumiendo el bloqueo del runner.
-- JobSpy va después de Bright Data, SerpApi y Apify: no se gasta el runner si una vía anterior ya trajo
+- JobSpy va después de Bright Data, JSearch, SerpApi y Apify: no se gasta el runner si una vía anterior ya trajo
   ofertas. Sigue sin guardar correos ni teléfonos y todo entra como borrador.
 - El workflow (`.github/workflows/jobspy-collect.yml`) mantiene las acciones fijadas por SHA y añade el
   resumen de proxies al job.

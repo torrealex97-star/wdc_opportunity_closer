@@ -1,5 +1,39 @@
 # Estado
 
+## JSearch entra como escalón de Google Jobs entre Bright Data y SerpApi (sesión 289) — 2026-11-21
+
+- **Petición del propietario**: añadir JSearch (OpenWeb Ninja) a 0,0025 USD por petición, con su clave en
+  Panel → APIs, su tope en `providerBudget` y una prueba que demuestre que sustituye a SerpApi sin cambiar
+  el orden por coste.
+- **Contrato** (*documentado*: OpenAPI y tarifa del proveedor): `GET https://api.openwebninja.com/jsearch/search-v2`
+  con `x-api-key`, `country=es`, `language=es`, `num_pages=1` y `date_posted=week`; respuesta
+  `{ status, data: { jobs } }`. 0,0025 USD por petición = 25 USD por 10.000 (plan Pro) y 200 gratis al mes.
+  Una petición es una página de hasta 10 ofertas: no se pagina ni se envía `cursor`.
+- **Cambios**: `apps/web/lib/providers/jsearch.ts` (nuevo) con la petición, el mapeo de `data.jobs[]` (enlace
+  sin esquema se completa con `https://`; salario solo si trae cifras; fecha ISO o timestamp en segundos) y
+  descarte de lo que no tenga título o enlace http(s). `sourceRoutes.ts` añade el proveedor `jsearch` con
+  stage 3, entre Bright Data (2) y SerpApi (4), y renumera Apify 5, JobSpy 6, Unlocker 7 y agente 8: el orden
+  por coste no cambia. `providerBudget.ts` le da tope propio (`JSEARCH_MONTHLY_USD`, 5 USD por defecto) y
+  precio 0,0025. `/api/admin/source-routes` calcula su saldo y ejecuta «Probar ruta» con reserva de **una**
+  petición, nota `proveedor=jsearch · coste_usd=…` e ingesta en `google-jobs`. Panel → APIs gana la tarjeta
+  «JSearch · API key de OpenWeb Ninja»; su «Probar» hace una búsqueda real y la pista ya dice 0,0025 (antes
+  anunciaba 0,0015–0,002 para todas).
+- **Migración**: `20261121_integration_connections_jsearch.sql` amplía el `CHECK` de `integration_connections`
+  a doce proveedores; sin ella, guardar la clave respondería 503. Aplicada en `closer-ia-ops` como versión
+  **20261121205130**; su prueba `BEGIN…ROLLBACK` (`tests/db/integration_connections_providers.sql`, ahora con
+  `jsearch`) pasó contra la base real y no dejó filas.
+- **Probado** (*tested*): `tests/admin-auth/source-routes.mjs` en verde con un bloque nuevo — orden
+  Bright Data → JSearch → SerpApi, JSearch listo gana y SerpApi se declara «omitida: ya trajo ofertas», si
+  JSearch vuelve vacío SerpApi sigue de respaldo, tope propio (el último 0,0025 cabe y 4,998 no), gasto de
+  JSearch no atribuido a SerpApi, URL documentada, clave en `x-api-key`, sin `cursor`, mapeo del fixture y 401
+  que no se da por bueno. `npm run typecheck` en 0. `interactive.mjs` 11/12 y `flow.mjs` 4/46 **también en
+  `main`** sin estos cambios (fallo previo del entorno: `'zone' !== '1234'` y los pasos que no arrancan
+  aquí), así que no se atribuye a esta sesión.
+- **No probado**: sin clave de OpenWeb Ninja en este entorno no se ha llamado al endpoint; la tarjeta queda
+  «documentada · sin probar» hasta la primera búsqueda real desde el panel.
+- **Pendiente**: primera prueba con clave real y, si convence, cambiar el cron de `google-jobs` de SerpApi a
+  JSearch (hoy sigue por SerpApi a propósito: es un cambio de recogida, no de escalón).
+
 ## La clave correcta de Bright Data deja de rechazarse: se acepta sola y clave y zona se validan gratis antes de gastar (sesión 288) — 2026-11-21
 
 - **Petición del propietario**: la clave de Bright Data se estaba rechazando sin motivo cuando era la correcta.

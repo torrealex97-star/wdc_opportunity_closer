@@ -30,13 +30,16 @@ export const PROVIDERS = {
     name: 'Bright Data',
     hint: 'API key (la zona SERP se detecta sola); también API key:zona SERP[:zona Unlocker]',
   },
+  // JSearch (OpenWeb Ninja): no hay endpoint de cuenta gratuito, así que «Probar» hace UNA búsqueda real
+  // (~0,0025 USD) y se anota; sin tope legible no se lanza (lo hace `testConnection`).
+  jsearch: { name: 'JSearch', hint: 'API key de OpenWeb Ninja', probe: (k: string) => get(`${(process.env.JSEARCH_API_BASE ?? 'https://api.openwebninja.com/jsearch').replace(/\/+$/, '')}/search-v2?query=${encodeURIComponent('closer de ventas España')}&country=es&language=es&num_pages=1`, { 'x-api-key': k }) },
   // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
   zenrows: { name: 'ZenRows', hint: 'API key de ZenRows', probe: (k: string) => get(`https://api.zenrows.com/v1/?apikey=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
   scrapingbee: { name: 'ScrapingBee', hint: 'API key de ScrapingBee', probe: (k: string) => get(`https://app.scrapingbee.com/api/v1/?api_key=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
 } as const;
 
 /** Proveedores cuya prueba hace una petición real y se cobra (se avisa en la tarjeta). */
-export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'zenrows', 'scrapingbee']);
+export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'jsearch', 'zenrows', 'scrapingbee']);
 export type Provider = keyof typeof PROVIDERS;
 // `in` también acepta nombres heredados del prototipo (`toString`, `constructor`): se comprueba que la clave
 // sea propia, o el panel guardaría filas para un proveedor que no existe.

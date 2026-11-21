@@ -1,4 +1,5 @@
--- Prueba de comportamiento de 20261121_integration_connections_providers.sql. Todo va dentro de una
+-- Prueba de comportamiento de 20261121_integration_connections_providers.sql y
+-- 20261121_integration_connections_jsearch.sql. Todo va dentro de una
 -- transacción que se revierte: no deja filas. Ejecutar completo en el SQL Editor de Supabase.
 -- No pisa ninguna clave existente: un proveedor que ya tiene fila cuenta como admitido (unique_violation).
 begin;
@@ -6,7 +7,7 @@ begin;
   declare p text;
   begin
     foreach p in array array['apify', 'serpapi', 'groq', 'openai', 'adzuna', 'jooble', 'infojobs',
-                               'resend', 'brightdata', 'zenrows', 'scrapingbee'] loop
+                               'resend', 'brightdata', 'zenrows', 'scrapingbee', 'jsearch'] loop
       begin
         insert into public.integration_connections (provider, secret_ciphertext, last4, updated_by)
         values (p, 'x.y.z', '1234', 'test');
