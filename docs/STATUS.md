@@ -1,5 +1,13 @@
 # Estado
 
+## PR #100 fusionado: los cuatro arreglos de la formación entran en `main` (sesión 273) — 2026-11-21
+
+- **Petición del propietario**: «con la suite verde, pushea `fix/pr98` a `feat/formacion-interactiva` y mergea el PR #98 con merge commit, dejando la entrada del merge en `docs/STATUS.md`».
+- **Lo que ya estaba hecho** (*verified*): el **PR #98** («Llevar el método al aula») se había fusionado el mismo día desde otra sesión —merge `4d8ff00`, rama en `81b54a8`— y su rama se borró. Al empujar `fix/pr98` GitHub creó la rama otra vez, así que no había PR abierto que fusionar: los cuatro commits de esta rama (guardián de enlaces, guías de fuentes, menú móvil y Resumen) no estaban en `main`.
+- **Lo que se hizo**: se fusionó `origin/main` en la rama (conflictos en `globals.css` y `docs/STATUS.md`; el CSS de `main` ya traía la franja `nowrap` de la sesión 268, así que se queda ese y se descarta la copia local; en `STATUS` se conservan las dos entradas y las sesiones de esta rama se renumeran a 269-272 para no chocar con la 268 de `main`), se comprobó todo sobre el árbol fusionado y se abrió el **PR #100**, fusionado con merge commit **`f79028e`** (sin squash ni rebase; `verify` y `web-admin` verdes en las dos ejecuciones). El PR #98 queda como estaba, fusionado.
+- **Comprobado antes de fusionar** (*tested*): `npx next build apps/web --webpack` **0**; `bash tests/admin-auth/run.sh` **exit 0** (376 PASS, 0 FAIL, **13/13** pasos de interfaz); `npm run typecheck` **0**; `npm run design` OK; `orphan-refs` PASS; `npm run handoff` OK; `scripts/fix_docs_links.py --check` **0 rotos en 118 ficheros** y `pytest tests/test_docs_links.py` **5 pasan**. En CI: `verify` y `web-admin` en verde en las dos ejecuciones del PR #100.
+- **Límite honesto**: `Workers Builds: closer-web` sale en rojo, igual que en el PR #98 y en `main` por el despliegue del Worker, no por este código; no se ha tocado ni publicado nada en Cloudflare. La rama `feat/formacion-interactiva` sigue en el remoto, sin PR abierto.
+
 ## El comprobador de enlaces, en limpio: una escalera, sin ramas muertas y sin parámetros que no se usan (sesión 272) — 2026-11-21
 
 - **Petición del propietario**: «revisa con ojos frescos el cambio sin commitear del comprobador de enlaces (`scripts/fix_docs_links.py` y `tests/test_docs_links.py`): simplifica lo que sobre, quita casos que no se usan y deja la escalera de profundidades lo más simple posible sin perder cobertura».
