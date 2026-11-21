@@ -170,7 +170,7 @@ export default function Sources({ config, onRefresh }: { config: Config; onRefre
         <div className="source-grid">{groups.connected.map(sourcesCard)}</div>
 
         <div className="results-heading" style={{ marginTop: 40 }}><h2>Por conectar · Actor de Apify <span>{groups.apify.length}</span></h2></div>
-        <p className="catalog-note">Portales sin API pública: se conectan con un Actor de Apify (puede generar coste por ejecución). Elige el proveedor propuesto, valida su salida y ajusta el mapeo.</p>
+        <p className="catalog-note">Portales sin API ni feed que la app sepa leer: una de las vías es un Actor de Apify (puede generar coste por ejecución), no la única. Antes conviene mirar la guía de cada fuente, que nombra su API oficial o la búsqueda por Google Jobs. Elige el proveedor propuesto, valida su salida y ajusta el mapeo.</p>
         <div className="source-grid">{groups.apify.map(card)}</div>
 
         <div className="results-heading" style={{ marginTop: 40 }}><h2>Google · SerpApi <span>{groups.serpapi.length + 1}</span></h2></div>

@@ -11,22 +11,41 @@ export type Setup = {
   provider?: string;
   /** Coste o compromiso, en una línea, para que nadie configure creyendo que es gratis. */
   cost?: string;
+  /** Otras vías con lo que pide cada una; Apify es una opción, no la única. */
+  alternatives?: Alternative[];
 };
+
+/** Vía alternativa a la receta principal, con lo que pide para que nadie la dé por gratis. */
+export type Alternative = { route: string; detail: string; href?: string };
 
 const APIFY_TOKEN = { href: 'https://console.apify.com/account/integrations', label: 'Copiar tu token de Apify' };
 const APIFY_STORE = { href: 'https://apify.com/store', label: 'Buscar un actor en Apify' };
 
-const apify = (name: string, hint: string, docs?: Setup['docs']): Setup => ({
-  requirement: `${name} no ofrece una API pública verificada: se conecta con un Actor de Apify (la app ya sabe ejecutarlos con presupuesto y confirmación).`,
+// Rutas que valen para casi cualquier portal: se ofrecen antes que un actor de pago.
+const GOOGLE_JOBS: Alternative = {
+  route: 'Google Jobs (SerpApi)',
+  detail: 'Si el portal sale en Google, sus ofertas se buscan con los dorks que ya trae el catálogo: unas 0,025 USD por búsqueda y sin actor.',
+  href: 'https://serpapi.com/manage-api-key',
+};
+const OWN_FEED: Alternative = {
+  route: 'API, RSS o JSON-LD del propio portal',
+  detail: 'Si lo publica, entra por el conector «custom» del motor (gratis, sin clave de scraping); antes hay que comprobar que responde 200 y trae título y enlace.',
+};
+
+const apify = (name: string, hint: string, docs?: Setup['docs'], extra: Alternative[] = []): Setup => ({
+  requirement: `${name} no tiene hoy una vía que la app ya consuma, así que esta receta usa un Actor de Apify; no es la única: si el portal publica API o feed, o sale en Google Jobs, esas vías van antes y no gastan crédito de Apify.`,
   steps: [
-    'Abre tu cuenta de Apify y copia el token de API desde Settings → Integrations.',
+    'Comprueba en Fuentes → Estado si ya entra sin configurar nada.',
+    'Revisa las otras vías de esta ficha: API oficial, feed propio o Google Jobs. Si alguna sirve, configúrala antes que el actor.',
+    'Si ninguna sirve, abre tu cuenta de Apify y copia el token de API desde Settings → Integrations.',
     `Busca un actor de ${name} en la tienda de Apify y copia su Actor ID. ${hint}`,
     'En Búsqueda automática (o en «Añadir fuente»): pega el token, el Actor ID y las URLs de búsqueda, una por línea.',
     'Pulsa «Comprobar»: verifica el dataset sin gastar crédito. «Ejecutar scraper» sí gasta y te pide confirmación antes.',
     'Revisa la primera muestra: si la empresa o el título vienen vacíos, ajusta el mapeo antes de dejarlo activado.',
   ],
   docs: docs ?? APIFY_STORE,
-  cost: 'Coste por resultado del actor de Apify; cada ejecución se autoriza aparte y queda en el marcador de gasto.',
+  alternatives: [...extra, GOOGLE_JOBS, OWN_FEED],
+  cost: 'Apify: coste por resultado del actor, autorizado aparte y anotado en el marcador. Las vías oficiales o por feed no gastan crédito de Apify.',
 });
 
 // Recetas por código del catálogo. Solo datos que el portal publica o que el repo ya comprobó.
@@ -97,8 +116,20 @@ const RECIPES: Record<string, Setup> = {
   indeed: apify('Indeed', 'Indeed cerró su API pública a nuevos clientes: sin actor o sin Google Jobs no hay vía estable.', { href: 'https://es.indeed.com', label: 'Ver Indeed España' }),
   infoempleo: apify('Infoempleo', 'Las páginas públicas piden paginación: comprueba que el actor recorre más de la primera página.', { href: 'https://www.infoempleo.com', label: 'Ver Infoempleo' }),
   trabajos: apify('Trabajos.com', 'Portal generalista: limita la búsqueda a comercial y teletrabajo para no traer ruido.', { href: 'https://www.trabajos.com', label: 'Ver Trabajos.com' }),
-  torre: apify('Torre', 'Torre devuelve proyectos y pruebas; valida que la oferta tenga empresa y modalidad antes de activarla.', { href: 'https://torre.ai', label: 'Ver Torre' }),
-  weremoto: apify('WeRemoto', 'Bolsas remotas hispanas: el actor tiene que devolver la descripción, no solo el enlace.', { href: 'https://weremoto.com', label: 'Ver WeRemoto' }),
+  torre: apify('Torre', 'Torre devuelve proyectos y pruebas; valida que la oferta tenga empresa y modalidad antes de activarla.', { href: 'https://torre.ai', label: 'Ver Torre' }, [
+    { route: 'API de Torre', detail: 'api.torre.ai documenta la búsqueda de empleo, pero está en beta privada: hay que pedir acceso y usar una clave propia.', href: 'https://api.torre.ai/docs' },
+  ]),
+  weremoto: {
+    requirement: 'WeRemoto ya se lee con un conector propio en el backend local (gratis): portada y JSON-LD de cada ficha. No pide clave ni actor.',
+    steps: [
+      'Comprueba en Fuentes → Estado: el conector vive en apps/api/career/connectors.py y el motor cloud aún no lo recoge.',
+      'No hay clave que guardar: se lee la portada (30 tarjetas) y el JSON-LD de cada oferta.',
+      'Las ofertas sin país en la ficha entran como «por confirmar»; no se supone LATAM.',
+      'Solo si el portal bloqueara al servidor tendría sentido un actor de Apify, y hoy no hace falta.',
+    ],
+    docs: { href: 'https://www.weremoto.com', label: 'Ver WeRemoto' },
+    cost: 'Gratis: conector del backend, sin coste por ejecución.',
+  },
   remotoco: apify('Remoto.co', 'Comprueba que los enlaces siguen vivos: muchas ofertas de bolsas pequeñas caducan sin avisar.', { href: 'https://remoto.co', label: 'Ver Remoto.co' }),
   laborum: apify('Laborum / Bumeran', 'Elige el actor del país que te interese; el portal cambia el dominio por mercado.', { href: 'https://www.laborum.com', label: 'Ver Laborum' }),
   elempleo: apify('El Empleo', 'Ventas regionales: exige que el actor traiga la modalidad para no publicar presenciales como remotas.', { href: 'https://www.elempleo.com', label: 'Ver El Empleo' }),
@@ -126,15 +157,20 @@ const RECIPES: Record<string, Setup> = {
   },
   malt: apify('Malt', 'Muchas misiones exigen cuenta: solo se puede recoger contenido público autorizado.', { href: 'https://www.malt.es', label: 'Ver Malt' }),
   eures: {
-    requirement: 'EURES publica ofertas europeas, pero su buscador no es una API estable para terceros.',
+    requirement: 'EURES tiene API de vacantes propia (la que mueve su buscador) y, mientras la app no la consuma, también se puede leer con un actor de Apify.',
     steps: [
-      'La vía verificada es un actor de Apify sobre el buscador de EURES.',
-      'Filtra por España y por «teletrabajo» antes de ejecutarlo.',
+      'Comprueba en Fuentes → Estado: hoy la app no recoge EURES sin configurar nada.',
+      'Vía oficial: la API de vacantes de EURES en europa.eu/eures/api (búsqueda JV, con autenticación y sujeta a los términos del portal).',
+      'Mientras no haya conector: un actor de Apify sobre una URL de búsqueda de EURES, filtrada por España y teletrabajo.',
       'Comprueba que el resultado traiga salario y país: sin país, la oferta no se puede clasificar por mercado.',
       'Si el actor no trae descripción, esas ofertas no pasarán el filtro de español y no merece la pena activarlo.',
     ],
-    docs: { href: 'https://eures.europa.eu', label: 'Ver EURES' },
-    cost: 'Coste por resultado del actor de Apify.',
+    docs: { href: 'https://europa.eu/eures/api', label: 'API de vacantes de EURES' },
+    alternatives: [
+      { route: 'Actor de Apify sobre la búsqueda de EURES', detail: 'Salida ya mapeada sin escribir código; se paga por resultado y cada ejecución se autoriza aparte.', href: 'https://apify.com/store' },
+      GOOGLE_JOBS,
+    ],
+    cost: 'API de EURES: la del portal, según sus términos. Apify: coste por resultado del actor.',
   },
   company: {
     requirement: 'Los ATS públicos (Greenhouse, Ashby, Teamtailor, Recruitee, Lever) son gratis y no piden clave: se añade la empresa al motor.',
