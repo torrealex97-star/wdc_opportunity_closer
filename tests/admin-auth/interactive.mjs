@@ -56,7 +56,9 @@ try {
       body: JSON.stringify({ provider: 'brightdata', secret: 'testkey-1234:serp_zone:unlock_zone' }),
     })).status);
     assert.equal(status, 200);
-    assert.equal(state.connections.get('brightdata')?.last4, 'zone');
+    // La clave se guarda como `API key:zona SERP:zona Unlocker`: el panel enseña los últimos 4 de la CLAVE
+    // (no de la última zona, que no dice nada de la clave y confundía).
+    assert.equal(state.connections.get('brightdata')?.last4, '1234');
   });
 
   await step('APIs: «Probar» Bright Data hace una búsqueda, la anota y descuenta del tope', async () => {
