@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
-import { deleteConnection, isProvider, listConnections, PROVIDERS, saveConnection, testConnection } from '../../../../lib/integrations';
+import { deleteConnection, isProvider, listConnections, PROVIDERS, saveConnection, SPEND_PROBES, testConnection } from '../../../../lib/integrations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -46,6 +46,11 @@ export async function POST(request: NextRequest) {
   if (error) return error;
   const body = await request.json().catch(() => ({})) as { provider?: unknown };
   if (!isProvider(body.provider)) return Response.json({ detail: 'Proveedor no válido.' }, { status: 422 });
+  // Las pruebas de Bright Data, ZenRows y ScrapingBee hacen una petición real y se cobran: solo el
+  // propietario puede lanzarlas, igual que «Probar ruta» en Fuentes.
+  if (SPEND_PROBES.has(body.provider) && auth!.admin.role !== 'owner') {
+    return Response.json({ detail: 'Solo el propietario puede probar una clave que gasta.' }, { status: 403 });
+  }
   const outcome = await testConnection(body.provider);
   if (!outcome) return Response.json({ detail: 'Ese proveedor no tiene clave guardada.' }, { status: 404 });
   return reply(auth!, outcome);

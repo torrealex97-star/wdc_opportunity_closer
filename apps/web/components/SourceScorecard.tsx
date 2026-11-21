@@ -22,6 +22,10 @@ type Payload = {
 
 const num = (value: number | null) => value === null ? '—' : String(value);
 const rate = (value: number | null) => value === null ? '—' : value.toLocaleString('es', { maximumFractionDigits: 1 });
+// Vía de la fuente por su prefijo de proveedor. No es una estimación de coste: el importe real está en
+// la columna de coste y en «APIs». Una fuente del motor sin prefijo es gratuita; las de pago llevan su
+// proveedor en el nombre (`apify-…`, `serpapi-…`, `brightdata-…`).
+const routeKind = (source: string) => /^(apify|serpapi|brightdata|zenrows|scrapingbee)-/.test(source) ? 'Pago' : 'Gratis';
 
 // Por qué una celda de coste está en «—»: un hueco no es un cero y el motivo se puede leer.
 const costReason = (row: Row) => row.cost_usd === null
@@ -96,6 +100,7 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
         <thead>
           <tr>
             <th scope="col">Fuente</th>
+            <th scope="col" title="Gratis = fuente del motor o feed; Pago = proveedor por petición/resultado">Vía</th>
             <th scope="col" title="Anuncios vivos ingeridos por esa fuente">Vivos</th>
             <th scope="col">Enviadas</th>
             <th scope="col">Respuestas</th>
@@ -112,6 +117,7 @@ export default function SourceScorecard({ onSessionLost }: { onSessionLost: () =
         <tbody>
           {data.rows.map(row => <tr key={row.source} className={row.unlinked ? 'is-unlinked' : undefined}>
             <th scope="row">{row.source}</th>
+            <td><span className={routeKind(row.source) === 'Pago' ? 'status' : 'status ok'}>{routeKind(row.source)}</span></td>
             <td>{num(row.ingested)}</td>
             <td>{row.sent}</td>
             <td>{row.responded}</td>

@@ -330,3 +330,28 @@ Kitsuno, jobspipe, CleanJobData, ZenRows, ScrapingBee, SocialCrawl, JobDataFeeds
 
 Criterio: de un crawler ajeno se reutiliza lo que tiene licencia compatible (JobSpy) o su API pública; no se
 copian scrapers con licencia incompatible ni se escribe un conector que no se pueda probar con datos reales.
+
+## Rutas por fuente (2026-11-21)
+
+Cada fuente tiene varias formas de conectarse, ordenadas por coste real, no por marca. El modelo vive en
+[`sourceRoutes.ts`](../apps/web/lib/sourceRoutes.ts) y el panel de Fuentes lo enseña tarjeta a tarjeta:
+
+1. **Gratis primero:** API/feed público del motor, conector del backend o feed ATS. Sin clave.
+2. **API oficial con clave:** InfoJobs, Adzuna, Jooble. Guardar la clave no gasta.
+3. **Google Jobs · Bright Data SERP:** 0,0015 USD/búsqueda y 5.000 créditos gratis al mes compartidos.
+   Requiere `API key:zona SERP` en Panel → APIs. Va antes que SerpApi por coste.
+4. **Google Jobs · SerpApi:** 0,025 USD/búsqueda; respaldo si no hay Bright Data.
+5. **Apify:** actor auditado, pago por resultado y presupuesto propio.
+6. **JobSpy:** última vía; solo con proxies sanos (200 en <8 s). Sin proxies no se lanza.
+7. **Web Unlocker / ZenRows / ScrapingBee:** solo donde hay extractor JSON-LD/RSS; nunca a ciegas.
+8. **Hermes/Manus:** no disponibles (ADR-009); se muestran como hueco, no como conexión.
+
+La cascada prueba las vías listas en orden, **para en la primera con ofertas** y registra cada intento y su
+motivo. Un fallo no oculta lo que trajo otra vía. «Sin clave» y «sin tope» son estados distintos de
+«conectada»: el panel nunca los confunde.
+
+**Páginas de empresa:** hay una pestaña propia. Feed ATS (automático) · página de empleo propia (extractor
+JSON-LD/RSS + diff por huella) · solo LinkedIn (enlace a Google Jobs, sin rastrear la red). No se añade una
+empresa sin URL 200 con ofertas.
+
+Detalle y límites en [ADR-021](decisions/ADR-021-cascada-de-rutas-por-fuente.md).

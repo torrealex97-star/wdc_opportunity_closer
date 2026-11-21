@@ -99,3 +99,38 @@ El panel de Fuentes externas lista, plegado, las fuentes del SOP diario de WDC c
 
 ## 11. Revisor IA (shadow)
 Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_MODE` (`live` decide; por defecto shadow), `AI_REVIEW_MODEL`, `AI_REVIEW_MAX_CALLS` (15), `AI_REVIEW_MAX_APPROVALS` (25), `AUTO_PUBLISH` (`true` publica), `JEV_API_KEY`/`JEV_API_URL` (anotación opcional). Necesita la clave de Groq en Panel → APIs. En shadow no cambia ningún estado; mira la columna «Revisor IA» y el filtro «Cola humana» en Fuentes externas. Detalle en STATUS (sesión 41).
+
+## 12. Bright Data: Google Jobs y Web Unlocker (2026-11-21)
+
+- **Clave:** Panel → APIs → Bright Data. Formato `API key:zona SERP` (y `:zona Unlocker` si se quiere leer
+  HTML). Se guarda cifrada; el panel solo muestra los últimos 4 caracteres. Guardar no gasta.
+- **Google Jobs:** `POST https://api.brightdata.com/request` con `Authorization: Bearer` y
+  `{zone, url, format:"json"}`; la URL de Google lleva `ibp=htl%3Bjobs`. La respuesta documentada trae
+  `jobs.items[]` con título, empresa, ubicación, fuente, descripción, enlace y etiquetas. Sin título o sin
+  enlace, el anuncio se descarta.
+- **Coste:** 1,50 USD por 1.000 peticiones correctas (0,0015 USD/búsqueda), con 5.000 créditos gratis al mes
+  **compartidos** entre SERP, Web Unlocker y sus demás APIs. Con 7 dorks + 4 respaldos al día (~330/mes)
+  entra en el tramo gratis.
+- **Tope:** `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto) mientras no exista la tabla `provider_budget`
+  (migración escrita y **no aplicada**). Si el gasto del mes no se puede leer, no se lanza gasto nuevo.
+- **Web Unlocker:** devuelve HTML; solo se usa donde hay extractor JSON-LD/RSS y con cortesía por dominio.
+  No se usa para los 27 portales a ciegas. El resultado se atribuye a `brightdata-<portal>`
+  (p. ej. `brightdata-company`) y su gasto se anota con la misma nota que SERP, así que descuenta del tope.
+- **Prueba:** «Probar» en APIs hace **una** búsqueda real, comprueba el tope y anota el gasto; si no puede
+  anotarlo, falla cerrada. En este entorno no hay clave: el cliente se ha probado con `fetch` simulado y un
+  fixture con la forma documentada, no con una llamada real. Hasta la primera ejecución con clave, el panel
+  lo marca «documentada · sin probar».
+- **Orden por fuente:** `source_settings.route_order` guarda un override de ids `fuente:proveedor`
+  (`GET/PATCH /api/admin/source-routes`, solo propietario). Sin override manda el orden por coste; JobSpy
+  queda siempre al final. La migración `20261121_source_route_order.sql` está escrita y **sin aplicar**.
+
+## 13. JobSpy: última vía y solo con proxies sanos (2026-11-21)
+
+- `scripts/jobspy_collect.py` valida `JOBSPY_PROXIES` antes de importar JobSpy: una petición por proxy,
+  HTTP 200 y menos de 8 s. Solo los sanos se usan, rotados por sitio.
+- Sin ningún proxy sano **no se lanza**: se declara «no se intentó» y el workflow publica qué proxy falló y
+  por qué. El modo directo solo se activa con `JOBSPY_ALLOW_DIRECT=1`, asumiendo el bloqueo del runner.
+- JobSpy va después de Bright Data, SerpApi y Apify: no se gasta el runner si una vía anterior ya trajo
+  ofertas. Sigue sin guardar correos ni teléfonos y todo entra como borrador.
+- El workflow (`.github/workflows/jobspy-collect.yml`) mantiene las acciones fijadas por SHA y añade el
+  resumen de proxies al job.

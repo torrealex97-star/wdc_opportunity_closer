@@ -13,6 +13,18 @@ export type Setup = {
   cost?: string;
   /** Otras vías con lo que pide cada una; Apify es una opción, no la única. */
   alternatives?: Alternative[];
+  /** Cuánto se tarda, con qué cuenta y si hace falta tarjeta. */
+  minutes?: string;
+  account?: string;
+  card?: boolean;
+  /** Cómo saber que funciona de verdad (no solo que la clave se guardó). */
+  worksWhen?: string;
+  /** Tres fallos típicos y qué hacer con cada uno. */
+  failures?: string[];
+  /** Fecha de la última comprobación de la documentación o del portal. */
+  checkedAt?: string;
+  /** Solo si el vídeo existe y se ha verificado; nunca se inventa un enlace. */
+  video?: { href: string; label: string };
 };
 
 /** Vía alternativa a la receta principal, con lo que pide para que nadie la dé por gratis. */
@@ -22,9 +34,14 @@ const APIFY_TOKEN = { href: 'https://console.apify.com/account/integrations', la
 const APIFY_STORE = { href: 'https://apify.com/store', label: 'Buscar un actor en Apify' };
 
 // Rutas que valen para casi cualquier portal: se ofrecen antes que un actor de pago.
+const BRIGHTDATA_JOBS: Alternative = {
+  route: 'Google Jobs (Bright Data) · primera opción de pago',
+  detail: 'Si el portal sale en Google, una búsqueda con `ibp=htl;jobs` cuesta 0,0015 USD (1/16 que SerpApi) y comparte 5.000 créditos gratis al mes. Necesita API key:zona SERP.',
+  href: 'https://docs.brightdata.com/scraping-automation/serp-api/introduction',
+};
 const GOOGLE_JOBS: Alternative = {
-  route: 'Google Jobs (SerpApi)',
-  detail: 'Si el portal sale en Google, sus ofertas se buscan con los dorks que ya trae el catálogo: unas 0,025 USD por búsqueda y sin actor.',
+  route: 'Google Jobs (SerpApi) · respaldo',
+  detail: 'Si no hay Bright Data, los dorks ya preparados se piden a SerpApi: unas 0,025 USD por búsqueda y sin actor.',
   href: 'https://serpapi.com/manage-api-key',
 };
 const OWN_FEED: Alternative = {
@@ -44,7 +61,7 @@ const apify = (name: string, hint: string, docs?: Setup['docs'], extra: Alternat
     'Revisa la primera muestra: si la empresa o el título vienen vacíos, ajusta el mapeo antes de dejarlo activado.',
   ],
   docs: docs ?? APIFY_STORE,
-  alternatives: [...extra, GOOGLE_JOBS, OWN_FEED],
+  alternatives: [...extra, BRIGHTDATA_JOBS, GOOGLE_JOBS, OWN_FEED],
   cost: 'Apify: coste por resultado del actor, autorizado aparte y anotado en el marcador. Las vías oficiales o por feed no gastan crédito de Apify.',
 });
 
@@ -193,12 +210,76 @@ const RECIPES: Record<string, Setup> = {
   },
 };
 
+// Lo que comparten todas las guías: tiempo, cómo se comprueba y tres fallos que se ven de verdad.
+const GENERIC: Required<Pick<Setup, 'minutes' | 'account' | 'card' | 'worksWhen' | 'failures' | 'checkedAt'>> = {
+  minutes: '10–15 min',
+  account: 'La cuenta del portal o del proveedor; no hace falta crear otra.',
+  card: false,
+  worksWhen: 'La primera prueba termina sin error y deja al menos una oferta guardada. Si vuelve 0, se declara «vacía» y se prueba la siguiente vía; no se pinta «conectada».',
+  failures: [
+    'HTTP 401/403: la clave está mal o caducada. Vuelve a copiarla entera, sin espacios.',
+    'HTTP 429: has llegado al límite del plan. Espera o sube de plan; reintentar en bucle no arregla nada.',
+    'Responde 200 pero 0 ofertas: la búsqueda no tiene resultados o el portal cambió. No es «conectada»: revisa la consulta antes de dejarla activa.',
+  ],
+  checkedAt: '2026-11-21',
+};
+
+// Matices verificados por fuente. Sin fecha inventada: si no se comprobó, se usa la genérica.
+const GUIDE_META: Record<string, Partial<Setup>> = {
+  infojobs: {
+    minutes: '10 min (la aprobación de la API puede tardar días)', account: 'Cuenta de desarrollador de InfoJobs con acceso aprobado.', card: false,
+    worksWhen: '«Probar» devuelve 200 y al menos una oferta; si tu cuenta aún no está aprobada, responde 401/403 y se declara así.',
+    failures: ['401: la app aún no tiene acceso a la API de ofertas (no es la contraseña de tu cuenta).', '403: el client_id no está autorizado para ese endpoint.', '0 ofertas: revisa provincia y teletrabajo; la cuota no se gasta por volver a probar.'], checkedAt: '2026-11-21',
+  },
+  adzuna: {
+    minutes: '5 min', account: 'Cuenta gratuita de developer.adzuna.com.', card: false,
+    worksWhen: 'La prueba devuelve 200 con `results` (aunque venga vacío) y la clave queda como válida.',
+    failures: ['401: app_id o app_key mal copiados; van separados por dos puntos.', '429: límite mensual del plan gratuito.', '0 resultados: cambia el país o el término; Adzuna cubre más mercados que España.'], checkedAt: '2026-11-21',
+  },
+  jooble: {
+    minutes: '5 min', account: 'Clave de partner de es.jooble.org (cada país tiene la suya).', card: false,
+    worksWhen: 'La prueba devuelve 200 con `jobs`; si devuelve 403 desde el servidor, la IP está bloqueada y no se arregla con otra clave.',
+    failures: ['403 desde el servidor: Jooble bloquea la IP; no insistas desde el mismo host.', 'La clave de jooble.org solo trae EE. UU.: pide la de es.jooble.org.', '0 ofertas: revisa `location` y `keywords`; el término «closer» no existe en todos los mercados.'], checkedAt: '2026-11-21',
+  },
+  google: {
+    minutes: '5 min', account: 'Cuenta de Bright Data (recomendada por coste) o de SerpApi.', card: true,
+    worksWhen: 'Una búsqueda de prueba devuelve `jobs.items[]` (Bright Data) o `jobs_results[]` (SerpApi) con título y enlace. El panel enseña el coste antes de lanzarla.',
+    failures: ['401: API key o zona mal; en Bright Data el formato es API key:zona SERP.', '429/503: reintento una vez y luego se declara; no se insiste.', '200 con 0 resultados: la consulta es demasiado estrecha; cambia el dork, no la clave.'], checkedAt: '2026-11-21',
+    alternatives: [BRIGHTDATA_JOBS],
+  },
+  linkedin: {
+    minutes: '5 min', account: 'Cuenta de Bright Data o SerpApi para Google Jobs; no se inicia sesión en LinkedIn.', card: true,
+    worksWhen: 'Google Jobs devuelve fichas con enlace al anuncio original de LinkedIn. Si solo vuelve el enlace de Google, no se publica como oferta.',
+    failures: ['LinkedIn bloquea el rastreo directo: no se hace; usa Google Jobs.', 'El enlace es `google.com/search`: no es el anuncio original y se descarta.', '0 resultados: prueba el dork sin comillas y con `site:linkedin.com/jobs`.'], checkedAt: '2026-11-21',
+  },
+  indeed: {
+    minutes: '15 min', account: 'Token de Apify y presupuesto con saldo; o proxies para JobSpy.', card: true,
+    worksWhen: 'El actor devuelve empresa, ubicación y enlace directo (no solo el título). JobSpy solo cuenta si los proxies respondieron 200 en menos de 8 s.',
+    failures: ['El actor devuelve 0: Indeed cambió el HTML; prueba el siguiente actor auditado.', 'Sin proxies sanos, JobSpy no se lanza: se declara y no se quema el runner.', 'Enlaces de seguimiento: se conserva el `job_url_direct` cuando existe.'], checkedAt: '2026-11-21',
+  },
+  company: {
+    minutes: '5 min por empresa', account: 'Ninguna: la página es pública.', card: false,
+    worksWhen: '«Revisar ahora» detecta al menos un `JobPosting` o un `<item>` RSS y enseña cuántas son nuevas. Si no publica ninguno, se declara sin ofertas.',
+    failures: ['La página es una SPA sin JSON-LD: no hay extractor posible sin navegador; se declara.', 'El RSS está vacío o caducado: no se inventan ofertas.', 'La empresa cambió de ATS: actualiza el slug solo si el board nuevo responde 200 con ofertas.'], checkedAt: '2026-11-21',
+  },
+  weremoto: {
+    minutes: '0 min (ya está en el backend)', account: 'Ninguna.', card: false,
+    worksWhen: 'El conector local devuelve ofertas con enlace y país; las que no declaran país entran como «por confirmar».',
+    failures: ['El motor cloud aún no lo recoge: no aparece en «recogidas» hasta portarlo.', 'Una ficha sin país no se supone LATAM.', 'Si el portal bloquea al servidor, se declara; no se activa un actor sin comprobarlo.'], checkedAt: '2026-11-21',
+  },
+};
+
 export function setupFor(entry: { code: string; name: string; acquisition_method?: string | null; website?: string | null }): Setup {
   const direct = RECIPES[entry.code];
-  if (direct) return direct;
   const method = (entry.acquisition_method ?? '').toLowerCase();
-  if (/rss|feed/.test(method)) return RECIPES.custom;
-  const name = entry.name;
-  const fallback = apify(name, 'Lee el esquema de entrada del actor antes de ejecutarlo.', entry.website ? { href: entry.website, label: `Ver ${name}` } : APIFY_STORE);
-  return fallback;
+  const base = direct ?? (/rss|feed/.test(method) ? RECIPES.custom
+    : apify(entry.name, 'Lee el esquema de entrada del actor antes de ejecutarlo.', entry.website?.startsWith('https://') ? { href: entry.website, label: `Ver ${entry.name}` } : APIFY_STORE));
+  const meta = GUIDE_META[entry.code] ?? {};
+  const alternatives = [...(base.alternatives ?? []), ...(meta.alternatives ?? [])].filter((alt, index, list) => list.findIndex(item => item.route === alt.route) === index);
+  return {
+    ...GENERIC, ...base, ...meta,
+    alternatives: alternatives.length ? alternatives : undefined,
+    // Un enlace roto o sin HTTPS no se enseña como documentación oficial.
+    docs: base.docs && /^https:\/\//.test(base.docs.href) ? base.docs : APIFY_STORE,
+  };
 }

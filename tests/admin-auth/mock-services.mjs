@@ -84,6 +84,21 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'PATCH') { Object.assign(state.connections.get(eq) ?? {}, body); return send(res, 204, {}); }
       if (req.method === 'DELETE') { state.connections.delete(eq); return send(res, 204, {}); }
     }
+    // Bright Data SERP simulado: valida el contrato (Bearer, zona y `format`) y devuelve la forma
+    // documentada `jobs.items[]`. Solo la clave de prueba `testkey-1234` es válida.
+    if (url.pathname === '/request' && req.method === 'POST') {
+      if (bearer !== 'testkey-1234') return send(res, 401, { error: 'invalid api key' });
+      // Web Unlocker simulado: devuelve el HTML que el extractor común convierte en JobPosting.
+      if (body.zone === 'unlock_zone' && body.format === 'raw') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        return res.end('<!doctype html><html><head><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Closer Unlocker","datePosted":"2026-11-20","description":"Ventas B2B por teléfono","hiringOrganization":{"name":"Acme Unlocker"},"jobLocation":{"address":{"addressLocality":"Madrid","addressCountry":"ES"}},"url":"https://acme.test/careers/unlocker"}</script></head></html>');
+      }
+      if (body.zone !== 'serp_zone' || body.format !== 'json' || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
+      return send(res, 200, { jobs: { items: [
+        { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
+        { title: 'Setter de ventas', company: 'Beta BD', location: 'Barcelona, España', source: 'LinkedIn', description: 'Agenda de citas cualificadas', link: 'https://www.linkedin.com/jobs/view/bd-2', tags: [], posted_at: 'hace 1 día' },
+      ] } });
+    }
     if (url.pathname === '/rest/v1/engine_alerts') {
       if (state.alertsTableMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.engine_alerts' in the schema cache" });
       const q = Object.fromEntries(url.searchParams);
@@ -114,8 +129,12 @@ export function startMocks({ authPort, enginePort }) {
       return send(res, 200, n);
     }
     if (url.pathname === '/rest/v1/source_settings') {
-      if (req.method === 'POST') { state.sourceSettings.set(body.source, body); return send(res, 201, {}); }
-      return send(res, 200, [...state.sourceSettings.values()].filter(r => r.enabled === false).map(r => ({ source: r.source })));
+      if (req.method === 'POST') { state.sourceSettings.set(body.source, { ...state.sourceSettings.get(body.source), ...body }); return send(res, 201, {}); }
+      const q = Object.fromEntries(url.searchParams);
+      let rows = [...state.sourceSettings.values()];
+      if (q.source?.startsWith('eq.')) rows = rows.filter(r => r.source === decodeURIComponent(q.source.slice(3)));
+      if (q.enabled === 'eq.false') rows = rows.filter(r => r.enabled === false);
+      return send(res, 200, rows.map(r => ({ source: r.source, enabled: r.enabled, route_order: r.route_order ?? [] })));
     }
     if (url.pathname === '/rest/v1/external_ingest_runs') {
       if (req.method === 'POST') { state.ingestRuns.unshift({ ...body, created_at: new Date().toISOString() }); return send(res, 201, {}); }

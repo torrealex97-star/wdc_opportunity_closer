@@ -1,5 +1,95 @@
 # Estado
 
+## Cierre de pendientes del panel: última revisión real, tope sin 10.000 y prompt probado (sesión 278) — 2026-11-21
+
+- **Petición del propietario**: cerrar lo que se puede sin claves reales ni DDL; nada de columnas que siempre
+digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocker debe quedar cubierto.
+- **Última revisión sin DDL** (*tested*): [`companyReviewHistory`](../apps/web/lib/external.ts) deriva la fecha de
+  `external_ingest_runs` (`company:<code>` en la nota, que ahora se escribe incluso con 0 ofertas) y, como
+  respaldo para notas antiguas, de la última oferta de ese dominio en `external_offers`. En ATS se usa el
+  `last_seen` real de su fuente. La tabla de Empresas ya pinta esa fecha; solo deja «—» sin evidencia y, si una
+  lectura falla, el `title` dice que falta el dato en vez de afirmar que nunca se revisó. Sin tabla ni columna nueva.
+- **Tope sin truncar** (*tested*): [`runsThisMonth`](../apps/web/lib/external.ts) pagina con
+  `Number.POSITIVE_INFINITY` hasta la página vacía. La prueba sube a **10.001** ejecuciones (antes 1.001) y
+  comprueba la suma completa, el corte de mes y que octubre no entra.
+- **Probar Unlocker cubierto** (*tested*): el flujo se ejercita desde el botón real. La prueba sube temporalmente
+  `company:unlocker` en el orden de esa fuente, acepta el `prompt` con una URL pública, comprueba que la petición
+  usa esa URL y descuenta el tope, y restaura el orden. También queda la prueba directa del contrato de la API.
+  Sigue documentado que una URL sin HTTPS se rechaza en `fetchHtml` antes de llamar al proveedor.
+- **Corregido además** (*tested*): una clave de Bright Data sin zona Unlocker ya no marca lista esa vía;
+  `routeReadiness` recibe `unlockerReady`, la API lo expone y ZenRows/ScrapingBee pueden sustituirla. El KPI
+  «Gratis y operativas» ya no cuenta JobSpy sin proxies como operativo.
+- **Comprobado** (*tested*): `source-routes.mjs` **PASS**; `spend-window.mjs` **PASS** (10.001 filas);
+  `npm run typecheck` **0**; `npx next build apps/web --webpack` **0**; `bash tests/admin-auth/run.sh`
+  **exit 0**, **389 PASS, 0 FAIL**, **13/13** pasos de interfaz y **12/12** flujos interactivos (incluye el
+  `prompt` del Unlocker y la fecha de «Última revisión»). Enlaces: 0 rotos en 120 ficheros; `pytest` de
+  enlaces 5 pasan; `design` y `handoff` OK; `git diff --check` limpio.
+- **Lo que falta, y solo esto**:
+  - **Depende de claves/servicios reales del usuario**: (1) una clave real de Bright Data/SerpApi para confirmar
+    el contrato y el coste fuera del mock; (2) claves/proxies sanos de JobSpy para que `proxies.healthy` deje de
+    ser `false`; (3) una página de empresa real, porque la revisión se probó con fixture local. La evidencia
+    existente es `fetch` simulado, fixtures, la prueba de 10.001 filas y la suite interactiva.
+  - **Depende de tu orden para aplicar DDL**: (1) `20261121_provider_budget.sql`, que sustituye el tope por
+    entorno por la tabla de presupuesto; (2) `20261121_source_route_order.sql`, sin la cual el orden
+    personalizado responde 503. Hasta entonces el tope por entorno y el orden por coste funcionan; no se aplicó
+    ninguna migración ni se desplegó. Esta entrada viaja en `feat/fuentes-brightdata-jobspy` y se fusiona por PR.
+
+## Tope mensual: todas las ejecuciones desde el día 1, no las últimas 200 (sesión 277) — 2026-11-21
+
+- **Petición del propietario**: el tope de Bright Data/SerpApi se calculaba con `recentRuns(200)`; a mitad de
+  mes podía quedarse por debajo del gasto real y autorizar de más. Hay que sumar todas las ejecuciones desde
+  el día 1 y probar más de 200 ejecuciones y el cruce de mes.
+- **Qué se corrigió** (*tested*): [`monthStart`](../apps/web/lib/providerBudget.ts) fija el inicio del mes en
+  UTC y [`runsThisMonth`](../apps/web/lib/external.ts) lee `external_ingest_runs` con
+  `created_at=gte.<día 1>` usando `pagedRest`, no una sola página. `source-routes` (GET y POST) y
+  `testConnection` de APIs usan esa lectura; `recentRuns` queda solo para mostrar las últimas ejecuciones, no
+  para decidir el tope. Si el paginador falla, devuelve `null` y el gasto no se autoriza: un hueco no se
+  convierte en cero. (En esta sesión el paginador aún se truncaba a 10.000; la sesión 278 lo eliminó.)
+- **Comprobado** (*tested*): nuevo
+  [`tests/admin-auth/spend-window.mjs`](../tests/admin-auth/spend-window.mjs) **PASS** con **1.001**
+  ejecuciones de noviembre en dos páginas (suma 1,001 USD), una ejecución de octubre excluida y el corte
+  noviembre/diciembre comprobado en UTC. `npm run typecheck` **0**; `npx next build apps/web --webpack` **0**;
+  `bash tests/admin-auth/run.sh` **exit 0**, **388 PASS, 0 FAIL**, **13/13** pasos de interfaz y **11/11**
+  flujos interactivos.
+- **Límites honestos**: todo se probó contra el PostgREST simulado, sin tocar la base real. En esta sesión
+  `pagedRest` aún tenía un máximo de 10.000 filas por lectura; la sesión 278 lo eliminó y la prueba subió a
+  10.001. Sin migraciones aplicadas, sin despliegue y sin commit/push/PR/merge.
+
+## Cascada cerrada: dos fuentes, caída a SerpApi, JobSpy declarado, Unlocker contabilizado y orden por fuente (sesión 276) — 2026-11-21
+
+- **Petición del propietario**: cerrar la cascada de rutas por fuente con pruebas simuladas, sin ninguna
+  llamada de pago real: orden por coste para dos fuentes, caída a SerpApi sin Bright Data, JobSpy saltado
+  sin proxies sanos, Unlocker con extractor/atribución/tope y orden por fuente visible y modificable.
+- **Lo que se completó** (*tested*): `orderRoutes` aplica un override de ids `fuente:proveedor` y conserva el
+  orden por `stage` cuando no hay ninguno; JobSpy y el hueco agéntico quedan siempre al final. `planCascade`
+  recibe ese orden, así que la misma cascada que se enseña es la que se ejecuta. El override se guarda en
+  `source_settings.route_order` por `GET/PATCH /api/admin/source-routes` (solo propietario) y el panel lo
+  pinta en un bloque «Orden de vías» con subir/bajar y «Volver al orden por coste». La migración
+  [`20261121_source_route_order.sql`](../supabase/migrations/20261121_source_route_order.sql) queda escrita y
+  **sin aplicar**; sin la columna, el panel declara que usa el orden por coste y el guardado responde 503.
+- **Caída y saltos**: sin clave de Bright Data, la ruta de Google Jobs queda `omitida` con «Sin clave de
+  brightdata» y la cascada sigue a SerpApi sin `error`; con Bright Data, SERP va antes que SerpApi. JobSpy
+  sin `proxiesHealthy` queda `omitida` al final con «Sin proxies sanos» y no se ejecuta. La ruta Unlocker
+  acepta cualquiera de las tres claves (`brightdata`, `zenrows`, `scrapingbee`), pasa el HTML por
+  `extractJobPostings`, ingiere con `brightdata-<portal>` y anota el mismo `coste_usd` que SERP.
+- **Reagrupado y guía** (*tested*): `groupForSource` ya no cuenta JobSpy como «gratis» para esconder una
+  fuente que aún necesita proxies: Indeed/LinkedIn/Glassdoor sin claves se agrupan por Google Jobs y no
+  desaparecen de las tarjetas. «Cómo conectarla» abre la guía con requisito, pasos, alternativas, coste,
+  tres fallos y fecha de comprobación; la prueba de interfaz la abre, cuenta los pasos y la cierra.
+- **Comprobado** (*tested*): `tests/admin-auth/source-routes.mjs` **PASS** (dos fuentes con Bright Data y sin
+  ella, SerpApi como respaldo, JobSpy sin proxies, Unlocker y atribución, `orderRoutes` con y sin override,
+  JobSpy no se adelanta, agrupación por vía, contrato y contabilidad); `npm run typecheck` **0**; `npx next
+  build apps/web --webpack` **0**; `pytest tests/test_jobspy_collect.py` **12 passed, 1 skipped**;
+  `bash tests/admin-auth/run.sh` **exit 0**, **387 PASS, 0 FAIL**, **13/13** pasos de interfaz y **11/11**
+  flujos interactivos. Los tres pasos nuevos del interactivo son «Unlocker de Bright Data extrae, atribuye a
+  brightdata-company y descuenta el tope», «el orden por fuente se guarda, se ve y se restaura al de coste»
+  —guarda un override de InfoJobs, recarga el panel, comprueba que SerpApi aparece antes que la API oficial y
+  lo borra— y «Cómo conectarla abre la guía paso a paso».
+- **Límites honestos**: no hay claves reales de Bright Data, ZenRows ni ScrapingBee; todo se probó contra el
+  mock y `fetch` simulado, sin llamadas de pago. Las migraciones de presupuesto y de orden siguen escritas y
+  **sin aplicar**. No se ha hecho commit, push, PR, merge ni despliegue. No se ha tocado el rediseño visual
+  del panel: el bloque de orden es funcional y usa los controles existentes.
+
 ## «Workers Builds: closer-web»: comprobado otra vez y sigue fuera del repositorio (sesión 275) — 2026-11-21
 
 - **Petición del propietario**: «solucionalo como sea» / «avanza con todo hasta que esté hecho», sobre el check rojo `Workers Builds: closer-web`.
@@ -8,6 +98,35 @@
 - **Por qué no se puede arreglar desde el repositorio** (*inspected*): la conexión de Git y sus valores —repositorio, rama, directorio raíz, comando de build, comando de despliegue, rutas vigiladas— existen solo en Cloudflare; ninguna clave del repositorio los define. Y el build de `closer-web` necesita `apps/web` como raíz: el script `build` de `apps/web` es `next build`, OpenNext se invoca desde ese directorio, `.open-next/` está ignorado por Git y `npx wrangler deploy` en la raíz falla por detección de workspace, así que un `wrangler.jsonc` en la raíz del monorepo no produce `.open-next/worker.js`. Poner configuración en la raíz sería adivinar sin poder leer los logs.
 - **Siguiente acción exacta, del propietario** (2 minutos, una de las dos): **(A)** Cloudflare → Workers & Pages → `closer-web` → Settings → Builds → desconectar la conexión de Git (el despliegue real ya lo hace [`.github/workflows/web-deploy.yml`](../.github/workflows/web-deploy.yml) con `wrangler deploy` y comprobación del dominio); o **(B)** crear un token *user-scoped* con «Workers Builds Configuration: Edit», dejarlo en `.local/cf-builds.token` (ya ignorado por Git) y decirlo: con eso se leen los logs, se pone `root_directory` en `apps/web` y se relanza el build. Con la pestaña de Cloudflare abierta y la sesión iniciada, la ruta (A) o (B) la puedo ejecutar yo.
 - **Límites honestos**: no se ha cambiado nada en Cloudflare. `Supabase Preview` también sale en rojo en `bc7ad6f` y es otro tema, sin mirar. Sin los logs del build no se distingue la causa exacta (raíz equivocada, comando vacío o conexión revocada).
+
+## Bright Data: la prueba de clave cuenta en el tope y cada portal conserva su atribución (sesión 274) — 2026-11-21
+
+- **Petición del propietario**: empezar por la integración de Bright Data (SERP de Google Jobs y Unlocker),
+  sus ajustes de clave, zona y tope, y la cascada entre rutas, con pruebas simuladas; el rediseño visual
+  del panel queda para el paso siguiente.
+- **Lo que faltaba de verdad** (*inspected*): el cliente Bright Data, las rutas por coste y la tarjeta ya
+  estaban; dos huecos rompían el plan. (1) «Probar» desde Panel → APIs hacía una búsqueda real **sin**
+  pasar por `canSpend` ni anotar el gasto, así que el tope mensual se podía saltar probando claves. (2) La
+  atribución de una ruta no-Google usaba `brightdata-portal`, un nombre genérico que impedía saber de qué
+  portal venía la oferta.
+- **Qué se corrigió**: [`testConnection`](../apps/web/lib/integrations.ts) comprueba el gasto acumulado con
+  `canSpend`, hace **una** petición y anota `proveedor=… · coste_usd=…` en `external_ingest_runs`; si la nota
+  no se guarda, la prueba falla cerrada y no se da el gasto por contado. Las pruebas que gastan (Bright Data,
+  ZenRows y ScrapingBee) son **solo del propietario**, también en la ruta de API y en el botón del panel;
+  las gratuitas siguen disponibles para administradores. La atribución pasa a `brightdata-<fuente>`
+  (`brightdata-google`, `brightdata-infojobs`) mediante `brightDataSource`, y la prueba interactiva lo
+  comprueba contra el portal InfoJobs.
+- **Comprobado** (*tested*): `node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs
+  tests/admin-auth/source-routes.mjs` **PASS** (orden de rutas, contrato `Bearer`/zona/`format`, mapeo
+  `jobs.items[]`, 401 sin reintento, 429 con un reintento, tope, cascada y atribución por portal);
+  `npm run typecheck` **0**; `npx next build apps/web --webpack` **0**; `bash tests/admin-auth/run.sh`
+  **exit 0**, **384 PASS, 0 FAIL**, **13/13** pasos de interfaz y **8/8** flujos interactivos. El paso nuevo
+  «APIs: Probar Bright Data hace una búsqueda, la anota y descuenta del tope» comprueba `ok`, el detalle de
+  0,0015 USD, la fila `brightdata-probe`, el gasto de 0,0015 USD y el saldo por debajo de 5 USD.
+- **Límites honestos**: no hay clave real de Bright Data, ZenRows ni ScrapingBee; todo se probó contra el
+  mock y un `fetch` simulado, sin ninguna llamada de pago. La migración `20261121_provider_budget.sql` sigue
+  escrita y **sin aplicar** (DDL requiere orden del propietario). No se ha hecho commit, push ni despliegue.
+  El rediseño visual del panel no forma parte de este incremento.
 
 ## PR #100 fusionado: los cuatro arreglos de la formación entran en `main` (sesión 273) — 2026-11-21
 
@@ -3341,3 +3460,52 @@ Supabase/Auth/RLS, portal de alumnas, clasificación IA y gold set, publicación
 - *tested*: `successstories.mjs` 4/4 (trece personas en orden, ids de YouTube válidos y únicos, sin campos vacíos, reproductor con `autoplay` solo tras el clic); `success.spec.ts` en navegador (menú, trece tarjetas, sin iframes antes del clic, un solo vídeo cargado, vuelta a Oportunidades). *verified*: `npm run typecheck`, `npm run design` y `npm run build -w apps/web` PASS; suite E2E completa 56 pasan / 6 omitidas en 43,1 s con 4 workers y `git status` limpio. Revisado en navegador a 1280 px (dos columnas) y 390 px (una columna, sin desbordamiento).
 - Operación: la suite E2E espera el servidor de `npm run dev` (levanta el motor local). Un `next dev` suelto deja el panel sin configuración y hacen fallar 7 pruebas del panel; no es una regresión del código. `next dev` reescribe `apps/web/next-env.d.ts` (rutas `dev/types`): al cerrar la sesión se restaura con `git checkout`.
 - Límites: no se ha visto el contenido de los trece vídeos, solo se enlazan; la sección es de solo lectura y no registra visitas ni progreso.
+
+### Panel de fuentes con rutas por coste, Bright Data y JobSpy al final (2026-11-21)
+
+- El panel de Fuentes deja de ser una tabla con «Requiere configurar»: ahora tiene KPIs (gratis operativas,
+  con clave, de pago activas, con fallo, gasto del mes vs tope, aprobadas por dólar), grupos por vía y una
+  tarjeta por fuente con sus rutas ordenadas, coste, estado de cada paso y ruta activa «N de M». La tabla
+  completa sigue debajo, por tandas de 25, con los mismos filtros de siempre.
+- **Bright Data** deja de ser un hueco: cliente `providers/brightdata.ts` (SERP Google Jobs + Unlocker),
+  ajustes `API key:zona SERP[:zona Unlocker]`, prueba de una petición con aviso de coste y contabilidad en
+  `external_ingest_runs` (`proveedor=… · coste_usd=…`). Tope `BRIGHTDATA_MONTHLY_USD` (5 USD) mientras no se
+  aplique `20261121_provider_budget.sql`, que queda escrita y **sin aplicar**. SerpApi sigue como respaldo.
+- **Cascada** pura en `sourceRoutes.ts`: gratis → clave → Bright Data → SerpApi → Apify → JobSpy → Unlocker
+  → agente. Para en la primera ruta con ofertas, declara las omitidas con su motivo y nunca hace una llamada
+  de pago sin clave o sin tope.
+- **JobSpy** valida proxies (200 en <8 s) antes de lanzar; sin sanos no se intenta. El workflow dice qué
+  proxy falló. Modo directo solo con `JOBSPY_ALLOW_DIRECT=1`.
+- **Empresas** estrena pestaña: ATS automático, página propia con extractor JSON-LD/RSS y diff por huella, y
+  «solo LinkedIn» enlazado a Google Jobs. Hermes/Manus siguen como hueco declarado (ADR-009).
+- **Guías**: tiempo, cuenta, tarjeta, pasos, otras vías, cómo saber que funciona, tres fallos típicos,
+  documentación oficial y fecha de comprobación. Sin vídeo: no hay ninguno verificado y no se inventa.
+- *tested*: `tests/admin-auth/source-routes.mjs` (orden de rutas, contrato Bright Data con `fetch` simulado,
+  401/429/0 resultados, tope, cascada, extractor JSON-LD/RSS, guías de las 69 fuentes y lista de empresas);
+  `pytest tests/test_source_catalog_export.py` 3 pasan; `pytest tests/test_jobspy_collect.py` 12 pasan y 1 se omite (JobSpy no está instalado);
+  `npm run typecheck` y `npx next build apps/web --webpack` PASS.
+- *limits*: no hay claves reales de Bright Data/ZenRows/ScrapingBee; no se ha hecho ninguna llamada de pago
+  ni se ha desplegado. La migración no está aplicada. El detalle está en ADR-021.
+
+### Verificación interactiva: Empresas y «Probar ruta» (2026-11-21)
+
+- Nuevo `tests/admin-auth/interactive.mjs`, ejecutado en `run.sh` contra `next start` y los servicios simulados. **7/7**:
+  sin clave el botón «Probar ruta» está desactivado y dice qué falta; con clave de prueba de Bright Data
+  (`testkey-1234:serp_zone`, `BRIGHTDATA_API_BASE` al mock) la prueba devuelve 2 ofertas, las guarda, muestra
+  «Coste: 0,0015 USD» y actualiza el KPI de gasto; `Empresas → Bastida Farina → Revisar ahora` extrae el
+  `JobPosting` del fixture, guarda 1 borrador y la segunda pasada declara 0 nuevas sin duplicar. Sin errores
+  de consola ni respuestas 4xx/5xx de las APIs del flujo.
+- **Fallo corregido en «Probar ruta»:** el endpoint pasaba el **saldo restante** (5 USD) a `canSpend`, que
+  espera el **gasto acumulado**; creía que el tope estaba agotado y devolvía 409 «Quedan 0.00 USD». Ahora
+  pasa el gasto real; primera ejecución con tope de 5 USD funciona y el saldo baja a 4,9985.
+- **Fallo corregido en el primer uso:** un historial de ejecuciones vacío se leía como «no se pudo leer el
+  gasto» y bloqueaba todas las rutas de pago. Una lista vacía es gasto 0; solo un fallo de lectura es `null`.
+- **Fallo corregido en el contador:** el KPI redondeaba a 2 decimales y un gasto de 0,0015 USD se pintaba
+  como «0 USD». Ahora usa hasta 6 decimales y se relee tras cada prueba.
+- La revisión de empresa acepta `COMPANY_REVIEW_FIXTURE` (solo pruebas) para no depender de la red; en
+  producción la variable no existe y se lee la página real. No cambia la URL verificada ni el extractor.
+- *tested*: `interactive.mjs` 7/7; `bash tests/admin-auth/run.sh` completo; `npm run typecheck`, `npm run
+  design`, `next build --webpack`, `pytest tests/test_source_catalog_export.py` y
+  `pytest tests/test_jobspy_collect.py`.
+- *limits*: Bright Data se prueba contra el mock, no contra el servicio real (no hay clave ni gasto); la
+  página de empresa se sirve del fixture. La migración `20261121_provider_budget.sql` sigue sin aplicar.

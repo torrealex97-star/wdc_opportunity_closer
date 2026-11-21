@@ -1,7 +1,8 @@
 name: JobSpy collect
 # Recolector diario de ofertas en España (Indeed, LinkedIn, Glassdoor, Google Jobs) con JobSpy. Envía BORRADORES al panel.
 # Riesgo asumido por el operador (ADR-011): estas webs restringen el scraping en sus condiciones de uso.
-# Secretos del repositorio necesarios: INGEST_URL (https://<dominio>/api/ingest) e INGEST_TOKEN (el mismo que INGEST_TOKEN en Vercel).
+# Última vía: si no hay proxies sanos, NO se lanza. El modo directo solo se activa a propósito con JOBSPY_ALLOW_DIRECT=1.
+# Secretos del repositorio necesarios: INGEST_URL (https://<dominio>/api/ingest), INGEST_TOKEN e, idealmente, JOBSPY_PROXIES.
 on:
   schedule:
     - cron: '17 5 * * *'
@@ -28,5 +29,15 @@ jobs:
           INGEST_URL: ${{ secrets.INGEST_URL }}
           INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
           SITES: ${{ github.event.inputs.sites || 'indeed,linkedin,glassdoor,google' }}
-          JOBSPY_PROXIES: ${{ secrets.JOBSPY_PROXIES }}   # opcional: proxies separados por coma si LinkedIn/Indeed bloquean a GitHub
-        run: python scripts/jobspy_collect.py --sites "$SITES"
+          JOBSPY_PROXIES: ${{ secrets.JOBSPY_PROXIES }}   # obligatorio salvo modo directo explícito
+          JOBSPY_ALLOW_DIRECT: '0'                        # cámbialo a 1 solo si asumes el riesgo de bloqueo
+        run: |
+          set -o pipefail
+          python scripts/jobspy_collect.py --sites "$SITES" 2>&1 | tee jobspy.log
+      - name: Resumen de proxies (qué falló y por qué)
+        if: always()
+        run: |
+          echo '### JobSpy' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -40 jobspy.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'sin salida' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

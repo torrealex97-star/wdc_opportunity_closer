@@ -2,7 +2,8 @@ import { enrich } from './offerScore';
 import { callTimeout, timeLeft } from './cronBudget';
 import { salaryFromText } from './salary';
 import { guardedGet } from './urlGuard';
-import { serviceRest } from './supabaseAuth';
+import { pagedRest, serviceRest } from './supabaseAuth';
+import { monthStart } from './providerBudget';
 
 // Fuentes externas (APIs con clave y recolectores programados). Los candidatos llegan tal cual los da la fuente.
 // El texto guardado va anonimizado; el contacto se guarda APARTE y solo si el anuncio lo publica literalmente
@@ -164,6 +165,55 @@ export async function setSourceEnabled(source: string, enabled: boolean, by: str
   return response.ok;
 }
 
+/**
+ * Orden personalizado de vías por fuente. `null` = no se pudo leer (no es «sin overrides»): el panel
+ * sigue usando el orden por coste y lo declara. La columna vive en `source_settings.route_order`;
+ * su migración está escrita y sin aplicar, así que en una base antigua esto devuelve `null`.
+ */
+export async function routeOrders(): Promise<Record<string, string[]> | null> {
+  const response = await serviceRest(`source_settings?org_id=eq.${ORG}&select=source,route_order&limit=500`);
+  if (!response.ok) return null;
+  const rows = await response.json().catch(() => null);
+  if (!Array.isArray(rows)) return null;
+  const out: Record<string, string[]> = {};
+  for (const row of rows as Array<{ source?: unknown; route_order?: unknown }>) {
+    if (typeof row.source !== 'string' || !Array.isArray(row.route_order)) continue;
+    if (row.route_order.every(id => typeof id === 'string')) out[row.source] = row.route_order as string[];
+  }
+  return out;
+}
+
+/** Guarda el orden de una fuente sin tocar su estado de pausa. `false` = no se pudo escribir. */
+export async function setSourceRouteOrder(source: string, order: string[], by: string): Promise<boolean> {
+  if (!SOURCE_RE.test(source) || order.length > 20 || new Set(order).size !== order.length) return false;
+  if (order.some(id => typeof id !== 'string' || !/^[a-z0-9-]{2,40}:[a-z]+$/.test(id))) return false;
+  // Se lee el estado actual para no reactivar una fuente pausada al hacer el upsert.
+  const current = await serviceRest(`source_settings?org_id=eq.${ORG}&source=eq.${source}&select=enabled&limit=1`);
+  if (!current.ok) return false;
+  const rows = await current.json().catch(() => null) as Array<{ enabled?: unknown }> | null;
+  if (!Array.isArray(rows)) return false;
+  const enabled = typeof rows[0]?.enabled === 'boolean' ? rows[0].enabled : true;
+  const response = await serviceRest('source_settings?on_conflict=org_id,source', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ org_id: ORG, source, enabled, route_order: order, updated_by: by, updated_at: new Date().toISOString() }),
+  });
+  return response.ok;
+}
+
+/**
+ * Anota un gasto de proveedor sin tocar el catálogo. Se usa en las pruebas de clave: la petición se
+ * cobra aunque no traiga ofertas, así que tiene que sumar al tope mensual igual que una ruta real.
+ * Devuelve `false` si la nota no se pudo guardar; el llamador no debe dar el gasto por contado.
+ */
+export async function recordSpend(source: string, via: string, note: string): Promise<boolean> {
+  if (!SOURCE_RE.test(source)) return false;
+  const response = await serviceRest('external_ingest_runs', {
+    method: 'POST', headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ org_id: ORG, source, via, received: 0, accepted: 0, rejected: 0, note }),
+  });
+  return response.ok;
+}
+
 export async function ingest(source: string, via: string, candidates: unknown[], note?: string): Promise<{ received: number; accepted: number; rejected: number; paused?: boolean }> {
   // Una fuente pausada no entra: se registra el intento para que se vea en el panel.
   const paused = await pausedSourcesStrict();
@@ -282,10 +332,58 @@ export async function sharedLiveOffers(): Promise<number | null> {
   return countExact([`org_id=eq.${ORG}`, `expires_at=gt.${now}`, 'also_seen=not.eq.%7B%7D']);
 }
 
+export type CompanyReviewHistory = { byCode: Record<string, string>; byHost: Record<string, string>; unknown: boolean };
+
+/**
+ * Última revisión por empresa usando SOLO datos ya guardados: la nota de la ejecución manual
+ * (`company:<code>`) y, como respaldo para notas antiguas, la última vez que se vio una oferta de su
+ * dominio. No hay tabla ni columna nueva; si una de las dos lecturas falla, `unknown` lo declara y el
+ * panel no convierte un hueco en «nunca revisada».
+ */
+export async function companyReviewHistory(): Promise<CompanyReviewHistory> {
+  const hostOf = (value: string) => { try { return new URL(value).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+  const [runs, offers] = await Promise.all([
+    pagedRest<{ note: string | null; created_at: string }>(
+      `external_ingest_runs?org_id=eq.${ORG}&source=eq.company&select=note,created_at`,
+      'created_at.desc', Number.POSITIVE_INFINITY,
+    ),
+    pagedRest<{ url: string; last_seen_at: string }>(
+      `external_offers?org_id=eq.${ORG}&source=eq.company&select=url,last_seen_at`,
+      'last_seen_at.desc', Number.POSITIVE_INFINITY,
+    ),
+  ]);
+  const byCode: Record<string, string> = {};
+  const byHost: Record<string, string> = {};
+  for (const row of runs?.rows ?? []) {
+    const code = /company:([a-z0-9-]{2,40})/.exec(row.note ?? '')?.[1];
+    if (code && (!byCode[code] || row.created_at > byCode[code])) byCode[code] = row.created_at;
+  }
+  for (const row of offers?.rows ?? []) {
+    const host = hostOf(row.url);
+    if (host && (!byHost[host] || row.last_seen_at > byHost[host])) byHost[host] = row.last_seen_at;
+  }
+  return { byCode, byHost, unknown: !runs || !offers };
+}
+
 export async function recentRuns(limit = 8): Promise<Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }> | null> {
   const response = await serviceRest(`external_ingest_runs?org_id=eq.${ORG}&select=source,via,received,accepted,note,created_at&order=created_at.desc&limit=${limit}`);
   const rows = response.ok ? await response.json().catch(() => null) : null;
   return Array.isArray(rows) ? rows : null;
+}
+
+/**
+ * Todas las ejecuciones desde el día 1 del mes, paginadas hasta la última página. No se usa
+ * `recentRuns(200)`: a mitad de mes las 200 últimas pueden dejar fuera gasto real y autorizar de más.
+ * Tampoco hay un tope artificial de 10.000 filas: si una página falla, devuelve `null` y los topes fallan
+ * cerrados en vez de sumar una parte como si fuera el total.
+ */
+export async function runsThisMonth(now = new Date()): Promise<Array<{ note: string | null }> | null> {
+  const since = encodeURIComponent(monthStart(now));
+  const page = await pagedRest<{ note: string | null }>(
+    `external_ingest_runs?org_id=eq.${ORG}&created_at=gte.${since}&select=note`,
+    'created_at.asc', Number.POSITIVE_INFINITY,
+  );
+  return page && !page.truncated ? page.rows : null;
 }
 
 export async function setStatus(ids: string[], status: string, by: string): Promise<number | null> {

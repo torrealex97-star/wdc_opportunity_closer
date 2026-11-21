@@ -12,7 +12,7 @@ node tests/withdraw-preview.mjs
 export PORT=3199
 SUPABASE_URL=http://127.0.0.1:8791 SUPABASE_PUBLISHABLE_KEY=anon-key SUPABASE_SERVICE_ROLE_KEY=service-key \
 CAREER_ENGINE_URL=http://127.0.0.1:8792 CAREER_ADMIN_TOKEN=engine-token ADMIN_PUBLIC_URL=https://app.test.dev \
-URL_GUARD_TEST_ALLOW=127.0.0.1:8792 STUDENT_AUTH_CACHE_MS=0 APIFY_MONTHLY_BUDGET_USD=5 INGEST_TOKEN=ingest-token-0123456789abcdef0123 CRON_SECRET=cron-secret-0123456789 INFOJOBS_API_BASE=http://127.0.0.1:8791 ADZUNA_API_BASE=http://127.0.0.1:8791 JOOBLE_API_BASE=http://127.0.0.1:8791 APIFY_API_BASE=http://127.0.0.1:8791 SERPAPI_API_BASE=http://127.0.0.1:8791 SERPAPI_JOBS_MAX_DORKS=0 GROQ_API_BASE=http://127.0.0.1:8791 OPENAI_API_BASE=http://127.0.0.1:8791 RESEND_API_BASE=http://127.0.0.1:8791 \
+URL_GUARD_TEST_ALLOW=127.0.0.1:8792 STUDENT_AUTH_CACHE_MS=0 APIFY_MONTHLY_BUDGET_USD=5 INGEST_TOKEN=ingest-token-0123456789abcdef0123 CRON_SECRET=cron-secret-0123456789 INFOJOBS_API_BASE=http://127.0.0.1:8791 ADZUNA_API_BASE=http://127.0.0.1:8791 JOOBLE_API_BASE=http://127.0.0.1:8791 APIFY_API_BASE=http://127.0.0.1:8791 SERPAPI_API_BASE=http://127.0.0.1:8791 BRIGHTDATA_API_BASE=http://127.0.0.1:8791 SERPAPI_JOBS_MAX_DORKS=0 COMPANY_REVIEW_FIXTURE="$PWD/tests/fixtures/bastida-careers.html" GROQ_API_BASE=http://127.0.0.1:8791 OPENAI_API_BASE=http://127.0.0.1:8791 RESEND_API_BASE=http://127.0.0.1:8791 \
   npx --no-install next start apps/web --hostname 127.0.0.1 --port "$PORT" > /tmp/admin-auth-next.log 2>&1 &
 NEXT_PID=$!
 trap 'kill $NEXT_PID 2>/dev/null || true' EXIT
@@ -63,6 +63,10 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/studentmetrics.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/retention.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/googlejobs.mjs
+# Rutas por fuente: orden por coste, contrato de Bright Data, extractor y cascada sin gastar sin clave/tope.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
+# Tope mensual: todas las ejecuciones desde el día 1, paginadas; nunca las últimas 200.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spend-window.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/fallback.mjs
 # Workana como portal de Apify: plantilla propia, sin país ISO roto y presupuesto que no es salario.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/workana.mjs
@@ -138,3 +142,5 @@ node tests/secrets.mjs
 node tests/admin-auth/gate.mjs
 node spikes/voice/tests/voice.mjs
 BASE="http://127.0.0.1:$PORT" node tests/admin-auth/ui.mjs
+# Interactivo: «Probar ruta» (Bright Data simulado) y «Revisar ahora» (fixture JSON-LD) de punta a punta.
+BASE="http://127.0.0.1:$PORT" node tests/admin-auth/interactive.mjs

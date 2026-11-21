@@ -97,7 +97,30 @@ def query_for(site, query):
     return f'"{query}"' if site == 'indeed' else query
 
 
-def build_kwargs(site, query, env=None):
+def validate_proxies(raw, timeout=8.0, opener=None):
+    """Valida la lista antes de lanzar nada: una petición por proxy, 200 y menos de 8 s.
+
+    Devuelve (sanos, fallos) con la latencia medida y el motivo del fallo. Sin esta validación, un proxy
+    muerto quema el runner y JobSpy parece «caído» cuando el problema es el proxy.
+    """
+    healthy, failed = [], []
+    build = opener or (lambda proxy: urllib.request.build_opener(urllib.request.ProxyHandler({'http': proxy, 'https': proxy})))
+    for proxy in raw:
+        start = time.monotonic()
+        try:
+            request = urllib.request.Request('https://api.ipify.org?format=json', headers={'User-Agent': 'WDC-jobspy/1.0'})
+            with build(proxy).open(request, timeout=timeout) as response:  # noqa: S310 - destino fijo
+                elapsed = time.monotonic() - start
+                if response.status == 200 and elapsed < 8:
+                    healthy.append({'proxy': proxy, 'ms': round(elapsed * 1000)})
+                else:
+                    failed.append({'proxy': proxy, 'reason': f'HTTP {response.status} en {elapsed:.1f}s'})
+        except Exception as error:  # noqa: BLE001 - cada proxy falla a su manera
+            failed.append({'proxy': proxy, 'reason': f'{type(error).__name__}: {error}'[:160]})
+    return healthy, failed
+
+
+def build_kwargs(site, query, env=None, proxies=None):
     """Argumentos de scrape_jobs verificados contra la firma de JobSpy 1.3.0 (tests/test_jobspy_collect.py los comprueba)."""
     env = os.environ if env is None else env
     kwargs = dict(
@@ -113,21 +136,34 @@ def build_kwargs(site, query, env=None):
         kwargs['fetch_description'] = True
     if site == 'google':
         kwargs['google_search_term'] = f'{query} empleo en España en los últimos 10 días'
-    proxies = [p.strip() for p in env.get('JOBSPY_PROXIES', '').split(',') if p.strip()]
+    if proxies is None:
+        proxies = [p.strip() for p in env.get('JOBSPY_PROXIES', '').split(',') if p.strip()]
     if proxies:
-        kwargs['proxies'] = proxies    # los runners de GitHub a veces son bloqueados: proxy opcional como secreto
+        kwargs['proxies'] = [proxies] if isinstance(proxies, str) else proxies    # los runners de GitHub a veces son bloqueados
     return kwargs
 
 
-def jobspy_scrape(site, query):
+def jobspy_scrape(site, query, proxies=None):
     from jobspy import scrape_jobs  # import tardío: solo hace falta al ejecutar el recolector
-    frame = scrape_jobs(**build_kwargs(site, query))
+    frame = scrape_jobs(**build_kwargs(site, query, proxies=proxies))
     rows = frame.drop(columns=['emails', 'skills'], errors='ignore').to_dict('records')
     # JobSpy (>=1.3.0 en GitHub) informa de qué sitio falló o qué opción ignoró en frame.attrs: distingue «bloqueado» de «sin ofertas».
     attrs = getattr(frame, 'attrs', {}) or {}
     notes = [f'{name}: {message}' for name, message in (attrs.get('errors') or {}).items()]
     notes += [f'{name}: {w}' for name, ws in (attrs.get('warnings') or {}).items() for w in ws]
     return rows, notes
+
+
+def _summary(report):
+    """Resumen para el panel/workflow: qué proxy falló y por qué, sin un «falló» genérico."""
+    path = os.environ.get('GITHUB_STEP_SUMMARY')
+    text = f"JobSpy · modo {report.get('mode')}\n\n" + '\n'.join(
+        [f"- OK {item['proxy']} ({item['ms']} ms)" for item in report.get('proxies_ok', [])] +
+        [f"- FALLO {item['proxy']}: {item['reason']}" for item in report.get('proxies_failed', [])]) + '\n'
+    if path:
+        with open(path, 'a', encoding='utf-8') as handle:
+            handle.write(text)
+    print(text, flush=True)
 
 
 def main(argv=None):
@@ -139,7 +175,32 @@ def main(argv=None):
     url, token = os.environ.get('INGEST_URL'), os.environ.get('INGEST_TOKEN')
     if not args.dry_run and not (url and token):
         sys.exit('Faltan INGEST_URL e INGEST_TOKEN (secretos del repositorio).')
-    results, errors = collect(sites, jobspy_scrape)
+    raw_proxies = [p.strip() for p in os.environ.get('JOBSPY_PROXIES', '').split(',') if p.strip()]
+    allow_direct = os.environ.get('JOBSPY_ALLOW_DIRECT') == '1'
+    report = {'mode': 'skipped', 'proxies_ok': [], 'proxies_failed': []}
+    site_proxies = {}
+    if raw_proxies:
+        healthy, failed = validate_proxies(raw_proxies)
+        report = {'mode': 'proxies' if healthy else 'skipped', 'proxies_ok': healthy, 'proxies_failed': failed}
+        print(json.dumps(report, ensure_ascii=False), flush=True)
+        if not healthy and not allow_direct:
+            print('JobSpy: sin proxies sanos; no se intentó. Configura JOBSPY_PROXIES o activa JOBSPY_ALLOW_DIRECT=1 asumiendo el riesgo de bloqueo.', file=sys.stderr)
+            _summary(report)
+            return 0
+        if not healthy:
+            report['mode'] = 'direct'
+            print('JobSpy: ningún proxy sano; se usa el modo directo porque JOBSPY_ALLOW_DIRECT=1 (riesgo de bloqueo).', file=sys.stderr)
+        site_proxies = {site: healthy[i % len(healthy)]['proxy'] for i, site in enumerate(sites)} if healthy else {}
+    elif not allow_direct:
+        print('JobSpy: JOBSPY_PROXIES vacío; no se intentó (el modo directo se activa con JOBSPY_ALLOW_DIRECT=1 y riesgo de bloqueo).', file=sys.stderr)
+        _summary(report)
+        return 0
+    else:
+        report['mode'] = 'direct'
+        print('JobSpy: modo directo activado a propósito; los runners de GitHub pueden estar bloqueados.', file=sys.stderr)
+    results, errors = collect(sites, lambda site, query: jobspy_scrape(site, query, proxies=site_proxies.get(site)))
+    report['sites'] = {site: len(items) for site, items in results.items()}
+    _summary(report)
     for site, items in results.items():
         print(f'{site}: {len(items)} candidatos', flush=True)
         if args.dry_run or not items:
@@ -148,6 +209,7 @@ def main(argv=None):
             print(' ->', post(url, token, site, items[i:i + BATCH], note='; '.join(errors)[:300] or None), flush=True)
     for error in errors:
         print('aviso:', error, file=sys.stderr)
+    return 0
 
 
 if __name__ == '__main__':

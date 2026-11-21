@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, BriefcaseBusiness, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Plug, RefreshCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
+import { Activity, BriefcaseBusiness, Building2, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Plug, RefreshCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
 import CloudAdminPanel from './CloudAdminPanel';
 import EngineAlertBanner from './EngineAlertBanner';
 import ApifyTab from './ApifyTab';
@@ -11,16 +11,14 @@ import QuickReview from './QuickReview';
 import StudentsTab from './StudentsTab';
 import SourceScorecard from './SourceScorecard';
 import SummaryTab from './SummaryTab';
-import sourceCatalog from '../lib/sourceCatalog.json';
-import { catalogCodeFor, groupByFamily } from '../lib/sourceFamilies';
-import { setupFor, type Setup } from '../lib/sourceSetup';
-import SourceSetupGuide from './SourceSetupGuide';
+import SourcesCenter from './SourcesCenter';
+import CompanyPages from './CompanyPages';
 import PracticeSettings from './PracticeSettings';
 
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
 export type Me = { email: string; role: 'owner' | 'admin' };
-type Tab = 'summary' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
+type Tab = 'summary' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -79,67 +77,9 @@ const RUN: Record<string, string> = { completed: 'Completada', failed: 'Fallida'
 const statusClass = (s: string | null) => s === 'ok' || s === 'completed' ? 'status ok' : s === 'error' || s === 'failed' ? 'status bad' : 'status';
 
 type ExtSource = { source: string; live: number; approved: number; last_seen: string | null };
-type CatalogEntry = { code: string; name: string; category: string | null; website: string | null; acquisition_method: string | null; validation_status: string | null; requires: string | null; note: string | null };
-const CATALOG = sourceCatalog as CatalogEntry[];
 type CloudSource = Overview['sources'][number];
-type Filter = 'all' | 'cloud' | 'failed' | 'local';
 
-// Catálogo completo (todas las fuentes que conoce la app) cruzado con el estado real del motor cloud.
-function SourceCatalog({ sources, external = [], paused = [], engineDown = false, onOpenApis }: { sources: CloudSource[]; external?: ExtSource[]; paused?: string[]; engineDown?: boolean; onOpenApis?: () => void }) {
-  const [guide, setGuide] = useState<{ name: string; code: string; setup: Setup } | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
-  const [category, setCategory] = useState('');
-  const [text, setText] = useState('');
-  const [limit, setLimit] = useState(25); // por tandas: el catálogo tiene decenas de filas y en móvil medía ~11.000 px
-  useEffect(() => setLimit(25), [filter, category, text]);
-  const ext = new Map(external.map(e => [e.source, e]));
-  // Los conectores del motor se agrupan por portal (himalayas-closer + himalayas → himalayas): antes,
-  // un portal recogido por un conector con otro nombre se leía como «Fuera del cloud».
-  const cloud = groupByFamily(sources);
-  const known = new Set(CATALOG.map(c => c.code));
-  const rows = [
-    ...CATALOG.map(c => ({ ...c, cloud: cloud.get(c.code) ?? null, ext: ext.get(c.code) ?? null })),
-    ...sources.filter(s => !known.has(catalogCodeFor(s.code))).map(s => ({ code: s.code, name: s.name, category: 'Motor cloud', website: null, acquisition_method: 'Recogida del motor cloud', validation_status: null, requires: 'none', note: null, cloud: cloud.get(catalogCodeFor(s.code)) ?? null, ext: null })),
-    ...external.filter(e => !known.has(e.source) && !cloud.has(e.source)).map(e => ({ code: e.source, name: e.source, category: 'Fuentes externas', website: null, acquisition_method: 'API o recolector externo', validation_status: null, requires: 'none', note: null, cloud: null, ext: e })),
-  ];
-  const failed = (r: (typeof rows)[number]) => r.cloud?.run_status === 'failed';
-  const categories = [...new Set(rows.map(r => r.category ?? 'Otras'))].sort();
-  const q = text.trim().toLowerCase();
-  const shown = rows.filter(r => (filter === 'all' || (filter === 'cloud' && (r.cloud || r.ext)) || (filter === 'failed' && failed(r)) || (filter === 'local' && !r.cloud && !r.ext))
-    && (!category || (r.category ?? 'Otras') === category) && (!q || `${r.name} ${r.code} ${r.note ?? ''}`.toLowerCase().includes(q)));
-  const inCloud = rows.filter(r => r.cloud || r.ext).length;
-  // Con el motor sin datos, una fila que no está en el motor NO está «fuera del cloud»: no se sabe. La
-  // diferencia importa: «fuera del cloud» se lee como una configuración pendiente y no como un fallo.
-  const cell = (r: (typeof rows)[number]) => paused.includes(r.code) ? <span className="status bad">Pausada</span> : r.ext && !r.cloud ? <span className="status ok">Externa · {r.ext.live} activas</span> : r.cloud
-    ? <span className={statusClass(r.cloud.run_status)}>{r.cloud.run_status ? RUN[r.cloud.run_status] ?? r.cloud.run_status : 'Sin recogida'}{r.cloud.connectors > 1 && <span className="sub">{r.cloud.connectors} conectores</span>}</span>
-    : engineDown ? <span className="status">Sin datos del motor</span>
-    : <span className="status">{r.requires === 'input' ? 'Requiere configurar' : 'Fuera del cloud'}</span>;
-  return <>
-    <h2 className="section-title">Fuentes de datos</h2>
-    {engineDown && <p className="card-meta" style={{ marginBottom: 12 }}>Sin datos del motor cloud en esta consulta: el estado de las fuentes que no son externas no se puede comprobar ahora mismo.</p>}
-    <div className="stat-strip"><span><strong>{rows.length}</strong>fuentes catalogadas</span><span><strong>{inCloud}</strong>recogidas (motor cloud o externas)</span><span><strong>{engineDown ? '—' : rows.filter(failed).length}</strong>con fallo</span><span><strong>{engineDown ? '—' : rows.length - inCloud}</strong>fuera del cloud (app local o con configuración)</span></div>
-    <div className="search-panel admin-toolbar">
-      <label className="grow" htmlFor="src-q">Buscar<input id="src-q" placeholder="Nombre o código" value={text} onChange={e => setText(e.target.value)} /></label>
-      <label htmlFor="src-filter">Mostrar<select id="src-filter" value={filter} onChange={e => setFilter(e.target.value as Filter)}><option value="all">Todas</option><option value="cloud">En el motor cloud</option><option value="failed">Con fallo</option><option value="local">Fuera del cloud</option></select></label>
-      <label htmlFor="src-cat">Categoría<select id="src-cat" value={category} onChange={e => setCategory(e.target.value)}><option value="">Todas</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
-    </div>
-    {!shown.length ? <div className="empty"><h3>Ninguna fuente con estos filtros.</h3></div> : <div className="table-wrap"><table className="data-table">
-      <thead><tr><th>Fuente</th><th>Categoría</th><th>Método</th><th>Estado</th><th className="num">Leídas</th><th className="num">Catálogo</th><th className="num">Elegibles</th></tr></thead>
-      <tbody>{shown.slice(0, limit).map(r => <tr key={r.code}>
-        <td className="primary-cell"><strong>{r.website ? <a href={r.website} target="_blank" rel="noopener noreferrer">{r.name}</a> : r.name}</strong><span>{r.code}</span>
-          {r.cloud?.warning && <span style={{ color: 'var(--warning)' }}>{r.cloud.warning}</span>}{!r.cloud && r.note && <span>{r.note}</span>}
-          {/* «Requiere configurar» sin decir qué falta obligaba a adivinar. Ahora abre la guía completa:
-              requisito, pasos numerados, documentación oficial y atajo a las claves. */}
-          {!r.cloud && !r.ext && r.requires === 'input' && <button type="button" className="source-setup-open"
-            aria-haspopup="dialog" onClick={() => setGuide({ name: r.name, code: r.code, setup: setupFor(r) })}>Cómo conectarla · guía paso a paso</button>}</td>
-        <td>{r.category ?? '—'}</td><td>{r.acquisition_method ?? '—'}{r.validation_status && <span className="sub">{r.validation_status}</span>}</td>
-        <td>{cell(r)}</td><td className="num">{r.cloud?.fetched ?? '—'}</td><td className="num">{r.cloud?.catalog ?? '—'}</td><td className="num">{r.cloud?.eligible ?? '—'}</td></tr>)}</tbody></table></div>}
-    {shown.length > limit && <p className="card-meta" style={{ marginTop: 12 }}><button onClick={() => setLimit(n => n + 25)}>Mostrar {Math.min(25, shown.length - limit)} más</button> <span aria-live="polite">Mostrando {limit} de {shown.length}</span></p>}
-    {guide && <SourceSetupGuide name={guide.name} code={guide.code} setup={guide.setup} onClose={() => setGuide(null)} onOpenApis={onOpenApis} />}
-  </>;
-}
-
-function SourcesTab({ onSessionLost, onOpenApis }: { onSessionLost: () => void; onOpenApis: () => void }) {
+function SourcesTab({ onSessionLost, onOpenApis, owner }: { onSessionLost: () => void; onOpenApis: () => void; owner: boolean }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
@@ -158,11 +98,8 @@ function SourcesTab({ onSessionLost, onOpenApis }: { onSessionLost: () => void; 
       <button disabled={busy} onClick={load}>{busy ? <LoaderCircle size={15} className="spin" /> : <RefreshCcw size={15} />} Actualizar</button>
     </div>
     {busy && !data ? <p className="muted"><LoaderCircle size={14} className="spin" /> Comprobando…</p> : data && <>
-      <h2 className="section-title">Conexiones</h2>
-      <div className="card-grid">{[...data.connections, ...data.paid].map(c => <article className="source-card" key={c.id}>
-        <div className="card-head"><h3>{c.name}</h3><span className={statusClass(c.status)}>{CONN[c.status]}</span></div>
-        <p className="card-meta">{c.detail}{c.ms ? ` · ${c.ms} ms` : ''}</p></article>)}</div>
-      <SourceCatalog sources={data.sources} external={data.external?.sources} paused={data.external?.paused} engineDown={data.engine === null} onOpenApis={onOpenApis} />
+      <SourcesCenter sources={data.sources} external={data.external?.sources} paused={data.external?.paused} engineDown={data.engine === null}
+        connections={data.connections} paid={data.paid} engine={data.engine} owner={owner} onOpenApis={onOpenApis} />
       <h2 className="section-title">Auditoría de enlaces JobToday{data.audit ? ` · ${data.audit.day}` : ''}</h2>
       {!data.audit ? <p className="muted">Sin auditoría disponible hoy.</p> : <div className="table-wrap"><table className="data-table">
         <thead><tr><th>Fuente</th><th>Enlace</th><th>Estado</th><th className="num">HTTP</th></tr></thead>
@@ -233,7 +170,8 @@ const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode;
   { id: 'apify', group: 'Ofertas', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
   { id: 'review', group: 'Ofertas', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
   { id: 'catalog', group: 'Ofertas', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
-  { id: 'sources', group: 'Sistema', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente y de las conexiones del sistema.' },
+  { id: 'sources', group: 'Sistema', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente, sus vías por coste y la guía para conectar la que falte. Sin clave no hay conexión.' },
+  { id: 'companies', group: 'Ofertas', label: 'Empresas', icon: <Building2 size={18} />, eyebrow: 'FEED ATS, PÁGINA PROPIA O LINKEDIN', title: 'Empresas, una a una.', lead: 'Las que tienen ATS público entran solas; las que tienen página propia se revisan con el extractor común; las que solo publican en LinkedIn se buscan en Google Jobs.' },
   { id: 'scorecard', group: 'Sistema', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
   { id: 'apis', group: 'Sistema', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
   { id: 'students', group: 'Equipo', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
@@ -300,7 +238,8 @@ export default function AdminShell() {
         {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}
         {tab === 'review' && <CloudAdminPanel onSessionLost={lost} />}
         {tab === 'catalog' && <CatalogTab onSessionLost={lost} />}
-        {tab === 'sources' && <SourcesTab onSessionLost={lost} onOpenApis={() => go('apis')} />}
+        {tab === 'sources' && <SourcesTab onSessionLost={lost} onOpenApis={() => go('apis')} owner={me.role === 'owner'} />}
+        {tab === 'companies' && <CompanyPages owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'apis' && <ApisTab owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'scorecard' && <SourceScorecard onSessionLost={lost} />}
         {tab === 'students' && <StudentsTab owner={me.role === 'owner'} onSessionLost={lost} />}

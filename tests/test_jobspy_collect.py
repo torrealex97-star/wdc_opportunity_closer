@@ -102,3 +102,45 @@ def test_jobspy_failure_notes_are_reported_without_stopping_the_run():
     results, errors = jc.collect(['linkedin'], scrape, sleep=lambda _: None)
     assert len(results['linkedin']) == len(jc.QUERIES)
     assert errors[0] == 'linkedin/closer de ventas: linkedin: response status code 429'
+
+
+def test_validate_proxies_keeps_only_fast_200_and_reports_the_reason():
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class Opener:
+        def open(self, request, timeout=0):
+            return Response()
+
+    healthy, failed = jc.validate_proxies(['http://ok:1'], opener=lambda proxy: Opener())
+    assert len(healthy) == 1 and healthy[0]['proxy'] == 'http://ok:1' and healthy[0]['ms'] >= 0
+    assert failed == []
+
+    def broken(proxy):
+        raise RuntimeError('sin salida')
+
+    healthy, failed = jc.validate_proxies(['http://bad:1'], opener=broken)
+    assert healthy == [] and failed[0]['proxy'] == 'http://bad:1' and 'RuntimeError' in failed[0]['reason']
+
+
+def test_without_healthy_proxies_it_does_not_launch_jobspy(monkeypatch):
+    called = []
+    monkeypatch.setattr(jc, 'collect', lambda *args, **kwargs: called.append(1))
+    # Sin lista: no se intenta (el modo directo exige una variable explícita).
+    monkeypatch.delenv('JOBSPY_PROXIES', raising=False)
+    monkeypatch.delenv('JOBSPY_ALLOW_DIRECT', raising=False)
+    assert jc.main(['--dry-run']) == 0 and called == []
+    # Con lista, pero ningún proxy sano: tampoco se intenta y se puede leer qué falló.
+    monkeypatch.setenv('JOBSPY_PROXIES', 'http://bad:1')
+    monkeypatch.setattr(jc, 'validate_proxies', lambda raw: ([], [{'proxy': raw[0], 'reason': 'timeout'}]))
+    assert jc.main(['--dry-run']) == 0 and called == []
+    # El modo directo sí se lanza cuando el operador lo activa a propósito.
+    monkeypatch.setattr(jc, 'collect', lambda *args, **kwargs: ({site: [] for site in jc.SITES}, []))
+    monkeypatch.setenv('JOBSPY_ALLOW_DIRECT', '1')
+    assert jc.main(['--dry-run']) == 0
