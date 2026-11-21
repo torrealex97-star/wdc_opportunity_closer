@@ -86,7 +86,12 @@ export function extractJsonLdJobs(html: string, baseUrl: string): DetectedJob[] 
   const nodes: JsonLdNode[] = [];
   for (const raw of scripts) {
     // Algunos gestores de plantillas dejan comentarios o comas finales: se limpian sin evaluar nada.
-    const cleaned = raw.replace(/^\s*<!--/, '').replace(/-->\s*$/, '').replace(/,\s*([}\]])/g, '$1').trim();
+    // Se aceptan los dos cierres de comentario HTML (`-->` y `--!>`), no solo el clásico.
+    let cleaned = raw.trim();
+    if (cleaned.startsWith('<!--')) cleaned = cleaned.slice(4).trimStart();
+    if (cleaned.endsWith('-->')) cleaned = cleaned.slice(0, -3).trimEnd();
+    else if (cleaned.endsWith('--!>')) cleaned = cleaned.slice(0, -4).trimEnd();
+    cleaned = cleaned.replace(/,\s*([}\]])/g, '$1').trim();
     if (!cleaned) continue;
     try { walk(JSON.parse(cleaned), nodes); } catch { /* un bloque roto no invalida los demás */ }
   }

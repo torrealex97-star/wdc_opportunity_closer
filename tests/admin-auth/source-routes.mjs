@@ -205,6 +205,9 @@ assert.equal(rssJobs.length, 1);
 assert.equal(rssJobs[0].title, 'Setter & closer');
 assert.equal(rssJobs[0].description, 'Remoto');
 assert.deepEqual(extractJobPostings('<html><body>sin datos</body></html>', 'https://acme.test'), []);
+// Algunos gestores cierran el comentario con `--!>`: el extractor debe limpiarlo igual que `-->`.
+const commented = `<script type="application/ld+json"><!-- {"@context":"https://schema.org","@type":"JobPosting","title":"Comentado","url":"https://acme.test/jobs/3"} --!></script>`;
+assert.equal(extractJobPostings(commented, 'https://acme.test/jobs').length, 1, 'cierre de comentario --!>');
 
 // 7. Guías: pasos, fecha, tres fallos y enlaces https. Ninguna fuente se queda sin receta.
 for (const item of catalog) {
