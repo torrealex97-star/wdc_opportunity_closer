@@ -140,6 +140,15 @@
 
 - **Fusionado** (*verified*): PR #103 con merge commit **`6935fcf`**, sin squash ni rebase; `verify` y `web-admin` en verde en el head `ee052a2` (y en el anterior). La ficha se borra y queda en `docs/handoff/archive/2026-11.md`.
 
+## Revisión del motor: publicar reclama la fila, 429 sin «allowance» y recorte declarado — 2026-11-21
+
+- **Petición del propietario**: revisar dónde pudo equivocarse el agente anterior y arreglar los errores.
+- **Publicación con reclamo atómico** (*tested*): `applyReview` acepta `expect: 'draft'` en [`sites/engine/worker.js`](../sites/engine/worker.js); la versión solo se inserta y el puntero solo se mueve si la fila sigue en borrador, y la activación no cuenta como publicada la que otra persona o ejecución movió. Antes pisaba cualquier estado y no miraba `changes`.
+- **Recorte del freno diario** (*tested*): `WRITE_ALLOWANCE_DAY` por encima del mensual se declara en `config.ignored`.
+- **429 sin «allowance»** (*inspected*): [`engineGet`](../apps/web/lib/engineHealth.ts) solo lo lee como pausa de cuota si trae ese texto; el mock de `enginepause.mjs` ya lo envía.
+- **Comprobado** (*tested*): los 26 `tests/engine/*`, `tsc --noEmit`, `ruff`, `handoff`, `orphan-refs`; la sentencia nueva validada en SQLite.
+- **Límites**: `tests/admin-auth/run.sh` no se completó (interrumpida), así que el cambio de `engineHealth` no se ejercitó en la suite web; nada probado contra D1 real. El guardián de cuota sigue recogiendo si no puede leer su registro (decisión declarada, sin tocar).
+
 ## Relevo al día (262-273), árbol sin duplicados y el E741 del exportador fuera (sesión 279) — 2026-11-21
 
 - **Petición del propietario**: «Borra los 13 duplicados sin seguimiento del árbol y confírmame que pytest y ruff salen limpios en local. Después actualiza `docs/ACTIVE_HANDOFF.md` con las sesiones 262-273 y fusiónalo a `main` con merge commit cuando `verify` y `web-admin` estén en verde».

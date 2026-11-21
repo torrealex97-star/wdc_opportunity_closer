@@ -1996,19 +1996,34 @@ async function handleAdminReview(request, env, opportunityId) {
 // UNA sola ruta para el PATCH del panel y la activación en lote, con la procedencia
 // del revisor registrada (espejo de opportunity_versions del núcleo local; el cloud
 // aceptaba `reviewed_by` y lo descartaba).
-async function applyReview(db, row, payload, editorialStatus, locale, reviewedBy, invokedBy = null) {
+// `expect` (estado editorial que la fila debe tener TODAVÍA) convierte la escritura en un reclamo
+// atómico: la versión solo se inserta si la fila sigue en ese estado y el puntero solo se mueve si
+// sigue en él. Si otra persona o ejecución la movió entretanto, no se escribe nada y devuelve `null`:
+// quien llama no puede contarla como hecha. Sin `expect` (PATCH de una persona) la revisión manda.
+async function applyReview(db, row, payload, editorialStatus, locale, reviewedBy, invokedBy = null, { expect = null } = {}) {
   const maxVersion = await db.prepare('SELECT max(version) AS v FROM opportunity_versions WHERE org_id=? AND opportunity_id=?').bind(ORG, row.id).first();
   const created = now();
   const newId = 'ver-' + crypto.randomUUID();
   const reviewer = reviewedBy || null;
   const reviewedAt = ['approved', 'published', 'withdrawn'].includes(editorialStatus) ? created : null;
-  await db.batch([
-    db.prepare(`INSERT INTO opportunity_versions (id,org_id,opportunity_id,version,locale,payload,created_by,created_at,reviewed_by,reviewed_at,invoked_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(newId, ORG, row.id, (maxVersion?.v ?? 0) + 1, locale, JSON.stringify(payload), reviewer ?? 'admin', created, reviewer, reviewedAt, invokedBy),
-    db.prepare('UPDATE opportunities SET current_version_id=?, editorial_status=?, updated_at=? WHERE org_id=? AND id=?')
-      .bind(newId, editorialStatus, created, ORG, row.id),
-  ]);
-  return { newId, version: (maxVersion?.v ?? 0) + 1, created, reviewed_by: reviewer, reviewed_at: reviewedAt, invoked_by: invokedBy };
+  const json = JSON.stringify(payload);
+  const version = (maxVersion?.v ?? 0) + 1;
+  const insert = expect
+    // El número de versión se calcula DENTRO de la sentencia: dos escrituras a la vez no repiten número.
+    ? db.prepare(`INSERT INTO opportunity_versions (id,org_id,opportunity_id,version,locale,payload,created_by,created_at,reviewed_by,reviewed_at,invoked_by)
+        SELECT ?,?,?,(SELECT COALESCE(MAX(version),0)+1 FROM opportunity_versions WHERE org_id=? AND opportunity_id=?),?,?,?,?,?,?,?
+        WHERE EXISTS (SELECT 1 FROM opportunities WHERE org_id=? AND id=? AND editorial_status=?)`)
+      .bind(newId, ORG, row.id, ORG, row.id, locale, json, reviewer ?? 'admin', created, reviewer, reviewedAt, invokedBy, ORG, row.id, expect)
+    : db.prepare(`INSERT INTO opportunity_versions (id,org_id,opportunity_id,version,locale,payload,created_by,created_at,reviewed_by,reviewed_at,invoked_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(newId, ORG, row.id, version, locale, json, reviewer ?? 'admin', created, reviewer, reviewedAt, invokedBy);
+  const update = expect
+    ? db.prepare('UPDATE opportunities SET current_version_id=?, editorial_status=?, updated_at=? WHERE org_id=? AND id=? AND editorial_status=?')
+      .bind(newId, editorialStatus, created, ORG, row.id, expect)
+    : db.prepare('UPDATE opportunities SET current_version_id=?, editorial_status=?, updated_at=? WHERE org_id=? AND id=?')
+      .bind(newId, editorialStatus, created, ORG, row.id);
+  const results = await db.batch([insert, update]);
+  if (expect && !Number(results?.[1]?.meta?.changes ?? 0)) return null;
+  return { newId, version, created, reviewed_by: reviewer, reviewed_at: reviewedAt, invoked_by: invokedBy };
 }
 
 // Cota de escaneo del pool de drafts (no del lote): el catálogo tiene miles y una
@@ -2334,7 +2349,10 @@ async function handleAdminActivate(request, env) {
       continue;
     }
     const status = publisher ? 'published' : 'needs_review';
-    const applied = await applyReview(db, opp, payload, status, 'es', reviewedBy ?? 'admin-activate', invokedBy);
+    // Reclamo atómico: solo se publica lo que SIGUE en borrador. Si una persona o el cron lo movió
+    // durante la verificación, no se pisa ni se cuenta como publicado.
+    const applied = await applyReview(db, opp, payload, status, 'es', reviewedBy ?? 'admin-activate', invokedBy, { expect: 'draft' });
+    if (!applied) { skip('ya no estaba en borrador: otra persona o ejecución la movió'); continue; }
     counters[status] += 1;
     items.push({ id: row.opportunity_id, job_id: row.job_id, action: status, role: derivedRole, version: applied.version,
       application_type: applicationType, application_url: url,
@@ -2419,6 +2437,7 @@ function writeLimits(env = {}) {
   // Un freno diario mayor que el mensual no tiene sentido: se recorta y se declara.
   const dayRaw = dayEnv ?? WRITE_ALLOWANCE.day;
   const day = dayRaw > 0 ? Math.min(dayRaw, month) : 0;
+  if (dayRaw > month && dayEnv !== null) ignored.push('WRITE_ALLOWANCE_DAY');
   // WRITE_GUARD_RATIO se escribe como decimal (0.85); se acepta también «85» y «0,85».
   const ratio = (() => {
     const raw = env?.WRITE_GUARD_RATIO;

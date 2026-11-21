@@ -168,4 +168,26 @@ const withdrawals = db => writes(db).filter(entry => /SET editorial_status='with
   assert.equal(body.counts.published, 1, 'la que sí tiene cuerpo en español se publica');
 }
 
+// 5) Reclamo atómico: si la fila ya no está en borrador cuando se publica (otra persona o ejecución la
+// movió), no se pisa ni se cuenta como publicada. D1 lo informa con `changes: 0` en el UPDATE guardado.
+{
+  const pool = [row('opp-movida', offer('Closer de ventas', 'Madrid, España', SPAIN_TEXT))];
+  const db = fakeDb(pool);
+  db.batch = async stmts => {
+    const out = [];
+    for (const s of stmts) { await s.run(); out.push({ meta: { changes: /^UPDATE opportunities SET current_version_id/.test(s.sql) ? 0 : 1 } }); }
+    return out;
+  };
+  const { status, body } = await activate(db, { dry_run: false, verify: false, market: 'any' });
+  assert.equal(status, 200);
+  assert.equal(body.counts.published, 0, 'una fila que no era suya no se cuenta como publicada');
+  assert.equal(body.counts.skipped, 1);
+  assert.match(body.items[0].reason, /ya no estaba en borrador/);
+  const guardadas = db.log.filter(e => e.kind === 'run' && /UPDATE opportunities SET current_version_id/.test(e.sql));
+  assert.equal(guardadas.length, 1);
+  assert.match(guardadas[0].sql, /editorial_status=\?$/, 'el puntero solo se mueve si sigue en borrador');
+  const versiones = db.log.filter(e => e.kind === 'run' && /^INSERT INTO opportunity_versions/.test(e.sql));
+  assert.match(versiones[0].sql, /WHERE EXISTS \(SELECT 1 FROM opportunities WHERE org_id=\? AND id=\? AND editorial_status=\?\)/, 'la versión tampoco se inserta si ya no es borrador');
+}
+
 console.log('PASS  motor: retira lo descartado en bloque, con motivo, y solo toca borradores');

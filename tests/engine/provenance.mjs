@@ -73,8 +73,11 @@ function fakeDb({ pool = [], opportunity = null, posting = null, versionPayload 
 const inserted = (db, table) => db.log
   .filter(entry => new RegExp(`INSERT (?:OR IGNORE )?INTO ${table} \\(`).test(entry.sql ?? ''))
   .map(entry => {
-    const columns = /\(([^)]*)\) VALUES/.exec(entry.sql)[1].split(',').map(name => name.trim());
-    return Object.fromEntries(columns.map((name, index) => [name, entry.args[index]]));
+    const columns = /\(([^)]*)\)\s+(?:VALUES|SELECT)/.exec(entry.sql)[1].split(',').map(name => name.trim());
+    // La forma con reclamo atómico (`INSERT … SELECT … WHERE EXISTS`) calcula `version` en una subconsulta
+    // con dos parámetros propios (org, oportunidad): se saltan para alinear el resto con sus columnas.
+    const args = /\)\s+SELECT /.test(entry.sql) ? [...entry.args.slice(0, 3), null, ...entry.args.slice(5)] : entry.args;
+    return Object.fromEntries(columns.map((name, index) => [name, args[index]]));
   });
 
 const offerRow = (id) => ({
