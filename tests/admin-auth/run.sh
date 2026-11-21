@@ -67,6 +67,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
 # Tope mensual: todas las ejecuciones desde el día 1, paginadas; nunca las últimas 200.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spend-window.mjs
+# Tope por organización: `monthly_usd` de provider_budget manda y el entorno queda como respaldo declarado.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/provider-budget-org.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/fallback.mjs
 # Workana como portal de Apify: plantilla propia, sin país ISO roto y presupuesto que no es salario.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/workana.mjs

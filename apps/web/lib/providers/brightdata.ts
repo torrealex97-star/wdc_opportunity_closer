@@ -2,13 +2,10 @@ import type { Candidate } from '../external';
 
 // Bright Data · SERP API y Web Unlocker.
 //
-// Contrato contrastado con su documentación (docs.brightdata.com, SERP API → Google → Jobs y «Parsed JSON
-// results»): `POST https://api.brightdata.com/request` con `Authorization: Bearer <API key>` y
-// `{zone, url, format: "raw"}`. Para Google Jobs se pide la URL de Google con `ibp=htl%3Bjobs` **y
-// `brd_json=1`**: ese parámetro de la URL es lo que devuelve el JSON parseado; sin él la respuesta es el
-// HTML de Google. `format` NO activa el parseo: `raw` entrega el cuerpo tal cual y `json` lo envuelve en
-// `{status_code, headers, body}` (aquí se desenvuelve por si una zona lo devuelve así). El JSON parseado
-// trae `jobs.items[]` con título, empresa, ubicación, fuente, descripción, enlace y etiquetas. Precio de lista: 1,50 USD por 1.000 peticiones correctas
+// Contrato verificado en su documentación (2026-11-21): `POST https://api.brightdata.com/request`
+// con `Authorization: Bearer <API key>` y `{zone, url, format}`. Para Google Jobs se pide la URL de
+// Google con `ibp=htl%3Bjobs`; su JSON parseado trae `jobs.items[]` con título, empresa, ubicación,
+// fuente, descripción, enlace y etiquetas. Precio de lista: 1,50 USD por 1.000 peticiones correctas
 // (0,0015 USD cada una) y 5.000 créditos gratis al mes COMPARTIDOS entre sus productos.
 //
 // Lo que este módulo NO hace: inventar campos que la respuesta no trae. Sin enlace o sin título, el
@@ -18,38 +15,50 @@ import type { Candidate } from '../external';
 // con clave de verdad.
 
 export const BRIGHTDATA_USD_PER_REQUEST = 0.0015;
-export const BRIGHTDATA_FREE_MONTHLY_REQUESTS = 5000;
-export const BRIGHTDATA_COST_NOTE = '1,50 USD por 1.000 peticiones correctas · 5.000 créditos gratis al mes compartidos entre sus APIs';
+
+/** Intentos por llamada. El tope reserva este número antes de lanzar: un reintento no lo desborda. */
+export const BRIGHTDATA_MAX_ATTEMPTS = 2;
 
 export type BrightDataConfig = {
   apiKey: string;
-  serpZone: string;
+  /** Zona SERP API. Puede faltar: se descubre con la cuenta (gratis) antes de usarla. */
+  serpZone: string | null;
   /** Zona del Web Unlocker; opcional porque solo hace falta para leer HTML de portales. */
   unlockerZone: string | null;
 };
 
-/** La clave se guarda como `API key:zona SERP[:zona Unlocker]`. Nada se deduce del nombre de la zona. */
+export type BrightDataZone = { name: string; type: string | null };
+
+// La API key de Bright Data es un token hexadecimal largo (64 caracteres en su documentación);
+// se aceptan también `.`, `_`, `~` y `-` para no rechazar una clave correcta por su alfabeto.
+const API_KEY = /^[A-Za-z0-9._~-]{8,300}$/;
+const ZONE = /^[A-Za-z0-9_.-]{2,80}$/;
+
+/**
+ * La clave se guarda como `API key`, `API key:zona SERP` o `API key:zona SERP:zona Unlocker`.
+ * La API key sola es el formato que da Bright Data (Cuenta → API keys): las zonas se descubren con
+ * `GET /zone/get_active_zones`, que es gratis. Antes se exigían dos partes, así que una clave correcta
+ * pegada tal cual se rechazaba como «formato incorrecto» sin haberla comprobado nunca.
+ */
 export function parseBrightDataSecret(secret: string): BrightDataConfig | null {
   const parts = secret.trim().split(':').map(part => part.trim());
-  if (parts.length < 2 || parts.length > 3) return null;
+  if (parts.length > 3) return null;
   const [apiKey, serpZone, unlockerZone] = parts;
-  if (!/^[A-Za-z0-9_-]{8,200}$/.test(apiKey)) return null;
-  if (!/^[A-Za-z0-9_-]{2,80}$/.test(serpZone)) return null;
-  if (unlockerZone !== undefined && !/^[A-Za-z0-9_-]{2,80}$/.test(unlockerZone)) return null;
-  return { apiKey, serpZone, unlockerZone: unlockerZone ?? null };
+  if (!API_KEY.test(apiKey)) return null;
+  if (serpZone && !ZONE.test(serpZone)) return null;
+  if (unlockerZone && !ZONE.test(unlockerZone)) return null;
+  return { apiKey, serpZone: serpZone || null, unlockerZone: unlockerZone || null };
 }
-
-/** Nunca se imprime la clave: solo los últimos 4 caracteres, como el resto de proveedores. */
-export const brightDataLast4 = (secret: string) => secret.trim().slice(-4);
 
 export class BrightDataError extends Error {
   readonly status: number | null;
-  readonly retryable: boolean;
-  constructor(message: string, status: number | null = null, retryable = false) {
+  /** Intentos hechos: si hubo error de red, el primero pudo facturarse aunque no llegara respuesta. */
+  readonly attempts: number;
+  constructor(message: string, status: number | null = null, attempts = 0) {
     super(message);
     this.name = 'BrightDataError';
     this.status = status;
-    this.retryable = retryable;
+    this.attempts = attempts;
   }
 }
 
@@ -59,34 +68,127 @@ export const apiBase = () => process.env.BRIGHTDATA_API_BASE ?? 'https://api.bri
 export const brightDataSource = (code: string) => `brightdata-${code}`;
 
 /**
- * URL de Google Jobs: `ibp=htl;jobs` es el parámetro documentado para vacantes y `brd_json=1` el que pide
- * a Bright Data el JSON parseado en lugar del HTML de Google (sin él no hay `jobs.items[]`).
+ * URL de Google Jobs: `ibp=htl;jobs` activa el panel de vacantes y `brd_json=1` pide a Bright Data el JSON
+ * ya interpretado (sin él la respuesta puede ser HTML o un envoltorio y el anuncio no se puede leer).
  */
 export function googleJobsUrl(query: string, gl = 'es', hl = 'es'): string {
-  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', hl, gl, brd_json: '1' });
+  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', brd_json: '1', hl, gl });
   return `https://www.google.com/search?${params.toString()}`;
 }
 
 /**
- * Cuerpo de la respuesta ya como objeto. Acepta el JSON parseado directo (`format: raw` + `brd_json=1`) y
- * la envoltura `{status_code, headers, body}` que devuelve `format: json`, cuyo `body` es otro JSON (si es
- * HTML no hay datos parseados y se declara en `serpJobs`).
+ * `POST /request` puede devolver el resultado dentro de `{status_code, headers, body}` (el cuerpo como texto
+ * JSON). Se desenvuelve sin inventar nada; si no hay envoltorio se devuelve el mismo objeto.
  */
-export function unwrapBody(text: string): Record<string, unknown> | null {
-  let parsed: unknown;
-  try { parsed = JSON.parse(text); } catch { return null; }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-  const outer = parsed as Record<string, unknown>;
-  if (typeof outer.body === 'string' && ('status_code' in outer || 'headers' in outer)) {
-    try {
-      const inner = JSON.parse(outer.body);
-      return inner && typeof inner === 'object' && !Array.isArray(inner) ? inner as Record<string, unknown> : null;
-    } catch { return null; }
+export function unwrapPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const body = (payload as Record<string, unknown>).body;
+  if (typeof body === 'string' && body.trim()) {
+    try { return JSON.parse(body); } catch { return payload; }
   }
-  return outer;
+  if (body && typeof body === 'object') {
+    const inner = body as Record<string, unknown>;
+    if (inner.jobs !== undefined || inner.jobs_results !== undefined) return inner;
+  }
+  return payload;
+}
+
+/** Zonas activas de la cuenta: `[{name, type}]` (la documentación también admite `{zones: [...]}`). */
+export function zonesFromPayload(payload: unknown): BrightDataZone[] {
+  const list = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as Record<string, unknown>).zones)
+      ? (payload as Record<string, unknown>).zones as unknown[]
+      : [];
+  return list
+    .map(zone => {
+      if (!zone || typeof zone !== 'object') return null;
+      const record = zone as Record<string, unknown>;
+      const name = clip(record.name, 80);
+      const type = clip(record.type, 40);
+      return name ? { name, type: type ? type.toLowerCase() : null } : null;
+    })
+    .filter((zone): zone is BrightDataZone => zone !== null);
+}
+
+/** Primera zona SERP y primera de Web Unlocker de la cuenta. `null` si esa cuenta no tiene ninguna. */
+export function pickBrightDataZones(zones: BrightDataZone[]): { serpZone: string | null; unlockerZone: string | null } {
+  const byType = (...types: string[]) => zones.find(zone => zone.type && types.includes(zone.type))?.name ?? null;
+  return {
+    serpZone: byType('serp', 'serp_api', 'serp-api'),
+    unlockerZone: byType('unblocker', 'web_unlocker', 'web-unlocker'),
+  };
+}
+
+export type ZonesResult = { zones: BrightDataZone[]; status: number | null; error: string | null };
+
+/**
+ * Zonas activas de la cuenta con la API key. Es gratis (no consume créditos de scraping) y por eso sirve
+ * para validar la clave y las zonas ANTES de lanzar una petición de pago.
+ */
+export async function listZones(apiKey: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<ZonesResult> {
+  const { fetchImpl = fetch, timeoutMs = 8_000 } = options;
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/zone/get_active_zones`, {
+      method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  } catch (err) {
+    return { zones: [], status: null, error: `No se pudo contactar con Bright Data: ${(err as Error).message}` };
+  }
+  const text = await response.text().catch(() => '');
+  if (!response.ok) return { zones: [], status: response.status, error: `Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}` };
+  let payload: unknown = null;
+  try { payload = JSON.parse(text); } catch { /* respuesta sin JSON: se declara «sin zonas legibles» */ }
+  return { zones: zonesFromPayload(payload), status: response.status, error: null };
+}
+
+export type ResolvedBrightData = {
+  /** `null` si el texto guardado no es una clave utilizable. */
+  config: BrightDataConfig | null;
+  /** `null` si no se pudo leer la cuenta (no se confunde con «sin zonas»). */
+  zones: BrightDataZone[] | null;
+  /** Motivo por el que no se pudieron completar las zonas, con la clave ya validada. */
+  error: string | null;
+};
+
+/**
+ * Completa las zonas que falten con la cuenta de Bright Data. Si el secreto ya trae las dos, no hay red.
+ * Un fallo al leer las zonas **no invalida la clave**: se devuelve el motivo y decide el llamador.
+ */
+export async function resolveBrightDataConfig(secret: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<ResolvedBrightData> {
+  const parsed = parseBrightDataSecret(secret);
+  if (!parsed) return { config: null, zones: null, error: 'Formato incorrecto: se esperaba la API key de Bright Data.' };
+  if (parsed.serpZone && parsed.unlockerZone) return { config: parsed, zones: null, error: null };
+  const listed = await listZones(parsed.apiKey, options);
+  if (listed.error) return { config: parsed, zones: null, error: listed.error };
+  const picked = pickBrightDataZones(listed.zones);
+  return {
+    config: {
+      apiKey: parsed.apiKey,
+      serpZone: parsed.serpZone ?? picked.serpZone,
+      unlockerZone: parsed.unlockerZone ?? picked.unlockerZone,
+    },
+    zones: listed.zones,
+    error: null,
+  };
 }
 
 type FetchLike = typeof fetch;
+
+/**
+ * La petición de prueba del panel: UNA búsqueda de Google Jobs, sin reintento (un reintento se cobraría).
+ * Se usa con una configuración ya resuelta para no repetir la consulta de zonas. No se ejecuta al guardar.
+ * Exige la zona en el tipo: el llamador ya la comprobó, así que no hay una rama de error inalcanzable.
+ */
+export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
+  return fetchImpl(`${apiBase()}/request`, {
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'json' }),
+  });
+}
 
 async function postRequest(
   config: BrightDataConfig,
@@ -95,10 +197,10 @@ async function postRequest(
   format: 'json' | 'raw',
   fetchImpl: FetchLike,
   timeoutMs: number,
-  maxAttempts = 2,
-): Promise<{ text: string; status: number }> {
+  maxAttempts = BRIGHTDATA_MAX_ATTEMPTS,
+): Promise<{ text: string; attempts: number }> {
   let last: BrightDataError | null = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let response: Response;
     try {
       response = await fetchImpl(`${apiBase()}/request`, {
@@ -109,19 +211,19 @@ async function postRequest(
         body: JSON.stringify({ zone, url, format }),
       });
     } catch (err) {
-      last = new BrightDataError(`No se pudo contactar con Bright Data: ${(err as Error).message}`, null, true);
-      if (attempt < maxAttempts - 1) continue;
+      last = new BrightDataError(`No se pudo contactar con Bright Data: ${(err as Error).message}`, null, attempt);
+      if (attempt < maxAttempts) continue;
       throw last;
     }
     const text = await response.text().catch(() => '');
-    if (response.ok) return { text, status: response.status };
+    if (response.ok) return { text, attempts: attempt };
     const retryable = response.status === 429 || response.status >= 500;
-    last = new BrightDataError(`Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`, response.status, retryable);
+    last = new BrightDataError(`Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`, response.status, attempt);
     // Un 401/403 no mejora reintentando: la clave o la zona están mal.
-    if (!retryable || attempt >= maxAttempts - 1) throw last;
+    if (!retryable || attempt === maxAttempts) throw last;
     await new Promise(resolve => setTimeout(resolve, 400));
   }
-  throw last ?? new BrightDataError('Bright Data no respondió');
+  throw last ?? new BrightDataError('Bright Data no respondió', null, maxAttempts);
 }
 
 const clip = (value: unknown, max: number): string | null => {
@@ -195,8 +297,9 @@ export function jobToCandidate(item: unknown, now = Date.now()): Candidate | nul
   };
 }
 
-/** Forma documentada: `{ jobs: { items: [...] } }`. También acepta `jobs_results` si la zona cambia. */
-export function jobsFromPayload(payload: unknown, now = Date.now()): Candidate[] {
+/** Forma documentada: `{ jobs: { items: [...] } }`. También acepta `jobs_results` y el envoltorio `{body}`. */
+export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidate[] {
+  const payload = unwrapPayload(rawPayload);
   if (!payload || typeof payload !== 'object') return [];
   const body = payload as Record<string, unknown>;
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
@@ -214,7 +317,7 @@ export function jobsFromPayload(payload: unknown, now = Date.now()): Candidate[]
 
 /** `maxAttempts: 1` desactiva el reintento: lo usa el cron, cuyo reloj compartido no admite un segundo intento. */
 export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number; maxAttempts?: number };
-export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; hasJobsPanel: boolean };
+export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; /** La respuesta traía el panel de empleos de Google (aunque estuviera vacío); sin él no es «0 ofertas» comprobado. */ hasJobsPanel: boolean };
 
 /**
  * Una búsqueda de Google Jobs. Un fallo se lanza con su motivo (nunca se devuelve una lista vacía
@@ -222,22 +325,27 @@ export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUs
  * para que el llamador lo anote y lo sume al tope mensual.
  */
 export async function serpJobs(config: BrightDataConfig, options: SerpJobsOptions): Promise<SerpJobsResult> {
-  const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now(), maxAttempts = 2 } = options;
+  const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now(), maxAttempts = BRIGHTDATA_MAX_ATTEMPTS } = options;
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
-  const { text } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs, maxAttempts);
-  const body = unwrapBody(text);
-  if (!body) {
-    throw new BrightDataError('Bright Data devolvió HTML y no el JSON parseado: revisa que la zona sea de SERP API (no Web Unlocker) y que la URL lleve brd_json=1', 200, false);
+  if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
+  const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'json', fetchImpl, timeoutMs, maxAttempts);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, attempts);
   }
-  if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, false);
+  const unwrapped = unwrapPayload(payload);
+  const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
+  if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
   const rawItems = Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
   return {
-    candidates: jobsFromPayload(body, now),
-    requests: 1,
-    costUsd: BRIGHTDATA_USD_PER_REQUEST,
+    candidates: jobsFromPayload(payload, now),
+    // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.
+    requests: attempts,
+    costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST,
     rawItems,
-    // Sin panel de empleos en la respuesta no se dice «0 ofertas»: se dice que Google no lo mostró.
     hasJobsPanel: Boolean(jobs) || Array.isArray(body.jobs_results),
   };
 }
@@ -246,10 +354,10 @@ export type UnlockResult = { html: string; requests: number; costUsd: number };
 
 /** HTML de una página con anti-bot. Solo se usa donde hay un extractor probado (JSON-LD/RSS). */
 export async function unlockHtml(config: BrightDataConfig, url: string, options: { timeoutMs?: number; fetchImpl?: FetchLike } = {}): Promise<UnlockResult> {
-  if (!config.unlockerZone) throw new BrightDataError('Falta la zona de Web Unlocker (API key:zona SERP:zona Unlocker)', 422, false);
-  if (!/^https:\/\//i.test(url)) throw new BrightDataError('El Unlocker solo acepta enlaces HTTPS públicos', 422, false);
+  if (!config.unlockerZone) throw new BrightDataError('Falta la zona de Web Unlocker (API key:zona SERP:zona Unlocker)', 422);
+  if (!/^https:\/\//i.test(url)) throw new BrightDataError('El Unlocker solo acepta enlaces HTTPS públicos', 422);
   const { timeoutMs = 20_000, fetchImpl = fetch } = options;
-  const { text } = await postRequest(config, config.unlockerZone, url, 'raw', fetchImpl, timeoutMs);
-  if (!text.trim()) throw new BrightDataError('El Unlocker devolvió una página vacía', 200, false);
-  return { html: text, requests: 1, costUsd: BRIGHTDATA_USD_PER_REQUEST };
+  const { text, attempts } = await postRequest(config, config.unlockerZone, url, 'raw', fetchImpl, timeoutMs);
+  if (!text.trim()) throw new BrightDataError('El Unlocker devolvió una página vacía', 200, attempts);
+  return { html: text, requests: attempts, costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST };
 }

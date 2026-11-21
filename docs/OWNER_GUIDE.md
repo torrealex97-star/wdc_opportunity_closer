@@ -210,7 +210,7 @@ Respóndeme con el **Prompt 10** (pegado y rellenado).
    -- 4 filas: brightdata, serpapi, zenrows, scrapingbee
    select relrowsecurity from pg_class where oid = 'public.provider_budget'::regclass; -- true
    ```
-   Ojo: la tabla deja el tope **listo**, pero hoy el tope efectivo lo sigue leyendo el entorno (`BRIGHTDATA_MONTHLY_USD`, `SERPAPI_MONTHLY_USD`…, 5 USD si no están); hasta que el adaptador lea la tabla, si quieres otro tope se pone esa variable en Vercel + redeploy.
+   Desde la sesión 289 el tope efectivo sale de esta tabla: cambiar `monthly_usd` cambia el límite **sin redeploy**. El entorno (`BRIGHTDATA_MONTHLY_USD`, `SERPAPI_MONTHLY_USD`…) solo actúa como respaldo si la fila no se puede leer, y el panel declara cuándo pasa.
 2. **Orden de vías por fuente** — SQL Editor → pega entero `supabase/migrations/20261121_source_route_order.sql` → **Run**. Añade `route_order text[]` a `source_settings`; vacío o sin fila = orden por coste.
    **Comprueba**:
    ```sql
@@ -221,8 +221,8 @@ Respóndeme con el **Prompt 10** (pegado y rellenado).
    **Comprueba**: el bloque dice «personalizado» y el orden sigue ahí tras recargar; «Volver al orden por coste» lo borra. Antes de aplicar la migración, guardar responde **503** con el motivo (es lo esperado, no un fallo del panel). En la base: `select source, route_order from public.source_settings where route_order <> '{}';`
 
 **B. Las claves reales**
-4. **Bright Data** — Panel → APIs → Bright Data: pega el token y la **zona** (una para SERP de Google Jobs y otra para el Unlocker de una página concreta; no son la misma).
-   **Comprueba**: «Probar» hace **una** petición, descuenta del tope y deja una ejecución `brightdata-probe` con su `coste_usd=0.0015` (así lo comprueba la suite del panel). El gasto del mes sube en la tarjeta; si pone «—» es que faltan notas de ejecuciones, no que sea cero.
+4. **Bright Data** — Panel → APIs → Bright Data: pega **solo la API key** (Cuenta → API keys). El panel lee tus zonas activas con la API de cuenta (gratis) y usa la de tipo SERP; si prefieres fijarlas a mano, pega `API key:zona SERP[:zona Unlocker]` (la de SERP para Google Jobs y la de Unlocker para leer una página concreta; no son la misma).
+   **Comprueba**: «Probar» valida primero la clave y la zona **sin gastar** (un 401 significa clave rechazada; una zona que no existe o no es SERP se dice con su nombre) y después hace **una** petición, descuenta del tope y deja una ejecución `brightdata-probe` con su `coste_usd=0.0015` (así lo comprueba la suite del panel). El gasto del mes sube en la tarjeta; si pone «—» es que faltan notas de ejecuciones, no que sea cero.
 5. **Unlocker** — si tu clave no tiene zona Unlocker, el panel **no** marca esa vía como lista y lo dice; ZenRows o ScrapingBee pueden sustituirla con su clave en el mismo panel.
    **Comprueba**: en Fuentes, la tarjeta de la fuente enseña qué vía está lista y cuál no, con el motivo.
 6. **SerpApi** — Panel → APIs → SerpApi → pegar → «Comprobar».

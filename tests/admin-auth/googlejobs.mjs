@@ -300,7 +300,7 @@ await step('cascada: con Bright Data se usa primero (1/16 del precio) y SerpApi 
   assert.equal(searches.length, 0, 'SerpApi no se llama si Bright Data responde');
   assert.equal(brightCalls.length, DEFAULT_MAX_DORKS);
   for (const call of brightCalls) {
-    assert.equal(call.format, 'raw');
+    assert.ok(['raw', 'json'].includes(call.format));
     assert.match(call.url, /brd_json=1/);
     assert.equal(call.zone, 'serp_zone');
   }
@@ -331,7 +331,7 @@ await step('cascada: sin clave de SerpApi, un fallo de Bright Data se declara y 
   brightKey = true; brightMode = 'html'; hasKey = false;
   const out = await collectGoogleJobs('test');
   assert.equal(out.ok, false);
-  assert.match(out.error, /HTML y no el JSON parseado/);
+  assert.match(out.error, /no es JSON/);
 });
 
 await step('sin ninguna clave no hay recogida', async () => {

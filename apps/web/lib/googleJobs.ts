@@ -3,7 +3,7 @@ import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './exte
 import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
 import { loadMeter, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
-import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs, type BrightDataConfig } from './providers/brightdata';
+import { BrightDataError, brightDataSource, parseBrightDataSecret, resolveBrightDataConfig, serpJobs, type BrightDataConfig } from './providers/brightdata';
 
 // Google Jobs vía SerpApi: la única fuente de ofertas ya conectada que puede
 // aportar closers de España sin una clave nueva. Google Jobs indexa InfoJobs,
@@ -214,7 +214,14 @@ export async function collectGoogleJobs(
     const limit = maxDorks();
     if (limit === 0) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Recogida de Google Jobs desactivada (SERPAPI_JOBS_MAX_DORKS=0).' };
     const [serpSecret, brightSecret] = await Promise.all([getSecret('serpapi'), getSecret('brightdata')]);
-    const brightConfig = brightSecret ? parseBrightDataSecret(brightSecret) : null;
+    // La clave puede venir sola (sin zona): la zona SERP se descubre con la cuenta (llamada gratuita). Sin zona
+    // SERP utilizable Bright Data no entra en la cascada y SerpApi cubre.
+    let brightConfig: BrightDataConfig | null = null;
+    if (brightSecret) {
+      const parsed = parseBrightDataSecret(brightSecret);
+      brightConfig = parsed?.serpZone ? parsed : (await resolveBrightDataConfig(brightSecret).catch(() => null))?.config ?? null;
+      if (brightConfig && !brightConfig.serpZone) brightConfig = null;
+    }
     if (!serpSecret && !brightConfig) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi ni de Bright Data' };
     // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice. Va ANTES de leer el gasto del mes
     // (una lectura paginada) para no gastar el tramo en preparar una búsqueda que ya no cabe.

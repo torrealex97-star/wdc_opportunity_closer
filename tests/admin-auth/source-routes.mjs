@@ -4,8 +4,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl } from '../../apps/web/lib/providers/brightdata.ts';
-import { spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
+import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
 import { setupFor } from '../../apps/web/lib/sourceSetup.ts';
 import { COMPANY_WATCHLIST } from '../../apps/web/lib/companyWatchlist.ts';
@@ -49,15 +49,72 @@ assert.equal(groupForSource(routesForSource(entry('himalayas')), new Set(['brigh
 assert.equal(groupForSource(routesForSource(entry('indeed')), new Set()).toString(), 'google', 'Indeed sin claves se agrupa por Google Jobs, no como gratis por JobSpy');
 
 // 3. Contrato de la petición a Bright Data y mapeo del fixture documentado.
+// La API key sola es un secreto válido (es lo que emite Bright Data): antes se descartaba por «formato»
+// y una clave correcta aparecía como rechazada sin haberla comprobado.
 const config = parseBrightDataSecret('abc12345key:serp_zone_1:unlock_zone');
 assert.deepEqual(config, { apiKey: 'abc12345key', serpZone: 'serp_zone_1', unlockerZone: 'unlock_zone' });
-assert.equal(parseBrightDataSecret('solo-api-key'), null, 'sin zona no hay configuración');
+assert.deepEqual(parseBrightDataSecret('  abc12345key  '), { apiKey: 'abc12345key', serpZone: null, unlockerZone: null }, 'la API key sola vale');
+assert.deepEqual(parseBrightDataSecret('abc12345key::unlock_zone'), { apiKey: 'abc12345key', serpZone: null, unlockerZone: 'unlock_zone' }, 'se puede dar solo la zona Unlocker');
 assert.equal(parseBrightDataSecret('a:b:c:d'), null, 'cuatro partes no es el formato');
+assert.equal(parseBrightDataSecret('corta'), null, 'una clave de 5 caracteres no es una API key');
 const url = googleJobsUrl('closer de ventas', 'es', 'es');
 assert.match(url, /ibp=htl%3Bjobs/);
+assert.match(url, /brd_json=1/, 'sin brd_json=1 la respuesta puede volver como HTML');
 assert.match(url, /q=closer\+de\+ventas/);
 assert.equal(brightDataSource('google'), 'brightdata-google', 'Google Jobs se atribuye a brightdata-google');
 assert.equal(brightDataSource('infojobs'), 'brightdata-infojobs', 'cada portal conserva su código, no un «portal» genérico');
+
+// 3b. Zonas de la cuenta (gratis): se elige por tipo y no por el nombre, y un 401 sí es clave rechazada.
+assert.deepEqual(zonesFromPayload([{ name: 'serp_api1', type: 'SERP' }, { name: 'web_unlocker1', type: 'unblocker' }]),
+  [{ name: 'serp_api1', type: 'serp' }, { name: 'web_unlocker1', type: 'unblocker' }]);
+assert.deepEqual(zonesFromPayload({ zones: [{ name: 'z1', type: 'serp' }, { nope: true }] }), [{ name: 'z1', type: 'serp' }]);
+assert.deepEqual(pickBrightDataZones([{ name: 'w1', type: 'unblocker' }, { name: 's1', type: 'serp' }]), { serpZone: 's1', unlockerZone: 'w1' });
+assert.deepEqual(pickBrightDataZones([{ name: 'proxy1', type: 'res_rotating' }]), { serpZone: null, unlockerZone: null }, 'una zona de proxy no se confunde con SERP');
+const zonesFetch = async (target) => {
+  assert.match(target, /\/zone\/get_active_zones$/);
+  return new Response(JSON.stringify([{ name: 'serp_api1', type: 'serp' }, { name: 'web_unlocker1', type: 'unblocker' }]), { status: 200 });
+};
+assert.equal((await listZones('k', { fetchImpl: zonesFetch })).zones.length, 2);
+const rejectedZones = await listZones('k', { fetchImpl: async () => new Response('User authentication is required', { status: 401 }) });
+assert.equal(rejectedZones.status, 401);
+assert.match(rejectedZones.error, /HTTP 401/);
+assert.deepEqual(rejectedZones.zones, [], 'una respuesta rechazada no inventa zonas');
+let zoneCalls = 0;
+const resolvedBare = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { zoneCalls++; return new Response(JSON.stringify([{ name: 'serp_api1', type: 'serp' }]), { status: 200 }); } });
+assert.equal(zoneCalls, 1, 'con la clave sola se consulta la cuenta una vez, gratis');
+assert.deepEqual(resolvedBare.config, { apiKey: 'abc12345key', serpZone: 'serp_api1', unlockerZone: null });
+let fullCalls = 0;
+const resolvedFull = await resolveBrightDataConfig('abc12345key:serp_zone_1:unlock_zone', { fetchImpl: async () => { fullCalls++; return new Response('[]', { status: 200 }); } });
+assert.equal(fullCalls, 0, 'si las zonas vienen escritas no se llama a la cuenta');
+assert.equal(resolvedFull.config.serpZone, 'serp_zone_1');
+const resolvedDown = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { throw new Error('timeout'); } });
+assert.equal(resolvedDown.config.serpZone, null);
+assert.match(resolvedDown.error, /No se pudo contactar/, 'un fallo de red no se anuncia como clave rechazada');
+assert.equal((await resolveBrightDataConfig('corta')).config, null);
+
+// 3c. El envoltorio `{status_code, headers, body}` no pierde las ofertas.
+const wrapped = { status_code: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobs: { items: [{ title: 'Closer', company: 'Acme', link: 'https://acme.test/1' }] } }) };
+assert.equal(unwrapPayload(wrapped).jobs.items.length, 1);
+assert.equal(jobsFromPayload(wrapped).length, 1, 'las ofertas se leen dentro del envoltorio');
+assert.equal(unwrapPayload({ jobs: { items: [] } }).jobs.items.length, 0, 'un payload directo se devuelve igual');
+
+// 3d. La prueba es UNA petición con el contrato documentado, y su precio es el mismo que usa el tope.
+const probeCalls = [];
+const probeResponse = await serpProbeRequest({ apiKey: 'abc12345key', serpZone: 'serp_zone_1', unlockerZone: null }, async (target, init) => {
+  probeCalls.push({ target, init });
+  return new Response('{}', { status: 200 });
+});
+assert.equal(probeResponse.status, 200);
+assert.equal(probeCalls.length, 1, 'la prueba no reintenta: una sola petición');
+assert.equal(probeCalls[0].target, 'https://api.brightdata.com/request');
+assert.equal(probeCalls[0].init.method, 'POST');
+assert.equal(probeCalls[0].init.headers.Authorization, 'Bearer abc12345key');
+const probeBody = JSON.parse(probeCalls[0].init.body);
+assert.deepEqual(Object.keys(probeBody).sort(), ['format', 'url', 'zone']);
+assert.equal(probeBody.zone, 'serp_zone_1');
+assert.equal(probeBody.format, 'json');
+assert.match(probeBody.url, /brd_json=1/);
+assert.equal(BRIGHTDATA_USD_PER_REQUEST, PROVIDER_METERS.brightdata.usdPerRequest, 'el precio del proveedor y el del medidor del tope no pueden divergir');
 
 const calls = [];
 const fixture = {
@@ -75,7 +132,7 @@ assert.equal(calls[0].init.headers.Authorization, 'Bearer abc12345key');
 const body = JSON.parse(calls[0].init.body);
 assert.deepEqual(Object.keys(body).sort(), ['format', 'url', 'zone']);
 assert.equal(body.zone, 'serp_zone_1');
-assert.equal(body.format, 'raw', 'format raw: el parseo lo activa brd_json=1 en la URL, no format');
+assert.ok(['raw', 'json'].includes(body.format), 'el parseo lo activa brd_json=1 en la URL; format raw o json (se desenvuelve)');
 assert.match(body.url, /ibp=htl%3Bjobs/);
 assert.match(body.url, /[?&]brd_json=1(&|$)/, 'sin brd_json=1 Bright Data devuelve HTML, no jobs.items[]');
 assert.equal(result.hasJobsPanel, true);
@@ -87,20 +144,32 @@ assert.match(result.candidates[0].description, /Remoto/);
 assert.ok(result.candidates[0].posted_at?.startsWith('2026-11-19'));
 assert.equal(jobsFromPayload({ jobs_results: [{ title: 'T', company_name: 'C', location: 'L', link: 'https://x.test/1', via: 'V' }] }).length, 1, 'acepta la forma de SerpApi si la zona cambia');
 
+await assert.rejects(() => serpJobs({ apiKey: 'abc12345key', serpZone: null, unlockerZone: null }, { query: 'x' }), /zona SERP/, 'sin zona no se lanza una petición que se cobraría');
 let authCalls = 0;
 await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => { authCalls++; return new Response('nope', { status: 401 }); } }), /HTTP 401/);
 assert.equal(authCalls, 1, 'un 401 no se reintenta');
 let retryCalls = 0;
 await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => { retryCalls++; return new Response('busy', { status: 429 }); } }), /HTTP 429/);
 assert.equal(retryCalls, 2, 'un 429 se reintenta una vez y se declara');
+let flaky = 0;
+const recovered = await serpJobs(config, { query: 'x', fetchImpl: async () => {
+  flaky++;
+  return flaky === 1 ? new Response('busy', { status: 429 }) : new Response(JSON.stringify(fixture), { status: 200 });
+} });
+assert.equal(recovered.requests, 2, 'un reintento cuenta dos peticiones');
+assert.equal(recovered.costUsd, 0.003, 'el coste anota los dos intentos, no solo el que respondió');
+let networkError;
+await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => { throw new Error('timeout'); } }), err => { networkError = err; return /No se pudo contactar/.test(err.message); });
+assert.equal(networkError.status, null, 'un fallo de red no inventa un HTTP');
+assert.equal(networkError.attempts, 2, 'un fallo de red declara los dos intentos para poder anotarlos');
 const empty = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ jobs: { items: [] } }), { status: 200 }) });
 assert.deepEqual(empty.candidates, [], '0 resultados es una lista vacía, no un error');
 assert.equal(empty.hasJobsPanel, true);
 // Una respuesta HTML (la URL sin brd_json, o una zona que no es de SERP) NO es «0 ofertas»: es un error declarado.
-await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => new Response('<!doctype html><html></html>', { status: 200 }) }), /HTML y no el JSON parseado/);
+await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => new Response('<!doctype html><html></html>', { status: 200 }) }), /no es JSON/);
 // Con `format: json` Bright Data envuelve el resultado: se desenvuelve en vez de leer 0 ofertas.
-const wrapped = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify(fixture) }), { status: 200 }) });
-assert.equal(wrapped.candidates.length, 2, 'la envoltura {status_code, headers, body} se desenvuelve');
+const wrappedResult = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify(fixture) }), { status: 200 }) });
+assert.equal(wrappedResult.candidates.length, 2, 'la envoltura {status_code, headers, body} se desenvuelve');
 // Un JSON sin panel de empleos no se presenta como «no hay ofertas»: el llamador lo distingue.
 const noPanel = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ organic: [] }), { status: 200 }) });
 assert.equal(noPanel.hasJobsPanel, false);
@@ -202,6 +271,8 @@ const unlockerNote = spendNote({ route: '7/7', provider: 'brightdata', requests:
 assert.equal(spentFromNotes([{ note: unlockerNote }], 'brightdata').usd, 0.0015);
 assert.equal(canSpend('brightdata', 4.9985).ok, true);
 assert.equal(canSpend('brightdata', 4.9999).ok, false);
+assert.equal(canSpend('brightdata', 4.998, { BRIGHTDATA_MONTHLY_USD: '5' }).ok, true, 'una petición cabe');
+assert.equal(canSpend('brightdata', 4.998, { BRIGHTDATA_MONTHLY_USD: '5' }, 2).ok, false, 'dos intentos no caben: se reserva el peor caso');
 
 // 6. Extractor común: JSON-LD y RSS, sin inventar campos.
 const jsonld = `<html><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Closer","datePosted":"2026-11-20","description":"<p>Ventas &amp; más</p>","hiringOrganization":{"name":"Acme"},"jobLocation":{"address":{"addressLocality":"Madrid","addressCountry":"ES"}},"baseSalary":{"currency":"EUR","value":{"minValue":30000,"maxValue":40000,"unitText":"YEAR"}},"url":"https://acme.test/jobs/1"}</script></html>`;
