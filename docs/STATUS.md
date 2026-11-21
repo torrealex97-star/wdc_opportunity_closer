@@ -9,6 +9,8 @@
 - **Comprobado (solo documentación)** (*tested*): `scripts/fix_docs_links.py --check` → **0 enlaces** en 120 ficheros; `pytest tests/test_docs_links.py` → **5 pasan**; `node scripts/handoff.mjs check` → OK. **No** se ejecutó typecheck, build ni Playwright: el incremento no toca código.
 - **Límites honestos**: unir redacciones no cambia ningún estado real. Las dos migraciones del panel de fuentes siguen **sin aplicar** y las claves (Resend, Bright Data, SerpApi, InfoJobs/Adzuna/Jooble) siguen sin existir en el entorno. La lista salta la 15 porque esa entrada ya está dentro de la 3.
 
+- **Fusionado** (*verified*): PR #104 con merge commit **`264388f`**, sin squash ni rebase; `verify` y `web-admin` en verde en el head `14aa946` y en el anterior. La ficha se borra y queda en `docs/handoff/archive/2026-11.md`.
+
 ## Relevo: la misión por escrito y las tareas del dueño de las sesiones 274-278 (sesión 280) — 2026-11-21
 
 - **Petición del propietario**: «Deja guardado en el md la misión objetivo y demás cosas que hemos hecho aquí, fusiona mergea todo online», después de pedir que las tareas del dueño del relevo recogieran lo que dejaron pendiente las sesiones 274-278: las migraciones `20261121_provider_budget.sql` y `20261121_source_route_order.sql`, y las claves reales de Bright Data/SerpApi.
