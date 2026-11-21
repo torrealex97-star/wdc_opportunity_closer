@@ -9,6 +9,8 @@
 - **Comprobado (solo documentación)** (*tested*): `scripts/fix_docs_links.py --check` → **0 enlaces** en 120 ficheros; `pytest tests/test_docs_links.py` → **5 pasan**; `node scripts/handoff.mjs check` → OK. **No** se ha ejecutado typecheck, build ni Playwright: el incremento no toca código y así se declara.
 - **Límites honestos**: es un cambio de documentación; lo único que demuestra es que los enlaces resuelven y el relevo cuadra. Nada se ha probado contra servicios reales (sigue sin `GROQ_API_KEY` y sin claves de Bright Data/SerpApi) ni contra Supabase (sin DDL aplicado).
 
+- **Fusionado** (*verified*): PR #103 con merge commit **`6935fcf`**, sin squash ni rebase; `verify` y `web-admin` en verde en el head `ee052a2` (y en el anterior). La ficha se borra y queda en `docs/handoff/archive/2026-11.md`.
+
 ## Relevo al día (262-273), árbol sin duplicados y el E741 del exportador fuera (sesión 279) — 2026-11-21
 
 - **Petición del propietario**: «Borra los 13 duplicados sin seguimiento del árbol y confírmame que pytest y ruff salen limpios en local. Después actualiza `docs/ACTIVE_HANDOFF.md` con las sesiones 262-273 y fusiónalo a `main` con merge commit cuando `verify` y `web-admin` estén en verde».
