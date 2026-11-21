@@ -1,4 +1,6 @@
-import { ingest, pausedSourcesStrict, type Candidate } from './external';
+import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './external';
+import { loadMeter, type Meter } from './providerCaps';
+import { spendNote } from './providerBudget';
 import { getSecret } from './integrations';
 import { ORG } from './external';
 import { callTimeout, timeLeft, MIN_STEP_MS } from './cronBudget';
@@ -113,7 +115,7 @@ export function serpapiSiteFetcher(secret: string): Fetcher {
 export type FallbackOutcome = { source: string; portal: string; ok: boolean; accepted?: number; received?: number; searches: number; cost_usd: number; error?: string; truncated?: boolean; skipped?: string };
 export type FallbackSummary = { ok: boolean; need: number | null; accepted_before: number | null; searches: number; cost_usd: number; outcomes: FallbackOutcome[]; truncated?: boolean };
 
-type Deps = { deadline?: number; max?: number; fetcher?: Fetcher; need?: number | null; missing?: string[] };
+type Deps = { deadline?: number; max?: number; fetcher?: Fetcher; need?: number | null; missing?: string[]; meter?: Meter };
 
 /**
  * Ejecuta el plan de respaldo. Se detiene cuando ya hay suficientes ofertas del día, cuando el reloj
@@ -142,24 +144,41 @@ export async function collectFallback(via: string, deps: Deps = {}): Promise<Fal
   if (!plan.length) return { ...out, ok: true, outcomes: [{ source: 'serpapi', portal: '—', ok: true, searches: 0, cost_usd: 0, skipped: 'ningún portal necesita respaldo' }] };
 
   const fetchFor = deps.fetcher ?? serpapiSiteFetcher(secret);
+  // Tope mensual en USD: cada búsqueda se comprueba contra el gasto YA anotado (sin gasto legible no se lanza).
+  const meter = deps.meter ?? await loadMeter();
   const errors: string[] = [];
+  let unrecorded = false;
   for (const portal of plan) {
     if (timeLeft(deps.deadline) < MIN_STEP_MS) { out.truncated = true; break; }
     if (paused.has(portal.source)) { out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 0, cost_usd: 0, skipped: 'fuente pausada' }); continue; }
     if (out.searches > 0 && need - out.searches * 8 <= 0) break; // cada búsqueda aporta ~8 ofertas: deja de gastar si ya sobra
+    const gate = meter.check('serpapi');
+    if (!gate.ok) {
+      out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 0, cost_usd: 0, skipped: `tope mensual de SerpApi: ${gate.reason ?? 'agotado'}` });
+      break; // el tope es del proveedor, no del portal: el resto tampoco cabe
+    }
+    meter.charge('serpapi', SEARCH_USD);
     out.searches++;
     out.cost_usd = Number((out.searches * SEARCH_USD).toFixed(3));
+    const note = spendNote({ route: 'respaldo', provider: 'serpapi', requests: 1, costUsd: SEARCH_USD, detail: portal.source });
     try {
       const candidates = await fetchFor(portal, callTimeout(12_000, deps.deadline));
-      if (!candidates.length) { out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: 0, accepted: 0, searches: 1, cost_usd: SEARCH_USD }); continue; }
-      const note = `respaldo SerpApi · ${out.searches} búsqueda(s), ${(out.searches * SEARCH_USD).toFixed(3)} USD`;
+      if (!candidates.length) {
+        if (!await recordSpend(portal.source, via, note)) unrecorded = true;
+        out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: 0, accepted: 0, searches: 1, cost_usd: SEARCH_USD });
+        continue;
+      }
+      // La nota lleva el gasto en el formato único: la suma el marcador de inversión y limita el mes.
       const r = await ingest(portal.source, via, candidates, note);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: r.received, accepted: r.accepted, searches: 1, cost_usd: SEARCH_USD });
     } catch (err) {
+      // Una búsqueda que falla se cuenta igual (cota conservadora): mejor sobrestimar que gastar de más.
+      if (!await recordSpend(portal.source, via, note)) unrecorded = true;
       errors.push(`${portal.name}: ${(err as Error).message}`);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 1, cost_usd: SEARCH_USD, error: (err as Error).message });
     }
   }
+  if (unrecorded) out.outcomes.push({ source: 'serpapi', portal: '—', ok: false, searches: 0, cost_usd: 0, error: 'Un gasto de SerpApi no se pudo anotar: el marcador de inversión lo verá de menos.' });
   return { ...out, ok: out.outcomes.some(o => o.ok), cost_usd: Number((out.searches * SEARCH_USD).toFixed(3)), ...(out.truncated ? { truncated: true } : {}), ...(errors.length ? { outcomes: out.outcomes } : {}) };
 }
 

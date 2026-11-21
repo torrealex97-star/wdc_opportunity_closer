@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     const result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
     const source = brightDataSource(entry.code);
     const saved = await ingest(source, 'brightdata-serp', result.candidates, spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests: result.requests, costUsd: result.costUsd, detail: `${entry.code} · ${result.rawItems} en bruto` }));
-    return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: `Bright Data devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` });
+    return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: result.hasJobsPanel ? `Bright Data devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` : 'Bright Data respondió, pero Google no mostró el panel de empleos para esta búsqueda: no se inventa ninguna oferta. La petición se cobró.' });
   }
 
   if (route.provider === 'serpapi') {

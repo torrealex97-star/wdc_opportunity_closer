@@ -2,10 +2,13 @@ import type { Candidate } from '../external';
 
 // Bright Data · SERP API y Web Unlocker.
 //
-// Contrato verificado en su documentación (2026-11-21): `POST https://api.brightdata.com/request`
-// con `Authorization: Bearer <API key>` y `{zone, url, format}`. Para Google Jobs se pide la URL de
-// Google con `ibp=htl%3Bjobs`; su JSON parseado trae `jobs.items[]` con título, empresa, ubicación,
-// fuente, descripción, enlace y etiquetas. Precio de lista: 1,50 USD por 1.000 peticiones correctas
+// Contrato contrastado con su documentación (docs.brightdata.com, SERP API → Google → Jobs y «Parsed JSON
+// results»): `POST https://api.brightdata.com/request` con `Authorization: Bearer <API key>` y
+// `{zone, url, format: "raw"}`. Para Google Jobs se pide la URL de Google con `ibp=htl%3Bjobs` **y
+// `brd_json=1`**: ese parámetro de la URL es lo que devuelve el JSON parseado; sin él la respuesta es el
+// HTML de Google. `format` NO activa el parseo: `raw` entrega el cuerpo tal cual y `json` lo envuelve en
+// `{status_code, headers, body}` (aquí se desenvuelve por si una zona lo devuelve así). El JSON parseado
+// trae `jobs.items[]` con título, empresa, ubicación, fuente, descripción, enlace y etiquetas. Precio de lista: 1,50 USD por 1.000 peticiones correctas
 // (0,0015 USD cada una) y 5.000 créditos gratis al mes COMPARTIDOS entre sus productos.
 //
 // Lo que este módulo NO hace: inventar campos que la respuesta no trae. Sin enlace o sin título, el
@@ -55,10 +58,32 @@ export const apiBase = () => process.env.BRIGHTDATA_API_BASE ?? 'https://api.bri
 /** Atribución por fuente: `brightdata-google` o `brightdata-<portal>` (p. ej. `brightdata-infojobs`). */
 export const brightDataSource = (code: string) => `brightdata-${code}`;
 
-/** URL de Google Jobs: `ibp=htl;jobs` es el parámetro documentado por Bright Data para vacantes. */
+/**
+ * URL de Google Jobs: `ibp=htl;jobs` es el parámetro documentado para vacantes y `brd_json=1` el que pide
+ * a Bright Data el JSON parseado en lugar del HTML de Google (sin él no hay `jobs.items[]`).
+ */
 export function googleJobsUrl(query: string, gl = 'es', hl = 'es'): string {
-  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', hl, gl });
+  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', hl, gl, brd_json: '1' });
   return `https://www.google.com/search?${params.toString()}`;
+}
+
+/**
+ * Cuerpo de la respuesta ya como objeto. Acepta el JSON parseado directo (`format: raw` + `brd_json=1`) y
+ * la envoltura `{status_code, headers, body}` que devuelve `format: json`, cuyo `body` es otro JSON (si es
+ * HTML no hay datos parseados y se declara en `serpJobs`).
+ */
+export function unwrapBody(text: string): Record<string, unknown> | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const outer = parsed as Record<string, unknown>;
+  if (typeof outer.body === 'string' && ('status_code' in outer || 'headers' in outer)) {
+    try {
+      const inner = JSON.parse(outer.body);
+      return inner && typeof inner === 'object' && !Array.isArray(inner) ? inner as Record<string, unknown> : null;
+    } catch { return null; }
+  }
+  return outer;
 }
 
 type FetchLike = typeof fetch;
@@ -187,7 +212,7 @@ export function jobsFromPayload(payload: unknown, now = Date.now()): Candidate[]
 }
 
 export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number };
-export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number };
+export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; hasJobsPanel: boolean };
 
 /**
  * Una búsqueda de Google Jobs. Un fallo se lanza con su motivo (nunca se devuelve una lista vacía
@@ -197,22 +222,21 @@ export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUs
 export async function serpJobs(config: BrightDataConfig, options: SerpJobsOptions): Promise<SerpJobsResult> {
   const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now() } = options;
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
-  const { text } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'json', fetchImpl, timeoutMs);
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, false);
+  const { text } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs);
+  const body = unwrapBody(text);
+  if (!body) {
+    throw new BrightDataError('Bright Data devolvió HTML y no el JSON parseado: revisa que la zona sea de SERP API (no Web Unlocker) y que la URL lleve brd_json=1', 200, false);
   }
-  const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, false);
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
   const rawItems = Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
   return {
-    candidates: jobsFromPayload(payload, now),
+    candidates: jobsFromPayload(body, now),
     requests: 1,
     costUsd: BRIGHTDATA_USD_PER_REQUEST,
     rawItems,
+    // Sin panel de empleos en la respuesta no se dice «0 ofertas»: se dice que Google no lo mostró.
+    hasJobsPanel: Boolean(jobs) || Array.isArray(body.jobs_results),
   };
 }
 

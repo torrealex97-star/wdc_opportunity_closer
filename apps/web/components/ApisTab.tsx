@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, LoaderCircle, PlugZap, Trash2 } from 'lucide-react';
 import { cost, money, unit, usd } from '../lib/money';
 import { providerBreakdown, providerTotals, type SourceRow } from '../lib/sourceScorecard';
+import SpendControl from './SpendControl';
 
 type Connection = { provider: string; name: string; configured: boolean; last4: string | null; updated_by: string | null; updated_at: string | null; last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: string | null };
 const fmt = (v: string | null) => v ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v)) : '—';
@@ -62,6 +63,7 @@ export default function ApisTab({ owner, onSessionLost }: { owner: boolean; onSe
   }
   return <section aria-label="APIs y conexiones">
     <p className="card-meta" style={{ marginTop: 0, marginBottom: 20, maxWidth: 760 }}>Las claves se guardan cifradas en el servidor y no vuelven al navegador: solo ves los últimos 4 caracteres. Guardar una clave no gasta nada. «Probar» usa la comprobación más barata de cada proveedor: en las APIs oficiales es gratis; en Bright Data, ZenRows y ScrapingBee hace <strong>una</strong> petición real (~0,0015–0,002 USD) porque no hay endpoint de cuenta que valide la zona, y la ficha lo avisa. El motor solo usa un proveedor de pago cuando lo ordenas y hay tope.</p>
+    <SpendControl owner={owner} onSessionLost={onSessionLost} />
     <h2 className="section-title">Gasto y rendimiento por proveedor</h2>
     <p className="card-meta" style={{ marginTop: 0, maxWidth: 760 }}>Lo que ya está registrado, no una estimación: el importe real de cada ejecución de Apify y la nota del respaldo de SerpApi (0,025 USD por búsqueda). Una raya (—) significa que ese proveedor no registra importe o que falta el tipo de cambio, no que sea gratis. «Vivos», «enviadas» y «entrevistas» son las ofertas que trajo ese proveedor y las candidaturas de la alumna desde ellas; el coste por envío y por entrevista reparte el gasto entre esas candidaturas.</p>
     {perfError

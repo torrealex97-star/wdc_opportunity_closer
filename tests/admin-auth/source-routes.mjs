@@ -75,8 +75,10 @@ assert.equal(calls[0].init.headers.Authorization, 'Bearer abc12345key');
 const body = JSON.parse(calls[0].init.body);
 assert.deepEqual(Object.keys(body).sort(), ['format', 'url', 'zone']);
 assert.equal(body.zone, 'serp_zone_1');
-assert.equal(body.format, 'json');
+assert.equal(body.format, 'raw', 'format raw: el parseo lo activa brd_json=1 en la URL, no format');
 assert.match(body.url, /ibp=htl%3Bjobs/);
+assert.match(body.url, /[?&]brd_json=1(&|$)/, 'sin brd_json=1 Bright Data devuelve HTML, no jobs.items[]');
+assert.equal(result.hasJobsPanel, true);
 assert.equal(result.rawItems, 3);
 assert.equal(result.candidates.length, 2, 'sin enlace no hay oferta verificable');
 assert.equal(result.costUsd, 0.0015);
@@ -93,6 +95,16 @@ await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () =>
 assert.equal(retryCalls, 2, 'un 429 se reintenta una vez y se declara');
 const empty = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ jobs: { items: [] } }), { status: 200 }) });
 assert.deepEqual(empty.candidates, [], '0 resultados es una lista vacía, no un error');
+assert.equal(empty.hasJobsPanel, true);
+// Una respuesta HTML (la URL sin brd_json, o una zona que no es de SERP) NO es «0 ofertas»: es un error declarado.
+await assert.rejects(() => serpJobs(config, { query: 'x', fetchImpl: async () => new Response('<!doctype html><html></html>', { status: 200 }) }), /HTML y no el JSON parseado/);
+// Con `format: json` Bright Data envuelve el resultado: se desenvuelve en vez de leer 0 ofertas.
+const wrapped = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify(fixture) }), { status: 200 }) });
+assert.equal(wrapped.candidates.length, 2, 'la envoltura {status_code, headers, body} se desenvuelve');
+// Un JSON sin panel de empleos no se presenta como «no hay ofertas»: el llamador lo distingue.
+const noPanel = await serpJobs(config, { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ organic: [] }), { status: 200 }) });
+assert.equal(noPanel.hasJobsPanel, false);
+assert.deepEqual(noPanel.candidates, []);
 
 // 4. Contabilidad: la nota se puede volver a leer y el tope frena antes de gastar.
 const note = spendNote({ route: '3/5', provider: 'brightdata', requests: 2, costUsd: 0.003, detail: 'infojobs' });

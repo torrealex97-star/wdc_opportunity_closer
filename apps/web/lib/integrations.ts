@@ -2,7 +2,7 @@ import { decryptSecret, encryptSecret } from './secrets';
 import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
-import { parseBrightDataSecret } from './providers/brightdata';
+import { googleJobsUrl, parseBrightDataSecret, unwrapBody } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -34,7 +34,8 @@ export const PROVIDERS = {
       return fetch(`${process.env.BRIGHTDATA_API_BASE ?? 'https://api.brightdata.com'}/request`, {
         method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify({ zone: config.serpZone, url: 'https://www.google.com/search?q=closer+de+ventas&ibp=htl%3Bjobs&hl=es&gl=es', format: 'json' }),
+        // `format: raw` + `brd_json=1` en la URL: es lo que devuelve el JSON parseado (contrato de su documentación).
+        body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'raw' }),
       });
     },
   },
@@ -108,10 +109,12 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
         } else {
           let failure: string | null = null;
           if (provider === 'brightdata') {
-            const payload = await response.clone().json().catch(() => null) as { error?: unknown; jobs?: unknown; jobs_results?: unknown } | null;
-            const items = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as { items?: unknown }).items : null;
-            if (typeof payload?.error === 'string' && payload.error) failure = `Bright Data: ${payload.error.slice(0, 160)}`;
-            else if (!Array.isArray(items) && !Array.isArray(payload?.jobs_results)) failure = 'Bright Data respondió sin jobs.items[]; revisa la zona SERP.';
+            const text = await response.clone().text().catch(() => '');
+            const payload = unwrapBody(text);
+            // Clave y zona valen si vuelve JSON parseado. Que Google no muestre el panel de empleos para esta
+            // consulta no invalida la clave: solo se declara. HTML o un `error` sí son un fallo.
+            if (!payload) failure = 'Bright Data devolvió HTML y no JSON parseado: revisa que la zona sea de SERP API.';
+            else if (typeof payload.error === 'string' && payload.error) failure = `Bright Data: ${payload.error.slice(0, 160)}`;
           }
           if (failure) {
             outcome = { ok: false, detail: failure };

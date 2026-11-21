@@ -12,6 +12,7 @@ let hasKey = true;
 let paused = [];
 let recentRows = [];
 let mode = 'ok';            // ok | fail | error
+let posted = [];
 let runsDown = false;       // el histórico de entradas no se puede leer
 
 // Fichas orgánicas como las devuelve Google: título con el sufijo del portal y enlace al anuncio.
@@ -51,9 +52,11 @@ const server = http.createServer(async (req, res) => {
     return send(200, rows.length);
   }
   if (url.pathname === '/rest/v1/external_ingest_runs') {
-    if (req.method === 'POST') return send(201, {});
+    if (req.method === 'POST') { posted.push(JSON.parse(body || '{}')); return send(201, {}); }
     if (runsDown) return send(500, {});
-    return send(200, recentRows);
+    // Pagina como PostgREST (el paginador pide hasta una página vacía).
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    return send(200, recentRows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 1000)));
   }
   return send(404, {});
 });
@@ -81,7 +84,8 @@ assert.ok(computrabajo && occ && infojobs, 'los portales del SOP están definido
 
 const results = [];
 const step = async (name, fn) => {
-  searches = []; saved = []; hasKey = true; paused = []; recentRows = []; mode = 'ok'; runsDown = false;
+  searches = []; saved = []; hasKey = true; paused = []; recentRows = []; mode = 'ok'; runsDown = false; posted = [];
+  delete process.env.SERPAPI_MONTHLY_USD;
   delete process.env.SERPAPI_FALLBACK_MAX_SEARCHES;
   delete process.env.DAILY_TARGET_OFFERS;
   try { await fn(); results.push(['PASS', name]); }
@@ -144,6 +148,21 @@ await step('busca cada portal en Google con su país y su operador site:', async
   assert.equal(run.portal, 'Computrabajo');
   assert.equal(run.cost_usd, SEARCH_USD);
   assert.ok(run.accepted >= 1, `aceptadas ${run.accepted}`);
+});
+
+await step('cada búsqueda de respaldo anota su gasto en el formato único y respeta el tope mensual en USD', async () => {
+  process.env.SERPAPI_MONTHLY_USD = '0.05'; // caben 2 búsquedas de 0,025
+  const out = await collectFallback('test', { missing: ['adzuna'], need: 400 });
+  assert.equal(out.searches, 2, `se hicieron ${out.searches} búsquedas con un tope de 0,05 USD`);
+  assert.ok(out.outcomes.some(o => /tope mensual de SerpApi/.test(o.skipped ?? '')), 'el corte por tope se declara');
+  const notes = posted.map(r => r.note ?? '').filter(Boolean);
+  assert.equal(notes.filter(n => /proveedor=serpapi/.test(n) && /coste_usd=0\.025000/.test(n)).length, 2, 'cada búsqueda deja su nota sumable');
+  // Con lo ya gastado en el mes, no se lanza nada.
+  searches = []; posted = [];
+  recentRows = [{ note: 'x · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000', source: 'otro', accepted: 0 }];
+  const none = await collectFallback('test', { missing: ['adzuna'], need: 400 });
+  assert.equal(none.searches, 0);
+  assert.equal(searches.length, 0, 'tope agotado: no se llama a SerpApi');
 });
 
 await step('si el día ya cumplió el objetivo no se gasta ni una búsqueda', async () => {

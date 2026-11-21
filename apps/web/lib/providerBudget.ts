@@ -78,6 +78,18 @@ export function spentFromNotes(notes: Array<{ vendor?: string | null; note?: str
   return { usd: Math.round(sum * 1e6) / 1e6, partial };
 }
 
+/** Peticiones anotadas por un proveedor (`3 petición(es)`); `null` si ninguna nota las trae. */
+export function requestsFromNotes(notes: Array<{ vendor?: string | null; note?: string | null }>, provider: MeteredProvider): number | null {
+  const mine = notes.filter(row => row.vendor === provider || (row.note ?? '').includes(`proveedor=${provider}`));
+  let total = 0;
+  let seen = false;
+  for (const row of mine) {
+    const match = /(\d+) petici[oó]n\(es\)/.exec(row.note ?? '');
+    if (match) { total += Number(match[1]); seen = true; }
+  }
+  return seen ? total : null;
+}
+
 /** Nota única para `external_ingest_runs`: la lee el marcador y se lee a sí misma al calcular el tope. */
 export function spendNote(input: { route: string; provider: MeteredProvider; requests: number; costUsd: number; detail?: string }): string {
   const parts = [
@@ -91,11 +103,13 @@ export function spendNote(input: { route: string; provider: MeteredProvider; req
 }
 
 /** ¿Queda dinero para una petición más? Sin tope legible no se lanza gasto nuevo. */
-export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env): { ok: boolean; reason?: string; cap: number; spent: number | null } {
-  const cap = capUsd(provider, env);
+export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env, capOverride?: number, requests = 1): { ok: boolean; reason?: string; cap: number; spent: number | null } {
+  // `capOverride` es el tope guardado en `provider_budget` (el que fija el propietario en el panel); sin él
+  // manda la variable de entorno y, sin ella, el valor por defecto.
+  const cap = capOverride !== undefined && Number.isFinite(capOverride) && capOverride >= 0 ? capOverride : capUsd(provider, env);
   if (cap <= 0) return { ok: false, reason: 'El tope mensual de este proveedor es 0: no se lanza nada.', cap, spent: spentUsd };
   if (spentUsd === null) return { ok: false, reason: 'No se pudo leer lo gastado este mes; por seguridad no se lanza gasto nuevo.', cap, spent: null };
-  if (spentUsd + PROVIDER_METERS[provider].usdPerRequest > cap) {
+  if (spentUsd + PROVIDER_METERS[provider].usdPerRequest * Math.max(1, requests) > cap) {
     return { ok: false, reason: `Quedan ${Math.max(0, cap - spentUsd).toFixed(2)} USD de ${cap} USD este mes.`, cap, spent: spentUsd };
   }
   return { ok: true, cap, spent: spentUsd };
