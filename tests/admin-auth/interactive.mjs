@@ -80,6 +80,7 @@ try {
   });
 
   await step('APIs: el Control de inversión enseña el gasto de TODOS los proveedores y el propietario cambia un tope', async () => {
+    try {
     await page.reload();
     await page.getByRole('button', { name: 'APIs', exact: true }).click();
     const control = page.getByTestId('spend-control');
@@ -93,11 +94,14 @@ try {
     await bright.getByRole('button', { name: 'Guardar tope de Bright Data' }).click();
     await control.getByText(/Tope mensual guardado: 2 USD/).waitFor({ timeout: 15000 });
     assert.equal(state.providerBudget.find(row => row.provider === 'brightdata')?.monthly_usd, 2);
-    assert.match(await control.locator('tr[data-provider="brightdata"]').innerText(), /guardado por el propietario/);
+    // El panel recarga tras guardar: se espera al texto nuevo en vez de leer la fila antes de que cambie.
+    await control.locator('tr[data-provider="brightdata"]').getByText(/guardado por el propietario/).waitFor({ timeout: 15000 });
     const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, wide: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 4).map(el => `${el.tagName}.${String(el.className).slice(0, 40)}`) }));
     assert.ok(overflow.scroll <= overflow.inner, `sin scroll horizontal de página: ${JSON.stringify(overflow)}`);
-    // Los pasos siguientes miden el gasto contra el tope por defecto (5 USD): se deshace el tope guardado aquí.
-    state.providerBudget = state.providerBudget.filter(row => row.provider !== 'brightdata');
+    } finally {
+      // Los pasos siguientes miden el gasto contra el tope por defecto (5 USD): el tope guardado aquí se deshace SIEMPRE.
+      state.providerBudget = state.providerBudget.filter(row => row.provider !== 'brightdata');
+    }
   });
 
   await step('Apify: un portal con un solo buscador avisa, propone repuestos validados y el propietario añade, retira y reactiva uno', async () => {
