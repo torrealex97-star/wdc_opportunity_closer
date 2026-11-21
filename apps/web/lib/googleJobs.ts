@@ -3,7 +3,7 @@ import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './exte
 import { callTimeout, timeLeft } from './cronBudget';
 import { loadMeter, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
-import { brightDataSource, parseBrightDataSecret, serpJobs, type BrightDataConfig } from './providers/brightdata';
+import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs, type BrightDataConfig } from './providers/brightdata';
 
 // Google Jobs vía SerpApi: la única fuente de ofertas ya conectada que puede
 // aportar closers de España sin una clave nueva. Google Jobs indexa InfoJobs,
@@ -222,12 +222,19 @@ export async function collectGoogleJobs(
     }
     const timeout = callTimeout(12_000, deadline);
     const used: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>> = {};
-    const bill = (provider: MeteredProvider) => {
-      const price = PROVIDER_METERS[provider].usdPerRequest;
+    const bill = (provider: MeteredProvider, sign = 1) => {
+      const price = PROVIDER_METERS[provider].usdPerRequest * sign;
       meter.charge(provider, price);
       const row = used[provider] ?? { searches: 0, cost_usd: 0 };
-      row.searches += 1; row.cost_usd = Math.round((row.cost_usd + price) * 1e6) / 1e6;
+      row.searches += sign; row.cost_usd = Math.round((row.cost_usd + price) * 1e6) / 1e6;
       used[provider] = row;
+    };
+    // La reserva se hace antes de lanzar (el tope vale también para búsquedas simultáneas); si el proveedor
+    // rechaza la petición (HTTP de error, red) no la cobra y la reserva se devuelve. Una respuesta 200 que no
+    // sirve (HTML en vez de JSON) sí se cobra: Bright Data factura las peticiones correctas.
+    const refund = (provider: MeteredProvider, err: unknown) => {
+      if (provider === 'brightdata' && err instanceof BrightDataError && err.status === 200) return;
+      bill(provider, -1);
     };
     const blocked: string[] = [];
     // En paralelo: los dorks son independientes y en serie no cabían en el tramo del cron (la primera pasada se
@@ -245,19 +252,21 @@ export async function collectGoogleJobs(
       if (first === 'brightdata') {
         try { return await brightFetch!(dork, timeout); }
         catch (err) {
+          refund('brightdata', err);
           // Sin SerpApi (o sin tope para él) el fallo de Bright Data se declara tal cual.
           if (!serpFetch || !meter.check('serpapi').ok) throw err;
           bill('serpapi');
           errors.push(`Bright Data (${dork.q}, ${dork.gl}): ${(err as Error).message} → SerpApi`);
-          return serpFetch(dork, timeout);
+          try { return await serpFetch(dork, timeout); } catch (second) { refund('serpapi', second); throw second; }
         }
       }
-      return serpFetch!(dork, timeout);
+      try { return await serpFetch!(dork, timeout); } catch (err) { refund('serpapi', err); throw err; }
     }));
     settled.forEach((result, i) => {
       if (result.status === 'fulfilled') all.push(...result.value);
       else errors.push(`${plan[i].dork.q} (${plan[i].dork.gl}): ${(result.reason as Error)?.message ?? 'fallo'}`);
     });
+    for (const key of Object.keys(used) as MeteredProvider[]) if (!used[key]?.searches) delete used[key];
     const searches = Object.values(used).reduce((n, row) => n + (row?.searches ?? 0), 0);
     const cost = Number(Object.values(used).reduce((sum, row) => sum + (row?.cost_usd ?? 0), 0).toFixed(4));
     if (deadline !== undefined && Date.now() >= deadline) truncated = true;

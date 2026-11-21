@@ -289,6 +289,16 @@ await step('cascada: si Bright Data devuelve HTML, cada dork pasa a SerpApi y el
   assert.equal(out.ok, true);
   assert.equal(searches.length, DEFAULT_MAX_DORKS, 'SerpApi cubre lo que Bright Data no resolvió');
   assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS);
+  assert.equal(out.by_provider.brightdata.searches, DEFAULT_MAX_DORKS, 'un 200 con HTML sí lo factura Bright Data: se anota');
+});
+
+await step('cascada: una petición que Bright Data rechaza (401) no se cobra ni se anota; SerpApi cubre', async () => {
+  brightKey = true; brightMode = 'error';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true);
+  assert.equal(out.by_provider.brightdata, undefined, 'lo rechazado no es gasto');
+  assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS);
+  assert.ok(!runs.some(r => /proveedor=brightdata/.test(r.note ?? '')), 'no hay nota de gasto de Bright Data');
 });
 
 await step('cascada: sin clave de SerpApi, un fallo de Bright Data se declara y no se inventa nada', async () => {

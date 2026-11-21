@@ -172,8 +172,9 @@ export async function collectFallback(via: string, deps: Deps = {}): Promise<Fal
       const r = await ingest(portal.source, via, candidates, note);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: r.received, accepted: r.accepted, searches: 1, cost_usd: SEARCH_USD });
     } catch (err) {
-      // Una búsqueda que falla se cuenta igual (cota conservadora): mejor sobrestimar que gastar de más.
-      if (!await recordSpend(portal.source, via, note)) unrecorded = true;
+      // Una petición que SerpApi rechaza (HTTP de error, clave mala) no se cobra: no se anota como gasto y la
+      // reserva de esta pasada se devuelve. Solo cuenta lo que respondió (con o sin resultados).
+      meter.charge('serpapi', -SEARCH_USD);
       errors.push(`${portal.name}: ${(err as Error).message}`);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 1, cost_usd: SEARCH_USD, error: (err as Error).message });
     }
