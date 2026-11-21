@@ -14,7 +14,7 @@ const base = () => (process.env.APIFY_API_BASE ?? 'https://api.apify.com').repla
 export const MONTHLY_BUDGET_USD = () => Number(process.env.APIFY_MONTHLY_BUDGET_USD) > 0 ? Number(process.env.APIFY_MONTHLY_BUDGET_USD) : 10;
 const RESERVE_USD = 1; // lo que se reserva por ejecución en curso hasta conocer su coste real
 
-export type ActorRow = { id: string; label: string; actor: string; source: string; input_template: Record<string, unknown> | null; max_items: number; memory_mb: number; timeout_s: number; schedule_daily: boolean; created_by: string; created_at: string };
+export type ActorRow = { id: string; label: string; actor: string; source: string; /** `inactive` = retirado de la cascada (a mano o por fallos repetidos); cualquier otro valor está en uso. */ status?: string; input_template: Record<string, unknown> | null; max_items: number; memory_mb: number; timeout_s: number; schedule_daily: boolean; created_by: string; created_at: string };
 export type RunRow = { id: string; actor_id: string; run_id: string; dataset_id: string | null; status: string; started_at: string; finished_at: string | null; items_total: number | null; harvested: number; cost_usd: number | null; error: string | null; started_by?: string };
 export const PRESETS = [{ label: 'JobSpy (Indeed, LinkedIn, Glassdoor…)', actor: 'aakash19/jobspy', source: 'apify-jobspy' }];
 export const ACTOR_RE = /^[A-Za-z0-9._-]+[/~][A-Za-z0-9._-]+$/;

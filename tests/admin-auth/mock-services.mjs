@@ -6,7 +6,7 @@ export function startMocks({ authPort, enginePort }) {
   const state = {
     users: new Map([['owner@test.dev', { id: 'u1', password: 'Correcta-12345' }]]),
     admins: [{ email: 'owner@test.dev', role: 'owner', invited_by: 'bootstrap', created_at: '2026-10-16T00:00:00Z' }],
-    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], providerBudget: [], providerBudgetMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
+    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], storeCalls: [], providerBudget: [], providerBudgetMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
     engineDown: false, // simula la pausa de cuota del motor (Sites devuelve 503)
     // Pausa REAL de la plataforma, medida en producción: el sitio está publicado pero la cuota del mes se
     // agotó, y TODAS sus rutas responden 429 con texto plano. `error` imita una caída de verdad (500 HTML).
@@ -288,6 +288,23 @@ export function startMocks({ authPort, enginePort }) {
       return send(res, 200, rows.slice(0, Number(q.limit) || 100));
     }
     // API de Apify simulada: solo la clave «good-key-1234» es válida.
+    // Tienda de Apify (pública, sin token): búsqueda y metadatos de los actores `store-*` de las pruebas.
+    // `state.storeActors` dice qué existe, cuál está obsoleto y en qué estado quedó su build por defecto.
+    if (url.pathname === '/v2/store') {
+      state.storeCalls.push(Object.fromEntries(url.searchParams));
+      if (state.storeDown) return send(res, 503, {});
+      const term = (url.searchParams.get('search') ?? '').toLowerCase();
+      const items = Object.keys(state.storeActors ?? {}).filter(id => id.includes(term.split(' ')[0].replace(/[^a-z0-9]/g, '')) || term === '')
+        .map(id => { const [username, name] = id.split('~'); return { id, username, name, title: state.storeActors[id].title ?? name, description: `Buscador ${name}`, stats: { totalUsers: state.storeActors[id].users ?? 100, totalRuns: 5000 } }; });
+      return send(res, 200, { data: { items } });
+    }
+    const storeAct = url.pathname.match(/^\/v2\/acts\/(store-[^/]+)(\/builds\/default)?$/);
+    if (storeAct && req.method === 'GET') {
+      const a = state.storeActors?.[storeAct[1]];
+      if (!a) return send(res, 404, {});
+      if (storeAct[2]) return send(res, 200, { data: { status: a.build ?? 'SUCCEEDED', inputSchema: a.noSchema ? null : JSON.stringify({ properties: { query: { type: 'string' }, maxItems: { type: 'integer' } } }) } });
+      return send(res, 200, { data: a.hideDeprecated ? {} : { isDeprecated: Boolean(a.deprecated) } });
+    }
     const apifyMatch = url.pathname.match(/^\/v2\/(acts\/([^/]+)\/(builds\/default|runs)|actor-runs\/([^/]+)|datasets\/([^/]+)\/items)$/);
     if (apifyMatch) {
       if (bearer !== 'good-key-1234') return send(res, 401, {});

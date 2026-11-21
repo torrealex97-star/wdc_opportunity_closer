@@ -24,10 +24,37 @@ export function recipeState(actorId: string | undefined, runs: RunRow[], now = D
   return { state: 'ok', items: last.harvested };
 }
 
+// Buscadores de un portal: los del catálogo que NO están retirados más los que se añadieron desde la tienda (filas de
+// `apify_actors` de ese portal que el catálogo no trae). El catálogo es el punto de partida; la app lo va actualizando.
+export const isRetired = (row: Pick<ActorRow, 'status'> | undefined) => row?.status === 'inactive';
+export function recipesOf(portal: Portal, rows: ActorRow[]): Recipe[] {
+  const inCatalog = new Set(portal.recipes.map(r => r.actor.toLowerCase()));
+  const fromCatalog = portal.recipes.filter(r => !isRetired(rows.find(a => a.actor.toLowerCase() === r.actor.toLowerCase())));
+  const added = rows.filter(a => a.source === portal.source && !inCatalog.has(a.actor.toLowerCase()) && !isRetired(a))
+    .map((a): Recipe => ({ actor: a.actor, name: a.label || a.actor }));
+  return [...fromCatalog, ...added];
+}
+
 // Los que fallaron en las últimas 24 h van al final; el resto conserva el orden del catálogo.
 export function orderRecipes(portal: Portal, rows: ActorRow[], runs: RunRow[], now = Date.now()): Recipe[] {
   const failed = (r: Recipe) => recipeState(rows.find(a => a.actor === r.actor)?.id, runs, now).state === 'failed';
-  return [...portal.recipes.filter(r => !failed(r)), ...portal.recipes.filter(failed)];
+  const usable = recipesOf(portal, rows);
+  return [...usable.filter(r => !failed(r)), ...usable.filter(failed)];
+}
+
+// Retirada automática: un buscador con 3 fallos seguidos en 14 días y ninguna ejecución buena sale de la cascada
+// (`status = inactive`, reversible desde el panel). Nunca se retira el último que queda de un portal.
+export const RETIRE_AFTER = 3, RETIRE_WINDOW_DAYS = 14;
+export function retirementCandidates(portal: Portal, rows: ActorRow[], runs: RunRow[], now = Date.now()): ActorRow[] {
+  const usable = recipesOf(portal, rows);
+  if (usable.length < 2) return [];
+  const mine = rows.filter(a => a.source === portal.source && !isRetired(a) && usable.some(r => r.actor.toLowerCase() === a.actor.toLowerCase()));
+  const out: ActorRow[] = [];
+  for (const row of mine) {
+    const recent = runs.filter(r => r.actor_id === row.id && age(r, now) < RETIRE_WINDOW_DAYS * DAY).sort((a, b) => b.started_at.localeCompare(a.started_at));
+    if (recent.length >= RETIRE_AFTER && recent.slice(0, RETIRE_AFTER).every(isFailed) && !recent.some(isGood) && out.length < usable.length - 1) out.push(row);
+  }
+  return out;
 }
 
 async function ensureRows(portal: Portal, by: string): Promise<ActorRow[]> {
@@ -92,6 +119,18 @@ export function measuredSince(runs: Array<{ started_at: string }>): string | nul
 }
 export async function dailyAuto(publicBase: string, opts: { start?: boolean; deadline?: number } = {}) {
   const [actors, runs] = [await listActors() ?? [], await listRuns(80) ?? []]; const started: Array<{ actor: string; ok: boolean; error?: string }> = []; const now = Date.now();
+  // Primero se retiran los buscadores que llevan fallando (reversible desde el panel): así la búsqueda de hoy ya no
+  // gasta un intento en uno que no funciona. Cada retirada se comprueba: un PATCH fallido no se cuenta como hecho.
+  const retired: Array<{ portal: string; actor: string; ok: boolean }> = [];
+  if (opts.start !== false) {
+    for (const portal of PORTALS) {
+      for (const row of retirementCandidates(portal, actors, runs, now)) {
+        const response = await serviceRest(`apify_actors?org_id=eq.${ORG}&id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'inactive' }) }).catch(() => null);
+        retired.push({ portal: portal.id, actor: row.actor, ok: Boolean(response?.ok) });
+        if (response?.ok) row.status = 'inactive'; // los pasos siguientes de esta pasada ya no lo cuentan
+      }
+    }
+  }
   const pending = (opts.start === false ? [] : PORTALS).filter(portal => {
     const rows = actors.filter(a => a.source === portal.source); if (!rows.some(a => a.schedule_daily)) return false;
     const ids = new Set(rows.map(a => a.id));
@@ -120,7 +159,7 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
     }
   }
   const legacy = await dailyApify(publicBase, { ...opts, skip: a => Boolean(portalBySource(a.source)), after: (run, actor, res) => recoverAfter(run, actor, res, publicBase) });
-  return { ...legacy, started: [...started, ...legacy.started] };
+  return { ...legacy, started: [...started, ...legacy.started], ...(retired.length ? { retired } : {}) };
 }
 
 // ---- Vista en lenguaje llano para el panel ----
@@ -128,7 +167,11 @@ export type PortalView = {
   id: string; name: string; plain: string; caution?: string; daily: boolean; maxItems: number;
   state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string;
   last: { when: string; items: number; cost: number | null } | null;
-  recipes: Array<{ name: string; state: RecipeState; detail: string }>;
+  recipes: Array<{ name: string; actor: string; id: string | null; state: RecipeState; detail: string; added: boolean }>;
+  /** Buscadores retirados de la cascada (a mano o por fallos repetidos): se pueden reactivar. */
+  retired: Array<{ id: string; name: string; actor: string }>;
+  /** Menos de dos buscadores activos: no hay repuesto si falla el único que queda. */
+  needs_more: boolean;
   // Por qué este portal está donde está en el reparto del mes: aprobadas medidas, coste y puesto.
   priority: { approved: number | null; usd: number; per_usd: number | null; rank: number | null; note: string };
 };
@@ -162,22 +205,24 @@ export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now()
   const rank = new Map(ranked.map((m, i) => [m.p.id, i + 1]));
   return measured.map(({ p, rows, mine: unsorted, ap, usd, per }) => {
     const mine = [...unsorted].sort((a, b) => b.started_at.localeCompare(a.started_at));
-    const recipes = p.recipes.map(r => { const row = rows.find(a => a.actor === r.actor); const s = recipeState(row?.id, runs, now);
+    const inCatalog = new Set(p.recipes.map(r => r.actor.toLowerCase()));
+    const recipes = recipesOf(p, rows).map(r => { const row = rows.find(a => a.actor.toLowerCase() === r.actor.toLowerCase()); const s = recipeState(row?.id, runs, now);
       // Los buscadores generados desde la auditoría declaran qué campos exige el actor: se dice en la tarjeta
       // para que nadie se pregunte por qué un intento no arrancó por falta de un dato.
       const needs = r.needs?.length ? ` · pide ${r.needs.join(', ')}` : '';
-      return { name: r.name, state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : `Aún sin probar${needs}` }; });
+      return { name: r.name, actor: r.actor, id: row?.id ?? null, added: !inCatalog.has(r.actor.toLowerCase()), state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : `Aún sin probar${needs}` }; });
+    const retired = rows.filter(isRetired).map(a => ({ id: a.id, name: a.label || a.actor, actor: a.actor }));
     const good = mine.find(isGood), daily = rows.some(a => a.schedule_daily);
     const last = good ? { when: ago(good.finished_at ?? good.started_at, now), items: good.harvested, cost: good.cost_usd == null ? null : Number(good.cost_usd) } : null;
     const failedN = recipes.filter(r => r.state === 'failed').length;
     let state: PortalView['state'], headline: string, detail: string;
     if (mine.some(isActive)) { state = 'running'; headline = 'Buscando ahora…'; detail = 'Tarda entre 1 y 5 minutos. Las ofertas aparecen solas en «Fuentes externas».'; }
     else if (good && mine[0] === good && now - Date.parse(good.started_at) < 48 * 3600 * 1000) { state = 'ok'; headline = 'Funciona'; detail = `Última búsqueda ${last!.when}: ${last!.items} ofertas${last!.cost != null ? ` (${last!.cost.toFixed(2)} USD)` : ''}.`; }
-    else if (failedN === p.recipes.length) { state = 'down'; headline = 'Ahora mismo ningún buscador funciona'; detail = daily ? 'La app lo reintentará mañana sola. También puedes pulsar «Buscar ahora».' : 'Pulsa «Buscar ahora» para reintentar; la app probará todos los buscadores por orden.'; }
+    else if (recipes.length && failedN === recipes.length) { state = 'down'; headline = 'Ahora mismo ningún buscador funciona'; detail = daily ? 'La app lo reintentará mañana sola. También puedes pulsar «Buscar ahora».' : 'Pulsa «Buscar ahora» para reintentar; la app probará todos los buscadores por orden.'; }
     else if (failedN > 0) { state = 'trying'; headline = 'Un buscador falló; se usa el siguiente'; detail = 'No tienes que hacer nada: la app cambia de buscador sola.'; }
     else if (!mine.length) { state = daily ? 'new' : 'off'; headline = daily ? 'Activado, aún sin primera búsqueda' : 'Sin probar'; detail = 'Pulsa «Probar con 10 ofertas»: cuesta céntimos y comprueba que todo funciona.'; }
     else { state = 'trying'; headline = 'Esperando la próxima búsqueda'; detail = 'Pulsa «Buscar ahora» o espera a la búsqueda diaria.'; }
-    return { id: p.id, name: p.name, plain: p.plain, caution: p.caution, daily, maxItems: p.maxItems, state, headline, detail, last, recipes,
+    return { id: p.id, name: p.name, plain: p.plain, caution: p.caution, daily, maxItems: p.maxItems, state, headline, detail, last, recipes, retired, needs_more: recipes.length < 2 && p.id !== 'multi',
       priority: { approved: ap, usd, per_usd: per, rank: rank.get(p.id) ?? null, note: priorityNote(ap, usd, per, rank.get(p.id) ?? null) } };
   });
 }

@@ -1,12 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import PortalActors from './PortalActors';
 import { CircleCheck, CircleDashed, CircleX, CloudDownload, LoaderCircle, Pencil, Play, Plus, RefreshCcw, Trash2, TriangleAlert } from 'lucide-react';
 
 // Apify: el scraping se ejecuta en la infraestructura de Apify (con sus proxies), no en la nuestra. De pago por uso:
 // nada se lanza solo salvo los actores marcados como diarios, con tope mensual y límites por ejecución.
 type Actor = { id: string; label: string; actor: string; source: string; input_template: Record<string, unknown> | null; max_items: number; memory_mb: number; timeout_s: number; schedule_daily: boolean };
 type Run = { id: string; actor_id: string; run_id: string; status: string; started_at: string; finished_at: string | null; items_total: number | null; harvested: number; cost_usd: number | null; error: string | null };
-type PortalView = { id: string; name: string; plain: string; caution?: string; daily: boolean; maxItems: number; state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string; recipes: Array<{ name: string; state: string; detail: string }>;
+type PortalView = { id: string; name: string; plain: string; caution?: string; daily: boolean; maxItems: number; state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; headline: string; detail: string; recipes: Array<{ name: string; actor: string; id: string | null; state: string; detail: string; added: boolean }>; retired: Array<{ id: string; name: string; actor: string }>; needs_more: boolean;
   priority: { approved: number | null; usd: number; per_usd: number | null; rank: number | null; note: string } };
 const RUN_CAP = 2, TEST_CAP = 0.5; // topes duros que la app pide a Apify (mismos valores que lib/apify.ts)
 // Estado = texto + icono (nunca solo color).
@@ -107,9 +108,7 @@ export default function ApifyTab({ owner, onSessionLost, goApis }: { owner: bool
             <button className="primary" disabled={working !== '' || !data.has_key} onClick={() => { if (window.confirm(`Buscar ofertas en ${p.name}. Gasta crédito de Apify: tope de ${RUN_CAP} USD por búsqueda (hasta ${p.maxItems} ofertas) y${data.budget.spent === null ? ' no se pudo leer lo gastado este mes' : ` este mes llevas ${data.budget.spent.toFixed(2)} de ${data.budget.limit} USD`}. ¿Seguir?`)) void run(`go-${p.id}`, async () => (await post({ action: 'search_now', portal: p.id }) as { message: string }).message); }}>{working === `go-${p.id}` ? <LoaderCircle size={14} className="spin" /> : <CloudDownload size={14} />} Buscar ahora</button>
             <label className="check-label" style={{ flexDirection: 'row', alignItems: 'center' }}><input type="checkbox" checked={p.daily} disabled={working !== ''} onChange={e => { const on = e.target.checked; /* se lee ya: React restaura el valor controlado antes de que termine la petición */ void run(`daily-${p.id}`, async () => { await post({ action: 'portal_daily', portal: p.id, on }); return on ? `Búsqueda diaria activada en ${p.name}.` : `Búsqueda diaria desactivada en ${p.name}.`; }); }} /> Buscar cada día</label></div>
             : <p className="card-meta">Solo el propietario puede lanzar búsquedas. Búsqueda diaria: <strong>{p.daily ? 'activada' : 'desactivada'}</strong>.</p>}
-          <details><summary>Buscadores de repuesto ({p.recipes.length})</summary>
-            <ul style={{ margin: '8px 0 0', paddingLeft: 18, display: 'grid', gap: 4 }}>{p.recipes.map(r => <li key={r.name}><strong>{r.name}</strong>: {r.detail}</li>)}</ul>
-            <p className="card-meta">Se usan por orden. Si uno falla o no encuentra ofertas, se pasa al siguiente automáticamente.</p></details>
+          <PortalActors portal={p} owner={owner} busy={working !== ''} post={post} run={run} />
         </article>; })}</div></>}
     <details className="search-panel" style={{ marginBottom: 24 }} data-testid="apify-advanced"><summary><strong>Opciones avanzadas</strong>&nbsp;<span className="card-meta" style={{ margin: 0 }}>(solo si sabes lo que haces: añadir un buscador a mano)</span></summary>
     <div style={{ marginTop: 16 }}>

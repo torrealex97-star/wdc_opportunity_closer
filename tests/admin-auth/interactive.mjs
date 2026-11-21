@@ -100,6 +100,38 @@ try {
     state.providerBudget = state.providerBudget.filter(row => row.provider !== 'brightdata');
   });
 
+  await step('Apify: un portal con un solo buscador avisa, propone repuestos validados y el propietario añade, retira y reactiva uno', async () => {
+    state.storeActors = { 'store-a~infojobs-pro': { users: 500, title: 'InfoJobs Pro' }, 'store-b~infojobs-old': { deprecated: true, title: 'InfoJobs Old' }, 'store-d~infojobs-nofield': { hideDeprecated: true, title: 'InfoJobs Sin Campo' } };
+    await page.reload();
+    await page.getByRole('button', { name: 'Búsqueda automática', exact: true }).click();
+    const card = page.getByTestId('portal-infojobs'); await card.waitFor();
+    const ensureOpen = async () => { if (!(await card.locator('details').evaluate(el => el.open))) await card.locator('summary').click(); };
+    await ensureOpen();
+    await card.getByTestId('needs-more-infojobs').waitFor();
+    assert.match(await card.getByTestId('needs-more-infojobs').innerText(), /Solo hay un buscador/);
+    await card.getByRole('button', { name: 'Buscar repuestos en la tienda' }).click();
+    const list = card.getByTestId('replacements-infojobs'); await list.waitFor({ timeout: 15000 });
+    const text = await list.innerText();
+    assert.match(text, /InfoJobs Pro[\s\S]*Validado/);
+    assert.match(text, /InfoJobs Old[\s\S]*No utilizable/);
+    assert.match(text, /InfoJobs Sin Campo[\s\S]*Sin verificar/);
+    assert.equal(await list.getByRole('button', { name: /^Añadir / }).count(), 1, 'solo el validado se puede añadir');
+    await list.getByRole('button', { name: 'Añadir InfoJobs Pro a InfoJobs' }).click();
+    await page.getByText(/InfoJobs Pro añadido como buscador de repuesto de InfoJobs/).waitFor({ timeout: 15000 });
+    assert.ok(state.apifyActors.some(a => a.actor === 'store-a/infojobs-pro' && a.source === 'apify-infojobs'));
+    await ensureOpen();
+    page.once('dialog', dialog => dialog.accept());
+    await card.getByRole('button', { name: 'Retirar InfoJobs Pro de la cascada' }).click();
+    await page.getByText('Buscador retirado de la cascada.').waitFor({ timeout: 15000 });
+    assert.equal(state.apifyActors.find(a => a.actor === 'store-a/infojobs-pro').status, 'inactive');
+    await ensureOpen();
+    await card.getByRole('button', { name: 'Reactivar InfoJobs Pro' }).click();
+    await page.getByText('Buscador reactivado.').waitFor({ timeout: 15000 });
+    assert.notEqual(state.apifyActors.find(a => a.actor === 'store-a/infojobs-pro').status, 'inactive');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin scroll horizontal de página');
+    state.apifyActors = state.apifyActors.filter(a => a.actor !== 'store-a/infojobs-pro');
+  });
+
   await step('Fuentes: «Probar ruta» ejecuta Bright Data, muestra ofertas y coste, y actualiza el gasto', async () => {
     await page.reload();
     await page.getByRole('button', { name: 'Fuentes', exact: true }).click();

@@ -65,6 +65,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/googlejobs.mjs
 # Rutas por fuente: orden por coste, contrato de Bright Data, extractor y cascada sin gastar sin clave/tope.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
+# Buscadores de repuesto de Apify: validación desde la tienda, cascada con añadidos y retirada de los caídos.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/apify-store.mjs
 # Tope mensual: todas las ejecuciones desde el día 1, paginadas; nunca las últimas 200.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spend-window.mjs
 # Tope por organización: `monthly_usd` de provider_budget manda y el entorno queda como respaldo declarado.
