@@ -4,8 +4,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
-import { spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
+import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
 import { setupFor } from '../../apps/web/lib/sourceSetup.ts';
 import { COMPANY_WATCHLIST } from '../../apps/web/lib/companyWatchlist.ts';
@@ -97,6 +97,24 @@ const wrapped = { status_code: 200, headers: { 'content-type': 'application/json
 assert.equal(unwrapPayload(wrapped).jobs.items.length, 1);
 assert.equal(jobsFromPayload(wrapped).length, 1, 'las ofertas se leen dentro del envoltorio');
 assert.equal(unwrapPayload({ jobs: { items: [] } }).jobs.items.length, 0, 'un payload directo se devuelve igual');
+
+// 3d. La prueba es UNA petición con el contrato documentado, y su precio es el mismo que usa el tope.
+const probeCalls = [];
+const probeResponse = await serpProbeRequest({ apiKey: 'abc12345key', serpZone: 'serp_zone_1', unlockerZone: null }, async (target, init) => {
+  probeCalls.push({ target, init });
+  return new Response('{}', { status: 200 });
+});
+assert.equal(probeResponse.status, 200);
+assert.equal(probeCalls.length, 1, 'la prueba no reintenta: una sola petición');
+assert.equal(probeCalls[0].target, 'https://api.brightdata.com/request');
+assert.equal(probeCalls[0].init.method, 'POST');
+assert.equal(probeCalls[0].init.headers.Authorization, 'Bearer abc12345key');
+const probeBody = JSON.parse(probeCalls[0].init.body);
+assert.deepEqual(Object.keys(probeBody).sort(), ['format', 'url', 'zone']);
+assert.equal(probeBody.zone, 'serp_zone_1');
+assert.equal(probeBody.format, 'json');
+assert.match(probeBody.url, /brd_json=1/);
+assert.equal(BRIGHTDATA_USD_PER_REQUEST, PROVIDER_METERS.brightdata.usdPerRequest, 'el precio del proveedor y el del medidor del tope no pueden divergir');
 
 const calls = [];
 const fixture = {
