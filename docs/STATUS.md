@@ -32,7 +32,8 @@ digan «—»; el tope mensual no puede truncarse a 10.000; el flujo del Unlocke
   - **Depende de tu orden para aplicar DDL**: (1) `20261121_provider_budget.sql`, que sustituye el tope por
     entorno por la tabla de presupuesto; (2) `20261121_source_route_order.sql`, sin la cual el orden
     personalizado responde 503. Hasta entonces el tope por entorno y el orden por coste funcionan; no se aplicó
-    ninguna migración ni se desplegó. Fusionado en `e24efc1` (PR #101).
+    ninguna migración. Fusionado en `e24efc1` (PR #101); el push a `main` disparó «Web deploy» y publicó
+    `closer-web`, con el dominio respondiendo 200.
 
 ## Tope mensual: todas las ejecuciones desde el día 1, no las últimas 200 (sesión 277) — 2026-11-21
 
