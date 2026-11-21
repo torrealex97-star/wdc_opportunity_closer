@@ -119,7 +119,7 @@ export default function ApisTab({ owner, onSessionLost }: { owner: boolean; onSe
       // Una prueba que falla no siempre es «clave rechazada»: el detalle dice si fue la clave, la zona o la
   // respuesta. El rótulo solo dice «Rechazada» cuando Bright Data rechazó de verdad la clave.
   const state = !c.configured ? ['Sin clave', 'status'] : c.last_test_ok == null ? ['Guardada · sin probar', 'status'] : c.last_test_ok ? ['Válida', 'status ok']
-    : /rechaz|no válida|formato/i.test(c.last_test_detail ?? '') ? ['Rechazada', 'status bad'] : ['Con error', 'status bad'];
+    : /rechaz[oó] la clave|clave rechazada|formato incorrecto|no parece válida/i.test(c.last_test_detail ?? '') ? ['Rechazada', 'status bad'] : ['Con error', 'status bad'];
       const spendBlocked = SPEND.has(c.provider) && !owner;
       return <article className="source-card" key={c.provider}>
         <div className="card-head"><div><h3>{c.name}</h3><p className="card-meta" style={{ marginTop: 4 }}>{PURPOSE[c.provider]}</p></div><span className={state[1]}>{state[0]}</span></div>
