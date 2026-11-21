@@ -3,7 +3,7 @@ import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
-import { parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
+import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -64,11 +64,15 @@ export async function saveConnection(provider: Provider, secret: string, by: str
     method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({ provider, secret_ciphertext: encryptSecret(secret), last4: last4Of(provider, secret), updated_by: by, updated_at: new Date().toISOString(), last_test_at: null, last_test_ok: null, last_test_detail: null }),
   });
+  // Clave nueva (o zonas nuevas en Bright Data): la caché de zonas del panel no puede seguir sirviendo la anterior.
+  if (response.ok && provider === 'brightdata') clearBrightDataZoneCache();
   return response.ok;
 }
 
 export async function deleteConnection(provider: Provider): Promise<boolean> {
-  return (await serviceRest(`integration_connections?provider=eq.${provider}`, { method: 'DELETE' })).ok;
+  const ok = (await serviceRest(`integration_connections?provider=eq.${provider}`, { method: 'DELETE' })).ok;
+  if (ok && provider === 'brightdata') clearBrightDataZoneCache();
+  return ok;
 }
 
 export async function getSecret(provider: Provider): Promise<string | null> {
@@ -89,7 +93,8 @@ const describeZones = (zones: BrightDataZone[]) =>
 async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; detail: string }> {
   const parsed = parseBrightDataSecret(secret);
   if (!parsed) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data (vale también API key:zona SERP).' };
-  const resolved = await resolveBrightDataConfig(secret);
+  // «Probar» es una comprobación explícita: pregunta a la cuenta aunque haya zonas en caché.
+  const resolved = await resolveBrightDataConfig(secret, { useCache: false });
   // Una zona fijada a mano que la cuenta no tiene se declara sin gastar crédito.
   if (resolved.zones && parsed.serpZone && !resolved.zones.some(zone => zone.name === parsed.serpZone)) {
     return { ok: false, detail: `La clave es válida, pero la zona «${parsed.serpZone}» no está activa. Zonas de la cuenta: ${describeZones(resolved.zones)}.` };

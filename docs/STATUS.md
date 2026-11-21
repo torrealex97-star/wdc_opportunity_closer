@@ -1,5 +1,13 @@
 # Estado
 
+## El panel no pregunta las zonas de Bright Data en cada carga (sesión 291) — 2026-11-21
+
+- **Petición del propietario**: «Evita que el panel consulte las zonas de Bright Data en cada carga cuando la clave está guardada sin zona: resuélvelas al guardar o guárdalas en caché, sin gastar ni cambiar el comportamiento.»
+- **Causa** (*inspected*): `stateOf()` en `app/api/admin/source-routes/route.ts` llama a `resolveBrightDataConfig` en **cada GET** del panel y en cada «Probar ruta». Con la clave guardada sola (`API key`), esa función consulta `GET /zone/get_active_zones` siempre: es gratis, pero son hasta 6 s de espera por carga y el panel depende de que Bright Data responda para pintar la vía Unlocker.
+- **Qué se hizo** (*tested*): caché en el proceso dentro de `providers/brightdata.ts` — `resolveBrightDataConfig` guarda las zonas resueltas por clave (FNV-1a de la API key, para no retener la clave en claro) con TTL de **10 minutos**; un **fallo no se cachea**; `clearBrightDataZoneCache()` la tira y se llama al **guardar** y al **borrar** la conexión de Bright Data; el botón **«Probar»** y cualquier comprobación explícita usan `useCache: false`. Si el secreto ya trae las zonas escritas, se sigue sin red y sin caché. No se guarda nada nuevo en la base (eso pediría DDL y orden del owner) y la consulta de zonas no gasta crédito: el gasto no cambia.
+- **Comprobado** (*tested*, sin red): `tests/admin-auth/source-routes.mjs` — primera resolución 1 llamada, segunda carga con la misma clave 0 llamadas y mismo resultado (incluida la zona Unlocker), TTL cumplido → 1 llamada más, `useCache:false` → siempre, secreto con zonas escritas → 0 llamadas, fallo de red repetido → 2 llamadas (no se cachea), `clearBrightDataZoneCache()` → vuelve a preguntar. Typecheck de `apps/web` sin errores.
+- **Límites honestos**: la caché vive en el proceso; en Cloudflare Workers cada instancia nueva empieza vacía, así que la primera carga de una instancia fría sí consulta (una vez). No se ha probado contra Bright Data real (sin clave en este entorno): lo verificado es la lógica con `fetch` simulado y el typecheck.
+
 ## «Web deploy» publica solo, y su verde ya no puede mentir (sesión 290) — 2026-11-21
 
 - **Petición del propietario**: «Deja el workflow «Web deploy» en estado de poder publicar: dime exactamente qué secreto o ajuste falta y déjalo documentado en `OWNER_GUIDE` para no depender de `wrangler` local.»

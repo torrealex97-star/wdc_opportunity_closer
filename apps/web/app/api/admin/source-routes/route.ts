@@ -62,7 +62,9 @@ async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap
   const [connections, brightdataSecret] = await Promise.all([listConnections(), getSecret('brightdata')]);
   const keys = new Set((connections ?? []).map(row => row.provider));
   // Si la clave se guardó sola (el formato que da Bright Data), las zonas se descubren en la cuenta, gratis;
-  // sin esa consulta la vía Unlocker parecería no estar lista teniendo su zona.
+  // sin esa consulta la vía Unlocker parecería no estar lista teniendo su zona. `resolveBrightDataConfig`
+  // guarda el resultado 10 minutos en el proceso, así que una carga del panel no repite la llamada (y
+  // guardar la clave tira la caché).
   const brightdataConfig = brightdataSecret ? (await resolveBrightDataConfig(brightdataSecret, { timeoutMs: 6_000 })).config : null;
   return {
     keys,

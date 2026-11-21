@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { JSearchError, candidatesFromPayload, jsearchJobs, jsearchUrl } from '../../apps/web/lib/providers/jsearch.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
@@ -81,17 +81,48 @@ assert.equal(rejectedZones.status, 401);
 assert.match(rejectedZones.error, /HTTP 401/);
 assert.deepEqual(rejectedZones.zones, [], 'una respuesta rechazada no inventa zonas');
 let zoneCalls = 0;
-const resolvedBare = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { zoneCalls++; return new Response(JSON.stringify([{ name: 'serp_api1', type: 'serp' }]), { status: 200 }); } });
+const resolvedBare = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { zoneCalls++; return new Response(JSON.stringify([{ name: 'serp_api1', type: 'serp' }]), { status: 200 }); }, useCache: false });
 assert.equal(zoneCalls, 1, 'con la clave sola se consulta la cuenta una vez, gratis');
 assert.deepEqual(resolvedBare.config, { apiKey: 'abc12345key', serpZone: 'serp_api1', unlockerZone: null });
 let fullCalls = 0;
 const resolvedFull = await resolveBrightDataConfig('abc12345key:serp_zone_1:unlock_zone', { fetchImpl: async () => { fullCalls++; return new Response('[]', { status: 200 }); } });
 assert.equal(fullCalls, 0, 'si las zonas vienen escritas no se llama a la cuenta');
 assert.equal(resolvedFull.config.serpZone, 'serp_zone_1');
-const resolvedDown = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { throw new Error('timeout'); } });
+const resolvedDown = await resolveBrightDataConfig('abc12345key', { fetchImpl: async () => { throw new Error('timeout'); }, useCache: false });
 assert.equal(resolvedDown.config.serpZone, null);
 assert.match(resolvedDown.error, /No se pudo contactar/, 'un fallo de red no se anuncia como clave rechazada');
 assert.equal((await resolveBrightDataConfig('corta')).config, null);
+
+// 3b-bis. Las zonas se cachean 10 minutos en el proceso: una carga del panel no pregunta a la cuenta.
+// (La consulta es gratis, pero con la clave sola son hasta 6 s de espera por carga y el panel deja de
+// pintarse si Bright Data no responde.)
+clearBrightDataZoneCache();
+let cacheCalls = 0;
+const cacheFetch = async () => {
+  cacheCalls++;
+  return new Response(JSON.stringify([{ name: 'serp_api1', type: 'serp' }, { name: 'web_unlocker1', type: 'unblocker' }]), { status: 200 });
+};
+const T0 = 1_760_000_000_000;
+const cachedFirst = await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0 });
+const cachedSecond = await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0 + 60_000 });
+assert.equal(cacheCalls, 1, 'la segunda carga sale de la caché: no se consulta la cuenta');
+assert.deepEqual(cachedSecond.config, cachedFirst.config, 'la caché devuelve la misma configuración');
+assert.deepEqual(cachedSecond.zones, cachedFirst.zones, 'y las mismas zonas que enseña el panel');
+assert.equal(cachedSecond.config.unlockerZone, 'web_unlocker1', 'la vía Unlocker sigue saliendo lista desde la caché');
+await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0 + 10 * 60_000 });
+assert.equal(cacheCalls, 2, 'cumplido el TTL se vuelve a preguntar, una sola vez');
+await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0, useCache: false });
+assert.equal(cacheCalls, 3, 'useCache:false pregunta siempre: es lo que hace «Probar»');
+await resolveBrightDataConfig('cachekey1234:zona_manual:unlock_manual', { fetchImpl: cacheFetch, now: T0 + 1_000 });
+assert.equal(cacheCalls, 3, 'con las zonas escritas en el secreto no hay consulta que cachear');
+let failCalls = 0;
+const failingFetch = async () => { failCalls++; throw new Error('timeout'); };
+await resolveBrightDataConfig('fallokey1234', { fetchImpl: failingFetch, now: T0 });
+await resolveBrightDataConfig('fallokey1234', { fetchImpl: failingFetch, now: T0 + 5_000 });
+assert.equal(failCalls, 2, 'un fallo de red no se cachea: no se queda «sin zona» 10 minutos');
+clearBrightDataZoneCache();
+await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0 + 60_000 });
+assert.equal(cacheCalls, 4, 'guardar o borrar la clave tira la caché (clearBrightDataZoneCache)');
 
 // 3c. El envoltorio `{status_code, headers, body}` no pierde las ofertas.
 const wrapped = { status_code: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobs: { items: [{ title: 'Closer', company: 'Acme', link: 'https://acme.test/1' }] } }) };
