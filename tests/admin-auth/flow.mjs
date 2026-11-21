@@ -124,6 +124,15 @@ await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en 
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'resend', secret: 'good-key-1234' } })).status, 200);
   const bad = await call('/api/admin/connections', { method: 'POST', body: { provider: 'serpapi' } });
   assert.equal(bad.json.ok, false); assert.match(bad.json.detail, /rechazada/);
+  // Las tres claves nuevas se guardan como cualquier otra (el CHECK de la base las admite desde
+  // 20261121_integration_connections_providers.sql) y el panel enseña los últimos 4 de la CLAVE de Bright
+  // Data, no los de la zona, que es lo que traería `slice(-4)` sobre `API key:zona`.
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'brightdata', secret: 'testkey-abcdef1234:serp_zone' } })).status, 200);
+  assert.equal((await call('/api/admin/connections')).json.connections.find(c => c.provider === 'brightdata').last4, '1234');
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'zenrows', secret: 'zen-key-1234' } })).status, 200);
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'scrapingbee', secret: 'bee-key-1234' } })).status, 200);
+  // Un nombre heredado del prototipo no es un proveedor: no se guarda nada.
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'toString', secret: 'good-key-1234' } })).status, 422);
   const o = (await call('/api/admin/overview')).json.paid;
   assert.equal(o.find(p => p.id === 'groq').status, 'ok'); assert.equal(o.find(p => p.id === 'serpapi').status, 'error'); assert.equal(o.find(p => p.id === 'apify').status, 'not_configured');
 });
