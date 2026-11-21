@@ -1,5 +1,14 @@
 # Estado
 
+## «Web deploy» publica solo, y su verde ya no puede mentir (sesión 290) — 2026-11-21
+
+- **Petición del propietario**: «Deja el workflow «Web deploy» en estado de poder publicar: dime exactamente qué secreto o ajuste falta y déjalo documentado en `OWNER_GUIDE` para no depender de `wrangler` local.»
+- **Qué faltaba de verdad** (*verified* con la API de GitHub y los logs de Actions): **nada**. El secreto `CLOUDFLARE_API_TOKEN` existe desde el **2026-11-20 11:55:04Z** —la documentación decía lo contrario, arrastrado de la sesión 236— y `CLOUDFLARE_ACCOUNT_ID` no es necesario porque el workflow usa `267ff3546dd1d780232981b1393d09ef` (cuenta Women Digital Closers) por defecto. Los runs de `aae3fb8`, `ce03b08` y `fe7adcd` publicaron: el último dejó `Uploaded closer-web` y **Version ID `34f2cdea-0adb-4b7b-b7d0-aee99a9dedde`**, y su paso de dominio terminó con `GET / -> HTTP 200`.
+- **Un efecto colateral que arreglé** (*verified*): mi despliegue manual de la sesión 289 se hizo desde `ce03b08` y pisó el del workflow, que ya servía `fe7adcd` (PR #111, web de otra sesión). Se relanzó «Web deploy» sobre `main` con `workflow_dispatch` para realinear producción con `main`, sin `wrangler` local.
+- **El workflow ya no puede dar verde sin publicar** (*tested*): «Credenciales de Cloudflare» va **antes** del build y falla con `::error::` si el secreto falta o si `/user/tokens/verify` no responde 200; la comprobación final compara el `BUILD_ID` del build con el que sirve `https://app.womendigitalclosers.com/BUILD_ID` (antes solo miraba un 200 y una cadena del HTML). YAML validado con `yaml.safe_load`; los dos caminos nuevos probados en local (token vacío → exit 1; token inválido → HTTP ≠ 200 → exit 1).
+- **Documentado**: `docs/OWNER_GUIDE.md` gana la **sección 17** (qué hay configurado, cómo comprobar, cómo rotar el token, cómo forzar una publicación, cómo leer el resultado y `wrangler` local como plan B), y la tarea 19 de `docs/ACTIVE_HANDOFF.md` pasa de «pendiente» a «hecho».
+- **Límites honestos**: GitHub no devuelve el valor ni la caducidad del secreto, así que lo comprobado es lo que el propio workflow pregunta (`/user/tokens/verify`) y que publica; el permiso exacto («Workers Scripts: Edit») se deduce de que el deploy funciona, no se lee. No se ha ejercitado un token caducado contra Cloudflare real (sí el camino de fallo con la respuesta de la API a un token inválido).
+
 ## El tope de los proveedores de pago lo manda `provider_budget` (sesión 289) — 2026-11-21
 
 - **Petición del propietario**: «Conecta capUsd() a provider_budget por organización con el entorno como respaldo, y añade su prueba, para que cambiar monthly_usd en la tabla cambie el tope de verdad.»

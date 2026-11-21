@@ -7,13 +7,15 @@ name: Web deploy
 # Comprobaciones ANTES de publicar (si alguna falla, no se despliega nada):
 #   typecheck · colores como tokens (design) · referencias huérfanas · ninguna credencial versionada
 #   · build de producción del Worker con OpenNext.
-# Y DESPUÉS: se comprueba que el dominio responde 200 y sirve la web.
+# Y DESPUÉS: el dominio responde 200 y su `/BUILD_ID` es el del build recién hecho (un job verde que
+# sirve el build anterior ya nos pasó dos veces; ahora sería rojo).
 #
-# Credenciales: hacen falta DOS valores del repositorio, los pone el propietario (nunca se versionan):
+# Credenciales: un solo valor obligatorio, lo pone el propietario en GitHub (nunca se versiona):
 #   CLOUDFLARE_API_TOKEN  secreto con permiso «Workers Scripts: Edit» sobre la cuenta Women Digital Closers
-#   CLOUDFLARE_ACCOUNT_ID secreto o variable con el id de esa cuenta (si falta, se usa el valor por
-#                         defecto de aquí abajo: es un identificador público, no una credencial)
-# Sin el token, el despliegue se SALTA con un aviso en el resumen del job y no se publica nada.
+#   CLOUDFLARE_ACCOUNT_ID opcional: si falta se usa el id de esa cuenta de aquí abajo (es un
+#                         identificador público, no una credencial)
+# Sin el token —o con uno caducado— el job FALLA, no da verde: un despliegue que no publica no puede
+# parecer un despliegue. Cómo crearlo, rotarlo o forzar una publicación: `docs/OWNER_GUIDE.md`, sección 17.
 on:
   push:
     branches: [main]
@@ -39,6 +41,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Se comprueba primero (segundos) para no gastar un build entero si no se puede publicar, y se
+      # pregunta a Cloudflare por el token: existir no es servir si está caducado o sin permiso.
+      - name: Credenciales de Cloudflare
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Falta el secreto CLOUDFLARE_API_TOKEN, así que no se publica nada. GitHub → Settings → Secrets and variables → Actions → New repository secret, con permiso «Workers Scripts: Edit» sobre la cuenta Women Digital Closers. Paso a paso: docs/OWNER_GUIDE.md, sección 17."
+            exit 1
+          fi
+          code=$(curl -s -o /tmp/token.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || echo 000)
+          if [ "$code" != "200" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN no vale (HTTP $code en /user/tokens/verify): caducado, revocado o con otro permiso. Rótalo como dice docs/OWNER_GUIDE.md, sección 17."
+            exit 1
+          fi
+          echo "Token válido; cuenta Women Digital Closers (267ff3546dd1d780232981b1393d09ef si no defines CLOUDFLARE_ACCOUNT_ID)."
       - run: npm ci
       # Lo que tiene que estar bien para que la alumna reciba una web sana. Son las mismas puertas que
       # corre el CI, pero aquí en corto: si una se rompe, el despliegue no ocurre.
@@ -52,21 +72,9 @@ jobs:
       - name: Build de producción del Worker (OpenNext)
         working-directory: apps/web
         run: npx --no-install opennextjs-cloudflare build
-      - name: ¿Hay credenciales de Cloudflare?
-        id: creds
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::Falta el secreto CLOUDFLARE_API_TOKEN: NO se publica. Añádelo en Settings → Secrets and variables → Actions con permiso «Workers Scripts: Edit»."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
       # `wrangler deploy` sube el bundle ya construido con los bindings de apps/web/wrangler.jsonc
       # (ENGINE, ASSETS, las dos variables públicas) y NO toca los secretos del Worker: siguen como están.
       - name: Publicar el Worker closer-web
-        if: steps.creds.outputs.ready == 'true'
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -74,15 +82,23 @@ jobs:
         run: npx --no-install wrangler deploy
       # Un despliegue «correcto» que no sirve la web no es un despliegue: se mira el dominio de verdad.
       - name: Comprobar el dominio real
-        if: steps.creds.outputs.ready == 'true'
         run: |
-          code=000
+          built=$(cat apps/web/.next/BUILD_ID 2>/dev/null || cat apps/web/.open-next/assets/BUILD_ID 2>/dev/null || true)
+          if [ -z "$built" ]; then
+            echo "::error::El build no dejó BUILD_ID: no se puede demostrar qué versión sirve el dominio."
+            exit 1
+          fi
+          code=000; served=""
           for _ in $(seq 1 12); do
             code=$(curl -s -o /tmp/home.html -w '%{http_code}' https://app.womendigitalclosers.com/ || echo 000)
-            [ "$code" = "200" ] && break
+            served=$(curl -s --max-time 20 https://app.womendigitalclosers.com/BUILD_ID || true)
+            [ "$code" = "200" ] && [ "$served" = "$built" ] && break
             sleep 5
           done
           echo "GET / -> HTTP $code"
+          echo "BUILD_ID del build:  $built"
+          echo "BUILD_ID del dominio: $served"
           [ "$code" = "200" ]
           grep -q "Women Digital" /tmp/home.html
-          echo "El dominio sirve la web."
+          [ "$served" = "$built" ]
+          echo "El dominio sirve este build."

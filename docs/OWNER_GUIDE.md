@@ -231,6 +231,24 @@ Respóndeme con el **Prompt 10** (pegado y rellenado).
    **Comprueba**: el gasto y el tope del mes en la tarjeta del proveedor, y que el botón de una prueba con el tope agotado se niega en vez de llamar.
 8. **Lo que seguirá sin probarse**: una **página de empresa real** (la revisión se probó con fixture) y **proxies sanos de JobSpy**, sin los cuales Indeed/LinkedIn/Glassdoor caen a Google Jobs. Ninguna de las dos se arregla con estas claves; si quieres cerrarlas, dime y lo montamos.
 
+## 17. Publicar la web (Cloudflare Workers) · 5 min
+**Qué consigues**: que `app.womendigitalclosers.com` se actualice solo con cada cambio de la web, sin que nadie tenga que publicar con `wrangler` desde su portátil. **Estado hoy (2026-11-21): ya funciona.** El secreto existe y el workflow ha publicado; no falta nada por configurar. Lo que sigue es cómo comprobarlo, cómo rotarlo y cómo forzar una publicación.
+**Herramientas**: GitHub → *Settings → Secrets and variables → Actions* y la pestaña *Actions*. **Necesitas**: ser la propietaria del repositorio (o tener permiso de administración).
+**Enlaces**: [workflow «Web deploy»](https://github.com/torrealex97-star/wdc_opportunity_closer/blob/main/.github/workflows/web-deploy.yml) · [runs](https://github.com/torrealex97-star/wdc_opportunity_closer/actions/workflows/web-deploy.yml) · [tokens de Cloudflare](https://dash.cloudflare.com/profile/api-tokens)
+
+**Qué hay configurado** (comprobado el 2026-11-21)
+- **`CLOUDFLARE_API_TOKEN`** — secreto del repositorio, creado el **2026-11-20 a las 11:55 UTC**. Es lo único imprescindible: con permiso «Workers Scripts: Edit» sobre la cuenta **Women Digital Closers**.
+- **`CLOUDFLARE_ACCOUNT_ID`** — **no hace falta**: el workflow usa `267ff3546dd1d780232981b1393d09ef` por defecto (es un identificador público, no una credencial). Si algún día el token ve dos cuentas, defínelo como *variable* del repositorio con ese mismo valor.
+
+1. **Comprobar que sigue vivo** — *Actions → «Web deploy» → Run workflow*, rama `main`.
+   **Comprueba**: el job `deploy` pasa por «Credenciales de Cloudflare» (`Token válido…`), «Publicar el Worker closer-web` (`Uploaded closer-web` y un `Current Version ID`) y «Comprobar el dominio real» (`El dominio sirve este build`, con el mismo `BUILD_ID` que imprimió el build). Si ves `::error::Falta el secreto CLOUDFLARE_API_TOKEN` o «no vale», ve al paso 2.
+2. **Rotar el token** (si caduca, se filtra o cambias de cuenta) — Cloudflare → *My Profile → API Tokens → Create Token* → plantilla **«Edit Cloudflare Workers»** → *Account Resources*: **Women Digital Closers**; no hace falta ninguna zona. Copia el valor y pégalo en GitHub → *Settings → Secrets and variables → Actions →* `CLOUDFLARE_API_TOKEN` → **Update**.
+   **Comprueba**: lanza el paso 1 y que publique. El token nunca se pega en el chat, en el repositorio ni en `.env`: solo en esa pantalla.
+3. **Publicar ya, sin esperar un push** — el mismo *Run workflow* del paso 1. El workflow se dispara solo cuando cambian `apps/web/**`, `packages/**`, `package.json`, `package-lock.json` o el propio workflow; un cambio solo de documentación no publica.
+4. **Leer el resultado de verdad** — `Uploaded closer-web` + `Current Version ID` en el log, y `https://app.womendigitalclosers.com/BUILD_ID` devolviendo el `BUILD_ID` de ese build. Eso demuestra que el dominio sirve lo último; un job verde no lo demuestra por sí solo (ya pasó dos veces lo contrario).
+5. **`wrangler` en local queda como plan B** (urgencia, sin GitHub) — desde `apps/web` con el repositorio al día: `npm ci`, `npx opennextjs-cloudflare build` y `CLOUDFLARE_ACCOUNT_ID=267ff3546dd1d780232981b1393d09ef npx wrangler deploy`. Si lo lanzas desde un commit atrasado, dejas producción **por detrás** de `main`: después ejecuta el paso 3 para realinearla.
+6. **Si el token existe y el deploy falla** — casi siempre es permiso: tiene que ser «Workers Scripts: Edit» sobre esa cuenta. Puedes probarlo a mano con `curl -s -H "Authorization: Bearer TU_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify`: 200 = válido, otro código = caducado o revocado.
+
 ---
 
 # Prompts y mensajes listos para pegar
