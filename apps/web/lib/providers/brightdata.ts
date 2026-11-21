@@ -44,14 +44,11 @@ export function parseBrightDataSecret(secret: string): BrightDataConfig | null {
   const parts = secret.trim().split(':').map(part => part.trim());
   if (parts.length > 3) return null;
   const [apiKey, serpZone, unlockerZone] = parts;
-  if (!API_KEY.test(apiKey ?? '')) return null;
+  if (!API_KEY.test(apiKey)) return null;
   if (serpZone && !ZONE.test(serpZone)) return null;
   if (unlockerZone && !ZONE.test(unlockerZone)) return null;
   return { apiKey, serpZone: serpZone || null, unlockerZone: unlockerZone || null };
 }
-
-/** Nunca se imprime la clave: solo los últimos 4 caracteres, como el resto de proveedores. */
-export const brightDataLast4 = (secret: string) => secret.trim().slice(-4);
 
 export class BrightDataError extends Error {
   readonly status: number | null;
@@ -183,9 +180,9 @@ type FetchLike = typeof fetch;
 /**
  * La petición de prueba del panel: UNA búsqueda de Google Jobs, sin reintento (un reintento se cobraría).
  * Se usa con una configuración ya resuelta para no repetir la consulta de zonas. No se ejecuta al guardar.
+ * Exige la zona en el tipo: el llamador ya la comprobó, así que no hay una rama de error inalcanzable.
  */
-export function serpProbeRequest(config: BrightDataConfig, fetchImpl: FetchLike = fetch): Promise<Response> {
-  if (!config.serpZone) return Promise.reject(new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422));
+export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
   return fetchImpl(`${apiBase()}/request`, {
     method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },

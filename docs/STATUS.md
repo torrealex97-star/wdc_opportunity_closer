@@ -17,6 +17,12 @@
 - **Probado** (*tested*): `tests/admin-auth/source-routes.mjs` en verde (clave sola, zonas por tipo, 401 que no
   inventa zonas, resolución sin red cuando las zonas vienen escritas, envoltorio `{body}`, y que sin zona no se
   lanza la petición que se cobra); `npm run typecheck -w apps/web` con 0 errores.
+- **Revisión con ojos frescos (mismo día)**: fuera el `probe` duplicado del registro de proveedores (era
+  inalcanzable: la prueba de Bright Data tiene su propio camino), la rama muerta de clave nula y
+  `brightDataLast4` (sin usos). Un fallo de red en «Probar» ahora anota **1 petición como posible gasto**
+  (antes un timeout facturado no se anotaba y el tope quedaba corto) y la reserva es explícita con
+  `requests: 1`; una comprobación nueva fija que el precio del proveedor y el del medidor son el mismo número.
+  Sin cambios de comportamiento en los caminos que ya funcionaban.
 - **Límites honestos**: no hay clave real en este entorno, así que **no se ha hecho ninguna llamada a Bright
   Data**; el contrato de `GET /zone/get_active_zones` y del envoltorio viene de su documentación, no de una
   respuesta real. El tope efectivo sigue leyéndose del entorno (`BRIGHTDATA_MONTHLY_USD`), no de

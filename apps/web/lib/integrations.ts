@@ -24,16 +24,11 @@ export const PROVIDERS = {
   resend: { name: 'Resend', hint: 'API key (empieza por re_)', probe: (k: string) => get(`${process.env.RESEND_API_BASE ?? 'https://api.resend.com'}/domains`, bearer(k)) },
   // Bright Data: se pega solo la API key (Cuenta → API keys); las zonas se descubren con
   // `GET /zone/get_active_zones`, que es gratis, y también se acepta `API key:zona SERP[:zona Unlocker]`
-  // para fijarlas a mano. La prueba hace UNA búsqueda real de Google Jobs (0,0015 USD) solo después de
-  // haber validado clave y zona sin gastar; se avisa en la tarjeta y nunca se ejecuta al guardar.
+  // para fijarlas a mano. Aquí no hay `probe`: su prueba necesita validar la clave y la zona ANTES de
+  // gastar, así que vive en `testBrightDataConnection` (una sola ruta, no dos que puedan divergir).
   brightdata: {
     name: 'Bright Data',
     hint: 'API key (la zona SERP se detecta sola); también API key:zona SERP[:zona Unlocker]',
-    probe: async (k: string) => {
-      const { config } = await resolveBrightDataConfig(k);
-      if (!config?.serpZone) return new Response(JSON.stringify({ detail: 'Sin zona SERP' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      return serpProbeRequest(config);
-    },
   },
   // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
   zenrows: { name: 'ZenRows', hint: 'API key de ZenRows', probe: (k: string) => get(`https://api.zenrows.com/v1/?apikey=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
@@ -84,12 +79,14 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const parsed = parseBrightDataSecret(secret);
   if (!parsed) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data (vale también API key:zona SERP).' };
   const resolved = await resolveBrightDataConfig(secret);
-  if (!resolved.config) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data.' };
   // Una zona fijada a mano que la cuenta no tiene se declara sin gastar crédito.
   if (resolved.zones && parsed.serpZone && !resolved.zones.some(zone => zone.name === parsed.serpZone)) {
     return { ok: false, detail: `La clave es válida, pero la zona «${parsed.serpZone}» no está activa. Zonas de la cuenta: ${describeZones(resolved.zones)}.` };
   }
+  // `resolved.config` solo es nulo cuando el texto no parsea (ya descartado arriba); la comprobación la
+  // exige el tipo, no un caso real.
   const config = resolved.config;
+  if (!config) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data.' };
   if (!config.serpZone) {
     return {
       ok: false,
@@ -105,13 +102,17 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   // La búsqueda real se cobra: tope e historial primero, igual que en cualquier otro gasto.
   const runs = await runsThisMonth();
   const spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), 'brightdata').usd ?? 0);
-  const check = canSpend('brightdata', spent);
+  // Una sola petición: la prueba no reintenta, así que se reserva exactamente una.
+  const check = canSpend('brightdata', spent, process.env, 1);
   if (!check.ok) return { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
   let response: Response;
   try {
-    response = await serpProbeRequest(config);
+    response = await serpProbeRequest({ ...config, serpZone: config.serpZone });
   } catch (err) {
-    return { ok: false, detail: `No se pudo contactar con Bright Data: ${(err as Error).message}` };
+    // Un timeout o un corte de red pudo facturarse sin respuesta: se anota el peor caso para que el tope
+    // no quede corto, igual que en «Probar ruta».
+    const recorded = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: PROVIDER_METERS.brightdata.usdPerRequest, detail: 'prueba de clave · fallo de red' }));
+    return { ok: false, detail: `No se pudo contactar con Bright Data: ${(err as Error).message}${recorded ? ' · se anotó 1 petición como posible gasto' : ' · no se pudo anotar el posible gasto; revisa el historial antes de reintentar'}` };
   }
   if (!response.ok) {
     const text = await response.text().catch(() => '');
