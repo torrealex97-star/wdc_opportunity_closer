@@ -1,5 +1,14 @@
 # Estado
 
+## Tareas del dueño sin duplicados: Resend y las claves de portales en una sola tarea (sesión 281) — 2026-11-21
+
+- **Petición del propietario**: «En la sección de tareas del dueño de `docs/ACTIVE_HANDOFF.md` hay pendientes repetidos: la clave de Resend aparece en las tareas 3 y 15, y las claves de InfoJobs/Adzuna/Jooble en la 8 y la 16(d). Únelos en una sola tarea cada uno, sin perder ninguna acción exacta ni ningún límite, y sin tocar el resto»; después, subirlo en una PR y fusionarlo con merge commit.
+- **Resend** (*inspected*): la tarea 3 pasa a «Resend y el aviso del motor (antes también en la tarea 15)» y reúne las dos. Del correo: webhook `email.received`, cuota compartida (3.000/mes y 100/día, ADR-014), abrir `resend.com/pricing`, verificar el dominio y pegar la clave en Panel → APIs. Del aviso: la migración `20261029_engine_alerts.sql` aplicada y verificada (2026-10-27), el reintento probado, que la clave es lo **único** que falta y qué dice el panel mientras tanto, `RESEND_FROM` en Vercel + redeploy, y que una pasada cada hora exige Vercel Pro. La tarea 15 se borra y el título nuevo lo declara, para que la numeración no parezca haber perdido nada.
+- **Claves de portales** (*inspected*): quedan solo en la tarea 8, que gana el límite que estaba en la 16(d) («España es el mínimo de 20/día»); la 16(d) conserva el plan de SerpApi (3 → 8-10 consultas LATAM) y remite a la tarea 8.
+- **Alcance** (*verified*): un solo fichero tocado, `docs/ACTIVE_HANDOFF.md` (+5 −4); ninguna otra tarea se reescribió y el relevo pasa de 129 a 130 líneas.
+- **Comprobado (solo documentación)** (*tested*): `scripts/fix_docs_links.py --check` → **0 enlaces** en 120 ficheros; `pytest tests/test_docs_links.py` → **5 pasan**; `node scripts/handoff.mjs check` → OK. **No** se ejecutó typecheck, build ni Playwright: el incremento no toca código.
+- **Límites honestos**: unir redacciones no cambia ningún estado real. Las dos migraciones del panel de fuentes siguen **sin aplicar** y las claves (Resend, Bright Data, SerpApi, InfoJobs/Adzuna/Jooble) siguen sin existir en el entorno. La lista salta la 15 porque esa entrada ya está dentro de la 3.
+
 ## Relevo: la misión por escrito y las tareas del dueño de las sesiones 274-278 (sesión 280) — 2026-11-21
 
 - **Petición del propietario**: «Deja guardado en el md la misión objetivo y demás cosas que hemos hecho aquí, fusiona mergea todo online», después de pedir que las tareas del dueño del relevo recogieran lo que dejaron pendiente las sesiones 274-278: las migraciones `20261121_provider_budget.sql` y `20261121_source_route_order.sql`, y las claves reales de Bright Data/SerpApi.
