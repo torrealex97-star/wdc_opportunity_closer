@@ -9,6 +9,8 @@
 - **Relevo actualizado** (*inspected*): [`docs/ACTIVE_HANDOFF.md`](ACTIVE_HANDOFF.md) pasa a 2026-11-21 y gana el bloque de las sesiones 262-273 (buscador del mapa del Classroom, recuperación del asistente por ese mapa, repaso del incremento, `globals.css` rehecho sobre `main`, guardián de enlaces, guías de fuentes, los tres pasos de `ui.mjs` y el merge del PR #100), con un puntero a las sesiones 274-278 que ya constan en este documento.
 - **Límites honestos**: (1) el build y las pruebas de navegador se verifican en el CI de la PR (`verify` y `web-admin`); en local no se han vuelto a ejecutar. (2) Nada se ha probado contra servicios reales: sigue sin `GROQ_API_KEY` y sin claves de Bright Data. (3) `Workers Builds: closer-web` y `Supabase Preview` siguen en rojo por configuración de Cloudflare/Supabase, igual que antes de esta sesión. (4) El borrado de los duplicados no deja rastro en el repositorio: no estaban versionados.
 
+- **Fusionado** (*verified*): PR #102 con merge commit **`60eff0b`**, sin squash ni rebase; `verify` y `web-admin` en verde en el head `4c16b06` (y en el anterior). La ficha del relevo se borra y queda en `docs/handoff/archive/2026-11.md`. No se ha desplegado nada a mano; el push a `main` dispara «Web deploy» como siempre.
+
 ## Cierre de pendientes del panel: última revisión real, tope sin 10.000 y prompt probado (sesión 278) — 2026-11-21
 
 - **Petición del propietario**: cerrar lo que se puede sin claves reales ni DDL; nada de columnas que siempre
