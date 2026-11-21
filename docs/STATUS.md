@@ -1,5 +1,22 @@
 # Estado
 
+## «Workers Builds: closer-web»: conexión de Git desconectada, el check desaparece (sesión 283) — 2026-11-21
+
+- **Petición del propietario**: «ya está desconectado», después de la sesión 275, donde quedó probado que la
+  configuración de Workers Builds vive solo en Cloudflare y que desde el repositorio no se puede tocar.
+- **Hecho por el propietario** (*confirmed by the owner*): la conexión de Git del Worker `closer-web`
+  (Workers & Pages → `closer-web` → Settings → Builds) está desconectada. No se cambió nada del repositorio
+  para ello, y no hace falta: el despliegue real ya lo hace
+  [`web-deploy.yml`](../.github/workflows/web-deploy.yml) con OpenNext + `wrangler deploy` y una comprobación
+  del dominio.
+- **Comprobación** (*inspected*): en el SHA anterior (`e1518b1`) el check seguía en `failure`, porque nació
+  antes de la desconexión. Este push es el primero sin la integración: si la desconexión es efectiva, GitHub
+  deja de recibir «Workers Builds: closer-web» y el rojo desaparece sin tocar el workflow.
+- **Comprobado (solo documentación)** (*tested*): `python3.12 scripts/fix_docs_links.py --check` → 0 enlaces
+  rotos en 120 ficheros; `pytest tests/test_docs_links.py` → 5 pasan; `node tests/orphan-refs.mjs` PASS;
+  `node scripts/handoff.mjs check` OK. **No** se ejecutó typecheck, build ni Playwright: no se tocó código.
+- **Ficha**: `buffy-worker-builds` se archiva y su bloqueo queda cerrado.
+
 ## Tareas del dueño sin duplicados: Resend y las claves de portales en una sola tarea (sesión 281) — 2026-11-21
 
 - **Petición del propietario**: «En la sección de tareas del dueño de `docs/ACTIVE_HANDOFF.md` hay pendientes repetidos: la clave de Resend aparece en las tareas 3 y 15, y las claves de InfoJobs/Adzuna/Jooble en la 8 y la 16(d). Únelos en una sola tarea cada uno, sin perder ninguna acción exacta ni ningún límite, y sin tocar el resto»; después, subirlo en una PR y fusionarlo con merge commit.
