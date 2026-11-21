@@ -54,6 +54,8 @@
   PASS (42 rutas); enlaces con 0 rotos y `pytest tests/test_docs_links.py` en verde. **No** se ejecutó
   typecheck, build ni Playwright: no se tocó código de la app.
 
+- **Fusionado** (*verified*): PR #106 con merge commit **`a2d45cd`**, sin squash ni rebase; `verify` y
+  `web-admin` en verde en el head `6979852`. La ficha se borra y queda en `docs/handoff/archive/2026-11.md`.
 ## Tareas del dueño sin duplicados: Resend y las claves de portales en una sola tarea (sesión 281) — 2026-11-21
 
 - **Petición del propietario**: «En la sección de tareas del dueño de `docs/ACTIVE_HANDOFF.md` hay pendientes repetidos: la clave de Resend aparece en las tareas 3 y 15, y las claves de InfoJobs/Adzuna/Jooble en la 8 y la 16(d). Únelos en una sola tarea cada uno, sin perder ninguna acción exacta ni ningún límite, y sin tocar el resto»; después, subirlo en una PR y fusionarlo con merge commit.
