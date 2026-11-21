@@ -47,10 +47,12 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
     const safe = <T,>(p: Promise<T>) => p.catch((err: Error & { engine?: boolean }) => { if (!err.engine) errors.push(err.message); return null; });
     Promise.all([safe(search('closer')), safe(search(null)), safe(get<{ counts: Record<string, number> }>('/api/admin/opportunities?limit=1')), safe(get<Overview>('/api/admin/overview'))])
       .then(([c, a, o, ov]) => {
-        if (c) setClosers(c.items.length);
-        if (a) setAllEs(a.items.length);
-        if (o) setEngineCounts(o.counts ?? {});
-        if (ov) setOverview(ov);
+        // Una lectura fallida deja el hueco en «—», no el número de la carga anterior: con el motor en pausa,
+        // conservar las cifras viejas hacía que el Resumen pareciera al día y escondía la pausa.
+        setClosers(c ? c.items.length : null);
+        setAllEs(a ? a.items.length : null);
+        setEngineCounts(o ? o.counts : null);
+        setOverview(ov);
         if (errors.some(m => m.includes('Sesión'))) onSessionLost();
         setError(errors[0] ?? '');
       }).finally(() => setBusy(false));
