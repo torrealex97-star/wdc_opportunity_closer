@@ -1,7 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: fix/zonas-cache
+pr: 115
 touches: apps/web/lib/providers/brightdata.ts, apps/web/lib/integrations.ts, apps/web/app/api/admin/source-routes/route.ts, tests/admin-auth/source-routes.mjs, docs/EXTERNAL_SOURCES.md, docs/STATUS.md
 date: 2026-11-21
 ---
