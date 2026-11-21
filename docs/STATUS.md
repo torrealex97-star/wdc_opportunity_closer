@@ -1,5 +1,14 @@
 # Estado
 
+## El tope de los proveedores de pago lo manda `provider_budget` (sesión 289) — 2026-11-21
+
+- **Petición del propietario**: «Conecta capUsd() a provider_budget por organización con el entorno como respaldo, y añade su prueba, para que cambiar monthly_usd en la tabla cambie el tope de verdad.»
+- **Qué se hizo** (*inspected* la tabla y el adaptador; *tested* el cambio): `providerBudgetStore.ts` (nuevo) lee los cuatro topes en **una** consulta a `provider_budget` por `org_id` y devuelve, por proveedor, el importe y su origen (`tabla` · `entorno` · `defecto`). `providerBudget.ts` gana `parseCapUsd` (0–5.000, el rango del `CHECK`), `envCap` y `capFromRow` (puros, sin red) y `canSpend(..., capOverride)`; `capUsd()` se queda como el respaldo del entorno. Lo usan todas las rutas que gastan: «Probar» de Bright Data y de los proveedores metrados (`integrations.ts`) y el resumen de saldo y las tres pruebas de ruta de `source-routes/route.ts` (SERP, SerpApi, Unlocker). Antes el panel enseñaba y aplicaba el tope del entorno aunque la tabla dijera otra cosa.
+- **Comportamiento**: fila válida → manda la tabla (y el 0 significa «aquí no se gasta»); sin fila → entorno; variable ausente o ilegible → 5 USD por proveedor; tabla caída (HTTP, red o cuerpo que no es lista) → entorno **con el motivo declarado**, nunca un cero. Cambiar `monthly_usd` cambia la decisión de gasto sin desplegar.
+- **Comprobado** (*tested*, sin red): `tests/admin-auth/provider-budget-org.mjs` (42 comprobaciones) — tabla sobre entorno y su efecto en `canSpend`, el 0 como tope, importe ilegible, HTTP 500, red caída y respuesta que no es lista con respaldo declarado, una sola consulta para los cuatro, `org_id` en la URL y clave de servicio, y los límites de `parseCapUsd`. También `typecheck` de `apps/web` (0 errores) y `tests/admin-auth/source-routes.mjs` en verde con el tope nuevo.
+- **Límites**: no se ha leído la tabla contra el Supabase real desde la app (la lectura se prueba con PostgREST simulado; la tabla y su prueba de BD ya estaban aplicadas) ni se ha cambiado ningún `monthly_usd` real, porque tocar la base exige la orden del dueño. El panel desplegado sigue sirviendo el build anterior hasta publicar.
+- **Qué viaja en esta PR**: `providerBudgetStore.ts` (nuevo), los cambios de `providerBudget.ts`, `integrations.ts` y `source-routes/route.ts`, la prueba nueva y su línea en `run.sh`, el comentario de la migración y la documentación (`ACTIVE_HANDOFF`, ADR-011, ADR-021, `EXTERNAL_SOURCES`, `OWNER_GUIDE`).
+
 ## La clave correcta de Bright Data deja de rechazarse: se acepta sola y clave y zona se validan gratis antes de gastar (sesión 288) — 2026-11-21
 
 - **Petición del propietario**: la clave de Bright Data se estaba rechazando sin motivo cuando era la correcta.
