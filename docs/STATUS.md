@@ -1,5 +1,44 @@
 # Estado
 
+## ATS por empresa validados en vivo: 20 tableros de España y LatAm con roles comerciales (sesión 284) — 2026-11-21
+
+- **Petición del propietario**: validar, **sin implementar**, los endpoints públicos de Lever, Personio, BambooHR,
+  Breezy y Join.com con 20 empresas reales de España o LatAm que tengan roles comerciales, dar el slug y la URL
+  verificada de cada una y ajustar el ranking con esa evidencia.
+- **Método** (*verified* en vivo, 2026-11-21, HTTP desde el equipo del propietario): 209 tableros ES/LatAm sacados
+  de un directorio de 12.574 tableros (`deriverge.com/tools/data/ats/*.json`, actualizado el 2026-11-20) y
+  filtrados por el país del tablero. Una petición por tablero a su endpoint público, sin clave ni cuenta. Un título
+  cuenta como comercial con una lista cerrada (`comercial`, `ventas`, `sales`, `closer`, `setter`, `account
+  executive`, `business development`, `SDR`/`BDR`, `ejecutivo`, `asesor`, `delegado`, `key account`, `inside sales`,
+  `preventa`). **No se leyó el cuerpo ni el idioma**: es un recuento de títulos, no una validación de elegibilidad.
+- **Resultado por ATS** (*verified*): BambooHR **113** tableros, 113 × 200, **36 con ventas** (110 roles); Lever
+  **37**, 37 × 200, **18** (194 roles); Breezy **49**, 49 × 200, **19** (49); Personio **10**, 9 × 200 (un slug
+  muerto, 404), **1** (3 roles); Join.com **6** páginas, **4** con ventas (10 de 13 puestos). En total, **74 tableros** con al menos un rol comercial de 209 probados.
+- **Los 20 verificados** (todos 200 y con rol comercial hoy): Lever — Job&Talent `jobandtalent` (31/9), Despegar
+  `despegar` (111/18), Aleph `aleph` (171/17), another `anotherco` (18/4), Xepelin `xepelin` (13/4); BambooHR —
+  Wallbox `wallbox` (19/8), Quadpack `quadpack` (6/3), Konfío `konfio` (42/7), Fudo `fudo` (11/4), Mangxo `mangxo`
+  (7/3); Breezy — Tigo Guatemala `tigo` (54/12), NEXU `nexu` (21/4), Norte Digital `nortedigital` (7/4), Salmonjobs
+  `salmonjobs` (147/3), Rockcruit `rockcruit` (15/1); Personio — Vivid Money `vivid` (18/3, una plaza en Barcelona);
+  Join.com — SOPREMA `soprema` (5/4), Creative Projects Worldwide `dextailstands` (5/4), Aplitech Biolab
+  `aplitechbiolabcom` (1/1) y Coffee King `coffee-king` (2/1). Tabla con la URL exacta de cada uno en
+  [SOURCES](SOURCES.md) «Validación en vivo de ATS por empresa — 2026-11-21».
+- **Ranking ajustado** (*inspected*, por tableros ES/LatAm con rol comercial y volumen; desempate por calidad del
+  endpoint): **BambooHR** (36 tableros, 110 roles; 24 tableros españoles, 6 con ventas) > **Lever** (18 tableros,
+  194 roles, el mayor volumen, pero solo 8 tableros españoles y 3 con ventas) > **Breezy** (19 tableros, 49 roles;
+  9 españoles y 1 con ventas) > **Join.com** (4 de 6 páginas, 10 de 13 puestos, la mejor tasa y la más española,
+  pero HTML sin API JSON) > **Personio** (1 tablero de 10 en ES/LatAm; 10 de 2.251 en el directorio: no merece
+  conector propio). Lever mantiene prioridad **solo para LatAm**; Personio baja al último lugar.
+- **Sin implementar** (*confirmed*): no se tocó código, catálogo, motor ni panel; no se añadió ningún tablero a la
+  watchlist. La lista de ATS con extractor en el motor (Greenhouse, Ashby, Teamtailor, Recruitee, Workable) sigue
+  igual: BambooHR, Breezy y Join.com son una capacidad pendiente, no una fuente conectada.
+- **Límites honestos**: (1) los títulos no prueban idioma, país permitido ni autorización laboral; (2) el país es el
+  del tablero en el directorio, no el de cada oferta, y por eso se excluyeron multinacionales de EE. UU. con plazas
+  en México; (3) el directorio puede ir por detrás (un slug de Personio da 404); (4) Join.com se validó por HTML
+  server-rendered con JSON-LD, no por una API; (5) los recuentos son de hoy y cambian con cada alta o cierre.
+- **Comprobado (solo documentación)** (*tested*): `python3.12 scripts/fix_docs_links.py --check` → 0 enlaces rotos;
+  `pytest -q tests/test_docs_links.py` → 5 pasan; `node scripts/handoff.mjs check` OK; `node tests/orphan-refs.mjs`
+  PASS; `git diff --check` limpio.
+
 ## «Workers Builds: closer-web»: conexión de Git desconectada, el check desaparece (sesión 283) — 2026-11-21
 
 - **Petición del propietario**: «ya está desconectado», después de la sesión 275, donde quedó probado que la
