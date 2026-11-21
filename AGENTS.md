@@ -25,6 +25,7 @@ Architecture revision: docs/decisions/ADR-007-groq-opportunity-surfaces.md and d
 - Generated artefacts: emit them in the shape the app consumes (typed module, same fields), not a JSON the app translates at runtime. One place per string.
 - Two Next processes on the same `.next` corrupt Turbopack's cache (`Failed to open database … invalid digit found in string`). Check for a live `next dev` before building; `next build --webpack` uses a separate cache; never delete `.next` under another session.
 - Shared documents: when another agent has uncommitted work in the same file (`STATUS`, `AGENTS`), commit `HEAD` + your own hunks and put their block back in the tree afterwards; never `git add` the whole file.
+- Pruning or rewriting a shared file (CSS, `STATUS`, config): start from its **current `origin/main`** state (`git show origin/main:<path>`) and add back only what this increment needs; never from a copy taken earlier or from memory. Verify by comparing **selectors and declarations** against `origin/main` — not only against the built output, because a minifier reorders declarations and a literal search there gives false negatives. Rationale: pruning `apps/web/app/globals.css` from an old copy silently reverted another session's mobile-nav rule and broke three `web-admin` UI steps (2026-11-21, STATUS session 268).
 
 ## Design and charts
 
