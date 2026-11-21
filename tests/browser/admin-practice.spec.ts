@@ -247,7 +247,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   expect(changed.label).toBe('Apertura con prueba social');
 
   // 5) Desactivar un criterio lo saca de la nota y persiste; reactivarlo lo devuelve.
-  const ethics = page.getByLabel('Activar Rapport y ética');
+  const ethics = page.getByLabel('Activar Diagnóstico y ética');
   await ethics.uncheck();
   await expect(page.getByText('6/7')).toBeVisible();
   await expect(page.getByText(/Los pesos activos suman 185/)).toBeVisible();
@@ -255,9 +255,9 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Los criterios de las salas.' })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByLabel('Activar Rapport y ética')).not.toBeChecked();
+  await expect(page.getByLabel('Activar Diagnóstico y ética')).not.toBeChecked();
   await expect(page.getByText('6/7')).toBeVisible();
-  await page.getByLabel('Activar Rapport y ética').check();
+  await page.getByLabel('Activar Diagnóstico y ética').check();
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
 
@@ -275,7 +275,7 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await expect(page.locator('#weight-apertura')).toHaveValue('100');
   await expect(page.locator('#axis-apertura')).toHaveValue('Apertura de la llamada revisada');
 
-  // 7) BANT: activar una entrevista y comprobar que persiste.
+  // 7) Cualificación: activar una entrevista y comprobar que persiste.
   const interviewBant = page.getByLabel('Entrevista · contratación');
   await expect(interviewBant).not.toBeChecked();
   await interviewBant.check();
@@ -297,14 +297,14 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // 8) Reordenar y editar la corrección prioritaria; persiste tras recargar.
-  await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
+  await expect(page.locator('#priority-0')).toHaveValue(/No se cavó el dolor/);
   await page.getByRole('button', { name: 'Subir la prioridad 2' }).click();
-  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/);
+  await expect(page.locator('#priority-0')).toHaveValue(/Se presentó la oferta antes de cualificar/);
   await page.locator('#priority-1').fill('Regla propia del panel para esta prueba.');
   await page.getByRole('button', { name: 'Guardar criterios' }).click();
   await expect(page.getByText('Criterios guardados.')).toBeVisible();
   await page.reload();
-  await expect(page.locator('#priority-0')).toHaveValue(/BANT, decisor o momento/, { timeout: 20_000 });
+  await expect(page.locator('#priority-0')).toHaveValue(/Se presentó la oferta antes de cualificar/, { timeout: 20_000 });
   await expect(page.locator('#priority-1')).toHaveValue('Regla propia del panel para esta prueba.');
 
   // 9) La misma configuración se aplica en el navegador: un roleplay real puntúa con el peso editado.
@@ -355,10 +355,10 @@ test('el panel guarda de verdad, sobrevive a la recarga y ese peso cambia la not
   await page.reload();
   await expect(page.locator('#weight-apertura')).toHaveValue('10');
   await expect(page.getByLabel('Entrevista · contratación')).not.toBeChecked();
-  await expect(page.locator('#priority-0')).toHaveValue(/pain cycle/);
+  await expect(page.locator('#priority-0')).toHaveValue(/No se cavó el dolor/);
   const restored = await score();
   expect(restored.score).toBe(10);
-  expect(restored.label).toBe('Apertura y agenda');
+  expect(restored.label).toBe('Apertura y marco');
 
   expect(consoleErrors).toEqual([]);
 });

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Check, CircleAlert, CloudUpload, Gauge, Link2, LoaderCircle, ScanLine, Target, Type } from 'lucide-react';
 import { BANT_LABELS, DECISION_LABELS, type PracticeBant } from '../lib/practiceRubrics';
 import { CALL_TYPE_HINTS, CALL_TYPE_LABELS, type CallType } from '../lib/callType';
+import AcademyAssistant from './AcademyAssistant';
 
 // Revisión de una llamada real: entrada separada del roleplay. La rúbrica sale de
 // `analisis-llamadas-ventas`, en la sala del tipo de llamada (cierre o frío). Se puede pegar la
@@ -118,7 +119,7 @@ export default function CallReview({ onBack }: { onBack: () => void }) {
         </div>
       </div> : null}
       {debrief.bant && <div className="practice-bant">
-        <span className="eyebrow">AUDITORÍA BANT Y DECISIÓN</span>
+        <span className="eyebrow">CUALIFICACIÓN Y DECISIÓN</span>
         <dl className="practice-bant-grid">{(['budget', 'authority', 'need', 'timing'] as const).map(letter => {
           const item = debrief.bant![letter];
           return <div key={letter}><dt><b>{item.status}</b> {BANT_LABELS[letter]}</dt>{item.quote && <dd>«{item.quote}»</dd>}</div>;
@@ -200,6 +201,7 @@ export default function CallReview({ onBack }: { onBack: () => void }) {
         {error && <p className="practice-error" role="alert"><CircleAlert size={15} />{error}</p>}
       </div>
       <p className="practice-note">Sin discovery (solo confirmar una cita o un buzón de voz) no hay nada que puntuar. La nota mide ejecución, no si la venta se cerró.</p>
+      <AcademyAssistant room="revision" />
     </div>
   </section>;
 }

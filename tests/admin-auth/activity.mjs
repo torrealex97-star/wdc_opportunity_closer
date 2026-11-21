@@ -15,6 +15,15 @@ assert.equal(REVIEW_REFS.length, 12, 'los doce cursos de la hoja del propietario
 assert.equal(checkActivity({ kind: 'training_review', ref: 'modulo-falso', detail: { met: 1, total: 1 } }).ok, false);
 assert.equal(checkActivity({ kind: 'training_review', ref: 'onboarding', detail: { met: 5, total: 4 } }).ok, false, 'más cumplidos que criterios');
 assert.equal(checkActivity({ kind: 'training_review', ref: 'estructura-de-la-llamada', detail: { met: 12, total: 12 } }).ok, true);
+// Aprobar el repaso es 80 % de aciertos: el servidor lo calcula, no lo acepta del navegador.
+const failedReview = checkActivity({ kind: 'training_review', ref: 'onboarding', detail: { met: 0, total: 2, passed: true, missed: ['onboarding-1', 'onboarding-2', 'id con espacios', 42] } });
+assert.equal(failedReview.ok, true);
+assert.equal(failedReview.passed, false, '0/2 no aprueba aunque el navegador diga que sí');
+assert.equal(failedReview.value.detail.passed, false);
+assert.deepEqual(failedReview.value.detail.missed, ['onboarding-1', 'onboarding-2'], 'solo ids de pregunta, sin texto libre');
+const passedReview = checkActivity({ kind: 'training_review', ref: 'onboarding', detail: { met: 2, total: 2 } });
+assert.equal(passedReview.passed, true, '2/2 aprueba');
+assert.equal(checkActivity({ kind: 'training_review', ref: 'onboarding', detail: { met: 4, total: 5 } }).passed, true, 'con cinco preguntas, cuatro aprueba (80 %)');
 assert.equal(checkActivity({ kind: 'training_exam', ref: 'final', score: 101 }).ok, false);
 assert.equal(checkActivity({ kind: 'training_exam', ref: 'final', score: 100 }).ok, false, 'sin respuestas no hay nota');
 assert.equal(checkActivity({ kind: 'training_exam', ref: 'final', detail: { correct: 6, total: 6 } }).ok, false, 'un recuento del navegador ya no vale: hacen falta las respuestas');
@@ -76,6 +85,13 @@ assert.deepEqual(split.axes, [
   { axis: 'objecion', avg: 50, track: 'entrevista', count: 1 }, { axis: 'encaje', avg: 65, track: 'entrevista', count: 1 },
 ], 'objeciones de llamada y de entrevista no se mezclan');
 assert.equal(week.recent[0].kind, 'training_exam'); assert.equal(week.recent[0].score, 33, 'lo más reciente primero');
+// Un curso cuenta solo si su repaso está aprobado; el intento fallido se ve aparte y no desbloquea nada.
+const onlyFailed = summarize([row('training_review', '2026-10-24T09:00:00Z', { ref: 'onboarding', detail: { met: 0, total: 2, passed: false } })], 30, now);
+assert.deepEqual(onlyFailed.lifetime.training.modules, [], '0/2 no cuenta como módulo hecho');
+assert.deepEqual(onlyFailed.lifetime.training.attempted, ['onboarding'], 'pero queda constancia del intento');
+assert.equal(onlyFailed.lifetime.achievements.find(a => a.id === 'training_complete').unlocked, false, '«Formación completa» no se desbloquea repasando sin aprobar');
+const legacyPass = summarize([row('training_review', '2026-10-24T09:00:00Z', { ref: 'onboarding', detail: { met: 2, total: 2 } })], 30, now);
+assert.deepEqual(legacyPass.lifetime.training.modules, ['onboarding'], 'una fila antigua sin «passed» se juzga con la misma regla');
 const all = summarize(rows, 90, now);
 assert.equal(week.lifetime.practice.count, 3, 'el resumen de siempre no depende del periodo'); assert.equal(all.lifetime.practice.count, 3);
 assert.equal(week.lifetime.training.modules.length, REVIEW_REFS.length);

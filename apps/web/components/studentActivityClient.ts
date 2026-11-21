@@ -1,7 +1,7 @@
 // Registro de actividad de la alumna desde el navegador. Nunca lanza ni bloquea la pantalla: sin sesión (la vista de
 // oportunidades puede estar abierta) o sin tabla, el ejercicio se hace igual y simplemente no queda en su progreso.
 export type ActivityBody =
-  | { kind: 'training_review'; ref: string; detail: { met: number; total: number; lesson?: string } }
+  | { kind: 'training_review'; ref: string; detail: { met: number; total: number; missed?: string[]; lesson?: string } }
   | { kind: 'training_exam'; ref: 'final'; detail: { answers: Record<string, string> } }
   | { kind: 'practice'; ref: string; score: number; detail?: { axes?: Record<string, number>; difficulty?: string; mode?: 'texto' | 'voz'; duration_s?: number } };
 

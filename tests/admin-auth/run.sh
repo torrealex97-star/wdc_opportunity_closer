@@ -55,6 +55,7 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/api-shapes.mjs
 # Formación importable: plantilla CSV, validación estricta, dry-run y frase diaria determinista.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/training-curriculum.mjs
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/training-quiz.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/training.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/activity.mjs
 node --experimental-strip-types tests/admin-auth/voiceecho.mjs
@@ -80,6 +81,12 @@ node --experimental-strip-types tests/engine/bucket.mjs
 node --experimental-strip-types tests/engine/role-audit.mjs
 node --experimental-strip-types tests/engine/discards.mjs
 node --experimental-strip-types tests/vocabulary-audit.mjs
+# Asistente de la academia: índice íntegro, respuestas con fuentes reales y sin inventar fuera del método.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/academy-assistant.mjs
+# Recuperación medida con 60 preguntas reales de alumna: sección y lección esperadas, sin llamar al modelo.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/academy-retrieval.mjs
+# «¿Dónde se enseña esto?»: el mapa del Classroom (12 módulos, 130 lecciones, 64 temas) sin modelo ni red.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/classroom-search.mjs
 node --experimental-strip-types tests/engine/activate.mjs
 # openradar: API pública sin clave con vacantes y encargos; campos del OpenAPI y sin inventar salario.
 node --experimental-strip-types tests/engine/openradar.mjs

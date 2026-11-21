@@ -12,15 +12,19 @@ assert.deepEqual([empty.xp, empty.level, empty.floor, empty.next], [0, 1, 0, 100
 assert.equal(xpAndLevel([], null).xp, 0, 'sin poder leer las candidaturas no se inventan puntos');
 const rows = [
   row('session', '2026-10-20T09:00:00Z'), row('session', '2026-10-20T18:00:00Z'), row('session', '2026-10-21T09:00:00Z'),
-  row('training_review', '2026-10-20T10:00:00Z', { ref: 'onboarding' }), row('training_review', '2026-10-20T10:05:00Z', { ref: 'onboarding' }), row('training_review', '2026-10-20T10:10:00Z', { ref: 'fundamentos-del-high-ticket' }),
-  row('training_review', '2026-10-20T10:15:00Z', { ref: 'modulo-falso' }),
+  row('training_review', '2026-10-20T10:00:00Z', { ref: 'onboarding', detail: { met: 2, total: 2, passed: true } }),
+  row('training_review', '2026-10-20T10:05:00Z', { ref: 'onboarding', detail: { met: 2, total: 2, passed: true } }),
+  row('training_review', '2026-10-20T10:10:00Z', { ref: 'fundamentos-del-high-ticket', detail: { met: 2, total: 2, passed: true } }),
+  // Repasado sin aprobar: se ve en el progreso, pero no suma XP de módulo (0/2 no es 2/2).
+  row('training_review', '2026-10-20T10:12:00Z', { ref: 'comunicacion', detail: { met: 0, total: 2, passed: false } }),
+  row('training_review', '2026-10-20T10:15:00Z', { ref: 'modulo-falso', detail: { met: 2, total: 2, passed: true } }),
   row('training_exam', '2026-10-21T10:00:00Z', { ref: 'final', score: 100 }),
   row('practice', '2026-10-21T11:00:00Z', { ref: 'venta-fria', score: 70 }),
 ];
 const got = xpAndLevel(rows, ['applied', 'responded', 'draft']);
 const part = id => got.parts.find(p => p.id === id).xp;
 assert.equal(part('sessions'), 2 * XP.session, 'dos días distintos, no tres entradas');
-assert.equal(part('modules'), 2 * XP.module, 'un módulo cuenta una vez y uno desconocido no cuenta');
+assert.equal(part('modules'), 2 * XP.module, 'un módulo cuenta una vez, uno desconocido no cuenta y uno sin aprobar tampoco');
 assert.equal(part('exam'), XP.examPassed);
 assert.equal(part('practice'), XP.practice + 7);
 assert.equal(part('applications'), APP_XP.applied + APP_XP.responded, 'un borrador no puntúa');

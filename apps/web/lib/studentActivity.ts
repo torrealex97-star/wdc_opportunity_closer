@@ -1,6 +1,7 @@
 import { FINAL_EXAM } from '../components/trainingContent';
 import { EXAM_PASS, gradeExam } from '../components/trainingCheck';
 import { REVIEW_REFS } from '../components/trainingRefs';
+import { quizPassed } from './trainingQuiz';
 import { scenarioById } from '../components/practiceScenarios';
 import type { PracticeTrack } from '../components/practiceScenarios';
 import { ORG } from './external';
@@ -38,7 +39,13 @@ export function checkActivity(body: unknown): Checked {
     // Lección de la ruta importada: se valida como slug y se guarda para derivar el progreso por lección.
     // El módulo (`ref`) sigue siendo el que cuenta para XP, igual que antes.
     if (info.lesson !== undefined && (typeof info.lesson !== 'string' || !/^[a-z0-9-]{2,61}$/.test(info.lesson))) return { ok: false, detail: 'Lección de formación no válida.' };
-    return { ok: true, value: { kind, ref, score: null, detail: { met: info.met, total: info.total, ...(typeof info.lesson === 'string' ? { lesson: info.lesson } : {}) } } };
+    // Preguntas falladas: solo identificadores de pregunta del banco (`onboarding-1`), sin texto libre.
+    const missed = Array.isArray(info.missed)
+      ? [...new Set(info.missed.filter(value => typeof value === 'string' && /^[a-z0-9-]{3,60}$/.test(value)))].slice(0, 10)
+      : [];
+    // El aprobado no se acepta del navegador: se calcula con los aciertos y el total.
+    const passed = quizPassed(info.met, info.total);
+    return { ok: true, passed, value: { kind, ref, score: null, detail: { met: info.met, total: info.total, passed, ...(missed.length ? { missed } : {}), ...(typeof info.lesson === 'string' ? { lesson: info.lesson } : {}) } } };
   }
   if (kind === 'training_exam') {
     if (ref !== 'final') return { ok: false, detail: 'Examen desconocido.' };
@@ -117,20 +124,46 @@ export function streaks(rows: Pick<ActivityRow, 'created_at'>[], now = new Date(
 // ---- Resumen ----------------------------------------------------------------
 
 export type Achievement = { id: string; label: string; unlocked: boolean };
+
+/**
+ * ¿Ese repaso está aprobado? Las filas nuevas traen `passed` calculado al guardarlas; las antiguas solo
+ * tienen aciertos y total, así que se aplica la misma regla (80 %). Un 0/2 nunca aprueba, ni antes ni ahora.
+ */
+export function reviewPassed(row: { detail?: Record<string, unknown> }): boolean {
+  const { passed, met, total } = row.detail ?? {};
+  if (typeof passed === 'boolean') return passed;
+  if (typeof met === 'number' && typeof total === 'number') return quizPassed(met, total);
+  return false;
+}
+
 type Totals = {
   practice: { count: number; avg: number | null; best: number | null };
-  training: { modules: string[]; lessons: string[]; examBest: number | null; examPassed: boolean; examAttempts: number };
+  training: {
+    modules: string[];
+    /** Cursos repasados sin aprobar: cuentan como intento, no como módulo hecho. */
+    attempted: string[];
+    lessons: string[];
+    examBest: number | null;
+    examPassed: boolean;
+    examAttempts: number;
+  };
 };
 function totals(rows: ActivityRow[]): Totals {
   const practice = rows.filter(row => row.kind === 'practice' && typeof row.score === 'number').map(row => row.score as number);
   const exams = rows.filter(row => row.kind === 'training_exam' && typeof row.score === 'number');
-  const reviewed = new Set(rows.filter(row => row.kind === 'training_review' && row.ref).map(row => row.ref as string));
+  const reviews = rows.filter(row => row.kind === 'training_review' && row.ref);
+  const approved = new Set(reviews.filter(reviewPassed).map(row => row.ref as string));
+  const reviewed = new Set(reviews.map(row => row.ref as string));
   // Progreso fino de la ruta importada: una fila por lección completada (con test superado), nunca el score del navegador.
   const lessons = new Set(rows.filter(row => row.kind === 'training_review' && typeof row.detail.lesson === 'string').map(row => row.detail.lesson as string));
   const examBest = exams.length ? Math.max(...exams.map(row => row.score as number)) : null;
   return {
     practice: { count: practice.length, avg: practice.length ? Math.round(practice.reduce((a, b) => a + b, 0) / practice.length) : null, best: practice.length ? Math.max(...practice) : null },
-    training: { modules: REVIEW_REFS.filter(ref => reviewed.has(ref)), lessons: [...lessons], examBest, examPassed: examBest !== null && examBest >= EXAM_PASS, examAttempts: exams.length },
+    training: {
+      modules: REVIEW_REFS.filter(ref => approved.has(ref)),
+      attempted: REVIEW_REFS.filter(ref => reviewed.has(ref) && !approved.has(ref)),
+      lessons: [...lessons], examBest, examPassed: examBest !== null && examBest >= EXAM_PASS, examAttempts: exams.length,
+    },
   };
 }
 

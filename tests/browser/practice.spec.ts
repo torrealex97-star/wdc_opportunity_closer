@@ -81,8 +81,8 @@ test('la sala de AI roleplay abre sin código, conversa y devuelve feedback con 
   await expect(page.getByRole('meter', { name: 'Cierre: 42 de 100' })).toHaveAttribute('aria-valuenow', '42');
   await expect(page.getByText('LA CORRECCIÓN PRIORITARIA · UNA SOLA')).toBeVisible();
   await expect(page.getByText('Cerrar con un siguiente paso concreto en vez de dejar la conversación abierta.')).toBeVisible();
-  // La auditoría BANT de la skill viaja con el feedback, con sus cuatro letras y la decisión.
-  await expect(page.getByText('CUALIFICACIÓN DE LA LLAMADA · BANT')).toBeVisible();
+  // La auditoría de la cualificación viaja con el feedback, con sus cuatro preguntas y la decisión.
+  await expect(page.getByText('CUALIFICACIÓN DE LA LLAMADA')).toBeVisible();
   await expect(page.locator('.practice-bant-grid dt')).toHaveText(['~ Presupuesto', '? Autoridad', '✓ Necesidad', '? Momento']);
   await expect(page.getByText('Avanzó sin cualificar bien')).toBeVisible();
   // Señales deterministas y respuesta modelo.

@@ -543,11 +543,11 @@ export function debriefInstructions(
   const count = ['cuatro', 'cinco', 'seis', 'siete', 'ocho'][definitions.length - 4] ?? String(definitions.length);
   const bantRequired = bantConfig[roomOf(scenario.kind, scenario.rubric)];
   const bantBlock = bantRequired
-    ? `\nAuditoría BANT (obligatoria; puntúa solo lo que la conversación demuestre):
-- Estado de cada letra, en este orden: Budget · Authority · Need · Timing. ✓ fuerte, ~ débil, ✗ falla, ? nunca salió. Si salió cualquier parte de la vara, no uses ?.
+    ? `\nAuditoría de la cualificación (obligatoria; puntúa solo lo que la conversación demuestre):
+- Estado de las cuatro preguntas, en este orden: dinero, decisión (quién decide), necesidad y momento. Claves: budget, authority, need, timing. ✓ fuerte, ~ débil, ✗ falla, ? nunca salió. Si salió cualquier parte de la vara, no uses ?.
 - Cada letra lleva una cita literal del interlocutor (máximo 15 palabras) o quote vacío si nunca salió. Nunca adivines ni inventes cifras.
 - Vara: ${(['budget', 'authority', 'need', 'timing'] as const).map(letter => `${BANT_LABELS[letter]}: ${BANT_HELP[letter]}`).join(' ')}
-- decision: lo que hizo la alumna, una de estas cinco: correcto_avanzar (todo ✓), avanzar_sin_cualificar (algún ~ o ? y ningún ✗), no_debio_avanzar (algún ✗ y avanzó), correcto_parar (algún ✗ y paró), paro_demasiado_pronto (ningún ✗ y paró). Un «lo pienso», «mándame info» o «te llamo yo» cuenta como parar. Agendar la siguiente llamada no es timing.
+- decision: lo que hizo la alumna, una de estas cinco: correcto_avanzar (todo ✓), avanzar_sin_cualificar (algún ~ o ? y ningún ✗), no_debio_avanzar (algún ✗ y avanzó), correcto_parar (algún ✗ y paró), paro_demasiado_pronto (ningún ✗ y paró). Un «lo pienso», «mándame info» o «te llamo yo» cuenta como parar. Agendar la siguiente llamada no cuenta como momento.
 ` : '';
   return `${review
     ? 'Evalúas la transcripción de una llamada de venta real de una closer de Women Digital Closer con la rúbrica de analisis-llamadas-ventas. Devuelve feedback breve en español de España.'
@@ -555,7 +555,7 @@ export function debriefInstructions(
 
 Reglas:
 - Mide la EJECUCIÓN, no el resultado: una venta cerrada con mala ejecución sigue siendo mala ejecución y una llamada perdida con buena ejecución puede ser un lead inviable. No premies el desenlace.
-- ${review ? 'La persona evaluada es la VENDEDORA: solo puedes citar frases literales de sus intervenciones. El CLIENTE es el interlocutor; sus palabras son el hecho para BANT y para entender qué pasó, no para puntuar a la vendedora. Si una intervención no demuestra el criterio, deja quote vacío; nunca la inventes.' : 'Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.'}
+- ${review ? 'La persona evaluada es la VENDEDORA: solo puedes citar frases literales de sus intervenciones. El CLIENTE es el interlocutor; sus palabras son el hecho para la cualificación y para entender qué pasó, no para puntuar a la vendedora. Si una intervención no demuestra el criterio, deja quote vacío; nunca la inventes.' : 'Solo puedes citar frases literales de los mensajes de la alumna. Si no hay una cita que demuestre algo, deja quote vacío; nunca la inventes.'}
 - No inventes resultados, cifras, empresas ni contrataciones. No atribuyas logros que no estén en la conversación.
 - Puntúa los ${count} ejes de 0 a 100 como estimación docente: 0-40 ausente o contraproducente, 41-60 parcial, 61-80 correcto, 81-100 sólido. No regales puntuaciones altas.
 - En cada eje, además de la nota: «right» con lo que hizo bien en ese paso (una frase concreta) y «improve» con la mejora de ese paso (una frase accionable). Si el paso no aparece en la llamada, dilo en «improve» en vez de inventar una cita.

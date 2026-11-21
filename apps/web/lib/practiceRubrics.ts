@@ -1,12 +1,13 @@
 // Criterios de la sala de práctica. Módulo PURO (sin Supabase ni red): lo importan el servidor
 // (prompts y validación del feedback) y el panel de administración, que edita estos valores.
 //
-// Las rúbricas no son una invención del producto: se copian de las skills `scalix-ventas` y
-// `analisis-llamadas-ventas` (instaladas en `.agents/skills/`), que a su vez se apoyan en el Ultimate
-// Sales Blueprint. Pesos por tipo de llamada: rubrica.md §1. El feedback termina siempre en UNA
-// corrección prioritaria (§Paso 4) porque «de 28 cosas mal en una llamada, solo una mueve el cierre».
+// Las rúbricas no son una invención del producto: dicen lo que enseña la academia y salen de la skill
+// `metodo-wdc` (`.agents/skills/metodo-wdc/SKILL.md`), que es el método de Women Digital Closers leído
+// de su propia formación. Las otras dos skills se quedan como fuente secundaria para no romper las
+// configuraciones ya guardadas. El feedback termina siempre en UNA corrección prioritaria porque «de
+// 28 cosas mal en una llamada, solo una mueve el cierre».
 export type PracticeRoom = 'venta' | 'setter' | 'frio' | 'entrevista' | 'llamada';
-export type RubricSkill = 'scalix-ventas' | 'analisis-llamadas-ventas';
+export type RubricSkill = 'metodo-wdc' | 'scalix-ventas' | 'analisis-llamadas-ventas';
 /** Cada criterio declara de qué skill y sección sale: el panel no puede inventar uno sin fuente. */
 export type RubricAxis = {
   id: string;
@@ -28,15 +29,19 @@ export type PracticeDecision =
   | 'correcto_parar'
   | 'paro_demasiado_pronto';
 export type BantLetterResult = { status: BantStatus; quote: string };
-/** Auditoría BANT de una llamada de venta: cuatro letras con evidencia y la decisión que tomó la vendedora. */
+/**
+ * Auditoría de la cualificación de una llamada de venta: dinero, decisión, necesidad y momento, con
+ * evidencia y la decisión que tomó la vendedora. La clave `bant` y las de las cuatro preguntas se
+ * conservan tal cual: son el contrato guardado de las configuraciones y de los feedbacks ya emitidos.
+ */
 export type PracticeBant = Record<BantLetter, BantLetterResult> & { decision: PracticeDecision };
 
 export const ROOMS: Array<{ id: PracticeRoom; label: string; note: string }> = [
-  { id: 'venta', label: 'Closer · llamada de cierre', note: 'Rúbrica completa del Ultimate Sales Blueprint (rubrica.md §1-§8).' },
-  { id: 'setter', label: 'Setter · cualificación y agenda', note: 'Peso en BANT, edificación del closer y cita con dos huecos.' },
+  { id: 'venta', label: 'Closer · llamada de cierre', note: 'La rúbrica completa de la llamada de cierre de la academia: apertura y marco, brecha, oferta, objeciones y siguiente paso (metodo-wdc §8–§13).' },
+  { id: 'setter', label: 'Setter · cualificación y agenda', note: 'Peso en la cualificación (tiempo, dinero y confianza), el marco del closer y la cita con dos huecos.' },
   { id: 'frio', label: 'Llamada en frío', note: 'Peso en apertura y gancho, y en el paso a cita; el objetivo no es vender.' },
-  { id: 'entrevista', label: 'Entrevista · contratación', note: 'Criterios de contratación de closers (scalix-ventas §7): las tres P, inteligencia, ética de trabajo y humildad.' },
-  { id: 'llamada', label: 'Evaluación de llamadas', note: 'Puntúa la transcripción de una llamada real con la rúbrica de analisis-llamadas-ventas (fases, BANT y evidencia).' },
+  { id: 'entrevista', label: 'Entrevista · contratación', note: 'Criterios de contratación de closers (metodo-wdc §15): las tres P, inteligencia, ética de trabajo y humildad.' },
+  { id: 'llamada', label: 'Evaluación de llamadas', note: 'Puntúa la transcripción de una llamada real con la rúbrica de analisis-llamadas-ventas (fases, cualificación y evidencia).' },
 ];
 
 export const MIN_AXES = 3;
@@ -53,162 +58,162 @@ type RubricSeed = Record<PracticeRoom, AxisSeed[]>;
 // Fuente y sección de cada criterio. Un id sin esta tabla no se puede guardar: así ningún criterio
 // propio del producto se cuela como si viniera de las skills.
 const TRACE: Record<string, Pick<RubricAxis, 'source' | 'source_ref'>> = {
-  'venta:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §2 (A1-A2)' },
-  'venta:descubrimiento': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §3 (B1-B5)' },
-  'venta:pitch': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §4 (C1-C3)' },
-  'venta:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
-  'venta:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §6 (E1-E7)' },
-  'venta:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §7 (F1-F2)' },
-  'venta:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
-  'setter:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 (setter) + §2 A1' },
-  'setter:cualificacion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §3 B5' },
-  'setter:agenda': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §7 F1' },
-  'setter:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
-  'setter:traspaso': { source: 'scalix-ventas', source_ref: 'SKILL.md §5 (handoff y notas de seis líneas)' },
-  'setter:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
-  'frio:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 (cold call) + §2 A1' },
-  'frio:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
-  'frio:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §7 F1' },
-  'frio:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §1 + §6 (E1-E7)' },
-  'frio:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
-  'entrevista:tres_p': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (las tres P: prospecto, proceso, producto)' },
-  'entrevista:inteligencia': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (inteligencia: velocidad de aprendizaje)' },
-  'entrevista:etica_trabajo': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (ética de trabajo)' },
-  'entrevista:humildad': { source: 'scalix-ventas', source_ref: 'SKILL.md §7 (humildad)' },
-  'llamada:apertura': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §2 (A1-A2)' },
-  'llamada:descubrimiento': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §3 (B1-B5)' },
-  'llamada:pitch': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §4 (C1-C3)' },
-  'llamada:control': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §5 (D1-D5)' },
-  'llamada:objecion': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §6 (E1-E7)' },
-  'llamada:siguiente': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §7 (F1-F2)' },
-  'llamada:etica': { source: 'analisis-llamadas-ventas', source_ref: 'references/rubrica.md §8 (G1-G2)' },
+  'venta:apertura': { source: 'metodo-wdc', source_ref: 'SKILL.md §8 (6.1 · apertura y marco)' },
+  'venta:descubrimiento': { source: 'metodo-wdc', source_ref: 'SKILL.md §9 y §1.4 (6.3 · cualificación y dolor)' },
+  'venta:pitch': { source: 'metodo-wdc', source_ref: 'SKILL.md §10 (6.4 · presentación de la oferta)' },
+  'venta:control': { source: 'metodo-wdc', source_ref: 'SKILL.md §4 (autoridad, silencio y escucha)' },
+  'venta:objecion': { source: 'metodo-wdc', source_ref: 'SKILL.md §11 y §12 (6.5 · cierre, 7.x · objeciones)' },
+  'venta:siguiente': { source: 'metodo-wdc', source_ref: 'SKILL.md §13 (8.3 · fases del seguimiento)' },
+  'venta:etica': { source: 'metodo-wdc', source_ref: 'SKILL.md §2 y §18 (código ético y límites)' },
+  'setter:apertura': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 (11.3 · mensajes de captación)' },
+  'setter:cualificacion': { source: 'metodo-wdc', source_ref: 'SKILL.md §9 y §12.2 (tiempo, dinero y confianza)' },
+  'setter:agenda': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 y §13 (11.3 · captación y fases)' },
+  'setter:control': { source: 'metodo-wdc', source_ref: 'SKILL.md §4 (escuchar, nombrar y devolver)' },
+  'setter:traspaso': { source: 'metodo-wdc', source_ref: 'SKILL.md §13 (8.3 · confirmación y traspaso)' },
+  'setter:etica': { source: 'metodo-wdc', source_ref: 'SKILL.md §2 (código ético)' },
+  'frio:apertura': { source: 'metodo-wdc', source_ref: 'SKILL.md §8 (6.1 · apertura y marco)' },
+  'frio:control': { source: 'metodo-wdc', source_ref: 'SKILL.md §4 (autoridad y silencio)' },
+  'frio:siguiente': { source: 'metodo-wdc', source_ref: 'SKILL.md §8 y §15 (siguiente paso con día y hora)' },
+  'frio:objecion': { source: 'metodo-wdc', source_ref: 'SKILL.md §12 (objeciones)' },
+  'frio:etica': { source: 'metodo-wdc', source_ref: 'SKILL.md §2 (código ético)' },
+  'entrevista:tres_p': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 (11.7 y currículum: evidencia, no promesas)' },
+  'entrevista:inteligencia': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 (lo que mira quien contrata)' },
+  'entrevista:etica_trabajo': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 (preparación y preguntas propias)' },
+  'entrevista:humildad': { source: 'metodo-wdc', source_ref: 'SKILL.md §15 (humildad y qué harías distinto)' },
+  'llamada:apertura': { source: 'metodo-wdc', source_ref: 'SKILL.md §8 (6.1 · apertura y marco)' },
+  'llamada:descubrimiento': { source: 'metodo-wdc', source_ref: 'SKILL.md §9 y §1.4 (6.3 · cualificación)' },
+  'llamada:pitch': { source: 'metodo-wdc', source_ref: 'SKILL.md §10 (6.4 · presentación)' },
+  'llamada:control': { source: 'metodo-wdc', source_ref: 'SKILL.md §4 (autoridad y escucha)' },
+  'llamada:objecion': { source: 'metodo-wdc', source_ref: 'SKILL.md §11 y §12 (cierres y objeciones)' },
+  'llamada:siguiente': { source: 'metodo-wdc', source_ref: 'SKILL.md §13 (8.3 · fases del seguimiento)' },
+  'llamada:etica': { source: 'metodo-wdc', source_ref: 'SKILL.md §2 y §18 (código ético y límites)' },
 };
 
 const BASE_RUBRICS: RubricSeed = {
   venta: [
     {
-      id: 'apertura', label: 'Apertura y agenda', weight: 10,
-      guide: 'En 15-20 segundos: por qué está en la llamada, una prueba breve de casos como el suyo y el plan (dónde está, dónde quiere estar y si encaja). Usa las notas previas y no le hace repetir lo que ya contó.',
+      id: 'apertura', label: 'Apertura y marco', weight: 10,
+      guide: 'En 15-20 segundos: por qué está en la llamada, una prueba breve de su caso y el plan (dónde está, dónde quiere estar y si encaja). Usa las notas previas, no le hace repetir lo que ya contó y no improvisa ni se salta fases (6.1).',
     },
     {
-      id: 'descubrimiento', label: 'Clarify, label y pain cycle', weight: 25,
-      guide: 'Aclara qué le hizo pedir la llamada, resume el hueco (dónde está, dónde quiere llegar y qué le frena) y lo confirma. Saca historial y cuantifica el coste en tiempo, dinero y estatus. Recoge BANT aquí, antes de hablar de dinero.',
+      id: 'descubrimiento', label: 'Descubrimiento y dolor', weight: 25,
+      guide: 'Primero la brecha con sus números, después el dolor cavado («¿por qué?», «cuéntame más», «dame un ejemplo»), el historial y el resumen con su etiqueta confirmado. Cualifica tiempo, dinero y confianza antes de hablar de precio (6.3, 7.1).',
     },
     {
-      id: 'pitch', label: 'Pitch en dos minutos', weight: 10,
-      guide: 'Tres pilares conectados con lo que falló antes, una metáfora o analogía y foco en el resultado, no en las características. Solo presenta lo que mapea con lo que él dijo.',
+      id: 'pitch', label: 'Presentación de la oferta', weight: 10,
+      guide: 'Resultado primero y después el cómo: tres o cuatro pilares conectados con lo que le falló antes, una analogía y foco en el resultado. Solo presenta lo que mapea con lo que ella dijo, en 3-5 minutos y sin justificar (6.4).',
     },
     {
       id: 'control', label: 'Control con preguntas', weight: 15,
-      guide: 'El prospecto habla alrededor de dos tercios. Ante una pregunta de detalle, devuelve otra pregunta antes de responder a ciegas. No entra en tecnicismos ni discute.',
+      guide: 'La clienta habla más que tú. Ante una pregunta de detalle, devuelve la pregunta antes de responder a ciegas; nombra lo que cuenta, devuelve su última frase y sostiene el silencio cuando el tono cambia (2.6, 9.7-9.9).',
     },
     {
       id: 'objecion', label: 'Objeciones y cierre', weight: 30,
-      guide: 'Aísla la objeción antes de responderla, valida con «y» (nunca «pero») y usa AAA entre cierres. Pide la venta, sostiene el silencio tras el precio y vuelve a pedir tras el primer no, sin bajar el precio ni inventar urgencia.',
+      guide: 'Micro cierres y resumen estratégico antes del precio. Cuando aparece la objeción: nombrarla, profundizarla y cerrar sobre ese obstáculo, un cierre por obstáculo con la frase de 6.5. Pide la decisión, sostiene el silencio y no baja el precio (6.5, 7.3, 7.9).',
     },
     {
-      id: 'siguiente', label: 'Handshake y siguiente paso', weight: 5,
-      guide: 'Si no compra, agenda la siguiente conversación dentro de la llamada (BAMFAM) con día y hora. «Te mando información» o «ya te escribo» no es un siguiente paso.',
+      id: 'siguiente', label: 'Siguiente paso y ciclo cerrado', weight: 5,
+      guide: 'Toda decisión termina en sí, no o ahora no, con día y hora para la siguiente conversación (fases de 8.3). «Te mando información» o «ya te escribo» no es un siguiente paso.',
     },
     {
-      id: 'etica', label: 'Rapport y ética', weight: 5,
-      guide: 'Decide pensando en el cliente, con curiosidad y sin «commission breath». No inventa escasez ni resultados y descalifica con claridad a quien no encaja.',
+      id: 'etica', label: 'Diagnóstico y ética', weight: 5,
+      guide: 'Diagnostica antes de ofrecer y dice que no cuando no encaja. No inventa escasez ni promete resultados: las garantías del material están marcadas como no copiables.',
     },
   ],
   setter: [
     {
       id: 'apertura', label: 'Primer mensaje', weight: 15,
-      guide: 'Responde en minutos (speed to lead) con nombre, contexto de dónde viene el lead y una pregunta. Nada de párrafos ni audios largos.',
+      guide: 'Responde en minutos con nombre, de dónde viene y una pregunta sobre su caso. El primer mensaje abre la conversación, no la cierra: ni párrafos ni audios largos (11.3).',
     },
     {
-      id: 'cualificacion', label: 'BANT y cualificación', weight: 30,
-      guide: 'Saca presupuesto, autoridad, necesidad y momento con preguntas cortas, una cada vez, sin que parezca un interrogatorio. Necesidad = objetivo concreto + obstáculo real; momento = quiere resolverlo ya.',
+      id: 'cualificacion', label: 'Cualificación', weight: 30,
+      guide: 'Tiempo, dinero y confianza, una pregunta cada vez, más la prioridad del 1 al 10. Con 6 o menos no se agenda para cerrar: se cualifica mejor o no encaja (7.1, 7.3).',
     },
     {
-      id: 'agenda', label: 'Edificación y agenda', weight: 25,
-      guide: 'Edifica al closer y vende el VSL como ahorro de tiempo. Ofrece dos huecos de las próximas 24-48 horas con día y hora y deja la cita confirmada, no «pendiente».',
+      id: 'agenda', label: 'Cita con día y hora', weight: 25,
+      guide: 'Dos huecos de las próximas 24-48 horas, con día y hora, y la cita confirmada —no «pendiente»—. Vende la llamada por lo que se lleva de ella, no por lo que dura (11.3, 8.3).',
     },
     {
       id: 'control', label: 'Control de la conversación', weight: 15,
-      guide: 'Lleva el hilo con preguntas, no con discursos. Convierte respuestas vacías en información y no deja que el lead marque el ritmo.',
+      guide: 'Lleva el hilo con preguntas, no con discursos. Devuelve la pregunta cuando piden un detalle y convierte respuestas vacías en información sin dejar que el lead marque el ritmo (2.6).',
     },
     {
-      id: 'traspaso', label: 'Traspaso al closer', weight: 10,
-      guide: 'Deja una nota limpia de seis líneas para el CRM: quién es, qué quiere, qué le frena, BANT, objeciones esperadas y siguiente paso. El closer no debe hacerle repetir todo.',
+      id: 'traspaso', label: 'Traspaso a la closer', weight: 10,
+      guide: 'Deja la nota antes de la llamada: quién es, qué quiere, qué le frena, qué ha intentado, objeciones esperadas y siguiente paso. La closer no debe hacerle repetir todo (8.3).',
     },
     {
-      id: 'etica', label: 'Rapport y ética', weight: 5,
-      guide: 'Trato cercano y honesto: sin urgencia falsa, sin culpar al lead y sin agendar a quien no puede beneficiarse.',
+      id: 'etica', label: 'Trato y ética', weight: 5,
+      guide: 'Cercana y honesta: sin urgencia falsa, sin culpar al lead y sin agendar a quien no puede beneficiarse (código ético, 2.2).',
     },
   ],
   frio: [
     {
       id: 'apertura', label: 'Apertura y gancho', weight: 35,
-      guide: 'En 15-30 segundos: nombre, empresa, motivo concreto y permiso para una pregunta. Sin disculparse, sin vender antes de descubrir y sin un discurso que se pueda contestar con «mándame un correo».',
+      guide: 'En 15-30 segundos: nombre, motivo concreto y permiso para una pregunta. Sin disculparse y sin vender antes de descubrir; si se puede contestar con «mándame un correo», está mal abierta (6.1).',
     },
     {
       id: 'control', label: 'Control con preguntas', weight: 15,
-      guide: 'Una pregunta cada vez y silencio para dejar hablar. Ante «estoy ocupado» o una pregunta de detalle, no responde a ciegas: reencuadra y vuelve a preguntar.',
+      guide: 'Una pregunta cada vez y silencio para dejar hablar. Ante «estoy ocupado» o un detalle, no respondas a ciegas: reencuadra y vuelve a preguntar (2.6).',
     },
     {
       id: 'siguiente', label: 'Paso a cita con dos opciones', weight: 30,
-      guide: 'Cualifica urgencia, autoridad y recursos en la misma llamada y propone dos huecos con día y hora. Descalificar con claridad también es un resultado válido.',
+      guide: 'Cualifica tiempo, dinero y confianza en la misma llamada y propone dos huecos con día y hora. Decir con claridad que no encaja también es un resultado válido (2.2, 11.3).',
     },
     {
       id: 'objecion', label: 'Manejo del primer no', weight: 15,
-      guide: 'El «no me interesa» o «mándame un correo» se trabaja sin discutir: valida, da un motivo nuevo y vuelve a pedir la cita. No insiste con el mismo argumento.',
+      guide: 'El «no me interesa» o «mándame un correo» se trabaja sin discutir: validar, dar un motivo nuevo y volver a pedir la cita, sin repetir el mismo argumento (7.1, 7.9).',
     },
     {
-      id: 'etica', label: 'Rapport y ética', weight: 5,
-      guide: 'Trata bien a quien filtra, no inventa urgencias ni se salta a recepción con engaños. Cierra el contacto con claridad cuando no encaja.',
+      id: 'etica', label: 'Trato y ética', weight: 5,
+      guide: 'Trato limpio a quien filtra, sin urgencias inventadas ni saltarse a recepción con engaños. Cierra el contacto con claridad cuando no encaja (2.2).',
     },
   ],
   entrevista: [
     {
-      id: 'tres_p', label: 'Las tres P', weight: 30,
-      guide: 'Demuestra al menos dos de las tres P (prospecto, proceso, producto) y, si es posible, haber vendido al mismo tipo de prospecto. Da un caso verificable, no una promesa.',
+      id: 'tres_p', label: 'Criterio y evidencia', weight: 30,
+      guide: 'Cuenta con un caso verificable qué vendía, a quién y qué resultado dio, y cómo lo medirías si no tienes la cifra. Nada de cifras redondas que se desmontan con una repregunta (11.7, 11.8).',
     },
     {
-      id: 'inteligencia', label: 'Velocidad de aprendizaje', weight: 25,
-      guide: 'Aprende con el coaching en tiempo real: incorpora una corrección en la misma conversación y mejora la siguiente respuesta. No repite el error después de señalado.',
+      id: 'inteligencia', label: 'Aprender de la corrección', weight: 25,
+      guide: 'Acepta una corrección en la propia entrevista e incorpora el cambio en la respuesta siguiente. Eso es lo que mira quien contrata: cómo aprendes, no lo que prometes (11.8).',
     },
     {
-      id: 'etica_trabajo', label: 'Ética de trabajo', weight: 25,
-      guide: 'Llega preparada, conoce el script y el producto, hace preguntas de calidad y explica cómo hace seguimiento. La preparación se nota en lo que pregunta, no en lo que promete.',
+      id: 'etica_trabajo', label: 'Preparación', weight: 25,
+      guide: 'Llega con dos preguntas propias sobre cómo se mide el éxito y de dónde vienen los leads. La preparación se nota en lo que pregunta, no en lo que dice de sí misma (11.7).',
     },
     {
       id: 'humildad', label: 'Humildad', weight: 20,
-      guide: 'Acepta el feedback sin defenderse, reconoce lo que no sabe o no midió y asume su parte en los resultados. No culpa al lead, al mercado ni a otros equipos.',
+      guide: 'Reconoce lo que no sabe o no midió, asume su parte en los resultados y no culpa al lead, al mercado ni al equipo. Termina con qué haría distinto (11.8).',
     },
   ],
   llamada: [
     {
-      id: 'apertura', label: 'Apertura y agenda', weight: 10,
-      guide: 'La transcripción muestra agenda en 15-20 segundos con prueba, promesa y plan, y uso de las notas previas sin hacer repetir al prospecto. Si el transcript no cubre la apertura, marca NE y excluye el peso.',
+      id: 'apertura', label: 'Apertura y marco', weight: 10,
+      guide: 'La transcripción muestra el marco de 6.1: agenda en 15-20 segundos con prueba, promesa y plan, y uso de las notas previas sin hacer repetir a la clienta. Si el transcript no cubre la apertura, marca NE y excluye el peso.',
     },
     {
-      id: 'descubrimiento', label: 'Clarify, label y pain cycle', weight: 25,
-      guide: 'Aclaró por qué estaba ahí, resumió el hueco y obtuvo confirmación; sacó historial y cuantificó el coste antes de presentar. Si no hubo descubrimiento, la skill indica no puntuar la llamada.',
+      id: 'descubrimiento', label: 'Descubrimiento y dolor', weight: 25,
+      guide: 'Brecha con números, dolor cavado con «¿por qué?» y ejemplos, historial y resumen confirmado, todo antes de presentar. Si no hubo descubrimiento, no se puntúa la llamada: se corrige el orden (6.3).',
     },
     {
-      id: 'pitch', label: 'Pitch', weight: 10,
-      guide: 'Presentó como máximo tres pilares conectados con lo que falló antes, con una metáfora o analogía y foco en el resultado, no en características.',
+      id: 'pitch', label: 'Presentación de la oferta', weight: 10,
+      guide: 'Presentó como máximo cuatro pilares conectados con lo que le falló antes, con una analogía y foco en el resultado, no en características (6.4).',
     },
     {
       id: 'control', label: 'Control con preguntas', weight: 15,
-      guide: 'El prospecto habló alrededor de dos tercios, devolvió pregunta ante detalles y no discutió. La ratio de habla se estima solo si la transcripción permite contar palabras o turnos.',
+      guide: 'La clienta habló más, devolvió pregunta ante los detalles y nombró el dolor con sus palabras. La ratio de habla se estima solo si la transcripción permite contar turnos (2.6).',
     },
     {
       id: 'objecion', label: 'Objeciones y cierre', weight: 30,
-      guide: 'Aisló la objeción antes de rebatir, usó AAA, pidió la venta, volvió a pedir tras el primer no y no bajó el precio. Distingue ejecución de resultado.',
+      guide: 'Nombró la objeción antes de responder, la profundizó, cerró sobre ese obstáculo, pidió la decisión y sostuvo el silencio. No bajó el precio ni prometió resultados. Distingue ejecución de resultado (6.5, 7.2, 7.9).',
     },
     {
-      id: 'siguiente', label: 'Handshake y siguiente paso', weight: 5,
-      guide: 'Si no compró, dejó BAMFAM con día y hora; si compró, hizo el handshake con la persona siguiente y el contexto. «Te mando información» no es un siguiente paso.',
+      id: 'siguiente', label: 'Siguiente paso', weight: 5,
+      guide: 'Si no compró, dejó día y hora para la siguiente conversación y cerró el ciclo en sí, no o ahora no. Si compró, explicó qué pasa ahora y quién hace qué (8.3).',
     },
     {
-      id: 'etica', label: 'Rapport y ética', weight: 5,
-      guide: 'Puso al prospecto en el centro, no inventó escasez ni resultados y descalificó con claridad a quien no encajaba. Una mala práctica grave se reporta aparte.',
+      id: 'etica', label: 'Diagnóstico y ética', weight: 5,
+      guide: 'Puso a la clienta en el centro, no inventó escasez ni resultados y dijo que no encajaba cuando era el caso. Una mala práctica grave se reporta aparte (2.2, 18).',
     },
   ],
 };
@@ -220,19 +225,20 @@ const traceOf = (room: PracticeRoom, id: string) => TRACE[`${room}:${id}`];
 export const DEFAULT_RUBRICS: RoomRubrics = Object.fromEntries(ROOMS.map(room => [room.id, BASE_RUBRICS[room.id].map(axis => ({
   ...axis,
   enabled: true,
-  ...(traceOf(room.id, axis.id) ?? { source: 'analisis-llamadas-ventas' as const, source_ref: 'references/rubrica.md' }),
+  ...(traceOf(room.id, axis.id) ?? { source: 'metodo-wdc' as const, source_ref: 'SKILL.md' }),
 }))])) as RoomRubrics;
 
-// Orden de impacto de `analisis-llamadas-ventas` §Paso 4.3. El feedback elige UNA y no recorre la lista.
+// Orden de impacto del método: primero lo que hace que la venta no exista, después la ejecución.
+// El feedback elige UNA y no recorre la lista.
 export const DEFAULT_PRIORITIES: string[] = [
-  'No hubo pain cycle ni se cuantificó el coste de no actuar.',
-  'BANT, decisor o momento aparecieron después de pedir el dinero.',
-  'Se cayó en detalles: respondió preguntas a ciegas sin devolver pregunta.',
-  'No pidió la venta o no volvió a pedir tras el primer no.',
-  'Habló más que el prospecto o hizo un pitch largo sobre el producto.',
-  'No hubo agenda de apertura (prueba, promesa y plan).',
-  'Siguió vendiendo después del sí o negoció el precio.',
-  'Entrega: tono, ritmo, énfasis y convicción.',
+  'No se cavó el dolor ni se cuantificó el coste de seguir igual.',
+  'Se presentó la oferta antes de cualificar tiempo, dinero y confianza.',
+  'La primera objeción se respondió sin aislar la de verdad.',
+  'No se pidió la decisión o se abandonó tras el primer no.',
+  'Se bajó el precio o se justificó sin que lo pidieran.',
+  'Habló más que la clienta o presentó de más.',
+  'El siguiente paso quedó sin día y hora.',
+  'Tono y ritmo: rápido, a la defensiva o rellenando silencios.',
 ];
 
 // Entrevista: la skill de análisis de llamadas no puntúa entrevistas (no hay discovery de venta).
@@ -304,7 +310,7 @@ export function validateRubrics(value: unknown): { ok: true; value: RoomRubrics 
       const fallback = traceOf(room.id, id);
       const source = item.source === undefined ? fallback?.source : item.source;
       const sourceRef = item.source_ref === undefined ? fallback?.source_ref : text(item.source_ref, 160);
-      if (source !== 'scalix-ventas' && source !== 'analisis-llamadas-ventas') {
+      if (source !== 'metodo-wdc' && source !== 'scalix-ventas' && source !== 'analisis-llamadas-ventas') {
         return { ok: false, detail: `${room.label}: «${label}» no declara una fuente de las skills.` };
       }
       if (!sourceRef) return { ok: false, detail: `${room.label}: «${label}» no declara la sección de la skill de la que sale.` };
@@ -329,7 +335,7 @@ export function validatePriorities(value: unknown): { ok: true; value: string[] 
 }
 
 export function validateBant(value: unknown): { ok: true; value: BantConfig } | { ok: false; detail: string } {
-  if (!isRecord(value)) return { ok: false, detail: 'La configuración de BANT debe ser un objeto por sala.' };
+      if (!isRecord(value)) return { ok: false, detail: 'La configuración de la cualificación debe ser un objeto por sala.' };
   const out = {} as BantConfig;
   for (const room of ROOMS) {
     const flag = value[room.id];

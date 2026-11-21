@@ -3,7 +3,7 @@ import type { FullConfig } from '@playwright/test';
 // `next dev` compila cada ruta la primera vez que la piden. Con la suite en paralelo, cuatro workers pueden
 // pedir `/` y `/admin` a la vez y el primero que llega paga la compilación dentro de su propio tiempo de
 // prueba: en una máquina lenta eso agota el `timeout` de la prueba y aparece un rojo que no es del producto
-// (pasó con «Formación», «Guardar …», el checkbox de BANT y el setup de fuente). Este paso previo pide esas
+// (pasó con «Formación», «Guardar …», el checkbox de cualificación y el setup de fuente). Este paso previo pide esas
 // rutas en serie, una sola vez, antes de que arranque ningún worker: cada prueba empieza con el servidor ya
 // caliente y su tiempo solo mide lo suyo.
 const ROUTES = ['/', '/admin', '/api/backend/config', '/api/student/session'];

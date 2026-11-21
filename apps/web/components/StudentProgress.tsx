@@ -133,8 +133,12 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
           <AxisGroup title="Prácticas anteriores sin sala" rows={p.axes.filter(a => a.track === null)} />
         </div>
           : <p className="card-meta">— Todavía no hay prácticas puntuadas por eje en este periodo.</p>}</article>
-      <article className="progress-card"><h2>Formación</h2><p className="card-meta">Los {REVIEW_REFS.length} cursos del Classroom y {(p.lifetime.training.lessons?.length ?? 0)} de {TOTAL_LESSONS(DEFAULT_CURRICULUM)} lecciones de la ruta con test superado (en total, no solo este periodo). Un curso cuenta cuando has marcado todas sus lecciones en Formación.</p>
-        <ul className="plain-list">{REVIEW_REFS.map(ref => { const done = p.lifetime.training.modules.includes(ref); return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Estudiado' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>; })}</ul></article>
+      <article className="progress-card"><h2>Formación</h2><p className="card-meta">Los {REVIEW_REFS.length} cursos del Classroom y {(p.lifetime.training.lessons?.length ?? 0)} de {TOTAL_LESSONS(DEFAULT_CURRICULUM)} lecciones de la ruta con test superado (en total, no solo este periodo). Un curso cuenta cuando <strong>apruebas</strong> su repaso de preguntas en Formación; haberlo intentado sin aprobar se ve, pero no suma.</p>
+        <ul className="plain-list">{REVIEW_REFS.map(ref => {
+          const done = p.lifetime.training.modules.includes(ref);
+          const tried = (p.lifetime.training.attempted ?? []).includes(ref);
+          return <li key={ref}><span className={done ? 'status ok' : 'status'}>{done ? 'Aprobado' : tried ? 'Repasado sin aprobar' : 'Pendiente'}</span> {REVIEW_LABELS[ref] ?? ref}</li>;
+        })}</ul></article>
       {metrics && <article className="progress-card"><h2>Maestría por escenario</h2><p className="card-meta">{coach ? 'Su' : 'Tu'} nota media en cada práctica de la sala (de siempre, no solo este periodo). Es una estimación del modelo.</p>
         {metrics.mastery.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Escenario</th><th scope="col" className="num">Veces</th><th scope="col" className="num">Media</th><th scope="col" className="num">Mejor</th></tr></thead>
           <tbody>{metrics.mastery.map(m => <tr key={m.ref}><th scope="row">{scenarioById(m.ref)?.title ?? m.ref}</th><td className="num">{m.count}</td><td className="num">{m.avg}</td><td className="num">{m.best}</td></tr>)}</tbody></table></div>
@@ -152,7 +156,7 @@ function Ready({ progress: p, metrics, retention, coach }: { progress: Progress;
     <h2 className="progress-heading">Actividad reciente</h2>
     {p.recent.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Qué</th><th scope="col">Detalle</th><th scope="col" className="num">Nota</th></tr></thead><tbody>{p.recent.map((r, i) => <tr key={r.id ?? i}>
       <td>{dateFmt.format(new Date(r.created_at))}</td><td>{KIND_LABELS[r.kind] ?? r.kind}</td>
-      <td>{r.kind === 'training_review' ? `${REVIEW_LABELS[r.ref ?? ''] ?? r.ref}: ${r.detail.met}/${r.detail.total} criterios` : r.kind === 'training_exam' ? (r.detail.passed ? 'Superado' : 'No superado') : r.kind === 'practice' ? `${scenarioById(r.ref ?? '')?.title ?? r.ref ?? 'Práctica'}${r.detail.mode === 'voz' ? ' · por voz' : ''}${typeof r.detail.duration_s === 'number' ? ` · ${clock(r.detail.duration_s)}` : ''}` : null}</td>
+      <td>{r.kind === 'training_review' ? `${REVIEW_LABELS[r.ref ?? ''] ?? r.ref}: ${r.detail.met}/${r.detail.total} acertadas${r.detail.passed === false ? ' · sin aprobar' : ''}` : r.kind === 'training_exam' ? (r.detail.passed ? 'Superado' : 'No superado') : r.kind === 'practice' ? `${scenarioById(r.ref ?? '')?.title ?? r.ref ?? 'Práctica'}${r.detail.mode === 'voz' ? ' · por voz' : ''}${typeof r.detail.duration_s === 'number' ? ` · ${clock(r.detail.duration_s)}` : ''}` : null}</td>
       <td className="num">{dash(r.score)}</td></tr>)}</tbody></table></div>
       : <p className="card-meta">— Nada en los últimos {p.days} días.</p>}
   </>;
