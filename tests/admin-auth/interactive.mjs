@@ -94,7 +94,10 @@ try {
     await control.getByText(/Tope mensual guardado: 2 USD/).waitFor({ timeout: 15000 });
     assert.equal(state.providerBudget.find(row => row.provider === 'brightdata')?.monthly_usd, 2);
     assert.match(await control.locator('tr[data-provider="brightdata"]').innerText(), /guardado por el propietario/);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin scroll horizontal de página');
+    const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, wide: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 4).map(el => `${el.tagName}.${String(el.className).slice(0, 40)}`) }));
+    assert.ok(overflow.scroll <= overflow.inner, `sin scroll horizontal de página: ${JSON.stringify(overflow)}`);
+    // Los pasos siguientes miden el gasto contra el tope por defecto (5 USD): se deshace el tope guardado aquí.
+    state.providerBudget = state.providerBudget.filter(row => row.provider !== 'brightdata');
   });
 
   await step('Fuentes: «Probar ruta» ejecuta Bright Data, muestra ofertas y coste, y actualiza el gasto', async () => {
@@ -104,6 +107,8 @@ try {
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
     const button = card.getByRole('button', { name: 'Probar ruta' });
+    // El resumen de claves y topes llega después de la tarjeta: se espera a que la vía lista habilite el botón.
+    await page.waitForFunction(element => !element.disabled, await button.elementHandle(), { timeout: 15000 }).catch(() => undefined);
     assert.equal(await button.isEnabled(), true, 'con clave y tope, la ruta debe estar lista');
     const responsePromise = page.waitForResponse(response => response.url().includes('/api/admin/source-routes') && response.request().method() === 'POST');
     await button.click();

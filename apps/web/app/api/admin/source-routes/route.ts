@@ -5,7 +5,8 @@ import { getSecret, listConnections } from '../../../../lib/integrations';
 import { ingest, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
 import { toCandidate as serpCandidate } from '../../../../lib/googleJobs';
 import { extractJobPostings } from '../../../../lib/jobPosting';
-import { canSpend, capUsd, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
+import { canSpend, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
+import { readCaps, type ProviderCap } from '../../../../lib/providerCaps';
 import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs } from '../../../../lib/providers/brightdata';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
 import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
@@ -47,12 +48,12 @@ const spentOf = (rows: RunNote[] | null, provider: MeteredProvider): number | nu
  * «no hay gasto todavía» y vale 0. Antes se confundían: con la primera clave guardada el panel decía
  * «no se pudo leer lo gastado» y no dejaba probar ninguna ruta.
  */
-async function stateOf(rows: RunNote[] | null): Promise<RouteState> {
+async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, ProviderCap>): Promise<RouteState> {
   const notes = (rows ?? []).map(row => ({ note: row.note }));
   const spent = (provider: MeteredProvider) => rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
   const remaining = (provider: MeteredProvider) => {
     const used = spent(provider);
-    return used === null ? null : Math.max(0, capUsd(provider) - used);
+    return used === null ? null : Math.max(0, caps[provider].usd - used);
   };
   const [connections, brightdataSecret] = await Promise.all([listConnections(), getSecret('brightdata')]);
   const keys = new Set((connections ?? []).map(row => row.provider));
@@ -78,15 +79,15 @@ export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request);
   if (error) return error;
   // Gasto del mes completo (paginado), no solo las últimas 200 ejecuciones.
-  const [rows, orders] = await Promise.all([runsThisMonth(), routeOrders()]);
-  const state = await stateOf(rows);
+  const [rows, orders, { caps }] = await Promise.all([runsThisMonth(), routeOrders(), readCaps()]);
+  const state = await stateOf(rows, caps);
   const budget: Record<string, number | null> = {};
   const spent: Record<string, number | null> = {};
   const notes = (rows ?? []).map(row => ({ note: row.note }));
   for (const provider of ['brightdata', 'serpapi', 'zenrows', 'scrapingbee'] as MeteredProvider[]) {
     budget[provider] = state.budget[provider] ?? null;
     spent[provider] = rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
-    if (budget[provider] === null && state.keys.has(provider)) budget[provider] = capUsd(provider);
+    if (budget[provider] === null && state.keys.has(provider)) budget[provider] = caps[provider].usd;
   }
   const configuredProxies = Boolean((process.env.JOBSPY_PROXIES ?? '').trim());
   return     reply(auth!, {
@@ -128,8 +129,8 @@ export async function POST(request: NextRequest) {
   const routes = entry ? BY_SOURCE.get(entry.code) ?? [] : [];
   const route = routes.find(item => item.id === body.route);
   if (!entry || !route) return Response.json({ detail: 'Esa ruta no pertenece a una fuente del catálogo.' }, { status: 404 });
-  const rows = await runsThisMonth();
-  const state = await stateOf(rows);
+  const [rows, { caps }] = await Promise.all([runsThisMonth(), readCaps()]);
+  const state = await stateOf(rows, caps);
   const readiness = routeReadiness(route, state);
   if (!readiness.ok) return Response.json({ detail: readiness.reason }, { status: 409 });
 
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
     const config = secret ? parseBrightDataSecret(secret) : null;
     if (!config) return Response.json({ detail: 'La clave de Bright Data no tiene el formato API key:zona SERP.' }, { status: 409 });
     // `canSpend` recibe el GASTO, no el saldo: pasarle el restante hacía que un tope de 5 USD pareciera agotado.
-    const check = canSpend('brightdata', spentOf(rows, 'brightdata'));
+    const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, caps.brightdata.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest) {
   if (route.provider === 'serpapi') {
     const secret = await getSecret('serpapi');
     if (!secret) return Response.json({ detail: 'Sin clave de SerpApi.' }, { status: 409 });
-    const check = canSpend('serpapi', spentOf(rows, 'serpapi'));
+    const check = canSpend('serpapi', spentOf(rows, 'serpapi'), process.env, caps.serpapi.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
     const provider = state.keys.has('zenrows') ? 'zenrows' : state.keys.has('scrapingbee') ? 'scrapingbee' : 'brightdata';
     const secret = await getSecret(provider);
     if (!secret) return Response.json({ detail: `Sin clave de ${provider}.` }, { status: 409 });
-    const check = canSpend(provider, spentOf(rows, provider));
+    const check = canSpend(provider, spentOf(rows, provider), process.env, caps[provider].usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     try {
       const page = await fetchHtml(provider, secret, url, { timeoutMs: 25_000 });
