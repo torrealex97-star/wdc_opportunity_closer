@@ -9,9 +9,11 @@
   para ello, y no hace falta: el despliegue real ya lo hace
   [`web-deploy.yml`](../.github/workflows/web-deploy.yml) con OpenNext + `wrangler deploy` y una comprobación
   del dominio.
-- **Comprobación** (*inspected*): en el SHA anterior (`e1518b1`) el check seguía en `failure`, porque nació
-  antes de la desconexión. Este push es el primero sin la integración: si la desconexión es efectiva, GitHub
-  deja de recibir «Workers Builds: closer-web» y el rojo desaparece sin tocar el workflow.
+- **Comprobado** (*verified*): en `14b481a`, el primer push sin la integración, GitHub **no crea el check**
+  «Workers Builds: closer-web»; la suite de la app `cloudflare-workers-and-pages` llega con **0 check-runs**.
+  En el SHA anterior (`e1518b1`) ese check seguía en `failure`, así que el rojo desaparece por la desconexión,
+  no por un cambio del workflow. En `14b481a` quedaron en verde `verify`, `web-admin` y los dos `analyze`;
+  `Supabase Preview` sigue en rojo, como antes y por su propia configuración.
 - **Comprobado (solo documentación)** (*tested*): `python3.12 scripts/fix_docs_links.py --check` → 0 enlaces
   rotos en 120 ficheros; `pytest tests/test_docs_links.py` → 5 pasan; `node tests/orphan-refs.mjs` PASS;
   `node scripts/handoff.mjs check` OK. **No** se ejecutó typecheck, build ni Playwright: no se tocó código.
