@@ -101,6 +101,7 @@ const collect = async (db, env) => {
   // Un freno diario por encima del mensual se recorta al mensual (no tiene sentido y confunde el panel).
   const recortado = writeLimits({ WRITE_ALLOWANCE_MONTH: '1000', WRITE_ALLOWANCE_DAY: '5000' });
   assert.equal(recortado.day, 1000);
+  assert.deepEqual(recortado.ignored, ['WRITE_ALLOWANCE_DAY'], 'el recorte se declara, no es silencioso');
 }
 
 // 3) `/api/status` publica los límites efectivos, con o sin descartes.

@@ -42,9 +42,10 @@ export async function engineGet<T = Record<string, unknown>>(
     const response = await fetchImpl(url, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
     if (response.ok) return { ok: true, data: await response.json().catch(() => null), http_status: response.status, reason: 'ok' };
     const text = await response.text().catch(() => '');
-    // Una pausa de cuota se reconoce por el 429 + «allowance»; si la plataforma cambiara ese texto, se
-    // leería como «no responde»: honesto, pero menos específico.
-    return { ok: false, data: null, http_status: response.status, reason: response.status === 429 || /allowance/i.test(text) ? 'allowance' : 'down' };
+    // Una pausa de cuota se reconoce por el texto «allowance» de la plataforma (llega con 429). Un 429
+    // sin ese texto es una limitación de peticiones, no una pausa de cuota: se lee como «no responde»
+    // (con su `http_status`) para no avisar de una pausa que no existe.
+    return { ok: false, data: null, http_status: response.status, reason: /allowance/i.test(text) ? 'allowance' : 'down' };
   } catch (error) {
     return { ok: false, data: null, http_status: null, reason: (error as Error)?.name === 'TimeoutError' ? 'timeout' : 'down' };
   }
