@@ -1,8 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: docs/panel-fuentes-aplicado
-pr: —
+pr: 106
 touches: docs/ACTIVE_HANDOFF.md, docs/STATUS.md, docs/OWNER_GUIDE.md, docs/EXTERNAL_SOURCES.md, docs/decisions/ADR-011-external-sources-tos.md, docs/decisions/ADR-021-cascada-de-rutas-por-fuente.md, docs/handoff/archive/2026-11.md, supabase/migrations/20261121_provider_budget.sql, supabase/migrations/20261121_source_route_order.sql, tests/db/provider_budget.sql, tests/db/source_route_order.sql, docs/handoff/claims/buffy-panel-fuentes-aplicado.md
 date: 2026-11-21
 ---
@@ -11,6 +11,5 @@ pruebas `BEGIN…ROLLBACK` nuevas, los documentos que declaran la versión aplic
 tareas 3 y 20— junto con la corrección de la tarea 20 del relevo: la tabla `provider_budget` no manda todavía
 sobre el tope porque `capUsd()` lee solo el entorno. No toca código de la app, ni despliegue, ni claves.
 
-Siguiente acción exacta: abrir la PR, marcar esta ficha `validated` con su número, esperar `verify` y
-`web-admin` verdes en el head, fusionar con merge commit y dejar en `main` la ficha borrada, la línea del
-archivo y la entrada de cierre en `STATUS`.
+PR #106 abierta; a la espera de `verify` y `web-admin` verdes en el head para fusionar con merge commit
+y dejar en `main` la ficha borrada, la línea del archivo y la entrada de cierre en `STATUS`.
