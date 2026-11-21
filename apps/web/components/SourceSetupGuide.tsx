@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { ArrowUpRight, Check, KeyRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CalendarCheck, Check, Clock, CreditCard, KeyRound, X } from 'lucide-react';
 import type { Setup } from '../lib/sourceSetup';
 
 // Guía de puesta en marcha de una fuente que aún no recoge. Se abre con «Cómo conectarla» y reúne en un
@@ -23,6 +23,11 @@ export default function SourceSetupGuide({ name, code, setup, onClose, onOpenApi
       </div>
       <h2>{name}</h2>
       <p className="setup-guide-need"><strong>Qué falta.</strong> {setup.requirement}</p>
+      <div className="setup-guide-needs">
+        <span><Clock size={14} /> {setup.minutes ?? '10–15 min'}</span>
+        <span><CreditCard size={14} /> {setup.card ? 'Tarjeta sí (verificación o pago por uso)' : 'Sin tarjeta'}</span>
+        <span>{setup.account ?? 'La cuenta del portal o proveedor.'}</span>
+      </div>
       <ol className="setup-guide-steps">
         {setup.steps.map((step, index) => <li key={step}><span className="setup-guide-num" aria-hidden="true">{index + 1}</span><span>{step}</span></li>)}
       </ol>
@@ -35,6 +40,13 @@ export default function SourceSetupGuide({ name, code, setup, onClose, onOpenApi
         </ul>
       </div>}
       {setup.cost && <p className="setup-guide-cost"><Check size={14} /><span>{setup.cost}</span></p>}
+      {setup.worksWhen && <div className="setup-guide-check"><p><strong>Cómo saber que funciona.</strong> {setup.worksWhen}</p></div>}
+      {!!setup.failures?.length && <div className="setup-guide-fails">
+        <p><AlertTriangle size={14} /> <strong>Los tres fallos que verás</strong></p>
+        <ul>{setup.failures.slice(0, 3).map(failure => <li key={failure}>{failure}</li>)}</ul>
+      </div>}
+      {setup.video && <p className="card-meta"><a href={setup.video.href} target="_blank" rel="noopener noreferrer">{setup.video.label}<ArrowUpRight size={12} /></a></p>}
+      {setup.checkedAt && <p className="card-meta"><CalendarCheck size={12} /> Última comprobación: {setup.checkedAt}. Si el portal cambia, esta guía se actualiza con él; no se promete una fecha que no se haya verificado.</p>}
       <div className="setup-guide-actions">
         {setup.docs && <a className="primary" href={setup.docs.href} target="_blank" rel="noopener noreferrer">{setup.docs.label}<ArrowUpRight size={15} /></a>}
         {setup.provider && onOpenApis && <button type="button" onClick={() => { dialog.current?.close(); onOpenApis(); }}><KeyRound size={15} /> Ir a Panel → APIs</button>}

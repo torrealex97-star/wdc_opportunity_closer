@@ -1,5 +1,8 @@
 import { decryptSecret, encryptSecret } from './secrets';
 import { serviceRest } from './supabaseAuth';
+import { recordSpend, runsThisMonth } from './external';
+import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
+import { parseBrightDataSecret } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -19,7 +22,29 @@ export const PROVIDERS = {
   jooble: { name: 'Jooble', hint: 'Clave de es.jooble.org (España)', probe: (k: string) => fetch(`${process.env.JOOBLE_API_BASE ?? 'https://es.jooble.org'}/api/${encodeURIComponent(k)}`, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: 'closer', location: 'España', page: 1 }) }) },
   infojobs: { name: 'InfoJobs', hint: 'client_id:client_secret (separados por dos puntos)', probe: (k: string) => { const p = pair(k); return p ? get(`${process.env.INFOJOBS_API_BASE ?? 'https://api.infojobs.net'}/api/9/offer?maxResults=1`, basic(p[0], p[1])) : Promise.resolve(new Response(null, { status: 400 })); } },
   resend: { name: 'Resend', hint: 'API key (empieza por re_)', probe: (k: string) => get(`${process.env.RESEND_API_BASE ?? 'https://api.resend.com'}/domains`, bearer(k)) },
+  // Bright Data: la clave se guarda como `API key:zona SERP[:zona Unlocker]`. La prueba hace UNA búsqueda
+  // real de Google Jobs (0,0015 USD) porque no hay endpoint de cuenta documentado que valide la zona;
+  // se avisa en la tarjeta y no se ejecuta nunca al guardar.
+  brightdata: {
+    name: 'Bright Data',
+    hint: 'API key:zona SERP (y :zona Unlocker si la tienes)',
+    probe: (k: string) => {
+      const config = parseBrightDataSecret(k);
+      if (!config) return Promise.resolve(new Response(null, { status: 400 }));
+      return fetch(`${process.env.BRIGHTDATA_API_BASE ?? 'https://api.brightdata.com'}/request`, {
+        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20000),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+        body: JSON.stringify({ zone: config.serpZone, url: 'https://www.google.com/search?q=closer+de+ventas&ibp=htl%3Bjobs&hl=es&gl=es', format: 'json' }),
+      });
+    },
+  },
+  // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
+  zenrows: { name: 'ZenRows', hint: 'API key de ZenRows', probe: (k: string) => get(`https://api.zenrows.com/v1/?apikey=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
+  scrapingbee: { name: 'ScrapingBee', hint: 'API key de ScrapingBee', probe: (k: string) => get(`https://app.scrapingbee.com/api/v1/?api_key=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
 } as const;
+
+/** Proveedores cuya prueba hace una petición real y se cobra (se avisa en la tarjeta). */
+export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'zenrows', 'scrapingbee']);
 export type Provider = keyof typeof PROVIDERS;
 export const isProvider = (v: unknown): v is Provider => typeof v === 'string' && v in PROVIDERS;
 
@@ -53,17 +78,55 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
   const row = await serviceRest(`integration_connections?provider=eq.${provider}&select=secret_ciphertext&limit=1`);
   const rows = row.ok ? await row.json().catch(() => []) : [];
   if (!Array.isArray(rows) || !rows[0]) return null;
-  let outcome: { ok: boolean; detail: string };
+  let outcome: { ok: boolean; detail: string } = { ok: false, detail: 'No se pudo probar el proveedor.' };
   try {
     const secret = decryptSecret(rows[0].secret_ciphertext);
-    const response = await PROVIDERS[provider].probe(secret);
-    // Una clave de Resend restringida a «solo envío» es válida pero no puede listar dominios: responde 401 `restricted_api_key`.
-    const restricted = provider === 'resend' && response.status === 401 && (await response.clone().json().catch(() => null))?.name === 'restricted_api_key';
-    outcome = response.status === 400 && (provider === 'adzuna' || provider === 'infojobs') ? { ok: false, detail: 'Formato de clave incorrecto (usa id:clave)' }
-      : restricted ? { ok: true, detail: 'Clave válida (permiso solo de envío)' }
-      : response.ok ? { ok: true, detail: 'Clave válida' }
-      : response.status === 401 || response.status === 403 ? { ok: false, detail: `Clave rechazada (HTTP ${response.status})` }
-      : { ok: false, detail: `El proveedor respondió HTTP ${response.status}` };
+    if (SPEND_PROBES.has(provider)) {
+      const meter = provider as MeteredProvider;
+      // La prueba hace una petición real: antes de lanzarla se comprueba el tope y, si responde, se anota
+      // el gasto en `external_ingest_runs` para que el marcador lo sume. Sin nota no se da por contado.
+      const runs = await runsThisMonth();
+      const spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), meter).usd ?? 0);
+      const check = canSpend(meter, spent);
+      if (!check.ok) {
+        outcome = { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
+      } else {
+        const response = await PROVIDERS[provider].probe(secret);
+        if (provider === 'brightdata' && response.status === 400) {
+          outcome = { ok: false, detail: 'Formato incorrecto: usa API key:zona SERP' };
+        } else if (!response.ok) {
+          outcome = response.status === 401 || response.status === 403
+            ? { ok: false, detail: `Clave rechazada (HTTP ${response.status})` }
+            : { ok: false, detail: `El proveedor respondió HTTP ${response.status}` };
+        } else {
+          let failure: string | null = null;
+          if (provider === 'brightdata') {
+            const payload = await response.clone().json().catch(() => null) as { error?: unknown; jobs?: unknown; jobs_results?: unknown } | null;
+            const items = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as { items?: unknown }).items : null;
+            if (typeof payload?.error === 'string' && payload.error) failure = `Bright Data: ${payload.error.slice(0, 160)}`;
+            else if (!Array.isArray(items) && !Array.isArray(payload?.jobs_results)) failure = 'Bright Data respondió sin jobs.items[]; revisa la zona SERP.';
+          }
+          if (failure) {
+            outcome = { ok: false, detail: failure };
+          } else {
+            const cost = PROVIDER_METERS[meter].usdPerRequest;
+            const recorded = await recordSpend(`${provider}-probe`, 'probe', spendNote({ route: 'prueba', provider: meter, requests: 1, costUsd: cost, detail: 'prueba de clave' }));
+            outcome = recorded
+              ? { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` }
+              : { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+          }
+        }
+      }
+    } else {
+      const response = await PROVIDERS[provider].probe(secret);
+      // Una clave de Resend restringida a «solo envío» es válida pero no puede listar dominios: responde 401 `restricted_api_key`.
+      const restricted = provider === 'resend' && response.status === 401 && (await response.clone().json().catch(() => null))?.name === 'restricted_api_key';
+      outcome = response.status === 400 && (provider === 'adzuna' || provider === 'infojobs') ? { ok: false, detail: 'Formato de clave incorrecto (usa id:clave)' }
+        : restricted ? { ok: true, detail: 'Clave válida (permiso solo de envío)' }
+        : response.ok ? { ok: true, detail: 'Clave válida' }
+        : response.status === 401 || response.status === 403 ? { ok: false, detail: `Clave rechazada (HTTP ${response.status})` }
+        : { ok: false, detail: `El proveedor respondió HTTP ${response.status}` };
+    }
   } catch { outcome = { ok: false, detail: 'No se pudo contactar con el proveedor' }; }
   await serviceRest(`integration_connections?provider=eq.${provider}`, {
     method: 'PATCH', headers: { Prefer: 'return=minimal' },

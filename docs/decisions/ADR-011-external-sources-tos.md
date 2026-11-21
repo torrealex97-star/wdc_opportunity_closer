@@ -18,3 +18,19 @@ El motor cloud solo recoge fuentes públicas verificadas y no alcanza el volumen
 ## Adenda 2026-10-16: Apify y escala
 - El operador no tiene ni va a crear infraestructura de proxies. Para el volumen (miles de ofertas) se añade la ejecución de **actores de Apify** (su infraestructura y proxies), de pago por uso: desactivados por defecto, con tope mensual propio, límites por ejecución, una ejecución a la vez por actor y webhook firmado con HMAC. El actor `aakash19/jobspy` es un envoltorio de comunidad: se muestra como preajuste con la advertencia de comprobar su ficha.
 - Ranking y huella al entrar (`lib/offerScore.ts`, columnas `score`, `role`, `spain`, `fingerprint`) para filtrar y deduplicar en el servidor; la aprobación sigue siendo humana (en bloque, por filtros).
+
+## Addendum 2026-11-21 · Bright Data, JobSpy con proxies y páginas de empresa
+
+- **Bright Data SERP** sustituye a SerpApi como primera vía de pago de Google Jobs cuando hay clave: misma
+  búsqueda, 0,0015 USD frente a 0,025. No se rastrea LinkedIn ni Indeed con sesión: se consulta Google Jobs
+  y se conserva el enlace al anuncio original. Si el resultado solo trae el enlace de Google, se descarta.
+- **Web Unlocker / ZenRows / ScrapingBee** se usan **solo** donde ya existe un extractor probado (JSON-LD
+  `JobPosting` o RSS) y con cortesía por dominio. No se escriben scrapers a ciegas para los 27 portales ni se
+  automatizan redes con sesión personal (Facebook, Telegram, Skool): eso sigue siendo ritual manual.
+- **JobSpy** es la última vía y solo se lanza con proxies validados (200 en <8 s). Sin proxies sanos no se
+  intenta; el modo directo exige una variable explícita y asume el riesgo de bloqueo. Esta decisión no
+  cambia la condición de uso de Indeed/LinkedIn/Glassdoor: el operador sigue asumiendo el riesgo (ADR-011).
+- **Páginas de empresa:** se lee la página pública y su JSON-LD/RSS; no se inventa una oferta desde HTML
+  suelto ni se añade una empresa sin URL que responda 200 con ofertas.
+- **Coste:** cada petición de pago se anota en `external_ingest_runs` y se compara con
+  `BRIGHTDATA_MONTHLY_USD` (y equivalentes). La tabla `provider_budget` está escrita y **no aplicada**.

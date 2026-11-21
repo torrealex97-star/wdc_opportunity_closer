@@ -101,10 +101,13 @@ await step('baja: no puedes quitarte a ti ni al último propietario; quitar cort
 });
 await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en claro; probar válida/ inválida', async () => {
   let r = await call('/api/admin/connections'); assert.equal(r.status, 200);
-  assert.equal(r.json.connections.length, 8); assert.ok(r.json.connections.every(c => !c.configured));
+  // 11 proveedores: los 8 de siempre + Bright Data, ZenRows y ScrapingBee (rutas de pago/HTML).
+  assert.equal(r.json.connections.length, 11); assert.ok(r.json.connections.every(c => !c.configured));
+  for (const provider of ['brightdata', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'nope', secret: 'good-key-1234' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'corta' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'groq' } })).status, 404); // sin clave guardada
+  assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'brightdata' } })).status, 404); // sin clave guardada
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'good-key-1234' } })).status, 200);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'serpapi', secret: 'bad-key-99999' } })).status, 200);
   const stored = state.connections.get('groq').secret_ciphertext;
@@ -129,6 +132,9 @@ await step('APIs: un administrador (no propietario) puede ver y probar pero no g
   const saved = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
   assert.equal((await call('/api/admin/connections')).status, 200);
   assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'groq' } })).status, 200);
+  // Una prueba que gasta (Bright Data/ZenRows/ScrapingBee) es solo del propietario, aunque el administrador pueda probar las gratuitas.
+  assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'brightdata' } })).status, 403);
+  assert.equal((await call('/api/admin/source-routes', { method: 'PATCH', body: { source: 'infojobs', order: [] } })).status, 403, 'el orden por fuente también es solo del propietario');
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'good-key-1234' } })).status, 403);
   assert.equal((await call('/api/admin/connections?provider=groq', { method: 'DELETE' })).status, 403);
   jar = saved;
