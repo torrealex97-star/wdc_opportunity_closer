@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { collectAll } from '../../../../lib/collectors';
 import { collectFallback } from '../../../../lib/serpapiFallback';
+import { loadMeter } from '../../../../lib/providerCaps';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
@@ -44,8 +45,12 @@ export async function GET(request: NextRequest) {
   if (outcomes.some(o => o.truncated)) budget.cut('apis');
   // Google Jobs (SerpApi, clave ya conectada): dorks de closer/ES y LatAm. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
+  // Un solo medidor de gasto para Google Jobs y el respaldo: lo gastado por el primero cuenta para el segundo y el
+  // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
+  let meterRead: ReturnType<typeof loadMeter> | undefined;
+  const sharedMeter = () => (meterRead ??= loadMeter());
   const googleJobs = budget.remaining() >= MIN_STEP_MS
-    ? await collectGoogleJobs('cron', budget.deadline(6_500)).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
+    ? await collectGoogleJobs('cron', budget.deadline(6_500), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
     : (budget.cut('googleJobs'), { source: 'google-jobs' as const, ok: false, error: 'sin tiempo en el presupuesto del cron' });
   if ('truncated' in googleJobs && googleJobs.truncated) budget.cut('googleJobs');
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
@@ -54,7 +59,7 @@ export async function GET(request: NextRequest) {
   // fuente pausada a propósito no cuenta como ausente y no se paga su respaldo.
   const missingApis = outcomes.filter(o => !o.ok && o.error !== 'Fuente pausada').map(o => o.provider);
   const fallback = budget.remaining() >= MIN_STEP_MS
-    ? await collectFallback('cron', { deadline: budget.deadline(5_000), missing: missingApis }).catch(() => null)
+    ? await collectFallback('cron', { deadline: budget.deadline(5_000), missing: missingApis, meter: await sharedMeter().catch(() => undefined) }).catch(() => null)
     : (budget.cut('fallback'), null);
   if (fallback?.truncated) budget.cut('fallback');
   // Nivel de pago opt-in: con APIFY_SKIP_IF_GOOD_PER_DAY, si las fuentes gratuitas ya cubren el objetivo no se lanza gasto nuevo

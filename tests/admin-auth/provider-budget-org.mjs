@@ -24,7 +24,7 @@ const withRows = (list) => { calls.length = 0; reply = () => new Response(JSON.s
 try {
   // 1) La tabla manda sobre el entorno, y una sola consulta da los cuatro topes.
   process.env.BRIGHTDATA_MONTHLY_USD = '5';
-  withRows([{ provider: 'brightdata', monthly_usd: 12 }, { provider: 'serpapi', monthly_usd: 4 }]);
+  withRows([{ provider: 'brightdata', monthly_usd: 12, updated_by: 'dueño' }, { provider: 'serpapi', monthly_usd: 4, updated_by: 'dueño' }]);
   const caps = await readCaps();
   eq(caps.brightdata.usd, 12, 'el importe de la tabla manda sobre BRIGHTDATA_MONTHLY_USD');
   eq(caps.brightdata.source, 'tabla', 'el tope se declara como «tabla»');
@@ -37,13 +37,25 @@ try {
   // 2) Cambiar la fila cambia la decisión de gasto de verdad (lo que antes no pasaba).
   ok(canSpend('brightdata', 11.99, process.env, 1, caps.brightdata.usd).ok, 'con 12 en la tabla cabe un gasto de 11,99');
   ok(!canSpend('brightdata', 11.99, process.env).ok, 'sin el tope de la tabla, el respaldo del entorno (5) lo bloquea');
-  withRows([{ provider: 'brightdata', monthly_usd: 2 }]);
+  withRows([{ provider: 'brightdata', monthly_usd: 2, updated_by: 'dueño' }]);
   const low = await capForOrg('brightdata');
   eq(low.usd, 2, 'bajar la tabla a 2 baja el tope efectivo');
   ok(!canSpend('brightdata', 1.9999, {}, 2, low.usd).ok, 'con 2 no caben los dos intentos reservados');
 
+  // 2b) La semilla de la migración (filas sin `updated_by`) no es una decisión del propietario: no pisa el entorno.
+  process.env.SERPAPI_MONTHLY_USD = '1';
+  withRows([{ provider: 'serpapi', monthly_usd: 5, updated_by: null }]);
+  const seeded = await capForOrg('serpapi');
+  eq(seeded.usd, 1, 'una fila sembrada (5 USD, sin updated_by) no sustituye al SERPAPI_MONTHLY_USD del operador');
+  eq(seeded.source, 'entorno');
+  delete process.env.SERPAPI_MONTHLY_USD;
+  withRows([{ provider: 'serpapi', monthly_usd: 3, updated_by: 'dueño', updated_at: '2026-11-21T10:00:00Z' }]);
+  const saved = await capForOrg('serpapi');
+  eq(saved.updated_by, 'dueño', 'quién lo guardó viaja con el tope');
+  eq(saved.updated_at, '2026-11-21T10:00:00Z');
+
   // 3) Cero es un tope válido y significa «aquí no se gasta».
-  withRows([{ provider: 'serpapi', monthly_usd: 0 }]);
+  withRows([{ provider: 'serpapi', monthly_usd: 0, updated_by: 'dueño' }]);
   const zero = await capForOrg('serpapi');
   eq(zero.usd, 0, 'el 0 se respeta, no se sustituye por el entorno');
   eq(zero.source, 'tabla');
@@ -53,7 +65,7 @@ try {
 
   // 4) Un importe ilegible no se recorta en silencio: se cae al entorno y se declara.
   process.env.SERPAPI_MONTHLY_USD = '3';
-  withRows([{ provider: 'serpapi', monthly_usd: 'mucho' }]);
+  withRows([{ provider: 'serpapi', monthly_usd: 'mucho', updated_by: 'dueño' }]);
   const bad = await capForOrg('serpapi');
   eq(bad.usd, 3, 'el importe inválido cae al entorno');
   eq(bad.source, 'entorno');
@@ -89,7 +101,7 @@ try {
   ok(/no devolvió una lista/.test(String(weird.error)), `declara la forma inesperada: ${weird.error}`);
 
   // 7) Se pide por organización y no se mezclan proveedores.
-  withRows([{ provider: 'zenrows', monthly_usd: 2.5 }]);
+  withRows([{ provider: 'zenrows', monthly_usd: 2.5, updated_by: 'dueño' }]);
   const other = await readCaps('otra-org');
   eq(other.zenrows.usd, 2.5, 'lee la fila del proveedor pedido');
   eq(other.brightdata.usd, 5, 'la fila de otro proveedor no se mezcla');

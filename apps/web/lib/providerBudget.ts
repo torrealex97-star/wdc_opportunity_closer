@@ -56,7 +56,7 @@ export const PROVIDER_METERS: Record<MeteredProvider, ProviderMeter> = {
 
 export type CapSource = 'tabla' | 'entorno' | 'defecto';
 /** Tope efectivo y de dónde sale: la tabla del panel, la variable de entorno o el defecto del proveedor. */
-export type Cap = { usd: number; source: CapSource; error: string | null };
+export type Cap = { usd: number; source: CapSource; error: string | null; /** Quién guardó el tope desde el panel (solo `tabla`). */ updated_by?: string | null; updated_at?: string | null };
 
 /**
  * Importe válido para un tope: 0–5.000 USD, el mismo rango que el `CHECK` de `provider_budget`. Se distingue
@@ -119,6 +119,18 @@ export function spentFromNotes(notes: Array<{ vendor?: string | null; note?: str
     else sum += value;
   }
   return { usd: Math.round(sum * 1e6) / 1e6, partial };
+}
+
+/** Peticiones anotadas por un proveedor (`3 petición(es)`); `null` si ninguna nota las trae. */
+export function requestsFromNotes(notes: Array<{ vendor?: string | null; note?: string | null }>, provider: MeteredProvider): number | null {
+  const mine = notes.filter(row => row.vendor === provider || (row.note ?? '').includes(`proveedor=${provider}`));
+  let total = 0;
+  let seen = false;
+  for (const row of mine) {
+    const match = /(\d+) petici[oó]n\(es\)/.exec(row.note ?? '');
+    if (match) { total += Number(match[1]); seen = true; }
+  }
+  return seen ? total : null;
 }
 
 /** Nota única para `external_ingest_runs`: la lee el marcador y se lee a sí misma al calcular el tope. */

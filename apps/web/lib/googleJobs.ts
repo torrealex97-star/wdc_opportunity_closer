@@ -1,6 +1,9 @@
 import { getSecret } from './integrations';
-import { ingest, pausedSourcesStrict, type Candidate } from './external';
-import { callTimeout, timeLeft } from './cronBudget';
+import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './external';
+import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
+import { loadMeter, type Meter } from './providerCaps';
+import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
+import { BrightDataError, brightDataSource, parseBrightDataSecret, resolveBrightDataConfig, serpJobs, type BrightDataConfig } from './providers/brightdata';
 
 // Google Jobs vía SerpApi: la única fuente de ofertas ya conectada que puede
 // aportar closers de España sin una clave nueva. Google Jobs indexa InfoJobs,
@@ -147,6 +150,15 @@ export type GoogleJobsOutcome = {
   cost_usd?: number;
   error?: string;
   truncated?: boolean;
+  /** Búsquedas y coste por proveedor (la cascada usa Bright Data antes que SerpApi). */
+  by_provider?: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>>;
+  /** Dorks que no se lanzaron porque el tope mensual del proveedor no daba para más. */
+  skipped_budget?: number;
+  /** Un gasto real no se pudo anotar: el marcador de inversión lo verá de menos. */
+  spend_unrecorded?: boolean;
+  /** Avisos que no hacen fallar la fuente: Bright Data falló y SerpApi cubrió la búsqueda; Google sin panel de empleos. */
+  warnings?: string[];
+  no_jobs_panel?: number;
 };
 
 type Fetcher = (dork: Dork, timeoutMs: number) => Promise<Candidate[]>;
@@ -169,38 +181,124 @@ export function serpapiFetcher(secret: string): Fetcher {
   };
 }
 
-// Recoge los dorks de closer/ES con la clave ya guardada. Un fallo de un dork no
-// tumba los demás; sin tiempo se corta y se declara. Nada se publica: los
-// candidatos entran como borradores y siguen exigiendo la revisión del operador.
-export async function collectGoogleJobs(via: string, deadline?: number, fetchFor: (secret: string) => Fetcher = serpapiFetcher): Promise<GoogleJobsOutcome> {
+/**
+ * Google Jobs vía Bright Data (1/16 del precio de SerpApi). Un fallo —clave rechazada, zona que no es de SERP,
+ * HTML en vez de JSON— se lanza para que la cascada pase a SerpApi; una respuesta sin panel de empleos para
+ * ese dork cuenta como «sin ofertas» solo si Bright Data respondió JSON de verdad.
+ */
+export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void): Fetcher {
+  return async (dork, timeoutMs) => {
+    // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
+    const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
+    if (!result.hasJobsPanel) onNoPanel?.();
+    return result.candidates;
+  };
+}
+
+// Recoge los dorks de closer/ES. Cascada por coste: Bright Data (0,0015 USD) si hay clave y tope, y SerpApi
+// (0,025 USD) como respaldo de cada dork que Bright Data no resuelva. Antes de CADA búsqueda se comprueba el
+// tope mensual del proveedor (`provider_budget`/entorno) contra el gasto ya anotado; sin gasto legible no se
+// lanza nada. Lo gastado se anota con el formato único (`proveedor=… · coste_usd=…`) para que el marcador de
+// inversión lo sume. Un fallo de un dork no tumba los demás; sin tiempo se corta y se declara. Nada se
+// publica: los candidatos entran como borradores y siguen exigiendo la revisión del operador.
+export async function collectGoogleJobs(
+  via: string,
+  deadline?: number,
+  fetchFor: (secret: string) => Fetcher = serpapiFetcher,
+  deps: { brightFetcher?: (config: BrightDataConfig, onNoPanel?: () => void) => Fetcher; meter?: Meter } = {},
+): Promise<GoogleJobsOutcome> {
   try {
     const paused = await pausedSourcesStrict();
     if (!paused) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'No se pudo comprobar si la fuente está pausada; se reintenta en la próxima ejecución.' };
     if (paused.has(GOOGLE_JOBS_SOURCE)) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Fuente pausada' };
     const limit = maxDorks();
     if (limit === 0) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Recogida de Google Jobs desactivada (SERPAPI_JOBS_MAX_DORKS=0).' };
-    const secret = await getSecret('serpapi');
-    if (!secret) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi' };
-    const fetchQuery = fetchFor(secret);
-    const dorks = dorkWindow(Date.now(), limit);
-    const all: Candidate[] = []; const errors: string[] = []; let truncated = false;
-    // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice.
+    const [serpSecret, brightSecret] = await Promise.all([getSecret('serpapi'), getSecret('brightdata')]);
+    // La clave puede venir sola (sin zona): la zona SERP se descubre con la cuenta (llamada gratuita). Sin zona
+    // SERP utilizable Bright Data no entra en la cascada y SerpApi cubre.
+    let brightConfig: BrightDataConfig | null = null;
+    if (brightSecret) {
+      const parsed = parseBrightDataSecret(brightSecret);
+      brightConfig = parsed?.serpZone ? parsed : (await resolveBrightDataConfig(brightSecret).catch(() => null))?.config ?? null;
+      if (brightConfig && !brightConfig.serpZone) brightConfig = null;
+    }
+    if (!serpSecret && !brightConfig) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi ni de Bright Data' };
+    // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice. Va ANTES de leer el gasto del mes
+    // (una lectura paginada) para no gastar el tramo en preparar una búsqueda que ya no cabe.
     if (timeLeft(deadline) < 3_500) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin tiempo en el presupuesto del cron: se reintentará en la próxima ejecución.', searches: 0, cost_usd: 0, truncated: true };
     }
-    const timeout = callTimeout(12_000, deadline);
-    // En paralelo: los dorks son independientes y en serie no cabían en el tramo del
-    // cron (la primera pasada se cortó en el tercero). Un fallo no oculta los demás.
-    const settled = await Promise.allSettled(dorks.map(dork => fetchQuery(dork, timeout)));
+    const meter = deps.meter ?? await loadMeter();
+    let noPanel = 0;
+    const serpFetch = serpSecret ? fetchFor(serpSecret) : null;
+    const brightFetch = brightConfig ? (deps.brightFetcher ?? brightDataFetcher)(brightConfig, () => { noPanel++; }) : null;
+    const dorks = dorkWindow(Date.now(), limit);
+    const all: Candidate[] = []; const errors: string[] = []; const warnings: string[] = []; let truncated = false;
+    const used: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>> = {};
+    const bill = (provider: MeteredProvider, sign = 1) => {
+      const price = PROVIDER_METERS[provider].usdPerRequest * sign;
+      meter.charge(provider, price);
+      const row = used[provider] ?? { searches: 0, cost_usd: 0 };
+      row.searches += sign; row.cost_usd = Math.round((row.cost_usd + price) * 1e6) / 1e6;
+      used[provider] = row;
+    };
+    // La reserva se hace antes de lanzar (el tope vale también para búsquedas simultáneas); si el proveedor
+    // rechaza la petición (HTTP de error, red) no la cobra y la reserva se devuelve. Una respuesta 200 que no
+    // sirve (HTML en vez de JSON) sí se cobra: Bright Data factura las peticiones correctas.
+    const refund = (provider: MeteredProvider, err: unknown) => {
+      if (provider === 'brightdata' && err instanceof BrightDataError && err.status === 200) return;
+      bill(provider, -1);
+    };
+    const blocked: string[] = [];
+    // En paralelo: los dorks son independientes y en serie no cabían en el tramo del cron (la primera pasada se
+    // cortó en el tercero). El proveedor de cada dork se decide ANTES de lanzar para que el tope valga también
+    // para las búsquedas simultáneas; si Bright Data falla, ese dork pasa a SerpApi si el tope lo permite.
+    const plan = dorks.map(dork => {
+      if (brightFetch && meter.check('brightdata').ok) { bill('brightdata'); return { dork, first: 'brightdata' as const }; }
+      if (serpFetch && meter.check('serpapi').ok) { bill('serpapi'); return { dork, first: 'serpapi' as const }; }
+      blocked.push(meter.check(serpFetch ? 'serpapi' : 'brightdata').reason ?? 'tope mensual agotado');
+      return { dork, first: null };
+    });
+    const skippedBudget = plan.filter(item => item.first === null).length;
+    const settled = await Promise.allSettled(plan.map(async ({ dork, first }) => {
+      if (first === null) return [] as Candidate[];
+      if (first === 'brightdata') {
+        try { return await brightFetch!(dork, callTimeout(12_000, deadline)); }
+        catch (err) {
+          refund('brightdata', err);
+          // Sin SerpApi, sin tope para él o sin tiempo en el reloj compartido, el fallo se declara tal cual.
+          if (!serpFetch || !meter.check('serpapi').ok || timeLeft(deadline) < MIN_STEP_MS) throw err;
+          bill('serpapi');
+          // Es un aviso, no un fallo de la fuente: SerpApi lo cubre. Solo cuenta como error si SerpApi también falla.
+          warnings.push(`Bright Data (${dork.q}, ${dork.gl}): ${(err as Error).message} → SerpApi`);
+          try { return await serpFetch(dork, callTimeout(12_000, deadline)); } catch (second) { refund('serpapi', second); throw second; }
+        }
+      }
+      try { return await serpFetch!(dork, callTimeout(12_000, deadline)); } catch (err) { refund('serpapi', err); throw err; }
+    }));
     settled.forEach((result, i) => {
       if (result.status === 'fulfilled') all.push(...result.value);
-      else errors.push(`${dorks[i].q} (${dorks[i].gl}): ${(result.reason as Error)?.message ?? 'fallo'}`);
+      else errors.push(`${plan[i].dork.q} (${plan[i].dork.gl}): ${(result.reason as Error)?.message ?? 'fallo'}`);
     });
-    const searches = dorks.length;
+    for (const key of Object.keys(used) as MeteredProvider[]) if (!used[key]?.searches) delete used[key];
+    const searches = Object.values(used).reduce((n, row) => n + (row?.searches ?? 0), 0);
+    const cost = Number(Object.values(used).reduce((sum, row) => sum + (row?.cost_usd ?? 0), 0).toFixed(4));
     if (deadline !== undefined && Date.now() >= deadline) truncated = true;
-    const cost = Number((searches * SEARCH_USD).toFixed(3));
-    if (!all.length && errors.length) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: errors[0], searches, cost_usd: cost, truncated: truncated || undefined };
-    if (!all.length && truncated) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin tiempo en el presupuesto del cron: se reintentará en la próxima ejecución.', searches, cost_usd: cost, truncated: true };
+    // El gasto se anota por proveedor ANTES de decidir el resultado: una búsqueda se cobra aunque no traiga nada.
+    let spendUnrecorded = false;
+    for (const provider of ['brightdata', 'serpapi'] as const) {
+      const row = used[provider];
+      if (!row) continue;
+      const source = provider === 'brightdata' ? brightDataSource('google') : GOOGLE_JOBS_SOURCE;
+      const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: row.searches, costUsd: row.cost_usd, detail: 'google-jobs' }));
+      if (!ok) spendUnrecorded = true;
+    }
+    const common = { searches, cost_usd: cost, by_provider: used, ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
+    if (!all.length && skippedBudget === plan.length) {
+      return { source: GOOGLE_JOBS_SOURCE, ok: false, error: `Sin presupuesto: ${blocked[0] ?? 'tope mensual agotado'}`, searches: 0, cost_usd: 0, skipped_budget: skippedBudget };
+    }
+    if (!all.length && errors.length) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: errors[0], ...common };
+    if (!all.length && truncated) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin tiempo en el presupuesto del cron: se reintentará en la próxima ejecución.', ...common };
     // El mismo anuncio sale en varios dorks. Se queda uno por id y, si alguno trae el
     // enlace del portal, ese: el de la ficha de Google no debe pisarlo.
     const isGoogle = (u: string) => /^https?:\/\/(www\.)?google\./i.test(u);
@@ -210,9 +308,15 @@ export async function collectGoogleJobs(via: string, deadline?: number, fetchFor
       if (!prev || (isGoogle(prev.url) && !isGoogle(c.url))) byId.set(c.external_id, c);
     }
     const unique = [...byId.values()];
-    const notes = [errors.length ? `${errors.length} búsqueda(s) fallaron` : '', truncated ? 'cortada por presupuesto de tiempo' : ''].filter(Boolean).join(' · ') || undefined;
+    const notes = [
+      errors.length ? `${errors.length} búsqueda(s) fallaron` : '',
+      warnings.length ? `${warnings.length} búsqueda(s) pasaron de Bright Data a SerpApi` : '',
+      noPanel ? `${noPanel} búsqueda(s) de Bright Data sin panel de empleos de Google (no es «0 ofertas» comprobado)` : '',
+      truncated ? 'cortada por presupuesto de tiempo' : '',
+      skippedBudget ? `${skippedBudget} búsqueda(s) sin lanzar por el tope mensual` : '',
+    ].filter(Boolean).join(' · ') || undefined;
     const result = await ingest(GOOGLE_JOBS_SOURCE, via, unique, notes);
-    return { source: GOOGLE_JOBS_SOURCE, ok: true, received: result.received, accepted: result.accepted, searches, cost_usd: cost, truncated: truncated || undefined };
+    return { source: GOOGLE_JOBS_SOURCE, ok: true, received: result.received, accepted: result.accepted, ...common };
   } catch (err) {
     return { source: GOOGLE_JOBS_SOURCE, ok: false, error: (err as Error).message };
   }

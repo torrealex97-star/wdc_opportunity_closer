@@ -11,7 +11,7 @@ import { serviceRest } from './supabaseAuth';
 export const METERED_PROVIDERS = Object.keys(PROVIDER_METERS) as MeteredProvider[];
 
 export async function readCaps(orgId: string = ORG): Promise<Record<MeteredProvider, Cap>> {
-  const response = await serviceRest(`provider_budget?org_id=eq.${encodeURIComponent(orgId)}&select=provider,monthly_usd`).catch(() => null);
+  const response = await serviceRest(`provider_budget?org_id=eq.${encodeURIComponent(orgId)}&select=provider,monthly_usd,updated_by,updated_at`).catch(() => null);
   const rows = response?.ok ? await response.json().catch(() => null) : null;
   const error = !response
     ? 'No se pudo consultar provider_budget; se usa el tope del entorno.'
@@ -20,16 +20,20 @@ export async function readCaps(orgId: string = ORG): Promise<Record<MeteredProvi
       : !Array.isArray(rows)
         ? 'provider_budget no devolvió una lista; se usa el tope del entorno.'
         : null;
-  const byProvider = new Map<string, { monthly_usd?: unknown }>();
+  const byProvider = new Map<string, { monthly_usd?: unknown; updated_by?: string | null; updated_at?: string | null }>();
   if (Array.isArray(rows)) {
-    for (const row of rows as Array<{ provider?: unknown; monthly_usd?: unknown }>) {
-      if (typeof row.provider === 'string') byProvider.set(row.provider, row);
+    for (const row of rows as Array<{ provider?: unknown; monthly_usd?: unknown; updated_by?: string | null; updated_at?: string | null }>) {
+      // Una fila sin `updated_by` es la semilla de la migración (5 USD para todos), no una decisión del
+      // propietario: no pisa la variable de entorno que el operador ya tuviera. Solo manda lo guardado en el panel.
+      if (typeof row.provider === 'string' && row.updated_by) byProvider.set(row.provider, row);
     }
   }
   const caps = {} as Record<MeteredProvider, Cap>;
   for (const provider of METERED_PROVIDERS) {
-    const cap = capFromRow(provider, byProvider.get(provider) ?? null);
-    caps[provider] = error ? { ...cap, error: cap.error ?? error } : cap;
+    const row = byProvider.get(provider) ?? null;
+    const cap = capFromRow(provider, row);
+    const withMeta = row && cap.source === 'tabla' ? { ...cap, updated_by: row.updated_by ?? null, updated_at: row.updated_at ?? null } : cap;
+    caps[provider] = error ? { ...withMeta, error: withMeta.error ?? error } : withMeta;
   }
   return caps;
 }

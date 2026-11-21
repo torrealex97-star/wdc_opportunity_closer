@@ -6,7 +6,7 @@ export function startMocks({ authPort, enginePort }) {
   const state = {
     users: new Map([['owner@test.dev', { id: 'u1', password: 'Correcta-12345' }]]),
     admins: [{ email: 'owner@test.dev', role: 'owner', invited_by: 'bootstrap', created_at: '2026-10-16T00:00:00Z' }],
-    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
+    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], providerBudget: [], providerBudgetMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
     engineDown: false, // simula la pausa de cuota del motor (Sites devuelve 503)
     // Pausa REAL de la plataforma, medida en producción: el sitio está publicado pero la cuota del mes se
     // agotó, y TODAS sus rutas responden 429 con texto plano. `error` imita una caída de verdad (500 HTML).
@@ -84,7 +84,7 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'PATCH') { Object.assign(state.connections.get(eq) ?? {}, body); return send(res, 204, {}); }
       if (req.method === 'DELETE') { state.connections.delete(eq); return send(res, 204, {}); }
     }
-    // Bright Data SERP simulado: valida el contrato (Bearer, zona y `format`) y devuelve la forma
+    // Bright Data SERP simulado: valida el contrato (Bearer, zona, `format: raw` y `brd_json=1`) y devuelve la forma
     // documentada `jobs.items[]`. Solo la clave de prueba `testkey-1234` es válida.
     if (url.pathname === '/request' && req.method === 'POST') {
       if (bearer !== 'testkey-1234') return send(res, 401, { error: 'invalid api key' });
@@ -93,7 +93,10 @@ export function startMocks({ authPort, enginePort }) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         return res.end('<!doctype html><html><head><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Closer Unlocker","datePosted":"2026-11-20","description":"Ventas B2B por teléfono","hiringOrganization":{"name":"Acme Unlocker"},"jobLocation":{"address":{"addressLocality":"Madrid","addressCountry":"ES"}},"url":"https://acme.test/careers/unlocker"}</script></head></html>');
       }
-      if (body.zone !== 'serp_zone' || body.format !== 'json' || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
+      // Contrato de la documentación: `brd_json=1` EN LA URL (`format` raw o json: el cliente desenvuelve el envoltorio). Sin él Bright Data devuelve el
+      // HTML de Google (aquí, un 200 con HTML), que es lo que rompía la integración con la clave real.
+      if (body.zone !== 'serp_zone' || !['raw', 'json'].includes(body.format) || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
+      if (!String(body.url).includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><body>Google</body></html>'); }
       return send(res, 200, { jobs: { items: [
         { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
         { title: 'Setter de ventas', company: 'Beta BD', location: 'Barcelona, España', source: 'LinkedIn', description: 'Agenda de citas cualificadas', link: 'https://www.linkedin.com/jobs/view/bd-2', tags: [], posted_at: 'hace 1 día' },
@@ -135,6 +138,16 @@ export function startMocks({ authPort, enginePort }) {
       if (q.source?.startsWith('eq.')) rows = rows.filter(r => r.source === decodeURIComponent(q.source.slice(3)));
       if (q.enabled === 'eq.false') rows = rows.filter(r => r.enabled === false);
       return send(res, 200, rows.map(r => ({ source: r.source, enabled: r.enabled, route_order: r.route_order ?? [] })));
+    }
+    // Topes por proveedor (tabla `provider_budget`): upsert por (org_id, provider), como PostgREST con on_conflict.
+    if (url.pathname === '/rest/v1/provider_budget') {
+      if (state.providerBudgetMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.provider_budget' in the schema cache" });
+      if (req.method === 'POST') {
+        const at = state.providerBudget.findIndex(r => r.org_id === body.org_id && r.provider === body.provider);
+        if (at >= 0) state.providerBudget[at] = { ...state.providerBudget[at], ...body }; else state.providerBudget.push({ ...body });
+        return send(res, 201, null);
+      }
+      return send(res, 200, state.providerBudget);
     }
     if (url.pathname === '/rest/v1/external_ingest_runs') {
       if (req.method === 'POST') { state.ingestRuns.unshift({ ...body, created_at: new Date().toISOString() }); return send(res, 201, {}); }

@@ -157,6 +157,60 @@ await step('APIs: borrar quita la clave', async () => {
   assert.ok(!state.connections.has('groq'));
   assert.equal((await call('/api/admin/connections')).json.connections.find(c => c.provider === 'groq').configured, false);
 });
+let spendKeptRuns = null;
+await step('Control de inversión: un solo cuadro con el gasto y el tope de todos los proveedores de pago', async () => {
+  // Historial aislado: se guarda el de los pasos anteriores (el objetivo diario de ofertas de los siguientes depende de él) y se restaura al final.
+  spendKeptRuns = state.ingestRuns; state.providerBudget = []; state.providerBudgetMissing = false; state.ingestRuns = [];
+  state.ingestRuns.push({ source: 'brightdata-google', via: 'cron', note: 'ruta cascada · proveedor=brightdata · 3 petición(es) · coste_usd=0.004500 · google-jobs', created_at: new Date().toISOString() });
+  state.ingestRuns.push({ source: 'google-jobs', via: 'cron', note: 'ruta cascada · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000 · google-jobs', created_at: new Date().toISOString() });
+  const r = await call('/api/admin/spend');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'serpapi', 'zenrows', 'scrapingbee']);
+  const bd = r.json.providers.find(p => p.provider === 'brightdata');
+  assert.equal(bd.spent_usd, 0.0045); assert.equal(bd.requests, 3); assert.equal(bd.cap_source, 'defecto');
+  const serp = r.json.providers.find(p => p.provider === 'serpapi');
+  assert.equal(serp.spent_usd, 0.05); assert.equal(serp.used_pct, 1);
+  assert.equal(r.json.providers.find(p => p.provider === 'zenrows').spent_usd, 0, 'sin gasto registrado y con historial legible es 0, no un hueco');
+  assert.equal(r.json.table_ok, true); assert.equal(r.json.spent_readable, true);
+  assert.ok('apify' in r.json && 'cap_usd' in r.json.apify, 'Apify entra en el mismo cuadro');
+  assert.ok(!JSON.stringify(r.json).includes('secret'), 'sin secretos en la respuesta');
+});
+await step('Control de inversión: el propietario fija el tope, manda sobre el entorno y se audita quién', async () => {
+  const bad = await call('/api/admin/spend', { method: 'POST', body: { provider: 'apify', monthly_usd: 5 } });
+  assert.equal(bad.status, 422, 'Apify tiene su propio control');
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: -1 } })).status, 422);
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: '' } })).status, 422, 'vacío no es cero');
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 9999 } })).status, 422);
+  for (const bad of [' ', true, [5], {}, 'abc', '5 USD']) assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: bad } })).status, 422, `no es un importe: ${JSON.stringify(bad)}`);
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: '7,5' } })).status, 200, 'la coma decimal del panel en español vale');
+  const ok = await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 12.5 } });
+  assert.equal(ok.status, 200);
+  const after = (await call('/api/admin/spend')).json.providers.find(p => p.provider === 'serpapi');
+  assert.equal(after.cap_usd, 12.5); assert.equal(after.cap_source, 'tabla'); assert.ok(after.cap_updated_by);
+  assert.equal(after.remaining_usd, 12.45);
+  const zero = await call('/api/admin/spend', { method: 'POST', body: { provider: 'zenrows', monthly_usd: 0 } });
+  assert.equal(zero.status, 200, '0 es un tope válido: no se gasta nada');
+  assert.equal((await call('/api/admin/spend')).json.providers.find(p => p.provider === 'zenrows').cap_usd, 0);
+});
+await step('Control de inversión: solo el propietario cambia un tope; un administrador lo ve', async () => {
+  const saved = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
+  assert.equal((await call('/api/admin/spend')).status, 200);
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 99 } })).status, 403);
+  jar = saved;
+  jar = {}; assert.equal((await call('/api/admin/spend')).status, 401, 'sin sesión no se ve');
+  jar = saved;
+});
+await step('Control de inversión: sin tabla de topes sigue con el entorno y lo declara; sin historial no inventa ceros', async () => {
+  state.providerBudgetMissing = true;
+  const r = (await call('/api/admin/spend')).json;
+  assert.equal(r.table_ok, false);
+  assert.equal(r.providers.find(p => p.provider === 'serpapi').cap_source, 'defecto', 'cae al valor por defecto, declarado');
+  const save = await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 3 } });
+  assert.equal(save.status, 503, 'no finge haber guardado');
+  state.providerBudgetMissing = false;
+  if (spendKeptRuns) { state.ingestRuns = spendKeptRuns; spendKeptRuns = null; }
+  state.providerBudget = [];
+});
 await step('sin sesión: connections 401', async () => { const saved = jar; jar = {}; assert.equal((await call('/api/admin/connections')).status, 401); jar = saved; });
 await step('ingest: cerrado sin token; valida el cuerpo; limpia datos personales y URLs peligrosas', async () => {
   const ingest = (body, token = 'ingest-token-0123456789abcdef0123') => call('/api/ingest', { method: 'POST', cookies: false, body, headers: token ? { authorization: `Bearer ${token}` } : {} });
@@ -485,7 +539,11 @@ await step('recogida de APIs oficiales: solo propietario; usa las claves guardad
   assert.ok(google && google.ok === false && /desactivada/.test(google.error), JSON.stringify(google));
   const bySource = Object.fromEntries([...state.external.values()].map(o => [o.source, o]));
   assert.equal(bySource.infojobs.title, 'Closer de ventas high ticket'); assert.equal(bySource.adzuna.location, 'Barcelona, España'); assert.equal(bySource.jooble.editorial_status, 'draft');
-  assert.equal(state.ingestRuns.filter(x => x.via === 'panel').length, 3);
+  // Una fila por API oficial. Las búsquedas de respaldo de SerpApi que respondieron sin resultados dejan además
+  // su fila de GASTO (`proveedor=serpapi`): se cobran aunque no traigan nada, y así el tope mensual las suma.
+  const panelRuns = state.ingestRuns.filter(x => x.via === 'panel');
+  assert.equal(panelRuns.filter(x => !/proveedor=/.test(x.note ?? '')).length, 3);
+  assert.ok(panelRuns.filter(x => /proveedor=serpapi/.test(x.note ?? '')).every(x => /coste_usd=0\.025000/.test(x.note)), 'cada gasto de respaldo se anota a 0,025 USD');
 });
 await step('cron: exige CRON_SECRET', async () => {
   assert.equal((await call('/api/cron/collect', { cookies: false })).status, 401);
