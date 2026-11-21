@@ -208,8 +208,9 @@ def main(argv=None) -> None:
         raise SystemExit(f'La hoja tiene {len(courses)} cursos y hay {len(COURSE_IDS)} identificadores: revisa '
                          'COURSE_IDS (los identificadores existentes no se cambian: borrarían el avance guardado).')
     OUT.write_text(render(courses), encoding='utf-8')
-    print(f"{len(courses)} cursos, {sum(len(c['lessons']) for c in courses)} lecciones, "
-          f"{sum(len(l['resources']) for c in courses for l in c['lessons'])} recursos → {OUT.relative_to(ROOT)}")
+    lessons = sum(len(course['lessons']) for course in courses)
+    resources = sum(len(lesson['resources']) for course in courses for lesson in course['lessons'])
+    print(f"{len(courses)} cursos, {lessons} lecciones, {resources} recursos → {OUT.relative_to(ROOT)}")
 
 
 if __name__ == '__main__':

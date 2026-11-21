@@ -1,5 +1,14 @@
 # Estado
 
+## Relevo al día (262-273), árbol sin duplicados y el E741 del exportador fuera (sesión 279) — 2026-11-21
+
+- **Petición del propietario**: «Borra los 13 duplicados sin seguimiento del árbol y confírmame que pytest y ruff salen limpios en local. Después actualiza `docs/ACTIVE_HANDOFF.md` con las sesiones 262-273 y fusiónalo a `main` con merge commit cuando `verify` y `web-admin` estén en verde».
+- **Duplicados borrados** (*verified*): ya no están los 13 ficheros «… 2/3» sin seguimiento (once copias idénticas de su original y dos versiones **anteriores** de `scripts/fix_docs_links.py` y `tests/test_docs_links.py`); `git status` solo muestra los cambios de esta sesión. Eran el único rojo local: las copias viejas del arreglador de enlaces hacían fallar 3 pruebas de `pytest` que no existen en el CI.
+- **Lint arreglado** (*tested*): `scripts/export_training_courses.py` tenía un `E741` (variable `l` en el recuento del mensaje final). El recuento pasa a dos variables con nombre (`lessons`, `resources`) y el texto que imprime es el mismo; no cambia lo que se escribe en el fichero exportado.
+- **Comprobado en local** (*tested*): `.venv/bin/python -m pytest -q` → **214 pasan, 1 omitida**, exit 0 (190 s); `.venv/bin/ruff check .` → **All checks passed!**, exit 0.
+- **Relevo actualizado** (*inspected*): [`docs/ACTIVE_HANDOFF.md`](ACTIVE_HANDOFF.md) pasa a 2026-11-21 y gana el bloque de las sesiones 262-273 (buscador del mapa del Classroom, recuperación del asistente por ese mapa, repaso del incremento, `globals.css` rehecho sobre `main`, guardián de enlaces, guías de fuentes, los tres pasos de `ui.mjs` y el merge del PR #100), con un puntero a las sesiones 274-278 que ya constan en este documento.
+- **Límites honestos**: (1) el build y las pruebas de navegador se verifican en el CI de la PR (`verify` y `web-admin`); en local no se han vuelto a ejecutar. (2) Nada se ha probado contra servicios reales: sigue sin `GROQ_API_KEY` y sin claves de Bright Data. (3) `Workers Builds: closer-web` y `Supabase Preview` siguen en rojo por configuración de Cloudflare/Supabase, igual que antes de esta sesión. (4) El borrado de los duplicados no deja rastro en el repositorio: no estaban versionados.
+
 ## Cierre de pendientes del panel: última revisión real, tope sin 10.000 y prompt probado (sesión 278) — 2026-11-21
 
 - **Petición del propietario**: cerrar lo que se puede sin claves reales ni DDL; nada de columnas que siempre
