@@ -1,7 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: fix/claves-proveedores-nuevos
+pr: 108
 touches: apps/web/lib/integrations.ts, apps/web/app/api/admin/connections/route.ts, supabase/migrations/20261121_integration_connections_providers.sql, tests/db/integration_connections_providers.sql, tests/admin-auth/flow.mjs, docs/STATUS.md, docs/handoff/archive/2026-11.md
 date: 2026-11-21
 ---
