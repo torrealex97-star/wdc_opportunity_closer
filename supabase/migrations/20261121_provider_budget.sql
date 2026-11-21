@@ -2,9 +2,11 @@
 --
 -- APLICADA en Supabase real (proyecto closer-ia-ops, ref jzchuizybyubtkownhlw) el 2026-11-21,
 -- versión 20261121180401. Prueba: `tests/db/provider_budget.sql` (BEGIN…ROLLBACK).
--- Ojo: hoy el tope efectivo lo sigue leyendo el entorno (`BRIGHTDATA_MONTHLY_USD` y sus equivalentes),
--- y el gasto se deriva de las notas de `external_ingest_runs` (`proveedor=… · coste_usd=…`).
--- El adaptador todavía NO lee `monthly_usd` de esta tabla; queda lista para cuando lo haga.
+-- Desde la sesión 289 (2026-11-21) el adaptador LEE `monthly_usd` por organización
+-- (`apps/web/lib/providerBudgetStore.ts`, una consulta para los cuatro topes); el entorno
+-- (`BRIGHTDATA_MONTHLY_USD` y sus equivalentes) queda como respaldo declarado. El gasto se sigue derivando de
+-- las notas de `external_ingest_runs` (`proveedor=… · coste_usd=…`), que es la fuente de verdad del gasto.
+-- Prueba del adaptador: `tests/admin-auth/provider-budget-org.mjs`.
 --
 -- Una fila por organización y proveedor. El gasto NO se guarda aquí (se deriva de las ejecuciones,
 -- que son la fuente de verdad); esta tabla solo fija el tope y quién lo cambió.
