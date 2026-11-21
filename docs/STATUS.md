@@ -1,5 +1,33 @@
 # Estado
 
+## La clave correcta de Bright Data deja de rechazarse: se acepta sola y clave y zona se validan gratis antes de gastar (sesión 288) — 2026-11-21
+
+- **Petición del propietario**: la clave de Bright Data se estaba rechazando sin motivo cuando era la correcta.
+- **Causa** (*inspected*: código propio y documentación de Bright Data): (1) el panel exigía `API key:zona SERP`
+  y la documentación dice pegar **solo la API key**, así que un texto sin zona se descartaba como «formato
+  incorrecto» sin comprobar nunca la clave; (2) la prueba anunciaba «clave rechazada» también cuando el 200
+  traía el envoltorio `{status_code, headers, body}` o un SERP sin `jobs.items[]`; (3) el rótulo de la tarjeta
+  decía «Rechazada» para cualquier fallo, incluso de tope o de formato.
+- **Cambios**: `parseBrightDataSecret` acepta `API key`, `API key::zona Unlocker` y el formato de tres partes;
+  `GET /zone/get_active_zones` (gratis) valida la clave y descubre las zonas SERP/Unlocker. «Probar» va en
+  orden: formato → cuenta (401 = clave rechazada de verdad) → zona inexistente o de otro tipo, con las zonas
+  de la cuenta en el mensaje → tope → **una** búsqueda real; el 400 de Bright Data se muestra con su propio
+  mensaje. La URL de Google Jobs lleva `brd_json=1` y se desenvuelve `{body}`. La tarjeta solo dice
+  «Rechazada» cuando el detalle nombra la clave o el formato; el resto es «Con error».
+- **Probado** (*tested*): `tests/admin-auth/source-routes.mjs` en verde (clave sola, zonas por tipo, 401 que no
+  inventa zonas, resolución sin red cuando las zonas vienen escritas, envoltorio `{body}`, y que sin zona no se
+  lanza la petición que se cobra); `npm run typecheck -w apps/web` con 0 errores.
+- **Revisión con ojos frescos (mismo día)**: fuera el `probe` duplicado del registro de proveedores (era
+  inalcanzable: la prueba de Bright Data tiene su propio camino), la rama muerta de clave nula y
+  `brightDataLast4` (sin usos). Un fallo de red en «Probar» ahora anota **1 petición como posible gasto**
+  (antes un timeout facturado no se anotaba y el tope quedaba corto) y la reserva es explícita con
+  `requests: 1`; una comprobación nueva fija que el precio del proveedor y el del medidor son el mismo número.
+  Sin cambios de comportamiento en los caminos que ya funcionaban.
+- **Límites honestos**: no hay clave real en este entorno, así que **no se ha hecho ninguna llamada a Bright
+  Data**; el contrato de `GET /zone/get_active_zones` y del envoltorio viene de su documentación, no de una
+  respuesta real. El tope efectivo sigue leyéndose del entorno (`BRIGHTDATA_MONTHLY_USD`), no de
+  `provider_budget`. Sin captura de la tarjeta del panel.
+
 ## Las claves nuevas del panel (Bright Data, ZenRows y ScrapingBee) ya se guardan (sesión 285) — 2026-11-21
 
 - **Petición del propietario**: «cuando intento añadir la api de bright data, etc de las nuevas no se guardan,

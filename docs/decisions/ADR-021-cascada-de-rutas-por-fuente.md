@@ -47,7 +47,11 @@ mismas para todas.
 - Reintento **una** vez en 429/5xx; 401/403 se declaran sin reintentar. Error tipado con estado.
 - `unlockHtml` para la zona Web Unlocker; devuelve HTML y el coste de la petición.
 
-La clave se guarda como `API key:zona SERP[:zona Unlocker]`, cifrada como las demás. «Guardar» no gasta;
+La clave se guarda tal como la da Bright Data (la **API key sola**) o, si se prefiere fijarlas, como
+`API key:zona SERP[:zona Unlocker]`; va cifrada como las demás. Con la clave sola, las zonas se descubren en
+la cuenta con `GET /zone/get_active_zones` (gratis); esa misma consulta valida la clave y la zona **antes** de
+la petición de pago (2026-11-21: antes se exigía el formato con zona y una clave correcta se rechazaba sin
+comprobarla). «Guardar» no gasta;
 «Probar» hace una petición real, comprueba el tope, anota `proveedor=brightdata · coste_usd=…` y falla
 cerrada si no puede anotarlo. Esa prueba también es solo del propietario. Una clave con solo zona SERP no
 marca lista la vía Unlocker: hace falta la segunda zona o una clave de ZenRows/ScrapingBee. La prueba del

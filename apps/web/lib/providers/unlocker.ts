@@ -1,4 +1,4 @@
-import { parseBrightDataSecret, unlockHtml, BrightDataError } from './brightdata';
+import { resolveBrightDataConfig, unlockHtml, BrightDataError } from './brightdata';
 
 // Proveedores que devuelven el HTML de una página (no una lista estructurada). Se usan SOLO donde ya
 // existe un extractor probado —JSON-LD `JobPosting` o RSS—, nunca como sustituto de un portal que la app
@@ -14,7 +14,8 @@ export type UnlockerPreset = {
   docs: string;
   /** Lo que hay que pegar en el panel. */
   secretHint: string;
-  build: (secret: string, url: string) => string;
+  /** ZenRows y ScrapingBee construyen la URL; Bright Data usa su propio cliente y no la necesita. */
+  build?: (secret: string, url: string) => string;
 };
 
 export const UNLOCKER_PRESETS: Record<UnlockerProvider, UnlockerPreset> = {
@@ -24,7 +25,6 @@ export const UNLOCKER_PRESETS: Record<UnlockerProvider, UnlockerPreset> = {
     usdPerRequest: 0.0015,
     docs: 'https://docs.brightdata.com/products/web-unlocker/quickstart',
     secretHint: 'API key:zona SERP:zona Unlocker',
-    build: () => '',
   },
   zenrows: {
     id: 'zenrows',
@@ -56,33 +56,35 @@ export async function fetchHtml(
   url: string,
   options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {},
 ): Promise<HtmlResult> {
-  if (!/^https:\/\//i.test(url)) throw new BrightDataError('Solo se leen páginas HTTPS públicas', 422, false);
+  if (!/^https:\/\//i.test(url)) throw new BrightDataError('Solo se leen páginas HTTPS públicas', 422);
   const { timeoutMs = 20_000, fetchImpl = fetch } = options;
   if (provider === 'brightdata') {
-    const config = parseBrightDataSecret(secret);
-    if (!config) throw new BrightDataError('Formato de clave de Bright Data incorrecto', 422, false);
+    // La API key sola es válida: la zona del Unlocker se descubre en la cuenta (gratis) si no vino escrita.
+    const { config } = await resolveBrightDataConfig(secret, { timeoutMs, fetchImpl });
+    if (!config) throw new BrightDataError('Formato de clave de Bright Data incorrecto', 422);
     return unlockHtml(config, url, { timeoutMs, fetchImpl });
   }
   const preset = UNLOCKER_PRESETS[provider];
-  const target = preset.build(secret, url);
-  let last: Error | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const target = preset.build!(secret, url);
+  let last: BrightDataError | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
     let response: Response;
     try {
       response = await fetchImpl(target, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
     } catch (err) {
-      last = new Error(`No se pudo contactar con ${preset.name}: ${(err as Error).message}`);
-      if (attempt === 0) continue;
+      last = new BrightDataError(`No se pudo contactar con ${preset.name}: ${(err as Error).message}`, null, attempt);
+      if (attempt === 1) continue;
       throw last;
     }
     const text = await response.text().catch(() => '');
-    if (response.ok && text.trim()) return { html: text, requests: 1, costUsd: preset.usdPerRequest };
+    // Se cobra por intento: el tope reserva los dos antes de lanzar.
+    if (response.ok && text.trim()) return { html: text, requests: attempt, costUsd: attempt * preset.usdPerRequest };
     const retryable = response.status === 429 || response.status >= 500;
-    last = new Error(`${preset.name} respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`);
-    if (!retryable || attempt === 1) throw last;
+    last = new BrightDataError(`${preset.name} respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, attempt);
+    if (!retryable || attempt === 2) throw last;
     await new Promise(resolve => setTimeout(resolve, 400));
   }
-  throw last ?? new Error(`${preset.name} no respondió`);
+  throw last ?? new BrightDataError(`${preset.name} no respondió`, null, 2);
 }
 
 export const unlockerProvider = (value: unknown): value is UnlockerProvider =>
