@@ -1,6 +1,6 @@
 import { getSecret } from './integrations';
 import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './external';
-import { callTimeout, timeLeft } from './cronBudget';
+import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
 import { loadMeter, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
 import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs, type BrightDataConfig } from './providers/brightdata';
@@ -156,6 +156,9 @@ export type GoogleJobsOutcome = {
   skipped_budget?: number;
   /** Un gasto real no se pudo anotar: el marcador de inversión lo verá de menos. */
   spend_unrecorded?: boolean;
+  /** Avisos que no hacen fallar la fuente: Bright Data falló y SerpApi cubrió la búsqueda; Google sin panel de empleos. */
+  warnings?: string[];
+  no_jobs_panel?: number;
 };
 
 type Fetcher = (dork: Dork, timeoutMs: number) => Promise<Candidate[]>;
@@ -183,9 +186,11 @@ export function serpapiFetcher(secret: string): Fetcher {
  * HTML en vez de JSON— se lanza para que la cascada pase a SerpApi; una respuesta sin panel de empleos para
  * ese dork cuenta como «sin ofertas» solo si Bright Data respondió JSON de verdad.
  */
-export function brightDataFetcher(config: BrightDataConfig): Fetcher {
+export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void): Fetcher {
   return async (dork, timeoutMs) => {
-    const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs });
+    // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
+    const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
+    if (!result.hasJobsPanel) onNoPanel?.();
     return result.candidates;
   };
 }
@@ -200,7 +205,7 @@ export async function collectGoogleJobs(
   via: string,
   deadline?: number,
   fetchFor: (secret: string) => Fetcher = serpapiFetcher,
-  deps: { brightFetcher?: (config: BrightDataConfig) => Fetcher; meter?: Meter } = {},
+  deps: { brightFetcher?: (config: BrightDataConfig, onNoPanel?: () => void) => Fetcher; meter?: Meter } = {},
 ): Promise<GoogleJobsOutcome> {
   try {
     const paused = await pausedSourcesStrict();
@@ -211,16 +216,17 @@ export async function collectGoogleJobs(
     const [serpSecret, brightSecret] = await Promise.all([getSecret('serpapi'), getSecret('brightdata')]);
     const brightConfig = brightSecret ? parseBrightDataSecret(brightSecret) : null;
     if (!serpSecret && !brightConfig) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi ni de Bright Data' };
-    const meter = deps.meter ?? await loadMeter();
-    const serpFetch = serpSecret ? fetchFor(serpSecret) : null;
-    const brightFetch = brightConfig ? (deps.brightFetcher ?? brightDataFetcher)(brightConfig) : null;
-    const dorks = dorkWindow(Date.now(), limit);
-    const all: Candidate[] = []; const errors: string[] = []; let truncated = false;
-    // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice.
+    // 3,5 s: por debajo no da tiempo ni a una llamada útil; se corta y se dice. Va ANTES de leer el gasto del mes
+    // (una lectura paginada) para no gastar el tramo en preparar una búsqueda que ya no cabe.
     if (timeLeft(deadline) < 3_500) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin tiempo en el presupuesto del cron: se reintentará en la próxima ejecución.', searches: 0, cost_usd: 0, truncated: true };
     }
-    const timeout = callTimeout(12_000, deadline);
+    const meter = deps.meter ?? await loadMeter();
+    let noPanel = 0;
+    const serpFetch = serpSecret ? fetchFor(serpSecret) : null;
+    const brightFetch = brightConfig ? (deps.brightFetcher ?? brightDataFetcher)(brightConfig, () => { noPanel++; }) : null;
+    const dorks = dorkWindow(Date.now(), limit);
+    const all: Candidate[] = []; const errors: string[] = []; const warnings: string[] = []; let truncated = false;
     const used: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>> = {};
     const bill = (provider: MeteredProvider, sign = 1) => {
       const price = PROVIDER_METERS[provider].usdPerRequest * sign;
@@ -250,17 +256,18 @@ export async function collectGoogleJobs(
     const settled = await Promise.allSettled(plan.map(async ({ dork, first }) => {
       if (first === null) return [] as Candidate[];
       if (first === 'brightdata') {
-        try { return await brightFetch!(dork, timeout); }
+        try { return await brightFetch!(dork, callTimeout(12_000, deadline)); }
         catch (err) {
           refund('brightdata', err);
-          // Sin SerpApi (o sin tope para él) el fallo de Bright Data se declara tal cual.
-          if (!serpFetch || !meter.check('serpapi').ok) throw err;
+          // Sin SerpApi, sin tope para él o sin tiempo en el reloj compartido, el fallo se declara tal cual.
+          if (!serpFetch || !meter.check('serpapi').ok || timeLeft(deadline) < MIN_STEP_MS) throw err;
           bill('serpapi');
-          errors.push(`Bright Data (${dork.q}, ${dork.gl}): ${(err as Error).message} → SerpApi`);
-          try { return await serpFetch(dork, timeout); } catch (second) { refund('serpapi', second); throw second; }
+          // Es un aviso, no un fallo de la fuente: SerpApi lo cubre. Solo cuenta como error si SerpApi también falla.
+          warnings.push(`Bright Data (${dork.q}, ${dork.gl}): ${(err as Error).message} → SerpApi`);
+          try { return await serpFetch(dork, callTimeout(12_000, deadline)); } catch (second) { refund('serpapi', second); throw second; }
         }
       }
-      try { return await serpFetch!(dork, timeout); } catch (err) { refund('serpapi', err); throw err; }
+      try { return await serpFetch!(dork, callTimeout(12_000, deadline)); } catch (err) { refund('serpapi', err); throw err; }
     }));
     settled.forEach((result, i) => {
       if (result.status === 'fulfilled') all.push(...result.value);
@@ -279,7 +286,7 @@ export async function collectGoogleJobs(
       const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: row.searches, costUsd: row.cost_usd, detail: 'google-jobs' }));
       if (!ok) spendUnrecorded = true;
     }
-    const common = { searches, cost_usd: cost, by_provider: used, ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
+    const common = { searches, cost_usd: cost, by_provider: used, ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
     if (!all.length && skippedBudget === plan.length) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: `Sin presupuesto: ${blocked[0] ?? 'tope mensual agotado'}`, searches: 0, cost_usd: 0, skipped_budget: skippedBudget };
     }
@@ -294,7 +301,13 @@ export async function collectGoogleJobs(
       if (!prev || (isGoogle(prev.url) && !isGoogle(c.url))) byId.set(c.external_id, c);
     }
     const unique = [...byId.values()];
-    const notes = [errors.length ? `${errors.length} búsqueda(s) fallaron` : '', truncated ? 'cortada por presupuesto de tiempo' : '', skippedBudget ? `${skippedBudget} búsqueda(s) sin lanzar por el tope mensual` : ''].filter(Boolean).join(' · ') || undefined;
+    const notes = [
+      errors.length ? `${errors.length} búsqueda(s) fallaron` : '',
+      warnings.length ? `${warnings.length} búsqueda(s) pasaron de Bright Data a SerpApi` : '',
+      noPanel ? `${noPanel} búsqueda(s) de Bright Data sin panel de empleos de Google (no es «0 ofertas» comprobado)` : '',
+      truncated ? 'cortada por presupuesto de tiempo' : '',
+      skippedBudget ? `${skippedBudget} búsqueda(s) sin lanzar por el tope mensual` : '',
+    ].filter(Boolean).join(' · ') || undefined;
     const result = await ingest(GOOGLE_JOBS_SOURCE, via, unique, notes);
     return { source: GOOGLE_JOBS_SOURCE, ok: true, received: result.received, accepted: result.accepted, ...common };
   } catch (err) {

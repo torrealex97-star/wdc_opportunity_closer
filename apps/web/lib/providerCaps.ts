@@ -2,8 +2,8 @@
 // ScrapingBee): lo que ve el propietario en «Control de inversión» y lo que consultan las rutas automáticas
 // antes de gastar.
 //
-// El tope sale, por este orden, de `provider_budget` (lo fija el propietario en el panel), de la variable de
-// entorno y del valor por defecto. Si la tabla no se puede leer se sigue con el entorno y se declara
+// El tope sale, por este orden, de `provider_budget` (SOLO las filas que el propietario guardó en el panel: la
+// semilla de la migración no cuenta), de la variable de entorno y del valor por defecto. Si la tabla no se puede leer se sigue con el entorno y se declara
 // (`table_ok: false`): un hueco en la lectura no se convierte en «sin tope». El gasto NO se guarda aparte: se
 // suma de las notas `proveedor=… · coste_usd=…` de `external_ingest_runs`, que son la fuente de verdad. Sin
 // historial legible el gasto es `null` (no 0) y las rutas automáticas no lanzan gasto nuevo.
@@ -39,6 +39,9 @@ export async function readCaps(env: NodeJS.ProcessEnv = process.env): Promise<Ca
   for (const row of rows as Array<{ provider?: unknown; monthly_usd?: unknown; updated_by?: string | null; updated_at?: string | null }>) {
     const usd = Number(row.monthly_usd);
     if (!isMetered(row.provider) || !Number.isFinite(usd) || usd < 0) continue;
+    // Una fila sin `updated_by` es la semilla de la migración (5 USD para todos), no una decisión del propietario:
+    // no pisa la variable de entorno que el operador ya tuviera. Solo manda lo que alguien guardó desde el panel.
+    if (!row.updated_by) continue;
     caps[row.provider] = { usd, source: 'tabla', updated_by: row.updated_by ?? null, updated_at: row.updated_at ?? null };
   }
   return { caps, table_ok: true };

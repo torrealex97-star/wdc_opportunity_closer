@@ -1,9 +1,9 @@
 // Tope y contabilidad de los proveedores que cobran por petición y NO son Apify.
 //
 // Apify tenía su propio tope mensual (`paid_budget`, editable en el panel). Bright Data, SerpApi y los
-// proxys de HTML no lo tenían: este módulo les da un tope por variable de entorno, un formato de nota
-// único y un lector que suma lo ya registrado. Sin tabla nueva y sin migración aplicada: si mañana se
-// crea `provider_budget`, se lee de ahí y el entorno queda como respaldo, igual que hace Apify.
+// proxys de HTML tienen el suyo: el que el propietario guarda en `provider_budget` desde Panel → APIs
+// (`providerCaps.ts`), con la variable de entorno y el valor por defecto como respaldo. Este módulo da el
+// formato único de nota, el lector que suma lo ya registrado y `canSpend`, al que se le pasa el tope efectivo.
 //
 // Un hueco no es un cero: sin tope legible o sin notas, el gasto devuelve `null` y el panel lo declara.
 

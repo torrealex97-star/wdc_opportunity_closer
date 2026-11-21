@@ -56,6 +56,7 @@ const server = http.createServer(async (req, res) => {
     const payload = JSON.parse(body || '{}');
     brightCalls.push(payload);
     if (brightMode === 'error') return send(401, { error: 'invalid api key' });
+    if (brightMode === 'nopanel') return send(200, { organic: [] });
     if (brightMode === 'html' || !String(payload.url ?? '').includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>Google</html>'); }
     return send(200, { jobs: { items: [{ title: 'Closer BD', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas por videollamada', link: `https://www.infojobs.net/oferta/bd-${brightCalls.length}`, tags: [] }] } });
   }
@@ -252,6 +253,31 @@ await step('el tope guardado en provider_budget manda sobre el entorno', async (
   capRow = { provider: 'serpapi', monthly_usd: 0.05, updated_by: 'dueño', updated_at: '2026-11-21T10:00:00Z' };
   await collectGoogleJobs('test');
   assert.equal(searches.length, 2, 'el tope de la tabla (0,05 USD) limita a 2 búsquedas');
+});
+
+await step('una fila sembrada por la migración (sin updated_by) NO pisa el tope del entorno', async () => {
+  process.env.SERPAPI_MONTHLY_USD = '0.05';
+  capRow = { provider: 'serpapi', monthly_usd: 5, updated_by: null, updated_at: null }; // la semilla de provider_budget
+  await collectGoogleJobs('test');
+  assert.equal(searches.length, 2, 'manda el entorno (0,05 USD), no la semilla de 5 USD');
+});
+
+await step('Bright Data falla y SerpApi cubre: es un aviso, no un fallo de la fuente (aunque no haya ofertas)', async () => {
+  brightKey = true; brightMode = 'error'; mode = 'empty';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(out.accepted, 0);
+  assert.equal(out.warnings.length, DEFAULT_MAX_DORKS);
+  assert.match(out.warnings[0], /Bright Data/);
+  assert.ok(runs.some(r => /pasaron de Bright Data a SerpApi/.test(r.note ?? '')), 'el aviso queda en la nota de la ejecución');
+});
+
+await step('Google sin panel de empleos con Bright Data se declara, no se confunde con «0 ofertas»', async () => {
+  brightKey = true; brightMode = 'nopanel';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true);
+  assert.equal(out.no_jobs_panel, DEFAULT_MAX_DORKS);
+  assert.equal(searches.length, 0, 'sin panel no se paga SerpApi por cada dork: se declara');
 });
 
 await step('sin gasto legible no se lanza gasto nuevo (un hueco no es un cero)', async () => {

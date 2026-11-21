@@ -177,6 +177,8 @@ await step('Control de inversión: el propietario fija el tope, manda sobre el e
   assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: -1 } })).status, 422);
   assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: '' } })).status, 422, 'vacío no es cero');
   assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 9999 } })).status, 422);
+  for (const bad of [' ', true, [5], {}, 'abc', '5 USD']) assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: bad } })).status, 422, `no es un importe: ${JSON.stringify(bad)}`);
+  assert.equal((await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: '7,5' } })).status, 200, 'la coma decimal del panel en español vale');
   const ok = await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 12.5 } });
   assert.equal(ok.status, 200);
   const after = (await call('/api/admin/spend')).json.providers.find(p => p.provider === 'serpapi');

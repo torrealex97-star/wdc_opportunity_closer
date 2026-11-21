@@ -52,8 +52,10 @@ export async function POST(request: NextRequest) {
   const { auth, error } = await gate(request, true);
   if (error) return error;
   if (!isMetered(body.provider)) return Response.json({ detail: 'Proveedor no válido. Apify tiene su propio control en la pestaña Apify.' }, { status: 422 });
-  const usd = Number(body.monthly_usd);
-  if (body.monthly_usd === '' || body.monthly_usd === null || !Number.isFinite(usd) || usd < 0 || usd > 5000) {
+  // Solo un número o un texto decimal no vacío: `' '`, `true` o `[5]` no son un importe (y un 0 accidental apagaría el gasto).
+  const raw = body.monthly_usd;
+  const usd = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\s*\d+(?:[.,]\d+)?\s*$/.test(raw) ? Number(raw.replace(',', '.')) : Number.NaN;
+  if (!Number.isFinite(usd) || usd < 0 || usd > 5000) {
     return Response.json({ detail: 'El tope mensual debe ser un importe en USD entre 0 y 5000 (0 = no se gasta nada).' }, { status: 422 });
   }
   if (!await setProviderCap(body.provider, usd, auth!.admin.email)) {

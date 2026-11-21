@@ -161,20 +161,30 @@ export async function collectFallback(via: string, deps: Deps = {}): Promise<Fal
     out.searches++;
     out.cost_usd = Number((out.searches * SEARCH_USD).toFixed(3));
     const note = spendNote({ route: 'respaldo', provider: 'serpapi', requests: 1, costUsd: SEARCH_USD, detail: portal.source });
+    let candidates: Candidate[];
     try {
-      const candidates = await fetchFor(portal, callTimeout(12_000, deps.deadline));
-      if (!candidates.length) {
-        if (!await recordSpend(portal.source, via, note)) unrecorded = true;
-        out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: 0, accepted: 0, searches: 1, cost_usd: SEARCH_USD });
-        continue;
-      }
-      // La nota lleva el gasto en el formato único: la suma el marcador de inversión y limita el mes.
-      const r = await ingest(portal.source, via, candidates, note);
+      candidates = await fetchFor(portal, callTimeout(12_000, deps.deadline));
+    } catch (err) {
+      // Una petición que SerpApi rechaza (HTTP de error, clave mala) no se cobra: no se anota y se devuelve la
+      // reserva de esta pasada Y los contadores, para que resultado, medidor y panel digan lo mismo.
+      meter.charge('serpapi', -SEARCH_USD);
+      out.searches--;
+      out.cost_usd = Number((out.searches * SEARCH_USD).toFixed(3));
+      errors.push(`${portal.name}: ${(err as Error).message}`);
+      out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 0, cost_usd: 0, error: (err as Error).message });
+      continue;
+    }
+    // SerpApi respondió: la búsqueda se cobró. El gasto se anota AHORA, aparte de guardar las ofertas, para que un
+    // fallo al guardar no deje un gasto real sin anotar (y por tanto fuera del tope).
+    if (!await recordSpend(portal.source, via, note)) unrecorded = true;
+    if (!candidates.length) {
+      out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: 0, accepted: 0, searches: 1, cost_usd: SEARCH_USD });
+      continue;
+    }
+    try {
+      const r = await ingest(portal.source, via, candidates);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: true, received: r.received, accepted: r.accepted, searches: 1, cost_usd: SEARCH_USD });
     } catch (err) {
-      // Una petición que SerpApi rechaza (HTTP de error, clave mala) no se cobra: no se anota como gasto y la
-      // reserva de esta pasada se devuelve. Solo cuenta lo que respondió (con o sin resultados).
-      meter.charge('serpapi', -SEARCH_USD);
       errors.push(`${portal.name}: ${(err as Error).message}`);
       out.outcomes.push({ source: portal.source, portal: portal.name, ok: false, searches: 1, cost_usd: SEARCH_USD, error: (err as Error).message });
     }

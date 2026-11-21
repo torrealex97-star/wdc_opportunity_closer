@@ -2,12 +2,12 @@ import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
 import { collectAll, type ApiProvider } from '../../../../lib/collectors';
 import { getSecret, listConnections } from '../../../../lib/integrations';
-import { ingest, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
+import { ingest, recordSpend, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
 import { toCandidate as serpCandidate } from '../../../../lib/googleJobs';
 import { extractJobPostings } from '../../../../lib/jobPosting';
 import { canSpend, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
 import { readCaps, type ProviderCap } from '../../../../lib/providerCaps';
-import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs } from '../../../../lib/providers/brightdata';
+import { BRIGHTDATA_USD_PER_REQUEST, BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs } from '../../../../lib/providers/brightdata';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
 import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
 import sourceCatalog from '../../../../lib/sourceCatalog.json';
@@ -156,9 +156,26 @@ export async function POST(request: NextRequest) {
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
-    const result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
     const source = brightDataSource(entry.code);
-    const saved = await ingest(source, 'brightdata-serp', result.candidates, spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests: result.requests, costUsd: result.costUsd, detail: `${entry.code} · ${result.rawItems} en bruto` }));
+    const billedNote = spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests: 1, costUsd: BRIGHTDATA_USD_PER_REQUEST, detail: `${entry.code} · respuesta no válida` });
+    let result;
+    try {
+      result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
+    } catch (err) {
+      // Un 200 con HTML (zona que no es de SERP) SÍ lo factura Bright Data: se anota para que el tope lo vea.
+      // Un HTTP de error o un fallo de red no se cobra y no se anota.
+      const billed = err instanceof BrightDataError && err.status === 200;
+      const recorded = billed ? await recordSpend(source, 'brightdata-serp', billedNote) : true;
+      return Response.json({ detail: `${err instanceof Error ? err.message : 'Bright Data no respondió.'}${billed ? ' La petición se cobró y se anotó en el gasto.' : ''}${recorded ? '' : ' No se pudo anotar el gasto.'}` }, { status: 502 });
+    }
+    const spendRow = spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests: result.requests, costUsd: result.costUsd, detail: `${entry.code} · ${result.rawItems} en bruto` });
+    let saved: Awaited<ReturnType<typeof ingest>>;
+    try { saved = await ingest(source, 'brightdata-serp', result.candidates, spendRow); }
+    catch (err) {
+      // Guardar falló DESPUÉS de cobrarse la petición: el gasto se anota aparte para que el tope lo vea.
+      const recorded = await recordSpend(source, 'brightdata-serp', spendRow);
+      return Response.json({ detail: `${(err as Error).message}${recorded ? ' La petición se cobró y se anotó en el gasto.' : ' No se pudo anotar el gasto.'}` }, { status: 502 });
+    }
     return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: result.hasJobsPanel ? `Bright Data devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` : 'Bright Data respondió, pero Google no mostró el panel de empleos para esta búsqueda: no se inventa ninguna oferta. La petición se cobró.' });
   }
 
@@ -175,7 +192,13 @@ export async function POST(request: NextRequest) {
     const payload = await response.json().catch(() => ({})) as { jobs_results?: unknown[]; error?: string };
     if (payload.error) return Response.json({ detail: `SerpApi: ${payload.error}` }, { status: 502 });
     const candidates = (payload.jobs_results ?? []).map(serpCandidate).filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
-    const saved = await ingest('google-jobs', 'serpapi-ruta', candidates, spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'serpapi', requests: 1, costUsd: 0.025, detail: entry.code }));
+    const spendRow = spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'serpapi', requests: 1, costUsd: 0.025, detail: entry.code });
+    let saved: Awaited<ReturnType<typeof ingest>>;
+    try { saved = await ingest('google-jobs', 'serpapi-ruta', candidates, spendRow); }
+    catch (err) {
+      const recorded = await recordSpend('google-jobs', 'serpapi-ruta', spendRow);
+      return Response.json({ detail: `${(err as Error).message}${recorded ? ' La búsqueda se cobró y se anotó en el gasto.' : ' No se pudo anotar el gasto.'}` }, { status: 502 });
+    }
     return reply(auth!, { ok: true, accepted: saved.accepted, received: candidates.length, cost_usd: 0.025, note: `SerpApi devolvió ${candidates.length}; ${saved.accepted} guardada(s).` });
   }
 

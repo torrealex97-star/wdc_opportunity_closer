@@ -95,9 +95,10 @@ async function postRequest(
   format: 'json' | 'raw',
   fetchImpl: FetchLike,
   timeoutMs: number,
+  maxAttempts = 2,
 ): Promise<{ text: string; status: number }> {
   let last: BrightDataError | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let response: Response;
     try {
       response = await fetchImpl(`${apiBase()}/request`, {
@@ -109,7 +110,7 @@ async function postRequest(
       });
     } catch (err) {
       last = new BrightDataError(`No se pudo contactar con Bright Data: ${(err as Error).message}`, null, true);
-      if (attempt === 0) continue;
+      if (attempt < maxAttempts - 1) continue;
       throw last;
     }
     const text = await response.text().catch(() => '');
@@ -117,7 +118,7 @@ async function postRequest(
     const retryable = response.status === 429 || response.status >= 500;
     last = new BrightDataError(`Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`, response.status, retryable);
     // Un 401/403 no mejora reintentando: la clave o la zona están mal.
-    if (!retryable || attempt === 1) throw last;
+    if (!retryable || attempt >= maxAttempts - 1) throw last;
     await new Promise(resolve => setTimeout(resolve, 400));
   }
   throw last ?? new BrightDataError('Bright Data no respondió');
@@ -211,7 +212,8 @@ export function jobsFromPayload(payload: unknown, now = Date.now()): Candidate[]
   return out;
 }
 
-export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number };
+/** `maxAttempts: 1` desactiva el reintento: lo usa el cron, cuyo reloj compartido no admite un segundo intento. */
+export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number; maxAttempts?: number };
 export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; hasJobsPanel: boolean };
 
 /**
@@ -220,9 +222,9 @@ export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUs
  * para que el llamador lo anote y lo sume al tope mensual.
  */
 export async function serpJobs(config: BrightDataConfig, options: SerpJobsOptions): Promise<SerpJobsResult> {
-  const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now() } = options;
+  const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now(), maxAttempts = 2 } = options;
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
-  const { text } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs);
+  const { text } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs, maxAttempts);
   const body = unwrapBody(text);
   if (!body) {
     throw new BrightDataError('Bright Data devolvió HTML y no el JSON parseado: revisa que la zona sea de SERP API (no Web Unlocker) y que la URL lleve brd_json=1', 200, false);

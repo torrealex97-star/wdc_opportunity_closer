@@ -13,6 +13,7 @@ let paused = [];
 let recentRows = [];
 let mode = 'ok';            // ok | fail | error
 let posted = [];
+let upsertFails = false;
 let runsDown = false;       // el histórico de entradas no se puede leer
 
 // Fichas orgánicas como las devuelve Google: título con el sufijo del portal y enlace al anuncio.
@@ -47,6 +48,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/rest/v1/source_settings') return send(200, paused.map(source => ({ source })));
   if (url.pathname === '/rest/v1/rpc/external_upsert') {
+    if (upsertFails) return send(500, { message: 'boom' });
     const rows = JSON.parse(body || '{}').p_rows ?? [];
     saved.push(...rows);
     return send(200, rows.length);
@@ -84,7 +86,7 @@ assert.ok(computrabajo && occ && infojobs, 'los portales del SOP están definido
 
 const results = [];
 const step = async (name, fn) => {
-  searches = []; saved = []; hasKey = true; paused = []; recentRows = []; mode = 'ok'; runsDown = false; posted = [];
+  searches = []; saved = []; hasKey = true; paused = []; recentRows = []; mode = 'ok'; runsDown = false; posted = []; upsertFails = false;
   delete process.env.SERPAPI_MONTHLY_USD;
   delete process.env.SERPAPI_FALLBACK_MAX_SEARCHES;
   delete process.env.DAILY_TARGET_OFFERS;
@@ -165,6 +167,15 @@ await step('cada búsqueda de respaldo anota su gasto en el formato único y res
   assert.equal(searches.length, 0, 'tope agotado: no se llama a SerpApi');
 });
 
+await step('si guardar las ofertas falla DESPUÉS de cobrarse la búsqueda, el gasto queda anotado igual', async () => {
+  upsertFails = true;
+  const out = await collectFallback('test', { missing: ['adzuna'], need: 40 });
+  assert.ok(out.searches >= 1);
+  const spendRows = posted.filter(r => /proveedor=serpapi/.test(r.note ?? ''));
+  assert.ok(spendRows.length >= 1, 'el gasto real consta aunque ingest haya fallado');
+  assert.ok(out.outcomes.some(o => o.ok === false && /guardar/i.test(o.error ?? '')), 'el fallo de guardado se declara');
+});
+
 await step('si el día ya cumplió el objetivo no se gasta ni una búsqueda', async () => {
   recentRows = [{ accepted: 80, source: 'infojobs' }];
   const out = await collectFallback('test', { missing: ['adzuna'] });
@@ -189,7 +200,10 @@ await step('un error del proveedor se declara y no se cuenta como éxito', async
   assert.equal(out.ok, false);
   assert.equal(out.outcomes[0].ok, false);
   assert.match(out.outcomes[0].error, /SerpApi: Invalid API key/);
-  assert.equal(out.searches, 1, 'la búsqueda que falló también se cuenta (se pagó)');
+  // SerpApi no cobra una petición que rechaza: ni el resultado, ni el medidor, ni el historial la cuentan como gasto.
+  assert.equal(out.searches, 0, 'la búsqueda rechazada devuelve su reserva');
+  assert.equal(out.cost_usd, 0);
+  assert.equal(posted.filter(r => /proveedor=serpapi/.test(r.note ?? '')).length, 0, 'y no deja nota de gasto');
 });
 
 await step('sin clave de SerpApi no se llama al proveedor', async () => {
