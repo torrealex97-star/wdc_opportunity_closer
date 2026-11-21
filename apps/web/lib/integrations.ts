@@ -2,7 +2,7 @@ import { decryptSecret, encryptSecret } from './secrets';
 import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
-import { parseBrightDataSecret } from './providers/brightdata';
+import { parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -22,20 +22,17 @@ export const PROVIDERS = {
   jooble: { name: 'Jooble', hint: 'Clave de es.jooble.org (España)', probe: (k: string) => fetch(`${process.env.JOOBLE_API_BASE ?? 'https://es.jooble.org'}/api/${encodeURIComponent(k)}`, { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: 'closer', location: 'España', page: 1 }) }) },
   infojobs: { name: 'InfoJobs', hint: 'client_id:client_secret (separados por dos puntos)', probe: (k: string) => { const p = pair(k); return p ? get(`${process.env.INFOJOBS_API_BASE ?? 'https://api.infojobs.net'}/api/9/offer?maxResults=1`, basic(p[0], p[1])) : Promise.resolve(new Response(null, { status: 400 })); } },
   resend: { name: 'Resend', hint: 'API key (empieza por re_)', probe: (k: string) => get(`${process.env.RESEND_API_BASE ?? 'https://api.resend.com'}/domains`, bearer(k)) },
-  // Bright Data: la clave se guarda como `API key:zona SERP[:zona Unlocker]`. La prueba hace UNA búsqueda
-  // real de Google Jobs (0,0015 USD) porque no hay endpoint de cuenta documentado que valide la zona;
-  // se avisa en la tarjeta y no se ejecuta nunca al guardar.
+  // Bright Data: se pega solo la API key (Cuenta → API keys); las zonas se descubren con
+  // `GET /zone/get_active_zones`, que es gratis, y también se acepta `API key:zona SERP[:zona Unlocker]`
+  // para fijarlas a mano. La prueba hace UNA búsqueda real de Google Jobs (0,0015 USD) solo después de
+  // haber validado clave y zona sin gastar; se avisa en la tarjeta y nunca se ejecuta al guardar.
   brightdata: {
     name: 'Bright Data',
-    hint: 'API key:zona SERP (y :zona Unlocker si la tienes)',
-    probe: (k: string) => {
-      const config = parseBrightDataSecret(k);
-      if (!config) return Promise.resolve(new Response(null, { status: 400 }));
-      return fetch(`${process.env.BRIGHTDATA_API_BASE ?? 'https://api.brightdata.com'}/request`, {
-        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20000),
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify({ zone: config.serpZone, url: 'https://www.google.com/search?q=closer+de+ventas&ibp=htl%3Bjobs&hl=es&gl=es', format: 'json' }),
-      });
+    hint: 'API key (la zona SERP se detecta sola); también API key:zona SERP[:zona Unlocker]',
+    probe: async (k: string) => {
+      const { config } = await resolveBrightDataConfig(k);
+      if (!config?.serpZone) return new Response(JSON.stringify({ detail: 'Sin zona SERP' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return serpProbeRequest(config);
     },
   },
   // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
@@ -74,6 +71,79 @@ export async function getSecret(provider: Provider): Promise<string | null> {
   try { return Array.isArray(rows) && rows[0] ? decryptSecret(rows[0].secret_ciphertext) : null; } catch { return null; }
 }
 
+const describeZones = (zones: BrightDataZone[]) =>
+  zones.length ? zones.map(zone => `${zone.name} (${zone.type ?? 'tipo no indicado'})`).join(', ') : 'ninguna';
+
+/**
+ * Prueba de Bright Data en dos pasos: primero valida clave y zona con la API de cuenta (`GET
+ * /zone/get_active_zones`, gratis) y solo después hace la búsqueda real que se cobra. Antes se exigía el
+ * formato `API key:zona SERP` y cualquier fallo se anunciaba como «clave rechazada», incluso con la clave
+ * correcta: ahora se acepta la API key sola y cada fallo declara su causa (clave, zona o respuesta).
+ */
+async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; detail: string }> {
+  const parsed = parseBrightDataSecret(secret);
+  if (!parsed) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data (vale también API key:zona SERP).' };
+  const resolved = await resolveBrightDataConfig(secret);
+  if (!resolved.config) return { ok: false, detail: 'Formato incorrecto: pega la API key de Bright Data.' };
+  // Una zona fijada a mano que la cuenta no tiene se declara sin gastar crédito.
+  if (resolved.zones && parsed.serpZone && !resolved.zones.some(zone => zone.name === parsed.serpZone)) {
+    return { ok: false, detail: `La clave es válida, pero la zona «${parsed.serpZone}» no está activa. Zonas de la cuenta: ${describeZones(resolved.zones)}.` };
+  }
+  const config = resolved.config;
+  if (!config.serpZone) {
+    return {
+      ok: false,
+      detail: resolved.error
+        ? `La clave tiene el formato correcto, pero no se pudieron leer las zonas activas (${resolved.error}). Pega la clave como API key:zona SERP.`
+        : 'La clave es válida, pero la cuenta no tiene una zona SERP activa: crea la de SERP API en Bright Data y vuelve a probar.',
+    };
+  }
+  const zone = resolved.zones?.find(item => item.name === config.serpZone);
+  if (zone?.type && !/^serp/i.test(zone.type)) {
+    return { ok: false, detail: `La zona «${config.serpZone}» es de tipo ${zone.type}, no SERP: Google Jobs solo responde por una zona SERP API. Zonas: ${describeZones(resolved.zones ?? [])}.` };
+  }
+  // La búsqueda real se cobra: tope e historial primero, igual que en cualquier otro gasto.
+  const runs = await runsThisMonth();
+  const spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), 'brightdata').usd ?? 0);
+  const check = canSpend('brightdata', spent);
+  if (!check.ok) return { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
+  let response: Response;
+  try {
+    response = await serpProbeRequest(config);
+  } catch (err) {
+    return { ok: false, detail: `No se pudo contactar con Bright Data: ${(err as Error).message}` };
+  }
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    let detail = text.slice(0, 160);
+    try {
+      const body = JSON.parse(text) as Record<string, unknown>;
+      const message = [body.error, body.detail, body.message].find(value => typeof value === 'string') as string | undefined;
+      if (message) detail = message.slice(0, 160);
+    } catch { /* respuesta sin JSON: se enseña el texto tal cual */ }
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, detail: `Bright Data rechazó la clave (HTTP ${response.status})${detail ? `: ${detail}` : ''}` };
+    }
+    return { ok: false, detail: `Bright Data respondió HTTP ${response.status}${detail ? `: ${detail}` : ''} (la clave y la zona sí pasaron la comprobación de cuenta).` };
+  }
+  // El 200 ya se pagó aunque el cuerpo no sirva: se anota SIEMPRE antes de validar el contenido.
+  const cost = PROVIDER_METERS.brightdata.usdPerRequest;
+  const recorded = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: cost, detail: 'prueba de clave' }));
+  let payload: Record<string, unknown> | null = null;
+  try {
+    const unwrapped = unwrapPayload(JSON.parse(await response.text()));
+    payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
+  } catch { /* cuerpo sin JSON */ }
+  const jobs = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
+  const failure = typeof payload?.error === 'string' && payload.error
+    ? `Bright Data: ${payload.error.slice(0, 160)}`
+    : !Array.isArray(jobs)
+      ? 'La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]: comprueba que la zona sea SERP API.'
+      : null;
+  if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+  return failure ? { ok: false, detail: failure } : { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` };
+}
+
 export async function testConnection(provider: Provider): Promise<{ ok: boolean; detail: string } | null> {
   const row = await serviceRest(`integration_connections?provider=eq.${provider}&select=secret_ciphertext&limit=1`);
   const rows = row.ok ? await row.json().catch(() => []) : [];
@@ -81,7 +151,9 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
   let outcome: { ok: boolean; detail: string } = { ok: false, detail: 'No se pudo probar el proveedor.' };
   try {
     const secret = decryptSecret(rows[0].secret_ciphertext);
-    if (SPEND_PROBES.has(provider)) {
+    if (provider === 'brightdata') {
+      outcome = await testBrightDataConnection(secret);
+    } else if (SPEND_PROBES.has(provider)) {
       const meter = provider as MeteredProvider;
       // La prueba hace una petición real: antes de lanzarla se comprueba el tope y, si responde, se anota
       // el gasto en `external_ingest_runs` para que el marcador lo sume. Sin nota no se da por contado.
@@ -92,29 +164,17 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
         outcome = { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
       } else {
         const response = await PROVIDERS[provider].probe(secret);
-        if (provider === 'brightdata' && response.status === 400) {
-          outcome = { ok: false, detail: 'Formato incorrecto: usa API key:zona SERP' };
-        } else if (!response.ok) {
+        if (!response.ok) {
           outcome = response.status === 401 || response.status === 403
             ? { ok: false, detail: `Clave rechazada (HTTP ${response.status})` }
             : { ok: false, detail: `El proveedor respondió HTTP ${response.status}` };
         } else {
-          let failure: string | null = null;
-          if (provider === 'brightdata') {
-            const payload = await response.clone().json().catch(() => null) as { error?: unknown; jobs?: unknown; jobs_results?: unknown } | null;
-            const items = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as { items?: unknown }).items : null;
-            if (typeof payload?.error === 'string' && payload.error) failure = `Bright Data: ${payload.error.slice(0, 160)}`;
-            else if (!Array.isArray(items) && !Array.isArray(payload?.jobs_results)) failure = 'Bright Data respondió sin jobs.items[]; revisa la zona SERP.';
-          }
-          if (failure) {
-            outcome = { ok: false, detail: failure };
-          } else {
-            const cost = PROVIDER_METERS[meter].usdPerRequest;
-            const recorded = await recordSpend(`${provider}-probe`, 'probe', spendNote({ route: 'prueba', provider: meter, requests: 1, costUsd: cost, detail: 'prueba de clave' }));
-            outcome = recorded
-              ? { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` }
-              : { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
-          }
+          // El HTTP 200 ya se pagó aunque el cuerpo no sirva: se anota SIEMPRE antes de validar.
+          const cost = PROVIDER_METERS[meter].usdPerRequest;
+          const recorded = await recordSpend(`${provider}-probe`, 'probe', spendNote({ route: 'prueba', provider: meter, requests: 1, costUsd: cost, detail: 'prueba de clave' }));
+          outcome = recorded
+            ? { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` }
+            : { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
         }
       }
     } else {

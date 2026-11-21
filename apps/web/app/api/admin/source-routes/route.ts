@@ -2,11 +2,11 @@ import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
 import { collectAll, type ApiProvider } from '../../../../lib/collectors';
 import { getSecret, listConnections } from '../../../../lib/integrations';
-import { ingest, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
+import { ingest, recordSpend, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
 import { toCandidate as serpCandidate } from '../../../../lib/googleJobs';
 import { extractJobPostings } from '../../../../lib/jobPosting';
-import { canSpend, capUsd, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
-import { BrightDataError, brightDataSource, parseBrightDataSecret, serpJobs } from '../../../../lib/providers/brightdata';
+import { canSpend, capUsd, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
+import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
 import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
 import sourceCatalog from '../../../../lib/sourceCatalog.json';
@@ -30,6 +30,9 @@ async function gate(request: NextRequest, ownerOnly = false) {
   return { auth };
 }
 const reply = (auth: { setCookies: string[] }, body: unknown, status = 200) => withCookies(Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } }), auth.setCookies);
+
+/** Un 2xx se cobra aunque el cuerpo no sirva; un 429/5xx o un fallo antes de enviar, no. */
+const billed = (status: number | null) => status === null || (status >= 200 && status < 300);
 
 const hostOf = (value: string | null) => {
   if (!value) return null;
@@ -56,7 +59,9 @@ async function stateOf(rows: RunNote[] | null): Promise<RouteState> {
   };
   const [connections, brightdataSecret] = await Promise.all([listConnections(), getSecret('brightdata')]);
   const keys = new Set((connections ?? []).map(row => row.provider));
-  const brightdataConfig = brightdataSecret ? parseBrightDataSecret(brightdataSecret) : null;
+  // Si la clave se guardó sola (el formato que da Bright Data), las zonas se descubren en la cuenta, gratis;
+  // sin esa consulta la vía Unlocker parecería no estar lista teniendo su zona.
+  const brightdataConfig = brightdataSecret ? (await resolveBrightDataConfig(brightdataSecret, { timeoutMs: 6_000 })).config : null;
   return {
     keys,
     paused: false,
@@ -148,16 +153,43 @@ export async function POST(request: NextRequest) {
 
   if (route.provider === 'brightdata') {
     const secret = await getSecret('brightdata');
-    const config = secret ? parseBrightDataSecret(secret) : null;
-    if (!config) return Response.json({ detail: 'La clave de Bright Data no tiene el formato API key:zona SERP.' }, { status: 409 });
+    const resolved = secret ? await resolveBrightDataConfig(secret) : null;
+    const config = resolved?.config ?? null;
+    if (!config) return Response.json({ detail: 'La clave de Bright Data no tiene un formato utilizable: pega la API key o API key:zona SERP.' }, { status: 409 });
+    if (!config.serpZone) {
+      // Se declara la causa real (sin zona SERP o cuenta ilegible) en vez de culpar a la clave.
+      return Response.json({ detail: resolved?.error
+        ? `La clave es válida, pero no se pudieron leer las zonas de Bright Data (${resolved.error}). Guarda la clave como API key:zona SERP.`
+        : 'La clave es válida, pero la cuenta no tiene una zona SERP activa en Bright Data.' }, { status: 409 });
+    }
     // `canSpend` recibe el GASTO, no el saldo: pasarle el restante hacía que un tope de 5 USD pareciera agotado.
-    const check = canSpend('brightdata', spentOf(rows, 'brightdata'));
+    // Reserva los DOS intentos: un reintento no puede dejar el gasto por encima del tope.
+    const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, 2);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
-    const result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
     const source = brightDataSource(entry.code);
-    const saved = await ingest(source, 'brightdata-serp', result.candidates, spendNote({ route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests: result.requests, costUsd: result.costUsd, detail: `${entry.code} · ${result.rawItems} en bruto` }));
+    const brightNote = (requests: number, costUsd: number, detail: string) => spendNote({
+      route: `${route.stage + 1}/${routes.length}`, provider: 'brightdata', requests, costUsd, detail,
+    });
+    let result: Awaited<ReturnType<typeof serpJobs>>;
+    try {
+      result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
+    } catch (err) {
+      // Un fallo de red pudo facturarse sin respuesta: se anota el peor caso antes de devolver el error.
+      if (err instanceof BrightDataError && billed(err.status) && err.attempts > 0) {
+        await recordSpend(source, 'brightdata-serp', brightNote(err.attempts, err.attempts * PROVIDER_METERS.brightdata.usdPerRequest, `${entry.code} · fallo tras ${err.attempts} intento(s)`));
+      }
+      return Response.json({ detail: err instanceof Error ? err.message : 'Bright Data no respondió.' }, { status: err instanceof BrightDataError && err.status ? err.status : 502 });
+    }
+    let saved: Awaited<ReturnType<typeof ingest>>;
+    try {
+      saved = await ingest(source, 'brightdata-serp', result.candidates, brightNote(result.requests, result.costUsd, `${entry.code} · ${result.rawItems} en bruto`));
+    } catch (err) {
+      // La llamada ya se pagó: si la ingesta falla, la nota se escribe por separado para no perder el gasto.
+      await recordSpend(source, 'brightdata-serp', brightNote(result.requests, result.costUsd, `${entry.code} · ingesta fallida`));
+      throw err;
+    }
     return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: `Bright Data devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` });
   }
 
@@ -184,16 +216,34 @@ export async function POST(request: NextRequest) {
     const provider = state.keys.has('zenrows') ? 'zenrows' : state.keys.has('scrapingbee') ? 'scrapingbee' : 'brightdata';
     const secret = await getSecret(provider);
     if (!secret) return Response.json({ detail: `Sin clave de ${provider}.` }, { status: 409 });
-    const check = canSpend(provider, spentOf(rows, provider));
+    // Igual que en SERP: se reservan los dos intentos del cliente de HTML.
+    const check = canSpend(provider, spentOf(rows, provider), process.env, 2);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
+    const source = provider === 'brightdata' ? brightDataSource(entry.code) : `${provider}-${entry.code}`;
+    const note = (requests: number, costUsd: number) => spendNote({ route: `${route.stage + 1}/${routes.length}`, provider, requests, costUsd, detail: entry.code });
     try {
       const page = await fetchHtml(provider, secret, url, { timeoutMs: 25_000 });
       const jobs = extractJobPostings(page.html, url);
-      if (!jobs.length) return reply(auth!, { ok: false, accepted: 0, cost_usd: page.costUsd, note: 'La página no publica JobPosting ni RSS: no se inventa ninguna oferta.' }, 422);
-      const source = provider === 'brightdata' ? brightDataSource(entry.code) : `${provider}-${entry.code}`;
-      const saved = await ingest(source, `${provider}-unlocker`, jobs, spendNote({ route: `${route.stage + 1}/${routes.length}`, provider, requests: page.requests, costUsd: page.costUsd, detail: entry.code }));
+      if (!jobs.length) {
+        // La petición se pagó aunque no haya JobPosting: se anota antes de devolver el 422.
+        const recorded = await recordSpend(source, `${provider}-unlocker`, note(page.requests, page.costUsd));
+        return reply(auth!, { ok: false, accepted: 0, cost_usd: page.costUsd, note: recorded
+          ? 'La página no publica JobPosting ni RSS: no se inventa ninguna oferta.'
+          : 'La página no publica JobPosting ni RSS y el gasto no se pudo anotar; revisa el historial antes de reintentar.' }, 422);
+      }
+      let saved: Awaited<ReturnType<typeof ingest>>;
+      try {
+        saved = await ingest(source, `${provider}-unlocker`, jobs, note(page.requests, page.costUsd));
+      } catch (err) {
+        // Igual que en SERP: la página ya se pagó aunque la ingesta falle.
+        await recordSpend(source, `${provider}-unlocker`, note(page.requests, page.costUsd));
+        throw err;
+      }
       return reply(auth!, { ok: true, accepted: saved.accepted, received: jobs.length, cost_usd: page.costUsd, note: `${jobs.length} detectada(s) en el HTML; ${saved.accepted} guardada(s).` });
     } catch (err) {
+      if (err instanceof BrightDataError && billed(err.status) && err.attempts > 0) {
+        await recordSpend(source, `${provider}-unlocker`, note(err.attempts, err.attempts * PROVIDER_METERS[provider].usdPerRequest));
+      }
       // URL no HTTPS o proveedor caído: se declara con su estado, nunca un 500 genérico.
       const status = err instanceof BrightDataError && err.status ? err.status : 502;
       return Response.json({ detail: err instanceof Error ? err.message : 'No se pudo leer la página.' }, { status });
