@@ -26,6 +26,14 @@ export default function SourceSetupGuide({ name, code, setup, onClose, onOpenApi
       <ol className="setup-guide-steps">
         {setup.steps.map((step, index) => <li key={step}><span className="setup-guide-num" aria-hidden="true">{index + 1}</span><span>{step}</span></li>)}
       </ol>
+      {!!setup.alternatives?.length && <div className="setup-guide-alts">
+        <p className="setup-guide-alts-title">Otras vías, antes de pagar por un actor</p>
+        <ul>
+          {setup.alternatives.map(alt => <li key={alt.route}><strong>{alt.route}.</strong> {alt.detail}{
+            alt.href && <> <a href={alt.href} target="_blank" rel="noopener noreferrer">Ver<ArrowUpRight size={12} /></a></>
+          }</li>)}
+        </ul>
+      </div>}
       {setup.cost && <p className="setup-guide-cost"><Check size={14} /><span>{setup.cost}</span></p>}
       <div className="setup-guide-actions">
         {setup.docs && <a className="primary" href={setup.docs.href} target="_blank" rel="noopener noreferrer">{setup.docs.label}<ArrowUpRight size={15} /></a>}
