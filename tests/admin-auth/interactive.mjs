@@ -85,7 +85,7 @@ try {
     const control = page.getByTestId('spend-control');
     await control.getByRole('heading', { name: 'Control de inversión' }).waitFor();
     await control.locator('tbody tr').first().waitFor();
-    assert.equal(await control.locator('tbody tr').count(), 5, 'Apify, Bright Data, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
+    assert.equal(await control.locator('tbody tr').count(), 6, 'Apify, Bright Data, JSearch, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
     const bright = control.locator('tr[data-provider="brightdata"]');
     assert.match(await bright.innerText(), /0,0015/, 'el gasto de la prueba de clave ya consta');
     assert.equal((await bright.locator('td.num').innerText()).trim(), '1', 'cuenta las peticiones');

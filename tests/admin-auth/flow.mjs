@@ -165,7 +165,7 @@ await step('Control de inversión: un solo cuadro con el gasto y el tope de todo
   state.ingestRuns.push({ source: 'google-jobs', via: 'cron', note: 'ruta cascada · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000 · google-jobs', created_at: new Date().toISOString() });
   const r = await call('/api/admin/spend');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'serpapi', 'zenrows', 'scrapingbee']);
+  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'jsearch', 'serpapi', 'zenrows', 'scrapingbee']);
   const bd = r.json.providers.find(p => p.provider === 'brightdata');
   assert.equal(bd.spent_usd, 0.0045); assert.equal(bd.requests, 3); assert.equal(bd.cap_source, 'defecto');
   const serp = r.json.providers.find(p => p.provider === 'serpapi');
