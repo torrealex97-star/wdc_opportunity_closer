@@ -79,6 +79,24 @@ try {
     assert.equal(summary.unlocker_ready, true, 'la clave de prueba incluye la zona Unlocker');
   });
 
+  await step('APIs: el Control de inversión enseña el gasto de TODOS los proveedores y el propietario cambia un tope', async () => {
+    await page.reload();
+    await page.getByRole('button', { name: 'APIs', exact: true }).click();
+    const control = page.getByTestId('spend-control');
+    await control.getByRole('heading', { name: 'Control de inversión' }).waitFor();
+    await control.locator('tbody tr').first().waitFor();
+    assert.equal(await control.locator('tbody tr').count(), 5, 'Apify, Bright Data, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
+    const bright = control.locator('tr[data-provider="brightdata"]');
+    assert.match(await bright.innerText(), /0,0015/, 'el gasto de la prueba de clave ya consta');
+    assert.equal((await bright.locator('td.num').innerText()).trim(), '1', 'cuenta las peticiones');
+    await bright.getByLabel('Tope mensual de Bright Data en USD').fill('2');
+    await bright.getByRole('button', { name: 'Guardar tope de Bright Data' }).click();
+    await control.getByText(/Tope mensual guardado: 2 USD/).waitFor({ timeout: 15000 });
+    assert.equal(state.providerBudget.find(row => row.provider === 'brightdata')?.monthly_usd, 2);
+    assert.match(await control.locator('tr[data-provider="brightdata"]').innerText(), /guardado por el propietario/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin scroll horizontal de página');
+  });
+
   await step('Fuentes: «Probar ruta» ejecuta Bright Data, muestra ofertas y coste, y actualiza el gasto', async () => {
     await page.reload();
     await page.getByRole('button', { name: 'Fuentes', exact: true }).click();

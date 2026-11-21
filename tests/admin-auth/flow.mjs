@@ -153,8 +153,10 @@ await step('APIs: borrar quita la clave', async () => {
   assert.ok(!state.connections.has('groq'));
   assert.equal((await call('/api/admin/connections')).json.connections.find(c => c.provider === 'groq').configured, false);
 });
+let spendKeptRuns = null;
 await step('Control de inversión: un solo cuadro con el gasto y el tope de todos los proveedores de pago', async () => {
-  state.providerBudget = []; state.providerBudgetMissing = false; state.ingestRuns = [];
+  // Historial aislado: se guarda el de los pasos anteriores (el objetivo diario de ofertas de los siguientes depende de él) y se restaura al final.
+  spendKeptRuns = state.ingestRuns; state.providerBudget = []; state.providerBudgetMissing = false; state.ingestRuns = [];
   state.ingestRuns.push({ source: 'brightdata-google', via: 'cron', note: 'ruta cascada · proveedor=brightdata · 3 petición(es) · coste_usd=0.004500 · google-jobs', created_at: new Date().toISOString() });
   state.ingestRuns.push({ source: 'google-jobs', via: 'cron', note: 'ruta cascada · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000 · google-jobs', created_at: new Date().toISOString() });
   const r = await call('/api/admin/spend');
@@ -200,6 +202,8 @@ await step('Control de inversión: sin tabla de topes sigue con el entorno y lo 
   const save = await call('/api/admin/spend', { method: 'POST', body: { provider: 'serpapi', monthly_usd: 3 } });
   assert.equal(save.status, 503, 'no finge haber guardado');
   state.providerBudgetMissing = false;
+  if (spendKeptRuns) { state.ingestRuns = spendKeptRuns; spendKeptRuns = null; }
+  state.providerBudget = [];
 });
 await step('sin sesión: connections 401', async () => { const saved = jar; jar = {}; assert.equal((await call('/api/admin/connections')).status, 401); jar = saved; });
 await step('ingest: cerrado sin token; valida el cuerpo; limpia datos personales y URLs peligrosas', async () => {
@@ -529,7 +533,11 @@ await step('recogida de APIs oficiales: solo propietario; usa las claves guardad
   assert.ok(google && google.ok === false && /desactivada/.test(google.error), JSON.stringify(google));
   const bySource = Object.fromEntries([...state.external.values()].map(o => [o.source, o]));
   assert.equal(bySource.infojobs.title, 'Closer de ventas high ticket'); assert.equal(bySource.adzuna.location, 'Barcelona, España'); assert.equal(bySource.jooble.editorial_status, 'draft');
-  assert.equal(state.ingestRuns.filter(x => x.via === 'panel').length, 3);
+  // Una fila por API oficial. Las búsquedas de respaldo de SerpApi que respondieron sin resultados dejan además
+  // su fila de GASTO (`proveedor=serpapi`): se cobran aunque no traigan nada, y así el tope mensual las suma.
+  const panelRuns = state.ingestRuns.filter(x => x.via === 'panel');
+  assert.equal(panelRuns.filter(x => !/proveedor=/.test(x.note ?? '')).length, 3);
+  assert.ok(panelRuns.filter(x => /proveedor=serpapi/.test(x.note ?? '')).every(x => /coste_usd=0\.025000/.test(x.note)), 'cada gasto de respaldo se anota a 0,025 USD');
 });
 await step('cron: exige CRON_SECRET', async () => {
   assert.equal((await call('/api/cron/collect', { cookies: false })).status, 401);

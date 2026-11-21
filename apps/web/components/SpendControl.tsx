@@ -115,7 +115,7 @@ export default function SpendControl({ owner, onSessionLost }: { owner: boolean;
                   ? <form className="card-form" onSubmit={e => { e.preventDefault(); void save(row.provider); }}>
                     <label htmlFor={`cap-${row.provider}`} className="sr-only">Tope mensual de {row.name} en USD</label>
                     <input id={`cap-${row.provider}`} type="number" min={0} max={5000} step="0.5" placeholder={String(row.cap_usd)} value={caps[row.provider] ?? ''} onChange={e => setCaps(current => ({ ...current, [row.provider]: e.target.value }))} />
-                    <button className="primary" disabled={busy !== null || !(caps[row.provider] ?? '').trim() || !data.table_ok} title={!data.table_ok ? 'La tabla de topes no está disponible.' : undefined}>{busy === row.provider ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Guardar</button>
+                    <button className="primary" aria-label={`Guardar tope de ${row.name}`} disabled={busy !== null || !(caps[row.provider] ?? '').trim() || !data.table_ok} title={!data.table_ok ? 'La tabla de topes no está disponible.' : undefined}>{busy === row.provider ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Guardar tope</button>
                   </form>
                   : <span className="card-meta">{row.where}</span>}</td>}
               </tr>;
