@@ -111,8 +111,9 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
 - **Coste:** 1,50 USD por 1.000 peticiones correctas (0,0015 USD/búsqueda), con 5.000 créditos gratis al mes
   **compartidos** entre SERP, Web Unlocker y sus demás APIs. Con 7 dorks + 4 respaldos al día (~330/mes)
   entra en el tramo gratis.
-- **Tope:** `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto) mientras no exista la tabla `provider_budget`
-  (migración escrita y **no aplicada**). Si el gasto del mes no se puede leer, no se lanza gasto nuevo.
+- **Tope:** `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto). La tabla `provider_budget` está aplicada
+  (versión **20261121180401**, 5 USD sembrados), pero `capUsd()` aún no la lee: el tope efectivo sigue en el
+  entorno. Si el gasto del mes no se puede leer, no se lanza gasto nuevo.
 - **Web Unlocker:** devuelve HTML; solo se usa donde hay extractor JSON-LD/RSS y con cortesía por dominio.
   No se usa para los 27 portales a ciegas. El resultado se atribuye a `brightdata-<portal>`
   (p. ej. `brightdata-company`) y su gasto se anota con la misma nota que SERP, así que descuenta del tope.
@@ -122,7 +123,8 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
   lo marca «documentada · sin probar».
 - **Orden por fuente:** `source_settings.route_order` guarda un override de ids `fuente:proveedor`
   (`GET/PATCH /api/admin/source-routes`, solo propietario). Sin override manda el orden por coste; JobSpy
-  queda siempre al final. La migración `20261121_source_route_order.sql` está escrita y **sin aplicar**.
+  queda siempre al final. La migración `20261121_source_route_order.sql` está aplicada (versión
+  **20261121180440**); el panel ya persiste el orden y «Volver al orden por coste» lo borra.
 
 ## 13. JobSpy: última vía y solo con proxies sanos (2026-11-21)
 

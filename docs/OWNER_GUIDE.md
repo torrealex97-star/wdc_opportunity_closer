@@ -1,6 +1,6 @@
 # Guía paso a paso: lo que solo puedes hacer tú
 
-Actualizada el 2026-10-26. Cada bloque trae: **qué consigues**, **herramientas**, **lo que necesitas a mano**, **enlaces**, **pasos** y, cuando te toca hablar con una persona o conmigo, un **prompt/mensaje listo para copiar y pegar**.
+Actualizada el 2026-11-21. Cada bloque trae: **qué consigues**, **herramientas**, **lo que necesitas a mano**, **enlaces**, **pasos** y, cuando te toca hablar con una persona o conmigo, un **prompt/mensaje listo para copiar y pegar**.
 
 Los menús de terceros **cambian**: si un botón no está donde digo, búscalo por el nombre entre comillas. ⚠️ = no lo he podido comprobar. Los enlaces profundos de Supabase/Vercel usan tu proyecto (`jzchuizybyubtkownhlw`, `app-b1af/closer-ia-ops`); si alguno falla, entra por el menú.
 
@@ -14,7 +14,7 @@ Los menús de terceros **cambian**: si un botón no está donde digo, búscalo p
 | 4 | Pruebas de BD | Supabase SQL Editor | Cuenta Supabase | 10 min |
 | 5 | Supabase Auth | Supabase (web) | Datos SMTP de Resend | 10 min |
 | 6 | Cuota de D1 | Cloudflare (web) | Cuenta Cloudflare | 5 min |
-| 7 | Resend | Resend (web) + tu DNS | Acceso al DNS del dominio | 20 min |
+| 7 | Resend y el aviso del motor | Resend (web) + tu DNS + Panel → APIs + Vercel | Acceso al DNS del dominio | 30 min |
 | 8 | Variables de Vercel | Vercel (web) | Datos legales de la entidad | 15 min |
 | 9 | Revisión legal | Asesor RGPD (persona) | Prompt 1 + enlaces de abajo | 1 reunión |
 | 10 | Groq / voz: retención cero | Groq console + correo | Prompt 2 | 30 min |
@@ -23,7 +23,7 @@ Los menús de terceros **cambian**: si un botón no está donde digo, búscalo p
 | 13 | Activaciones | Vercel + panel | Todo lo anterior hecho | variable |
 | 14 | Motor y esquema | Supabase CLI | Tarball del motor | 15 min |
 | 15 | Decisiones de producto | Este chat | Prompt 10 | 10 min |
-| 16 | Avisos del motor (panel y correo) | SQL Editor + Panel → APIs + Vercel | Clave de Resend | 15 min |
+| 16 | Panel de fuentes: migraciones y claves | Supabase SQL Editor + Panel → APIs | Orden para el DDL; cuentas de Bright Data/SerpApi | 30 min |
 
 Orden recomendado: 1 → 3 → 4 → 5 → 6 → 7 → 8 → resto.
 
@@ -123,14 +123,29 @@ git push origin --delete \
 2. Si quieres margen: plan de pago de Workers. ⚠️ Comprueba precio y que D1 sube sus límites con él (enlace de precios).
 3. Si no haces nada, ~400/día alcanza hasta el 1 de noviembre.
 
-## 7. Resend (correo) · 20 min
-**Herramientas**: Resend web + el panel de DNS de tu dominio (Cloudflare, GoDaddy…). **Necesitas**: acceso al DNS de `womendigitalclosers.com`.
-**Enlaces**: [Precios](https://resend.com/pricing) · [Dominios](https://resend.com/domains) · [API keys](https://resend.com/api-keys) · [Correo entrante](https://resend.com/docs/dashboard/receiving/introduction) · [Webhook email.received](https://resend.com/docs/webhooks/emails/received)
+## 7. Resend y el aviso del motor · 30 min
+**Qué consigues**: enviar correo desde tu dominio y, con la clave guardada, que te llegue un aviso cuando el motor se pause por cuota o deje de responder. La banda de aviso en el panel funciona **sin** correo: lo que añade la clave es el envío.
+**Herramientas**: Resend web + el panel de DNS de tu dominio (Cloudflare, GoDaddy…) + Panel → APIs de la app + Vercel. **Necesitas**: acceso al DNS de `womendigitalclosers.com`.
+**Enlaces**: [Precios](https://resend.com/pricing) · [Dominios](https://resend.com/domains) · [API keys](https://resend.com/api-keys) · [Correo entrante](https://resend.com/docs/dashboard/receiving/introduction) · [Webhook email.received](https://resend.com/docs/webhooks/emails/received) · [migración del aviso](https://github.com/torrealex97-star/closer-ia-ops/blob/main/supabase/migrations/20261029_engine_alerts.sql) · [prueba de BD del aviso](https://github.com/torrealex97-star/closer-ia-ops/blob/main/tests/db/engine_alerts.sql) · [ADR-016](https://github.com/torrealex97-star/closer-ia-ops/blob/main/docs/decisions/ADR-016-avisos-del-motor-por-correo.md)
 1. Mira el plan: gratis = 3.000 correos/mes y 100/día, y lo **recibido cuenta igual** que lo enviado (según su documentación). ⚠️ Confirma cifras vigentes.
+   **Comprueba**: que el plan que enseña la página cubre lo que vas a enviar. El tope es de la **cuenta**, no de cada dominio.
 2. **Domains → Add Domain**: `careers.womendigitalclosers.com` (o el subdominio que decidas). Copia los registros DNS (SPF, DKIM y MX para recibir) a tu proveedor de DNS y pulsa **Verify**.
+   **Comprueba**: ⚠️ el dominio aparece «Verified» y los tres registros en verde. Si tu DNS es Cloudflare, ⚠️ déjalos en «DNS only», no en «Proxied».
 3. **API Keys → Create API Key**: «Sending access» para empezar; cópiala (se muestra una vez).
+   **Comprueba**: ⚠️ la lista enseña la clave con su permiso y su fecha. Si la pierdes, crea otra y borra la vieja: no hay forma de volver a verla.
 4. En la app: **Panel → APIs → Resend → pegar → Guardar → Comprobar**. Esperado: «Clave válida» (o «Clave válida (permiso solo de envío)» si la creaste restringida; si dice «rechazada», dímelo).
-5. Cuando el dominio esté verificado: **Prompt 4** (abajo) para que construya el correo entrante.
+   **Comprueba**: tras «Comprobar», el bloque del aviso del motor en ese mismo panel deja de decir que falta la clave.
+5. ✅ **Migración del aviso ya aplicada** (2026-10-27, por orden tuya): `20261029_engine_alerts.sql` está en la base real, con RLS, sin acceso para el navegador y con su índice. Es lo que permite avisar **una sola vez por estado**; no hay que volver a aplicarla.
+   **Comprueba** en el SQL Editor: `select to_regclass('public.engine_alerts');` devuelve la tabla (si devuelve `null`, la migración no está).
+6. ✅ **Prueba de BD pasada**: `tests/db/engine_alerts.sql` corrió con `BEGIN…ROLLBACK` sin ningún `FALLO` y dejó 0 filas.
+   **Comprueba** ahora: `select count(*) from public.engine_alerts;`. Las filas que haya son avisos **reales** ya registrados, no restos de la prueba.
+7. **Remitente**: por defecto se usa `onboarding@resend.dev`, que Resend solo deja escribir al correo de tu propia cuenta. Con el dominio verificado, añade en Vercel `RESEND_FROM=avisos@careers.womendigitalclosers.com` y haz redeploy.
+   **Comprueba**: tras el redeploy, el correo de prueba sale con ese remitente. Si Resend lo rechaza, el dominio aún no está verificado: vuelve al paso 2.
+8. **Pruébalo**: en Panel, si el motor está mal verás la banda con «Comprobar ahora»; al pulsarlo se registra la comprobación y, si toca, sale el correo. La pantalla dice a quién se envió o por qué no.
+   **Comprueba**: la fila nueva en `public.engine_alerts` y el correo en tu bandeja. Va **solo al propietario** de la lista de usuarios del panel, nunca a alumnas; si no llega, la pantalla del aviso dice la causa.
+9. **Frecuencia**: la comprobación va con la recogida diaria (06:00 UTC). Con **Vercel Pro** se puede pasar a cada hora: pídemelo y añado la entrada del cron (el plan gratuito solo admite crons diarios).
+   **Comprueba**: ⚠️ en Vercel → *Cron Jobs* aparece la entrada con la hora que esperas.
+10. Cuando el dominio esté verificado: **Prompt 4** (abajo) para que construya el correo entrante.
 
 ## 8. Variables de Vercel · 15 min
 **Herramientas**: Vercel web. **Necesitas**: razón social, NIF/CIF, dirección y email de privacidad.
@@ -182,15 +197,39 @@ Hoy el texto de la sala de práctica se envía a Groq (consta en `/privacidad`).
 ## 15. Decisiones de producto
 Respóndeme con el **Prompt 10** (pegado y rellenado).
 
-## 16. Avisos del motor (panel y correo) · 15 min
-**Qué consigues**: enterarte de que el motor se ha pausado por cuota o ha dejado de responder **sin abrir la pestaña Fuentes** (la banda de aviso sale en todas las pestañas) y, si guardas la clave de Resend, también **por correo**.
-**Herramientas**: SQL Editor de Supabase + Panel → APIs + Variables de Vercel. **Enlaces**: [migración](https://github.com/torrealex97-star/closer-ia-ops/blob/main/supabase/migrations/20261029_engine_alerts.sql) · [prueba de BD](https://github.com/torrealex97-star/closer-ia-ops/blob/main/tests/db/engine_alerts.sql) · [ADR-016](https://github.com/torrealex97-star/closer-ia-ops/blob/main/docs/decisions/ADR-016-avisos-del-motor-por-correo.md)
-1. ✅ **Migración aplicada** (2026-10-27, por orden tuya): `20261029_engine_alerts.sql` ya está en la base real y **verificada** (existe, con RLS y sin acceso para el navegador, con su índice). Es lo que permite avisar **una sola vez por estado**.
-2. ✅ **Prueba pasada**: `tests/db/engine_alerts.sql` corrió en la base real sin ningún `FALLO` y se deshizo sola (0 filas después).
-3. Guarda la **clave de Resend** en Panel → APIs (paso 7). El aviso va **solo al propietario** de la lista de usuarios del panel, nunca a alumnas.
-4. **Remitente**: por defecto se usa `onboarding@resend.dev`, que Resend solo deja escribir al correo de tu propia cuenta de Resend. Cuando verifiques tu dominio (paso 7), añade en Vercel `RESEND_FROM=avisos@careers.womendigitalclosers.com` y haz redeploy.
-5. **Pruébalo** en Panel: si el motor está mal verás la banda con «Comprobar ahora»; al pulsarlo se registra la comprobación y, si toca, sale el correo. La pantalla dice a quién se envió o por qué no.
-6. **Frecuencia**: la comprobación va con la recogida diaria (06:00 UTC). Con **Vercel Pro** se puede pasar a cada hora: pídemelo y añado la entrada del cron (el plan gratuito solo admite crons diarios).
+## 16. Panel de fuentes: presupuesto por proveedor, orden de vías y claves reales · 30 min
+**Qué consigues**: dos cosas que hoy están escritas y **sin aplicar**. (1) Las dos tablas/columnas que el panel necesita: el presupuesto de los proveedores de pago y el orden de vías por fuente. (2) Las claves con las que por fin se puede probar Bright Data y SerpApi **de verdad**, porque todo lo verificado hasta hoy es `fetch` simulado.
+**Herramientas**: SQL Editor de Supabase + Panel → APIs + Panel → Fuentes. **Necesitas**: tu orden para el DDL (es lo que desbloquea) y cuentas de Bright Data y SerpApi.
+**Enlaces**: [migración del presupuesto](https://github.com/torrealex97-star/closer-ia-ops/blob/main/supabase/migrations/20261121_provider_budget.sql) · [migración del orden](https://github.com/torrealex97-star/closer-ia-ops/blob/main/supabase/migrations/20261121_source_route_order.sql) · [Bright Data](https://brightdata.com/) · [SerpApi](https://serpapi.com/manage-api-key)
+
+**A. Las dos migraciones**
+1. **Presupuesto por proveedor** — SQL Editor → pega entero `supabase/migrations/20261121_provider_budget.sql` → **Run**. Crea `provider_budget` (una fila por organización y proveedor, con RLS y sin acceso desde el navegador) y siembra **5 USD** para Bright Data, SerpApi, ZenRows y ScrapingBee. Si quieres otro tope, cambia esos cuatro `5` del `insert` antes de ejecutar.
+   **Comprueba**:
+   ```sql
+   select provider, monthly_usd from public.provider_budget order by provider;
+   -- 4 filas: brightdata, serpapi, zenrows, scrapingbee
+   select relrowsecurity from pg_class where oid = 'public.provider_budget'::regclass; -- true
+   ```
+   Ojo: la tabla deja el tope **listo**, pero hoy el tope efectivo lo sigue leyendo el entorno (`BRIGHTDATA_MONTHLY_USD`, `SERPAPI_MONTHLY_USD`…, 5 USD si no están); hasta que el adaptador lea la tabla, si quieres otro tope se pone esa variable en Vercel + redeploy.
+2. **Orden de vías por fuente** — SQL Editor → pega entero `supabase/migrations/20261121_source_route_order.sql` → **Run**. Añade `route_order text[]` a `source_settings`; vacío o sin fila = orden por coste.
+   **Comprueba**:
+   ```sql
+   select column_name, data_type from information_schema.columns
+    where table_name = 'source_settings' and column_name = 'route_order'; -- text[]
+   ```
+3. **El orden en el panel** — Fuentes → una fuente → «Orden de vías» → sube o baja una vía → guarda → recarga la página.
+   **Comprueba**: el bloque dice «personalizado» y el orden sigue ahí tras recargar; «Volver al orden por coste» lo borra. Antes de aplicar la migración, guardar responde **503** con el motivo (es lo esperado, no un fallo del panel). En la base: `select source, route_order from public.source_settings where route_order <> '{}';`
+
+**B. Las claves reales**
+4. **Bright Data** — Panel → APIs → Bright Data: pega el token y la **zona** (una para SERP de Google Jobs y otra para el Unlocker de una página concreta; no son la misma).
+   **Comprueba**: «Probar» hace **una** petición, descuenta del tope y deja una ejecución `brightdata-probe` con su `coste_usd=0.0015` (así lo comprueba la suite del panel). El gasto del mes sube en la tarjeta; si pone «—» es que faltan notas de ejecuciones, no que sea cero.
+5. **Unlocker** — si tu clave no tiene zona Unlocker, el panel **no** marca esa vía como lista y lo dice; ZenRows o ScrapingBee pueden sustituirla con su clave en el mismo panel.
+   **Comprueba**: en Fuentes, la tarjeta de la fuente enseña qué vía está lista y cuál no, con el motivo.
+6. **SerpApi** — Panel → APIs → SerpApi → pegar → «Comprobar».
+   **Comprueba**: en Fuentes, Google Jobs deja de salir «omitida» por falta de clave; con Bright Data también puesta, la cascada la usa **antes** que SerpApi, y sin ella cae a SerpApi sin `error`.
+7. **Gasto, no sorpresa** — antes de lanzar, el panel estima por petición (Bright Data 0,0015 USD; SerpApi 0,025) y no lanza si el tope del mes está agotado. Con la clave recién puesta, la primera prueba ya gasta: es una llamada real.
+   **Comprueba**: el gasto y el tope del mes en la tarjeta del proveedor, y que el botón de una prueba con el tope agotado se niega en vez de llamar.
+8. **Lo que seguirá sin probarse**: una **página de empresa real** (la revisión se probó con fixture) y **proxies sanos de JobSpy**, sin los cuales Indeed/LinkedIn/Glassdoor caen a Google Jobs. Ninguna de las dos se arregla con estas claves; si quieres cerrarlas, dime y lo montamos.
 
 ---
 

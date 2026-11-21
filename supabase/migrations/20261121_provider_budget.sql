@@ -1,9 +1,10 @@
 -- Tope mensual por proveedor de pago que no sea Apify (Bright Data, SerpApi, ZenRows, ScrapingBee).
 --
--- ESCRITA, NO APLICADA. El DDL requiere una orden explícita del propietario; mientras tanto el código
--- usa `BRIGHTDATA_MONTHLY_USD` (y sus equivalentes) como tope y lee el gasto de las notas de
--- `external_ingest_runs` (`proveedor=… · coste_usd=…`). Aplicarla no cambia el comportamiento: el
--- adaptador la lee cuando exista y el entorno queda como respaldo, igual que `paid_budget` con Apify.
+-- APLICADA en Supabase real (proyecto closer-ia-ops, ref jzchuizybyubtkownhlw) el 2026-11-21,
+-- versión 20261121180401. Prueba: `tests/db/provider_budget.sql` (BEGIN…ROLLBACK).
+-- Ojo: hoy el tope efectivo lo sigue leyendo el entorno (`BRIGHTDATA_MONTHLY_USD` y sus equivalentes),
+-- y el gasto se deriva de las notas de `external_ingest_runs` (`proveedor=… · coste_usd=…`).
+-- El adaptador todavía NO lee `monthly_usd` de esta tabla; queda lista para cuando lo haga.
 --
 -- Una fila por organización y proveedor. El gasto NO se guarda aquí (se deriva de las ejecuciones,
 -- que son la fuente de verdad); esta tabla solo fija el tope y quién lo cambió.
