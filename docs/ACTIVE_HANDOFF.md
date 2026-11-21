@@ -4,6 +4,12 @@
 > Documento corto a propósito (≤ ~150 líneas). Histórico → `docs/handoff/archive/`. Trabajos vivos → `docs/handoff/claims/` (`npm run handoff`). Reglas → `docs/handoff/README.md`. Diseño y estado pieza a pieza de los módulos IA Winner → [docs/plans/IA_WINNER_MODULOS.md](plans/IA_WINNER_MODULOS.md).
 > Última actualización: 2026-11-21.
 
+## 0. Misión objetivo
+
+Este documento existe para que **ningún pendiente que solo puede resolver el dueño quede escondido**: el detalle vive en `docs/STATUS.md`, y aquí van, con su siguiente acción exacta y su límite declarado, las tareas de la sección 3, las decisiones pendientes y el estado real de `main`. Un hueco no es un cero y «pendiente» no es «hecho».
+
+Lo hecho en la sesión del 2026-11-21 que dejó este relevo así: los 13 duplicados sin seguimiento fuera del árbol, `ruff` limpio (el `E741` del exportador de formación), las sesiones 262-273 resumidas aquí, las tareas del dueño de las sesiones 274-278 (las dos migraciones del panel de fuentes y las claves reales de Bright Data/SerpApi) en la sección 3, y todo fusionado en `main` con merge commit.
+
 Leyenda: ✅ hecho y probado · 🟡 parcial · ⬜ pendiente (construible) · ⛔ bloqueado por el dueño o por una decisión. **Lo pendiente o bloqueado NO está hecho.**
 
 ## 1. Tablero (trabajos vivos)
@@ -81,6 +87,10 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
 18. ~~**Aplicar la migración de Formación en Supabase**~~ hecho (sesión 239): aplicada en `closer-ia-ops`, prueba `BEGIN…ROLLBACK` en verde y currículo cargado desde el repo (con hashes verificados). Queda **publicar** el arreglo de versión del store para que producción lo sirva desde la base, y reimportar desde Excel cuando el equipo cambie el contenido (`npm run training:import -- --input <excel> --supabase`).
 
 19. **Configurar `CLOUDFLARE_API_TOKEN` en GitHub Actions** (sesión 236): el workflow «Web deploy» da verde pero **no publica** mientras falte ese secreto (solo están `COLLECT_TOKEN` y `ENGINE_URL`). Añadirlo en Settings → Secrets and variables → Actions con permiso «Workers Scripts: Edit» sobre la cuenta **Women Digital Closers**. Hasta entonces, cada push a `main` deja el dominio en la versión anterior sin fallar; la sesión 236 publicó a mano con `npx wrangler deploy` desde `apps/web` y `CLOUDFLARE_ACCOUNT_ID=267ff3546dd1d780232981b1393d09ef`.
+
+20. **Panel de fuentes: las dos migraciones de hoy y las claves reales** (sesiones 274-278, 2026-11-21). Es lo único que falta de ese incremento, y todo depende de ti:
+   - **DDL (tu orden)**: `supabase/migrations/20261121_provider_budget.sql` pasa el tope mensual de variable de entorno a una tabla de presupuesto, y `supabase/migrations/20261121_source_route_order.sql` añade `source_settings.route_order`; sin la segunda, el bloque «Orden de vías» del panel no puede guardar (responde **503**) y declara que usa el orden por coste. Hasta aplicarlas funcionan el tope por entorno y el orden por coste. Después: su prueba `BEGIN…ROLLBACK` y guardar un orden desde el panel de producción para ver la escritura real.
+   - **Claves reales (tuyas, en Panel → APIs)**: una de **Bright Data** (con su zona Unlocker si quieres esa vía; si no, ZenRows o ScrapingBee la cubren) y una de **SerpApi**. Todo lo verificado ahí es `fetch` simulado y fixtures: no se ha hecho **ni una llamada de pago**, así que ni el contrato ni el coste están confirmados fuera del mock. Con la clave guardada, «Probar» hace **una** petición, descuenta del tope y anota el coste. Siguen también pendientes una **página de empresa real** (la revisión se probó con fixture) y proxies sanos de JobSpy, sin los cuales Indeed/LinkedIn/Glassdoor caen a Google Jobs.
 
 ## 4. Decisiones ya tomadas
 
