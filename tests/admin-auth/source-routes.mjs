@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
 import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
+import { JSearchError, candidatesFromPayload, jsearchJobs, jsearchUrl } from '../../apps/web/lib/providers/jsearch.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
 import { setupFor } from '../../apps/web/lib/sourceSetup.ts';
 import { COMPANY_WATCHLIST } from '../../apps/web/lib/companyWatchlist.ts';
@@ -23,11 +24,11 @@ for (const item of catalog) {
   for (let i = 1; i < routes.length; i++) assert.ok(routes[i].stage >= routes[i - 1].stage, `${item.code}: rutas desordenadas`);
 }
 const indeed = routesForSource(entry('indeed')).map(route => route.provider);
-assert.deepEqual(indeed.slice(0, 3), ['brightdata', 'serpapi', 'apify'], 'Indeed: Bright Data antes que SerpApi y Apify');
+assert.deepEqual(indeed.slice(0, 3), ['brightdata', 'jsearch', 'serpapi'], 'Indeed: Bright Data, JSearch y SerpApi por coste');
 assert.ok(indeed.indexOf('jobspy') > indeed.indexOf('apify'), 'JobSpy va después de Apify');
 assert.equal(indeed.at(-1), 'jobspy', 'JobSpy es la última vía de Indeed');
 const infojobsProviders = routesForSource(entry('infojobs')).map(route => route.provider);
-assert.deepEqual(infojobsProviders.slice(0, 3), ['official', 'brightdata', 'serpapi'], 'InfoJobs: API oficial, Bright Data y SerpApi');
+assert.deepEqual(infojobsProviders.slice(0, 3), ['official', 'brightdata', 'jsearch'], 'InfoJobs: API oficial, Bright Data y JSearch');
 assert.equal(infojobsProviders.at(-1), 'apify', 'InfoJobs cierra con Apify; no tiene JobSpy');
 assert.ok(routesForSource(entry('infojobs')).some(route => route.provider === 'official'), 'InfoJobs conserva su API oficial');
 assert.equal(routesForSource(entry('remotejobs'))[0].evidence, 'bloqueado', 'un feed muerto no se presenta operativo');
@@ -174,7 +175,7 @@ assert.equal(canSpend('brightdata', 4.99, { BRIGHTDATA_MONTHLY_USD: '5' }).ok, t
 const infojobsRoutes = routesForSource(entry('infojobs'));
 const steps = planCascade(infojobsRoutes, state({ keys: new Set(['infojobs', 'brightdata', 'serpapi']), budget: { brightdata: 5, serpapi: 5 } }));
 assert.equal(steps.filter(step => step.ready).length, 3, 'oficial, Bright Data y SerpApi listas');
-assert.deepEqual(steps.map(step => step.route.provider), ['official', 'brightdata', 'serpapi', 'apify'], 'InfoJobs con Bright Data: orden por coste');
+assert.deepEqual(steps.map(step => step.route.provider), ['official', 'brightdata', 'jsearch', 'serpapi', 'apify'], 'InfoJobs con Bright Data: orden por coste');
 const seen = [];
 const cascade = await runCascade(steps, async route => {
   seen.push(route.provider);
@@ -219,6 +220,67 @@ assert.deepEqual(indeedWithoutBrightDataSeen, ['serpapi'], 'Indeed sin Bright Da
 assert.equal(indeedWithoutBrightDataRun.winner?.provider, 'serpapi');
 assert.equal(indeedWithoutBrightDataRun.attempts.find(attempt => attempt.route.provider === 'brightdata')?.status, 'omitida');
 
+// 5b-bis. JSearch entra entre Bright Data y SerpApi por precio: sustituye a SerpApi sin mover el orden.
+const jsearchRoute = routesForSource(entry('indeed')).find(route => route.provider === 'jsearch');
+assert.ok(jsearchRoute, 'Indeed tiene vía JSearch');
+assert.equal(jsearchRoute.costUsd, 0.0025, 'JSearch cuesta 0,0025 USD por petición');
+assert.equal(PROVIDER_METERS.jsearch.usdPerRequest, 0.0025);
+assert.equal(PROVIDER_METERS.jsearch.env, 'JSEARCH_MONTHLY_USD', 'su tope se lee de su propia variable');
+assert.ok(routesForSource(entry('infojobs')).some(route => route.provider === 'jsearch'), 'InfoJobs también cae a JSearch cuando no hay Bright Data');
+const indeedOrderNow = orderRoutes(routesForSource(entry('indeed'))).map(route => route.provider);
+assert.deepEqual(indeedOrderNow.slice(0, 3), ['brightdata', 'jsearch', 'serpapi'], 'el orden por coste no cambia: JSearch va antes que SerpApi');
+assert.ok(indeedOrderNow.indexOf('jsearch') < indeedOrderNow.indexOf('serpapi'), 'JSearch sustituye a SerpApi sin adelantarse a Bright Data');
+// Solo con JSearch: lista con clave y saldo, nunca sin uno de los dos.
+assert.equal(routeReadiness(jsearchRoute, state()).ok, false, 'sin clave no se lanza');
+assert.match(routeReadiness(jsearchRoute, state()).reason, /Sin clave de jsearch/);
+assert.equal(routeReadiness(jsearchRoute, state({ keys: new Set(['jsearch']), budget: { jsearch: null } })).ok, false, 'sin gasto legible no se lanza');
+assert.equal(routeReadiness(jsearchRoute, state({ keys: new Set(['jsearch']), budget: { jsearch: 0 } })).ok, false, 'tope agotado');
+assert.equal(routeReadiness(jsearchRoute, state({ keys: new Set(['jsearch']), budget: { jsearch: 4.99 } })).ok, true);
+// Cascada: con JSearch y SerpApi listas, JSearch gana y SerpApi ni se llama.
+const jsearchPlan = planCascade(routesForSource(entry('indeed')), state({ keys: new Set(['jsearch', 'serpapi']), budget: { jsearch: 5, serpapi: 5 } }));
+const seenJSearch = [];
+const jsearchRun = await runCascade(jsearchPlan, async route => { seenJSearch.push(route.provider); return { accepted: route.provider === 'jsearch' ? 3 : 9 }; });
+assert.deepEqual(seenJSearch, ['jsearch'], 'con JSearch listo no se llama a SerpApi');
+assert.equal(jsearchRun.winner?.provider, 'jsearch');
+assert.match(jsearchRun.attempts.find(attempt => attempt.route.provider === 'serpapi')?.note ?? '', /ya trajo ofertas/);
+// Si JSearch responde sin ofertas, SerpApi sigue de respaldo: el escalón no tapa la última vía.
+const jsearchEmpty = await runCascade(jsearchPlan, async route => ({ accepted: route.provider === 'jsearch' ? 0 : 2 }));
+assert.equal(jsearchEmpty.winner?.provider, 'serpapi', 'sin ofertas en JSearch se prueba SerpApi');
+assert.equal(jsearchEmpty.attempts.find(attempt => attempt.route.provider === 'jsearch')?.status, 'vacía');
+// Contabilidad al precio nuevo y tope propio: el gasto de JSearch no se atribuye a SerpApi.
+const jsearchNote = spendNote({ route: '3/5', provider: 'jsearch', requests: 1, costUsd: 0.0025, detail: 'indeed' });
+assert.equal(costFromNote(jsearchNote), 0.0025);
+assert.equal(spentFromNotes([{ note: jsearchNote }], 'jsearch').usd, 0.0025);
+assert.equal(spentFromNotes([{ note: jsearchNote }], 'serpapi').usd, null);
+assert.equal(canSpend('jsearch', 4.9975, { JSEARCH_MONTHLY_USD: '5' }).ok, true, 'el último 0,0025 cabe en el tope');
+assert.equal(canSpend('jsearch', 4.998, { JSEARCH_MONTHLY_USD: '5' }).ok, false, 'no se pasa del tope');
+assert.equal(canSpend('jsearch', 0, { JSEARCH_MONTHLY_USD: '0' }).ok, false, 'tope 0 no lanza');
+// Contrato: URL documentada, cabecera de clave y mapeo que no inventa campos.
+assert.equal(jsearchUrl({ query: 'closer de ventas España' }, { JSEARCH_API_BASE: 'https://ejemplo.test/' }), 'https://ejemplo.test/search-v2?query=closer+de+ventas+Espa%C3%B1a&country=es&language=es&num_pages=1&date_posted=week');
+const jsearchFixture = JSON.parse(readFileSync(new URL('../fixtures/jsearch-search-v2.json', import.meta.url), 'utf8'));
+const jsearchCandidates = candidatesFromPayload(jsearchFixture);
+assert.equal(jsearchCandidates.length, 2, 'sin enlace web usable no hay oferta: se descartan las dos filas sin URL');
+assert.equal(jsearchCandidates[0].url, 'https://linkedin.com/jobs/view/4429137', 'un enlace sin esquema se completa con https');
+assert.equal(jsearchCandidates[0].title, 'Closer high ticket (remoto)');
+assert.equal(jsearchCandidates[0].company, 'Academia Ventas Pro');
+assert.equal(jsearchCandidates[0].location, 'Madrid, Madrid, ES');
+assert.equal(jsearchCandidates[0].salary, '30000–60000 EUR por año');
+assert.equal(jsearchCandidates[0].posted_at, '2026-11-18T09:30:00.000Z');
+assert.equal(jsearchCandidates[0].raw?.provider, 'jsearch');
+assert.equal(jsearchCandidates[0].raw?.remote, true);
+assert.equal(jsearchCandidates[1].posted_at, new Date(1763500000 * 1000).toISOString(), 'el timestamp en segundos se convierte');
+let sentUrl = '';
+let sentKey = null;
+const jsearchLive = await jsearchJobs('clave-de-prueba', { query: 'closer', country: 'es', language: 'es', fetchImpl: async (url, init) => { sentUrl = String(url); sentKey = (init?.headers ?? {})['x-api-key']; return new Response(JSON.stringify(jsearchFixture), { status: 200 }); } });
+assert.equal(sentKey, 'clave-de-prueba', 'la clave va en x-api-key, no en la URL');
+assert.match(sentUrl, /num_pages=1/);
+assert.ok(!/cursor=/.test(sentUrl), 'no se pagina: cada página es una petición de pago');
+assert.equal(jsearchLive.requests, 1);
+assert.equal(jsearchLive.costUsd, 0.0025);
+assert.equal(jsearchLive.rawItems, 4, 'las filas en bruto se cuentan aunque alguna no tenga enlace');
+await assert.rejects(() => jsearchJobs('k', { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ status: 'ERROR', message: 'Invalid API key' }), { status: 401 }) }), err => err instanceof JSearchError && err.status === 401, 'un 401 se declara con su estado');
+await assert.rejects(() => jsearchJobs('k', { query: 'x', fetchImpl: async () => new Response(JSON.stringify({ status: 'ERROR', error: 'quota exceeded' }), { status: 200 }) }), err => err instanceof JSearchError && /quota exceeded/.test(err.message), 'un 200 con estado de error no se da por bueno');
+
 // 5c. JobSpy sin proxies sanos: se salta al final y se declara; no lanza ni rompe la cascada.
 const jobspySteps = planCascade(routesForSource(entry('indeed')), state({ keys: new Set(['brightdata', 'serpapi', 'apify', 'jobspy']), budget: { brightdata: 5, serpapi: 5 }, proxiesHealthy: false }));
 assert.equal(jobspySteps.at(-1)?.route.provider, 'jobspy', 'JobSpy sigue al final');
@@ -231,10 +293,10 @@ assert.ok(!jobspyRun.attempts.some(attempt => attempt.status === 'error'), 'sin 
 // 5d. El orden se ve y se puede cambiar; sin override vuelve al de coste y JobSpy no se adelanta.
 const infojobsForOrder = routesForSource(entry('infojobs'));
 const defaultInfojobsOrder = orderRoutes(infojobsForOrder).map(route => route.provider);
-assert.deepEqual(defaultInfojobsOrder, ['official', 'brightdata', 'serpapi', 'apify']);
+assert.deepEqual(defaultInfojobsOrder, ['official', 'brightdata', 'jsearch', 'serpapi', 'apify']);
 const serpapiId = infojobsForOrder.find(route => route.provider === 'serpapi').id;
 const officialId = infojobsForOrder.find(route => route.provider === 'official').id;
-assert.deepEqual(orderRoutes(infojobsForOrder, [serpapiId, officialId]).map(route => route.provider), ['serpapi', 'official', 'brightdata', 'apify']);
+assert.deepEqual(orderRoutes(infojobsForOrder, [serpapiId, officialId]).map(route => route.provider), ['serpapi', 'official', 'brightdata', 'jsearch', 'apify']);
 assert.deepEqual(orderRoutes(infojobsForOrder, []).map(route => route.provider), defaultInfojobsOrder, 'sin override manda el coste');
 const indeedForOrder = routesForSource(entry('indeed'));
 const jobspyId = indeedForOrder.find(route => route.provider === 'jobspy').id;
@@ -301,4 +363,4 @@ for (const company of COMPANY_WATCHLIST) {
   if (company.url) assert.match(company.url, /^https:\/\//);
 }
 
-console.log('source-routes: rutas, contrato Bright Data, extractor, cascada y guías OK');
+console.log('source-routes: rutas, contrato Bright Data y JSearch, extractor, cascada y guías OK');

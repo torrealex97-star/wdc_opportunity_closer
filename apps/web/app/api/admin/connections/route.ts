@@ -12,6 +12,7 @@ const MIGRATIONS: Partial<Record<string, string>> = {
   brightdata: '20261121_integration_connections_providers.sql',
   zenrows: '20261121_integration_connections_providers.sql',
   scrapingbee: '20261121_integration_connections_providers.sql',
+  jsearch: '20261121_integration_connections_jsearch.sql',
 };
 
 // Claves de APIs de proveedores. El navegador nunca recibe una clave: solo los últimos 4 caracteres.

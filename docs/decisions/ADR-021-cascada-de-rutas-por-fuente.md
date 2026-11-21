@@ -25,12 +25,18 @@ requisito y evidencia. El orden es por coste real, no por marca:
 |---|---|---|---|
 | 1 | API/feed oficial gratis (motor, backend, ATS) | 0 | Siempre primero |
 | 2 | API oficial con clave (InfoJobs, Adzuna, Jooble) | 0 con cuota | Si hay clave |
-| 3 | Google Jobs vía Bright Data SERP | 0,0015 USD/búsqueda | Si hay clave; antes que SerpApi |
-| 4 | Google Jobs vía SerpApi | 0,025 USD/búsqueda | Respaldo |
-| 5 | Apify | pago por resultado | Portales sin API ni extractor |
-| 6 | JobSpy | 0, con proxies | **Última**; sin proxies sanos no se lanza |
-| 7 | Web Unlocker / ZenRows / ScrapingBee | ~0,0015–0,002 USD/página | Solo con extractor JSON-LD/RSS |
-| 8 | Hermes/Manus | — | No disponibles (ADR-009); insignia, sin estado fingido |
+| 3 | Google Jobs vía Bright Data SERP | 0,0015 USD/búsqueda | Si hay clave; antes que JSearch y SerpApi |
+| 4 | Google Jobs vía JSearch (OpenWeb Ninja) | 0,0025 USD/petición | Si hay clave; antes que SerpApi |
+| 5 | Google Jobs vía SerpApi | 0,025 USD/búsqueda | Respaldo |
+| 6 | Apify | pago por resultado | Portales sin API ni extractor |
+| 7 | JobSpy | 0, con proxies | **Última**; sin proxies sanos no se lanza |
+| 8 | Web Unlocker / ZenRows / ScrapingBee | ~0,0015–0,002 USD/página | Solo con extractor JSON-LD/RSS |
+| 9 | Hermes/Manus | — | No disponibles (ADR-009); insignia, sin estado fingido |
+
+JSearch entra el 2026-11-21 como escalón propio porque es la misma búsqueda de Google Jobs que SerpApi a
+0,0025 USD por petición (25 USD por 10.000, 200 gratis al mes): el orden sigue siendo por coste y SerpApi
+queda como último respaldo, no como segunda vía. Sin clave o sin tope legible no se lanza; su gasto se anota
+con `proveedor=jsearch` y se descuenta de `JSEARCH_MONTHLY_USD` (5 USD por defecto), no del tope de SerpApi.
 
 Una fuente sin clave no está «conectada»: `routeReadiness` devuelve el motivo («Sin clave de brightdata»,
 «Tope mensual agotado», «Sin proxies sanos») y el panel lo pinta. Agrupar por «Directo gratis · Tus APIs ·
@@ -147,6 +153,7 @@ el orden y «Volver al orden por coste» lo borra.
 ## Referencias
 
 - Bright Data · SERP API: <https://docs.brightdata.com/scraping-automation/serp-api/introduction>
+- JSearch (OpenWeb Ninja): <https://openwebninja.com/api/jsearch>
 - Bright Data · Web Unlocker: <https://docs.brightdata.com/products/web-unlocker/quickstart>
 - JobSpy (MIT): <https://github.com/speedyapply/JobSpy>
 - ADR-009 (coste), ADR-011 (condiciones de uso), ADR-017 (forma de escritura del catálogo).

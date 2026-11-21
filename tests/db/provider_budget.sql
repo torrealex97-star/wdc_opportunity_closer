@@ -21,10 +21,10 @@ do $$ begin
   ) then raise exception 'FALLO: falta la PK (org_id, provider)'; end if;
 end $$;
 
--- 2) La semilla deja los cuatro proveedores de la organización del producto a 5 USD.
+-- 2) La semilla deja los cinco proveedores de la organización del producto a 5 USD (JSearch incluido).
 do $$ declare n int; begin
   select count(*) into n from public.provider_budget where org_id = 'cloud-wdc' and monthly_usd = 5;
-  if n <> 4 then raise exception 'FALLO: la semilla no dejó 4 proveedores a 5 USD (hay %)', n; end if;
+  if n <> 5 then raise exception 'FALLO: la semilla no dejó 5 proveedores a 5 USD (hay %)', n; end if;
 end $$;
 
 -- 3) Upsert por (org_id, provider): cambia el tope sin duplicar y guarda quién lo cambió.

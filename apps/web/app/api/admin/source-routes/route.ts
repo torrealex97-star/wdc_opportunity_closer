@@ -8,6 +8,7 @@ import { extractJobPostings } from '../../../../lib/jobPosting';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type Cap, type MeteredProvider } from '../../../../lib/providerBudget';
 import { readCaps } from '../../../../lib/providerBudgetStore';
 import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
+import { JSearchError, jsearchJobs } from '../../../../lib/providers/jsearch';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
 import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
 import sourceCatalog from '../../../../lib/sourceCatalog.json';
@@ -68,6 +69,7 @@ async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap
     paused: false,
     budget: {
       brightdata: remaining('brightdata'),
+      jsearch: remaining('jsearch'),
       serpapi: remaining('serpapi'),
       zenrows: remaining('zenrows'),
       scrapingbee: remaining('scrapingbee'),
@@ -89,7 +91,7 @@ export async function GET(request: NextRequest) {
   const budget: Record<string, number | null> = {};
   const spent: Record<string, number | null> = {};
   const notes = (rows ?? []).map(row => ({ note: row.note }));
-  for (const provider of ['brightdata', 'serpapi', 'zenrows', 'scrapingbee'] as MeteredProvider[]) {
+  for (const provider of ['brightdata', 'jsearch', 'serpapi', 'zenrows', 'scrapingbee'] as MeteredProvider[]) {
     budget[provider] = state.budget[provider] ?? null;
     spent[provider] = rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
     if (budget[provider] === null && state.keys.has(provider)) budget[provider] = caps[provider].usd;
@@ -192,6 +194,39 @@ export async function POST(request: NextRequest) {
       throw err;
     }
     return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: `Bright Data devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` });
+  }
+
+  if (route.provider === 'jsearch') {
+    const secret = await getSecret('jsearch');
+    if (!secret) return Response.json({ detail: 'Sin clave de JSearch.' }, { status: 409 });
+    // Mismo tope efectivo que las demás: la tabla manda y el entorno es el respaldo.
+    const check = canSpend('jsearch', spentOf(rows, 'jsearch'), process.env, 1, caps.jsearch.usd);
+    if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
+    const host = hostOf(entry.website);
+    const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
+    // Una petición = una página de hasta 10 ofertas. Se reserva exactamente una: esta vía no pagina.
+    const jsearchNote = (requests: number, costUsd: number, detail: string) => spendNote({
+      route: `${route.stage + 1}/${routes.length}`, provider: 'jsearch', requests, costUsd, detail,
+    });
+    let result: Awaited<ReturnType<typeof jsearchJobs>>;
+    try {
+      result = await jsearchJobs(secret, { query, country: 'es', language: 'es', timeoutMs: 20_000 });
+    } catch (err) {
+      // Un 2xx sin cuerpo legible ya se pagó; un 401/403/429 o un fallo de red, no.
+      if (err instanceof JSearchError && billed(err.status)) {
+        await recordSpend('google-jobs', 'jsearch-ruta', jsearchNote(1, PROVIDER_METERS.jsearch.usdPerRequest, `${entry.code} · respuesta ilegible`));
+      }
+      return Response.json({ detail: err instanceof Error ? err.message : 'JSearch no respondió.' }, { status: 502 });
+    }
+    let saved: Awaited<ReturnType<typeof ingest>>;
+    try {
+      saved = await ingest('google-jobs', 'jsearch-ruta', result.candidates, jsearchNote(result.requests, result.costUsd, `${entry.code} · ${result.rawItems} en bruto`));
+    } catch (err) {
+      // La petición ya se pagó: si la ingesta falla, la nota se escribe por separado para no perder el gasto.
+      await recordSpend('google-jobs', 'jsearch-ruta', jsearchNote(result.requests, result.costUsd, `${entry.code} · ingesta fallida`));
+      throw err;
+    }
+    return reply(auth!, { ok: true, accepted: saved.accepted, received: result.candidates.length, cost_usd: result.costUsd, note: `JSearch devolvió ${result.rawItems} resultados; ${saved.accepted} guardada(s).` });
   }
 
   if (route.provider === 'serpapi') {

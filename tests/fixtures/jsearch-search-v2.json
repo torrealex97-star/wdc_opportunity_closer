@@ -1,0 +1,52 @@
+{
+  "status": "OK",
+  "parameters": { "query": "closer de ventas España", "num_pages": 1, "country": "es", "language": "es", "date_posted": "week" },
+  "data": {
+    "cursor": "fixture-cursor",
+    "jobs": [
+      {
+        "job_id": "fixture-linkedin-4429137",
+        "job_title": "Closer high ticket (remoto)",
+        "employer_name": "Academia Ventas Pro",
+        "job_publisher": "LinkedIn",
+        "job_employment_type": "FULLTIME",
+        "job_apply_link": "linkedin.com/jobs/view/4429137",
+        "apply_options": [{ "publisher": "LinkedIn", "apply_link": "linkedin.com/jobs/view/4429137" }],
+        "job_is_remote": true,
+        "job_posted_at_datetime_utc": "2026-11-18T09:30:00.000Z",
+        "job_city": "Madrid",
+        "job_state": "Madrid",
+        "job_country": "ES",
+        "job_min_salary": 30000,
+        "job_max_salary": 60000,
+        "job_salary_currency": "EUR",
+        "job_salary_period": "YEAR",
+        "job_description": "Cierre de llamadas de venta de alto ticket, 100% remoto."
+      },
+      {
+        "job_id": "fixture-infojobs-881",
+        "job_title": "Setter / Closer comercial",
+        "employer_name": "Grupo Formación Digital",
+        "job_publisher": "InfoJobs",
+        "job_apply_link": "https://www.infojobs.net/oferta/setter-closer",
+        "job_is_remote": false,
+        "job_posted_at_timestamp": 1763500000,
+        "job_location": "Barcelona, ES",
+        "job_description": "Setter y closer para programa de formación."
+      },
+      {
+        "job_id": "fixture-sin-enlace-1",
+        "job_title": "Closer sin enlace de solicitud",
+        "employer_name": "Empresa sin ficha",
+        "job_publisher": "Glassdoor",
+        "job_apply_link": null
+      },
+      {
+        "job_id": "fixture-enlace-raro-1",
+        "job_title": "Closer con enlace no web",
+        "employer_name": "Empresa rara",
+        "job_apply_link": "mailto:rrhh@example.com"
+      }
+    ]
+  }
+}

@@ -8,7 +8,7 @@
 //
 // Un hueco no es un cero: sin tope legible o sin notas, el gasto devuelve `null` y el panel lo declara.
 
-export type MeteredProvider = 'brightdata' | 'serpapi' | 'zenrows' | 'scrapingbee';
+export type MeteredProvider = 'brightdata' | 'jsearch' | 'serpapi' | 'zenrows' | 'scrapingbee';
 
 /** Inicio del mes en UTC, que es como se guardan `created_at` y como se compara el gasto. */
 export const monthStart = (now = new Date()): string =>
@@ -27,6 +27,12 @@ export const PROVIDER_METERS: Record<MeteredProvider, ProviderMeter> = {
     defaultUsd: 5,
     usdPerRequest: 0.0015,
     note: '1,50 USD por 1.000 peticiones correctas · 5.000 créditos gratis al mes compartidos entre sus APIs',
+  },
+  jsearch: {
+    env: 'JSEARCH_MONTHLY_USD',
+    defaultUsd: 5,
+    usdPerRequest: 0.0025,
+    note: '25 USD por 10.000 peticiones (0,0025 por página de hasta 10 ofertas); el plan gratuito incluye 200 al mes',
   },
   serpapi: {
     env: 'SERPAPI_MONTHLY_USD',
