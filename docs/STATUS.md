@@ -6,7 +6,10 @@
 - **Causa**: la poda de la sesión 264 partió de una copia anterior del fichero y se llevó reglas que otras sesiones añadieron después, entre ellas la de `@media (max-width:760px)` que deja la navegación del panel en una sola franja desplazable.
 - **Arreglo**: `apps/web/app/globals.css` se reconstruye desde el de `main` (0 reglas suyas perdidas, comprobado con postcss) y solo se añaden las 53 reglas que usan los componentes nuevos; `.quiz-result[data-perfect]` pasa a `[data-passed]`, que es lo que emite el componente.
 - *tested*: `npm run build -w apps/web` PASS; `bash tests/admin-auth/run.sh` con `next start` sobre ese build — 363 PASS, 0 FAIL y **13/13 pasos de interfaz**, incluidos los tres que fallaban.
-- Límite: comprobado en el worktree de pruebas, no en CI todavía; las pantallas de formación siguen sin revisarse a ojo.
+- **Cómo se detectó**: comparando el fichero contra `origin/main` selector a selector y declaración a declaración (postcss sobre `git show origin/main:apps/web/app/globals.css`). Mirar el CSS compilado no bastaba: el minificador reordena las declaraciones, así que buscar una regla por su texto literal da «no está» aunque esté. Lo que acotó el problema fue el síntoma: con el `globals.css` de `main`, 13/13 pasos de interfaz; con el mío, 10/13.
+- **Regla adoptada** (en `AGENTS.md`): podar o reescribir un fichero compartido —CSS, `STATUS`, configuración— parte siempre de su estado actual en `origin/main`, y se comprueba que no se pierde ninguna regla suya comparando selectores **y** declaraciones contra `origin/main`, no solo contra la salida construida.
+- *verified*: CI de la PR #98 en verde (`verify` y `web-admin`); fusionada en `main` con merge commit `4d8ff00`.
+- Límite: las pantallas de formación siguen sin revisarse a ojo; los dos checks en rojo (`Workers Builds: closer-web`, `Supabase Preview`) ya fallaban en `main` antes de esto.
 
 ## Repaso del incremento de formación interactiva: menos código muerto y el mismo contrato (sesión 264) — 2026-11-20
 
