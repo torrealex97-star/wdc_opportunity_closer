@@ -64,16 +64,17 @@ marca lista la vía Unlocker: hace falta la segunda zona o una clave de ZenRows/
 Unlocker pide la URL pública con JSON-LD/RSS; no usa la web genérica del catálogo.
 
 **Precio y tope:** 1,50 USD por 1.000 peticiones correctas y 5.000 créditos gratis al mes compartidos entre
-sus APIs. El tope es `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto), también ahora que la tabla existe, porque
-`capUsd()` aún no la lee. Cada gasto se
+sus APIs. El tope sale de `provider_budget` por organización (5 USD sembrados) y el entorno queda como respaldo:
+cambiar `monthly_usd` cambia el límite sin desplegar (sesión 289). Cada gasto se
 anota en `external_ingest_runs` con `proveedor=brightdata · coste_usd=…` y el panel suma **todas** las
 ejecuciones desde el día 1 del mes paginando hasta el final (sin tope artificial de 10.000); si una página
 falla, no autoriza gasto. La
 migración [`20261121_provider_budget.sql`](../../supabase/migrations/20261121_provider_budget.sql) está
 **aplicada** en `closer-ia-ops` (versión **20261121180401**): 4 filas sembradas a 5 USD, RLS y sin acceso
 desde `anon`/`authenticated`; su prueba es [`tests/db/provider_budget.sql`](../../tests/db/provider_budget.sql)
-(`BEGIN…ROLLBACK`). Ojo: el tope efectivo **sigue leyéndose del entorno** porque `capUsd()` todavía no lee
-`monthly_usd`; conectar la tabla es un cambio de código aparte.
+(`BEGIN…ROLLBACK`). Desde la sesión 289 el adaptador **lee `monthly_usd`** por organización
+(`providerBudgetStore.readCaps`, una sola consulta) y el entorno es el respaldo declarado; su prueba es
+`tests/admin-auth/provider-budget-org.mjs`.
 
 ### 3. Cascada
 
@@ -122,7 +123,7 @@ el orden y «Volver al orden por coste» lo borra.
 - Sin clave o sin tope no hay llamada de pago; el panel no puede decir «conectada» por tener una clave
   guardada sin probar.
 - El coste se puede auditar nota a nota y el tope se puede bajar por entorno sin desplegar código.
-- La tabla `provider_budget` no cambia el tope por sí sola: mientras `capUsd()` no la lea, el entorno sigue siendo el tope efectivo.
+- La tabla `provider_budget` manda: cambiar `monthly_usd` cambia el tope sin desplegar; el entorno solo actúa como respaldo y el motivo se declara cuando se usa.
 
 ## Límites y verificación
 
@@ -134,11 +135,14 @@ el orden y «Volver al orden por coste» lo borra.
   20261121180401 y `source_route_order` 20261121180440), cada una con su prueba `BEGIN…ROLLBACK`; los
   advisors no añadieron hallazgos atribuibles a ellas. No se ha desplegado ni se ha pulsado el panel
   desplegado, y no se ha lanzado ninguna ejecución de pago.
-- **Pendiente:** conectar `provider_budget` al adaptador (hoy `capUsd()` lee solo el entorno), probar con una
-  clave real de Bright Data (todo sigue «documentada · sin probar») y verificar el guardado del orden en el
-  panel desplegado.
+- **Pendiente:** probar con una clave real de Bright Data (todo sigue «documentada · sin probar»), verificar en
+  el panel desplegado el guardado del orden y el tope leído de la tabla, y cambiar un `monthly_usd` real para
+  verlo bajar el límite (tocar la base real exige la orden del dueño).
 - El Unlocker se prueba con un HTML simulado que pasa por `extractJobPostings`; se atribuye a
   `brightdata-<portal>` y su nota de gasto se suma al mismo tope que SERP.
+- **Tope por organización** (*tested*): `tests/admin-auth/provider-budget-org.mjs` (42 comprobaciones) cubre tabla
+  sobre entorno, el 0 como «aquí no se gasta», importe ilegible y tabla caída con el motivo declarado, y que una
+  sola consulta trae los cuatro topes.
 - Comprobado: `tests/admin-auth/source-routes.mjs` (rutas, dos fuentes con y sin Bright Data, caída a
   SerpApi, JobSpy sin proxies, Unlocker, override de orden, contrato, cascada, guías y empresas),
   `npm run typecheck`, `npx next build apps/web --webpack`, `npm run design`, `pytest

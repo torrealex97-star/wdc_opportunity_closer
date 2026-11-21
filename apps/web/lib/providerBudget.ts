@@ -2,8 +2,9 @@
 //
 // Apify tenía su propio tope mensual (`paid_budget`, editable en el panel). Bright Data, SerpApi y los
 // proxys de HTML no lo tenían: este módulo les da un tope por variable de entorno, un formato de nota
-// único y un lector que suma lo ya registrado. Sin tabla nueva y sin migración aplicada: si mañana se
-// crea `provider_budget`, se lee de ahí y el entorno queda como respaldo, igual que hace Apify.
+// único y un lector que suma lo ya registrado. El tope sale de `provider_budget` por organización
+// (`providerBudgetStore.readCaps`, una sola consulta) y, si la tabla no se puede leer o no tiene la fila,
+// del entorno con `capUsd`. Cuando cae al entorno, se declara el motivo; no se inventa un tope.
 //
 // Un hueco no es un cero: sin tope legible o sin notas, el gasto devuelve `null` y el panel lo declara.
 
@@ -53,9 +54,45 @@ export const PROVIDER_METERS: Record<MeteredProvider, ProviderMeter> = {
   },
 };
 
+export type CapSource = 'tabla' | 'entorno' | 'defecto';
+/** Tope efectivo y de dónde sale: la tabla del panel, la variable de entorno o el defecto del proveedor. */
+export type Cap = { usd: number; source: CapSource; error: string | null };
+
+/**
+ * Importe válido para un tope: 0–5.000 USD, el mismo rango que el `CHECK` de `provider_budget`. Se distingue
+ * de `parseMonthlyUsd` (Apify, 1–5.000) en que el 0 es válido: «en este proveedor no se gasta».
+ */
+export function parseCapUsd(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const usd = Math.round(n * 100) / 100;
+  return usd >= 0 && usd <= 5000 ? usd : null;
+}
+
+/** Tope del entorno, o el defecto del proveedor si la variable no es un importe válido. */
+export function envCap(provider: MeteredProvider, env: NodeJS.ProcessEnv = process.env): Cap {
+  const usd = parseCapUsd(env[PROVIDER_METERS[provider].env]);
+  return usd === null
+    ? { usd: PROVIDER_METERS[provider].defaultUsd, source: 'defecto', error: null }
+    : { usd, source: 'entorno', error: null };
+}
+
+/** Respaldo puro: el tope del entorno. En servidor, el efectivo lo resuelve `providerBudgetStore`. */
 export function capUsd(provider: MeteredProvider, env: NodeJS.ProcessEnv = process.env): number {
-  const raw = Number(env[PROVIDER_METERS[provider].env]);
-  return Number.isFinite(raw) && raw >= 0 && raw <= 5000 ? raw : PROVIDER_METERS[provider].defaultUsd;
+  return envCap(provider, env).usd;
+}
+
+/**
+ * Tope efectivo a partir de la fila de `provider_budget` (o de su ausencia), con el entorno como respaldo.
+ * Puro: lo usa el lector de BD y lo prueban los tests sin red.
+ */
+export function capFromRow(provider: MeteredProvider, row: { monthly_usd?: unknown } | null | undefined, env: NodeJS.ProcessEnv = process.env): Cap {
+  if (!row) return envCap(provider, env);
+  const usd = parseCapUsd(row.monthly_usd);
+  if (usd !== null) return { usd, source: 'tabla', error: null };
+  const fallback = envCap(provider, env);
+  return { ...fallback, error: `El tope guardado de ${provider} no es un importe válido; se usa el del entorno.` };
 }
 
 /** Coste anotado en una ejecución de ingesta: `coste_usd=0.0105`. */
@@ -101,8 +138,9 @@ export function spendNote(input: { route: string; provider: MeteredProvider; req
  * de peticiones que puede hacer la llamada (por ejemplo 2 si reintenta una vez): se reserva entero para
  * que un reintento no pueda dejar el gasto por encima del tope.
  */
-export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env, requests = 1): { ok: boolean; reason?: string; cap: number; spent: number | null } {
-  const cap = capUsd(provider, env);
+export function canSpend(provider: MeteredProvider, spentUsd: number | null, env: NodeJS.ProcessEnv = process.env, requests = 1, capOverride?: number): { ok: boolean; reason?: string; cap: number; spent: number | null } {
+  // `capOverride` es el tope de la organización (ya resuelto con la tabla); sin él, el del entorno.
+  const cap = capOverride ?? capUsd(provider, env);
   if (cap <= 0) return { ok: false, reason: 'El tope mensual de este proveedor es 0: no se lanza nada.', cap, spent: spentUsd };
   if (spentUsd === null) return { ok: false, reason: 'No se pudo leer lo gastado este mes; por seguridad no se lanza gasto nuevo.', cap, spent: null };
   const worstCase = PROVIDER_METERS[provider].usdPerRequest * Math.max(1, requests);

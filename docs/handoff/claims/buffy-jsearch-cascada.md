@@ -2,7 +2,7 @@
 agent: buffy
 status: in_progress
 branch: feat/jsearch-cascada
-touches: apps/web/lib/providers/jsearch.ts, apps/web/lib/sourceRoutes.ts, apps/web/lib/providerBudget.ts, apps/web/lib/integrations.ts, apps/web/app/api/admin/source-routes/route.ts, apps/web/app/api/admin/connections/route.ts, apps/web/components/ApisTab.tsx, supabase/migrations/20261121_integration_connections_jsearch.sql, tests/admin-auth/source-routes.mjs, tests/db/integration_connections_providers.sql, docs/decisions/ADR-021-cascada-de-rutas-por-fuente.md, docs/EXTERNAL_SOURCES.md, docs/STATUS.md
+touches: apps/web/lib/providers/jsearch.ts, apps/web/lib/sourceRoutes.ts, apps/web/lib/providerBudget.ts, apps/web/lib/integrations.ts, apps/web/app/api/admin/source-routes/route.ts, apps/web/app/api/admin/connections/route.ts, apps/web/components/ApisTab.tsx, supabase/migrations/20261121_integration_connections_jsearch.sql, supabase/migrations/20261121_provider_budget_jsearch.sql, tests/admin-auth/source-routes.mjs, tests/admin-auth/flow.mjs, tests/db/integration_connections_providers.sql, tests/db/provider_budget.sql, docs/decisions/ADR-021-cascada-de-rutas-por-fuente.md, docs/EXTERNAL_SOURCES.md, docs/STATUS.md
 date: 2026-11-21
 ---
 

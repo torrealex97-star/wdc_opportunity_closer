@@ -114,9 +114,10 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
 - **Coste:** 1,50 USD por 1.000 peticiones correctas (0,0015 USD/búsqueda), con 5.000 créditos gratis al mes
   **compartidos** entre SERP, Web Unlocker y sus demás APIs. Con 7 dorks + 4 respaldos al día (~330/mes)
   entra en el tramo gratis.
-- **Tope:** `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto). La tabla `provider_budget` está aplicada
-  (versión **20261121180401**, 5 USD sembrados), pero `capUsd()` aún no la lee: el tope efectivo sigue en el
-  entorno. Si el gasto del mes no se puede leer, no se lanza gasto nuevo.
+- **Tope:** `provider_budget` por organización (versión **20261121180401**, 5 USD sembrados): cambiar
+  `monthly_usd` cambia el límite sin desplegar. Si esa fila no se puede leer, el respaldo es
+  `BRIGHTDATA_MONTHLY_USD` (5 USD por defecto) y el motivo se declara. Si el gasto del mes no se puede leer,
+  no se lanza gasto nuevo.
 - **Web Unlocker:** devuelve HTML; solo se usa donde hay extractor JSON-LD/RSS y con cortesía por dominio.
   No se usa para los 27 portales a ciegas. El resultado se atribuye a `brightdata-<portal>`
   (p. ej. `brightdata-company`) y su gasto se anota con la misma nota que SERP, así que descuenta del tope.

@@ -1,6 +1,15 @@
 # Estado
 
-## JSearch entra como escalón de Google Jobs entre Bright Data y SerpApi (sesión 289) — 2026-11-21
+## El tope de los proveedores de pago lo manda `provider_budget` (sesión 289) — 2026-11-21
+
+- **Petición del propietario**: «Conecta capUsd() a provider_budget por organización con el entorno como respaldo, y añade su prueba, para que cambiar monthly_usd en la tabla cambie el tope de verdad.»
+- **Qué se hizo** (*inspected* la tabla y el adaptador; *tested* el cambio): `providerBudgetStore.ts` (nuevo) lee los cuatro topes en **una** consulta a `provider_budget` por `org_id` y devuelve, por proveedor, el importe y su origen (`tabla` · `entorno` · `defecto`). `providerBudget.ts` gana `parseCapUsd` (0–5.000, el rango del `CHECK`), `envCap` y `capFromRow` (puros, sin red) y `canSpend(..., capOverride)`; `capUsd()` se queda como el respaldo del entorno. Lo usan todas las rutas que gastan: «Probar» de Bright Data y de los proveedores metrados (`integrations.ts`) y el resumen de saldo y las tres pruebas de ruta de `source-routes/route.ts` (SERP, SerpApi, Unlocker). Antes el panel enseñaba y aplicaba el tope del entorno aunque la tabla dijera otra cosa.
+- **Comportamiento**: fila válida → manda la tabla (y el 0 significa «aquí no se gasta»); sin fila → entorno; variable ausente o ilegible → 5 USD por proveedor; tabla caída (HTTP, red o cuerpo que no es lista) → entorno **con el motivo declarado**, nunca un cero. Cambiar `monthly_usd` cambia la decisión de gasto sin desplegar.
+- **Comprobado** (*tested*, sin red): `tests/admin-auth/provider-budget-org.mjs` (42 comprobaciones) — tabla sobre entorno y su efecto en `canSpend`, el 0 como tope, importe ilegible, HTTP 500, red caída y respuesta que no es lista con respaldo declarado, una sola consulta para los cuatro, `org_id` en la URL y clave de servicio, y los límites de `parseCapUsd`. También `typecheck` de `apps/web` (0 errores) y `tests/admin-auth/source-routes.mjs` en verde con el tope nuevo.
+- **Límites**: no se ha leído la tabla contra el Supabase real desde la app (la lectura se prueba con PostgREST simulado; la tabla y su prueba de BD ya estaban aplicadas) ni se ha cambiado ningún `monthly_usd` real, porque tocar la base exige la orden del dueño. El panel desplegado sigue sirviendo el build anterior hasta publicar.
+- **Qué viaja en esta PR**: `providerBudgetStore.ts` (nuevo), los cambios de `providerBudget.ts`, `integrations.ts` y `source-routes/route.ts`, la prueba nueva y su línea en `run.sh`, el comentario de la migración y la documentación (`ACTIVE_HANDOFF`, ADR-011, ADR-021, `EXTERNAL_SOURCES`, `OWNER_GUIDE`).
+
+## JSearch entra como escalón de Google Jobs entre Bright Data y SerpApi (sesión 290) — 2026-11-21
 
 - **Petición del propietario**: añadir JSearch (OpenWeb Ninja) a 0,0025 USD por petición, con su clave en
   Panel → APIs, su tope en `providerBudget` y una prueba que demuestre que sustituye a SerpApi sin cambiar
@@ -29,6 +38,10 @@
   que no se da por bueno. `npm run typecheck` en 0. `interactive.mjs` 11/12 y `flow.mjs` 4/46 **también en
   `main`** sin estos cambios (fallo previo del entorno: `'zone' !== '1234'` y los pasos que no arrancan
   aquí), así que no se atribuye a esta sesión.
+- **Tope en la tabla**: con la PR #110 el tope efectivo lo manda `provider_budget`; la migración
+  `20261121_provider_budget_jsearch.sql` amplía su `CHECK` a cinco proveedores y deja la fila
+  `cloud-wdc · jsearch · 5 USD` (aplicada como versión **20261121211607**; `tests/db/provider_budget.sql`
+  actualizado a cinco filas). Sin fila, el respaldo es `JSEARCH_MONTHLY_USD`.
 - **No probado**: sin clave de OpenWeb Ninja en este entorno no se ha llamado al endpoint; la tarjeta queda
   «documentada · sin probar» hasta la primera búsqueda real desde el panel.
 - **Pendiente**: primera prueba con clave real y, si convence, cambiar el cron de `google-jobs` de SerpApi a

@@ -5,7 +5,8 @@ import { getSecret, listConnections } from '../../../../lib/integrations';
 import { ingest, recordSpend, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
 import { toCandidate as serpCandidate } from '../../../../lib/googleJobs';
 import { extractJobPostings } from '../../../../lib/jobPosting';
-import { canSpend, capUsd, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from '../../../../lib/providerBudget';
+import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type Cap, type MeteredProvider } from '../../../../lib/providerBudget';
+import { readCaps } from '../../../../lib/providerBudgetStore';
 import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
 import { JSearchError, jsearchJobs } from '../../../../lib/providers/jsearch';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
@@ -51,12 +52,12 @@ const spentOf = (rows: RunNote[] | null, provider: MeteredProvider): number | nu
  * «no hay gasto todavía» y vale 0. Antes se confundían: con la primera clave guardada el panel decía
  * «no se pudo leer lo gastado» y no dejaba probar ninguna ruta.
  */
-async function stateOf(rows: RunNote[] | null): Promise<RouteState> {
+async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap>): Promise<RouteState> {
   const notes = (rows ?? []).map(row => ({ note: row.note }));
   const spent = (provider: MeteredProvider) => rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
   const remaining = (provider: MeteredProvider) => {
     const used = spent(provider);
-    return used === null ? null : Math.max(0, capUsd(provider) - used);
+    return used === null ? null : Math.max(0, caps[provider].usd - used);
   };
   const [connections, brightdataSecret] = await Promise.all([listConnections(), getSecret('brightdata')]);
   const keys = new Set((connections ?? []).map(row => row.provider));
@@ -85,15 +86,15 @@ export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request);
   if (error) return error;
   // Gasto del mes completo (paginado), no solo las últimas 200 ejecuciones.
-  const [rows, orders] = await Promise.all([runsThisMonth(), routeOrders()]);
-  const state = await stateOf(rows);
+  const [rows, orders, caps] = await Promise.all([runsThisMonth(), routeOrders(), readCaps()]);
+  const state = await stateOf(rows, caps);
   const budget: Record<string, number | null> = {};
   const spent: Record<string, number | null> = {};
   const notes = (rows ?? []).map(row => ({ note: row.note }));
   for (const provider of ['brightdata', 'jsearch', 'serpapi', 'zenrows', 'scrapingbee'] as MeteredProvider[]) {
     budget[provider] = state.budget[provider] ?? null;
     spent[provider] = rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
-    if (budget[provider] === null && state.keys.has(provider)) budget[provider] = capUsd(provider);
+    if (budget[provider] === null && state.keys.has(provider)) budget[provider] = caps[provider].usd;
   }
   const configuredProxies = Boolean((process.env.JOBSPY_PROXIES ?? '').trim());
   return     reply(auth!, {
@@ -135,8 +136,8 @@ export async function POST(request: NextRequest) {
   const routes = entry ? BY_SOURCE.get(entry.code) ?? [] : [];
   const route = routes.find(item => item.id === body.route);
   if (!entry || !route) return Response.json({ detail: 'Esa ruta no pertenece a una fuente del catálogo.' }, { status: 404 });
-  const rows = await runsThisMonth();
-  const state = await stateOf(rows);
+  const [rows, caps] = await Promise.all([runsThisMonth(), readCaps()]);
+  const state = await stateOf(rows, caps);
   const readiness = routeReadiness(route, state);
   if (!readiness.ok) return Response.json({ detail: readiness.reason }, { status: 409 });
 
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
     }
     // `canSpend` recibe el GASTO, no el saldo: pasarle el restante hacía que un tope de 5 USD pareciera agotado.
     // Reserva los DOS intentos: un reintento no puede dejar el gasto por encima del tope.
-    const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, 2);
+    const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, 2, caps.brightdata.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
@@ -198,7 +199,8 @@ export async function POST(request: NextRequest) {
   if (route.provider === 'jsearch') {
     const secret = await getSecret('jsearch');
     if (!secret) return Response.json({ detail: 'Sin clave de JSearch.' }, { status: 409 });
-    const check = canSpend('jsearch', spentOf(rows, 'jsearch'));
+    // Mismo tope efectivo que las demás: la tabla manda y el entorno es el respaldo.
+    const check = canSpend('jsearch', spentOf(rows, 'jsearch'), process.env, 1, caps.jsearch.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
@@ -230,7 +232,7 @@ export async function POST(request: NextRequest) {
   if (route.provider === 'serpapi') {
     const secret = await getSecret('serpapi');
     if (!secret) return Response.json({ detail: 'Sin clave de SerpApi.' }, { status: 409 });
-    const check = canSpend('serpapi', spentOf(rows, 'serpapi'));
+    const check = canSpend('serpapi', spentOf(rows, 'serpapi'), process.env, 1, caps.serpapi.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const host = hostOf(entry.website);
     const query = entry.code === 'google' || !host ? 'closer de ventas España' : `site:${host} closer de ventas`;
@@ -251,7 +253,7 @@ export async function POST(request: NextRequest) {
     const secret = await getSecret(provider);
     if (!secret) return Response.json({ detail: `Sin clave de ${provider}.` }, { status: 409 });
     // Igual que en SERP: se reservan los dos intentos del cliente de HTML.
-    const check = canSpend(provider, spentOf(rows, provider), process.env, 2);
+    const check = canSpend(provider, spentOf(rows, provider), process.env, 2, caps[provider].usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const source = provider === 'brightdata' ? brightDataSource(entry.code) : `${provider}-${entry.code}`;
     const note = (requests: number, costUsd: number) => spendNote({ route: `${route.stage + 1}/${routes.length}`, provider, requests, costUsd, detail: entry.code });

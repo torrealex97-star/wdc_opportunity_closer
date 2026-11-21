@@ -2,6 +2,7 @@ import { decryptSecret, encryptSecret } from './secrets';
 import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
+import { capForOrg } from './providerBudgetStore';
 import { parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
@@ -113,7 +114,8 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const runs = await runsThisMonth();
   const spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), 'brightdata').usd ?? 0);
   // Una sola petición: la prueba no reintenta, así que se reserva exactamente una.
-  const check = canSpend('brightdata', spent, process.env, 1);
+  const cap = await capForOrg('brightdata');
+  const check = canSpend('brightdata', spent, process.env, 1, cap.usd);
   if (!check.ok) return { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
   let response: Response;
   try {
@@ -170,7 +172,8 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
       // el gasto en `external_ingest_runs` para que el marcador lo sume. Sin nota no se da por contado.
       const runs = await runsThisMonth();
       const spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), meter).usd ?? 0);
-      const check = canSpend(meter, spent);
+      const cap = await capForOrg(meter);
+      const check = canSpend(meter, spent, process.env, 1, cap.usd);
       if (!check.ok) {
         outcome = { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
       } else {

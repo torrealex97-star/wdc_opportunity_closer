@@ -210,7 +210,7 @@ Respóndeme con el **Prompt 10** (pegado y rellenado).
    -- 4 filas: brightdata, serpapi, zenrows, scrapingbee
    select relrowsecurity from pg_class where oid = 'public.provider_budget'::regclass; -- true
    ```
-   Ojo: la tabla deja el tope **listo**, pero hoy el tope efectivo lo sigue leyendo el entorno (`BRIGHTDATA_MONTHLY_USD`, `SERPAPI_MONTHLY_USD`…, 5 USD si no están); hasta que el adaptador lea la tabla, si quieres otro tope se pone esa variable en Vercel + redeploy.
+   Desde la sesión 289 el tope efectivo sale de esta tabla: cambiar `monthly_usd` cambia el límite **sin redeploy**. El entorno (`BRIGHTDATA_MONTHLY_USD`, `SERPAPI_MONTHLY_USD`…) solo actúa como respaldo si la fila no se puede leer, y el panel declara cuándo pasa.
 2. **Orden de vías por fuente** — SQL Editor → pega entero `supabase/migrations/20261121_source_route_order.sql` → **Run**. Añade `route_order text[]` a `source_settings`; vacío o sin fila = orden por coste.
    **Comprueba**:
    ```sql
