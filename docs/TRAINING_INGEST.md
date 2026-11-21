@@ -99,7 +99,7 @@ Reglas de seguridad del importador ([training-import.mjs](../scripts/training-im
 - `GET /api/training` ([route.ts](../apps/web/app/api/training/route.ts)) devuelve `{ curriculum, source }`.
   Si Supabase no está configurado, faltan tablas o el JSON guardado no valida, cae al currículo del repo
   con `source: 'defaults'` y un motivo; nunca sirve una ruta a medias.
-- [TrainingCurriculum.tsx](../apps/web/components/TrainingCurriculum.tsx): acordeón por módulo, porcentaje
+- TrainingCurriculum.tsx: acordeón por módulo, porcentaje
   real, lección con contenido, puntos clave, recursos, test, reintento de falladas y marca de completada.
 - El **hub de recursos** consolida todos los recursos y filtra por módulo y tipo; cada recurso se puede
   abrir o copiar sin salir de Formación.

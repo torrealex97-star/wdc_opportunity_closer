@@ -32,7 +32,7 @@ Antes, la sala puntuaba con cuatro ejes genéricos sin pesos (apertura, descubri
 - Las notas antiguas y nuevas no son estrictamente comparables; el historial no se migra ni se recalcula.
 - La tabla nueva necesita dos migraciones: `20261119_practice_rubrics.sql` (tabla) y `20261119_practice_rubrics_versions.sql` (`version` e `history`). Mientras no se apliquen en el Supabase real, en producción el panel muestra los criterios por defecto y declara que no puede guardar; en desarrollo local guarda en SQLite y lo declara.
 - El backend local es una comodidad de desarrollo, no una segunda fuente de verdad: no se despliega, no se comparte y su base vive fuera del repo (`PRACTICE_DB_PATH` o `.local/`).
-- Evidencia de la ida y vuelta: [practice-persistence.mjs](../tests/admin-auth/practice-persistence.mjs) (5/5) y [admin-practice.spec.ts](../tests/browser/admin-practice.spec.ts) (1/1 activa): peso 100 → nota 53 y etiqueta nueva en el feedback; restaurar → nota 10.
+- Evidencia de la ida y vuelta: [practice-persistence.mjs](../../tests/admin-auth/practice-persistence.mjs) (5/5) y [admin-practice.spec.ts](../../tests/browser/admin-practice.spec.ts) (1/1 activa): peso 100 → nota 53 y etiqueta nueva en el feedback; restaurar → nota 10.
 - El análisis de varias llamadas (modo multi-llamada de la skill) no se implementa aquí: la sala puntúa una conversación por sesión.
 
 ## Actualización sesión 235: activación, versiones y evaluación de llamadas

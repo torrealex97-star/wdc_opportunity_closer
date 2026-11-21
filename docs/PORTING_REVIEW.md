@@ -12,7 +12,7 @@ Fuentes revisadas: `closer-ai-coach` (`src/data/salesMethodology.ts`, `src/data/
 - **Portados el 2026-10-24**: la biblioteca de los 10 cierres exactos y los 9 pasos de descubrimiento, cada uno con su banco de cinco preguntas corregido por clave. De los cierres se descartaron las cifras de ejemplo del original («2.997 €»): van como `[importe]` y `[plazo]` para que nunca se lea un precio inventado.
 - Las personas de práctica: 12 situaciones, incluidas las cuatro entrevistadoras (Carlos, Patricia, Miguel, Lucía) y los perfiles de cliente (Marta, Javier, Cristina, Andrés, Nuria, Lucía, Diego, Elena), en [practiceScenarios.ts](../apps/web/components/practiceScenarios.ts) y [prompts.ts](../apps/web/app/api/practice/prompts.ts).
 - Las rúbricas: 4 ejes de venta y los 6 criterios ponderados de entrevista WDC, con nota y cita literal validada en servidor.
-- Señales deterministas de estilo: «pero» al validar, relleno después del precio, sin siguiente paso, sin preguntas, mensajes largos o cortos, muletillas ([signals.ts](../apps/web/app/api/practice/signals.ts)).
+- Señales deterministas de estilo: «pero» al validar, relleno después del precio, sin siguiente paso, sin preguntas, mensajes largos o cortos, muletillas (signals.ts).
 - Dictado por voz, orbe de estados y lectura en voz alta; paneles de progreso de alumna y de coordinación con ejes, racha, evolución semanal y logros.
 - El radar de oportunidades con fuentes externas: propio de este repositorio, mejor que el de las aplicaciones anteriores.
 
