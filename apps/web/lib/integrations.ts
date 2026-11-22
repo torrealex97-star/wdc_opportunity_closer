@@ -156,7 +156,7 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const failure = typeof payload?.error === 'string' && payload.error
     ? `Bright Data: ${payload.error.slice(0, 160)}`
     : !Array.isArray(jobs)
-      ? 'La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]: comprueba que la zona sea SERP API.'
+      ? `La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]. ${payload ? `Campos que sí trae: ${Object.keys(payload).slice(0, 12).join(', ') || 'ninguno'}.` : 'El cuerpo no era un objeto JSON.'} Comprueba que la zona sea SERP API y que Google muestre el panel de empleos para esa búsqueda.`
       : null;
   if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
   return failure ? { ok: false, detail: failure } : { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` };
