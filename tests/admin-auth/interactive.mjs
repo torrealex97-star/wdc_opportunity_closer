@@ -79,6 +79,19 @@ try {
     assert.equal(summary.unlocker_ready, true, 'la clave de prueba incluye la zona Unlocker');
   });
 
+  await step('Resumen: la tarjeta de objetivo del día y gasto del mes sale con cifras o con «—» y su causa, nunca con 0 inventado', async () => {
+    state.waterfallRow = null;
+    await page.reload();
+    await page.getByRole('button', { name: 'Resumen', exact: true }).click();
+    const card = page.getByTestId('summary-money');
+    await card.waitFor({ timeout: 15000 });
+    await card.getByText(/Leyendo el objetivo y el gasto/).waitFor({ state: 'detached', timeout: 15000 });
+    const text = await card.innerText();
+    assert.match(text, /META DEL DÍA \(24 H\)/);
+    assert.match(text, /Gasto del mes: (—|\$|US\$|\d)/, 'el gasto es una cifra en dólares o una raya: ' + JSON.stringify(text));
+    await card.getByRole('button', { name: 'Ver APIs y topes' }).click();
+    await page.getByTestId('waterfall').waitFor({ timeout: 15000 });
+  });
   await step('APIs: el Objetivo diario muestra lo cualificado de hoy y el plan por etapas, y el propietario cambia el objetivo', async () => {
     state.waterfallRow = null;
     try {
@@ -87,7 +100,7 @@ try {
       const panel = page.getByTestId('waterfall');
       await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
-      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 4, 'Google Jobs, respaldo, Apify y manual');
+      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, respaldo, Apify y manual');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
       assert.match(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Manual/);
       await panel.getByLabel('Objetivo de ofertas cualificadas al día').fill('0');
@@ -108,7 +121,7 @@ try {
     const control = page.getByTestId('spend-control');
     await control.getByRole('heading', { name: 'Control de inversión' }).waitFor();
     await control.locator('tbody tr').first().waitFor();
-    assert.equal(await control.locator('tbody tr').count(), 6, 'Apify, Bright Data, JSearch, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
+    assert.equal(await control.locator('tbody tr').count(), 7, 'Apify, Bright Data, JSearch, RapidAPI, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
     const bright = control.locator('tr[data-provider="brightdata"]');
     assert.match(await bright.innerText(), /0,0015/, 'el gasto de la prueba de clave ya consta');
     assert.equal((await bright.locator('td.num').innerText()).trim(), '1', 'cuenta las peticiones');

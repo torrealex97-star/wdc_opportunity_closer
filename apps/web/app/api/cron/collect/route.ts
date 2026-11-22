@@ -5,6 +5,8 @@ import { collectFallback } from '../../../../lib/serpapiFallback';
 import { loadMeter } from '../../../../lib/providerCaps';
 import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
+import { collectBrightAsync } from '../../../../lib/brightdataAsync';
+import { collectRapidApi } from '../../../../lib/rapidapiCollect';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
@@ -68,18 +70,36 @@ export async function GET(request: NextRequest) {
   // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
   let meterRead: ReturnType<typeof loadMeter> | undefined;
   const sharedMeter = () => (meterRead ??= loadMeter());
-  // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. Entra después de las APIs
+  // Encargos asíncronos de Bright Data de pasadas anteriores: recogerlos es gratis y lo que traen cuenta ya para el
+  // objetivo, así que va antes de decidir si se gasta más. Sin clave de Bright Data no hace nada.
+  const brightAsync = budget.remaining() >= MIN_STEP_MS ? await collectBrightAsync('cron', budget.deadline(6_000)).catch(failed('brightdata_async', null)) : null;
+  if (brightAsync?.truncated) budget.cut('brightdataAsync');
+  if (brightAsync?.accepted) gap = await recount(gap);
+  // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. 18 s: Bright Data tarda 10–25 s
+  // en devolver el Full JSON; con el tramo antiguo (6,5 s) cada llamada se cortaba y SerpApi ya no tenía tiempo. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
   const googleJobs = !canSpend()
     ? (stages.push({ id: 'google-jobs', ran: false, why: noSpendWhy() }), { source: 'google-jobs' as const, ok: false, error: noSpendWhy(), skipped: true })
     : budget.remaining() >= MIN_STEP_MS
-      ? await collectGoogleJobs('cron', budget.deadline(6_500), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
+      ? await collectGoogleJobs('cron', budget.deadline(18_000), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
       : (budget.cut('googleJobs'), { source: 'google-jobs' as const, ok: false, error: 'sin tiempo en el presupuesto del cron' });
   if ('truncated' in googleJobs && googleJobs.truncated) budget.cut('googleJobs');
   if (!('skipped' in googleJobs)) {
     const accepted = 'accepted' in googleJobs ? googleJobs.accepted ?? 0 : 0;
     gap = await recount(gap);
     stages.push({ id: 'google-jobs', ran: googleJobs.ok || accepted > 0, why: googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.', accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
+  }
+  // RapidAPI (APIs de empleo verificadas con una sola clave): entra tras Google Jobs solo si aún falta objetivo; cada
+  // API respeta el tope mensual de RapidAPI y una sin suscripción se salta sin cobrarse.
+  const rapidapi = !canSpend()
+    ? (stages.push({ id: 'rapidapi', ran: false, why: noSpendWhy() }), null)
+    : budget.remaining() >= MIN_STEP_MS
+      ? await collectRapidApi('cron', budget.deadline(8_000), await sharedMeter()).catch(failed('rapidapi', null))
+      : (budget.cut('rapidapi'), null);
+  if (rapidapi?.truncated) budget.cut('rapidapi');
+  if (rapidapi) {
+    gap = await recount(gap);
+    stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.', accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
   }
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
   // o fallo) se buscan en Google acotados a ese portal con SerpApi. Acotado por
@@ -127,5 +147,5 @@ export async function GET(request: NextRequest) {
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

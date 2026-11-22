@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
     });
     let result: Awaited<ReturnType<typeof serpJobs>>;
     try {
-      result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 20_000 });
+      result = await serpJobs(config, { query, gl: 'es', hl: 'es', timeoutMs: 40_000, maxAttempts: 1 });
     } catch (err) {
       // Un fallo de red pudo facturarse sin respuesta: se anota el peor caso antes de devolver el error.
       if (err instanceof BrightDataError && billed(err.status) && err.attempts > 0) {
