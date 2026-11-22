@@ -165,7 +165,7 @@ await step('Control de inversión: un solo cuadro con el gasto y el tope de todo
   state.ingestRuns.push({ source: 'google-jobs', via: 'cron', note: 'ruta cascada · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000 · google-jobs', created_at: new Date().toISOString() });
   const r = await call('/api/admin/spend');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'serpapi', 'zenrows', 'scrapingbee']);
+  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'jsearch', 'serpapi', 'zenrows', 'scrapingbee']);
   const bd = r.json.providers.find(p => p.provider === 'brightdata');
   assert.equal(bd.spent_usd, 0.0045); assert.equal(bd.requests, 3); assert.equal(bd.cap_source, 'defecto');
   const serp = r.json.providers.find(p => p.provider === 'serpapi');
@@ -772,6 +772,63 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   const afterFirst = state.apifyCalls.length;
   k = await cron(); assert.equal(state.apifyCalls.length, afterFirst, 'una búsqueda diaria por portal: la segunda pasada no lanza nada');
   state.apifyFailActors = new Set(); state.apifyItems = [];
+});
+await step('Apify: buscadores de repuesto desde la tienda — se validan con metadatos públicos y solo el propietario añade, retira o reactiva', async () => {
+  const savedActors = state.apifyActors; state.apifyActors = []; state.storeDown = false;
+  state.storeActors = {
+    'store-a~infojobs-pro': { users: 500 }, 'store-b~infojobs-old': { deprecated: true, users: 9000 }, 'store-c~infojobs-broken': { build: 'FAILED' },
+    'store-d~infojobs-nofield': { hideDeprecated: true }, 'store-e~infojobs-noschema': { noSchema: true },
+  };
+  try {
+    const view = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
+    assert.equal(view.needs_more, true, 'InfoJobs tiene un solo buscador: el panel avisa de que no hay repuesto');
+    const found = await call('/api/admin/apify', { method: 'POST', body: { action: 'find_replacements', portal: 'infojobs' } });
+    assert.equal(found.status, 200);
+    const byActor = Object.fromEntries(found.json.candidates.map(c => [c.actor, c.verdict]));
+    assert.equal(byActor['store-a/infojobs-pro'], 'valid');
+    assert.equal(byActor['store-b/infojobs-old'], 'invalid', 'obsoleto');
+    assert.equal(byActor['store-c/infojobs-broken'], 'invalid', 'build fallido');
+    assert.equal(byActor['store-d/infojobs-nofield'], 'unverified', 'la tienda no dice si está obsoleto: no se da por bueno');
+    assert.equal(byActor['store-e/infojobs-noschema'], 'invalid', 'sin esquema de entrada legible');
+    assert.equal(found.json.candidates[0].actor, 'store-a/infojobs-pro', 'el validado va primero aunque otro tenga más usuarios');
+    assert.ok(!found.json.candidates.some(c => c.actor === 'haketa/infojobs-scraper'), 'el del catálogo no se vuelve a proponer');
+    assert.ok(state.storeCalls.length > 0 && state.storeCalls.every(c => !('token' in c)), 'la búsqueda en la tienda no envía la clave');
+
+    const add = b => call('/api/admin/apify', { method: 'POST', body: { action: 'add_replacement', portal: 'infojobs', ...b } });
+    assert.equal((await add({ actor: 'store-b/infojobs-old' })).status, 422, 'un obsoleto no se añade');
+    assert.equal((await add({ actor: 'store-d/infojobs-nofield' })).status, 422, 'un «sin verificar» no se añade');
+    assert.equal((await add({ actor: 'no es un actor' })).status, 422);
+    assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'add_replacement', portal: 'nope', actor: 'store-a/infojobs-pro' } })).status, 422);
+    const ok = await add({ actor: 'store-a/infojobs-pro', title: 'InfoJobs Pro' });
+    assert.equal(ok.status, 201, JSON.stringify(ok.json));
+    const row = state.apifyActors.find(a => a.actor === 'store-a/infojobs-pro');
+    assert.equal(row.source, 'apify-infojobs'); assert.equal(row.label, 'InfoJobs Pro'); assert.ok(row.created_by);
+    assert.equal((await add({ actor: 'store-a/infojobs-pro' })).status, 409, 'no se duplica');
+    const after = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
+    assert.equal(after.needs_more, false);
+    assert.ok(after.recipes.some(r => r.actor === 'store-a/infojobs-pro' && r.added), 'el añadido entra en la cascada');
+
+    const retire = await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: row.id } });
+    assert.equal(retire.status, 200); assert.equal(state.apifyActors.find(a => a.id === row.id).status, 'inactive');
+    const gone = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
+    assert.ok(!gone.recipes.some(r => r.actor === 'store-a/infojobs-pro'), 'retirado: fuera de la cascada');
+    assert.ok(gone.retired.some(r => r.actor === 'store-a/infojobs-pro'), 'y visible para reactivarlo');
+    assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'reactivate', id: row.id } })).status, 200);
+    assert.ok((await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs').recipes.some(r => r.actor === 'store-a/infojobs-pro'));
+    assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: 'no-es-un-id' } })).status, 422);
+
+    // Un administrador (no propietario) puede buscar, pero no añadir, retirar ni reactivar.
+    const savedJar = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
+    assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'find_replacements', portal: 'infojobs' } })).status, 200);
+    assert.equal((await add({ actor: 'store-a/infojobs-pro' })).status, 403);
+    assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: row.id } })).status, 403);
+    jar = savedJar;
+
+    // Tienda caída: se declara, no se presenta como «sin repuestos».
+    state.storeDown = true;
+    const down = await call('/api/admin/apify', { method: 'POST', body: { action: 'find_replacements', portal: 'infojobs' } });
+    assert.equal(down.status, 502); assert.match(down.json.detail, /tienda de Apify/);
+  } finally { state.apifyActors = savedActors; state.storeDown = false; state.storeActors = {}; }
 });
 await step('privacidad: página pública con borrador visible, sin inventar datos del responsable', async () => {
   const res = await fetch(BASE + '/privacidad'); assert.equal(res.status, 200);

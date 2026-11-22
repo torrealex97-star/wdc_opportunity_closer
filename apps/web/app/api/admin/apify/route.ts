@@ -6,6 +6,7 @@ import { approvedBySource, ORG, SOURCE_RE } from '../../../../lib/external';
 import { startRun } from '../../../../lib/apify';
 import { measuredSince, portalViews, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
 import { PORTALS, portalById } from '../../../../lib/apifyCatalog';
+import { checkActor, findReplacements, verdictOf } from '../../../../lib/apifyStore';
 import { serviceRest } from '../../../../lib/supabaseAuth';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const action = body.action;
-  const { auth, error } = await gate(request, action !== 'harvest');
+  const { auth, error } = await gate(request, action !== 'harvest' && action !== 'find_replacements');
   if (error) return error;
 
   // El propietario sube o baja el límite desde el panel: se guarda en la base, se audita quién y cuándo, y
@@ -63,6 +64,36 @@ export async function POST(request: NextRequest) {
     const r = await searchPortal(portal, { by: auth!.admin.email, publicBase: publicBaseUrl(request), test });
     if (r.ok) return reply(auth!, { ok: true, recipe: r.recipe, fallback: r.fallback, test, message: `${test ? 'Prueba lanzada' : 'Búsqueda lanzada'} en ${portal.name}${r.fallback ? ` (el primer buscador no arrancó; se usó «${r.recipe}»)` : ''}. Tarda entre 1 y 5 minutos; los resultados entran solos.`, attempts: r.attempts.map(a => ({ recipe: a.recipe, error: plainError(a.error) })) }, 202);
     return Response.json({ detail: r.busy ? 'Ya hay una búsqueda en curso en este portal. Espera a que termine.' : `${plainError(r.error)}${r.attempts.length ? ` Se probó: ${r.attempts.map(a => `${a.recipe} (${plainError(a.error)})`).join('; ')}.` : ''}`, attempts: r.attempts.map(a => ({ recipe: a.recipe, error: plainError(a.error) })) }, { status: 409 });
+  }
+  // Buscadores de repuesto desde la tienda de Apify. Buscar y validar no gasta crédito (metadatos públicos).
+  // Añadir exige que el actor se VUELVA a validar aquí: la app nunca se fía de lo que dice el navegador.
+  if (action === 'find_replacements') {
+    const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;
+    if (!portal) return Response.json({ detail: 'Portal no válido.' }, { status: 422 });
+    const rows = (await listActors() ?? []).filter(a => a.source === portal.source);
+    // Se excluyen los que ya están (activos o retirados) y los del catálogo.
+    const known = new Set([...rows.map(a => a.actor), ...portal.recipes.map(r => r.actor)].map(a => a.toLowerCase()));
+    const found = await findReplacements(portal, known);
+    if (found.error && !found.candidates.length) return Response.json({ detail: `${found.error} No se pudieron buscar repuestos ahora.` }, { status: 502 });
+    return reply(auth!, found);
+  }
+  if (action === 'add_replacement') {
+    const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;
+    const actor = typeof body.actor === 'string' ? body.actor.trim() : '';
+    if (!portal || !ACTOR_RE.test(actor)) return Response.json({ detail: 'Portal o actor no válido.' }, { status: 422 });
+    const rows = (await listActors() ?? []).filter(a => a.source === portal.source);
+    if (rows.some(a => a.actor.toLowerCase() === actor.toLowerCase())) return Response.json({ detail: 'Ese buscador ya está en este portal.' }, { status: 409 });
+    const check = await checkActor(actor);
+    const verdict = verdictOf(check);
+    if (verdict !== 'valid') return Response.json({ detail: `No se añade: ${verdict === 'invalid' ? 'la tienda lo marca como no utilizable' : 'no se pudo verificar'}. ${check.reasons.join(' ')}`.trim(), check }, { status: 422 });
+    const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 80) : actor;
+    const response = await serviceRest('apify_actors', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ org_id: ORG, label: title, actor, source: portal.source, input_template: portal.inputTemplate ?? null, max_items: portal.maxItems, memory_mb: 1024, timeout_s: 900, schedule_daily: rows.some(a => a.schedule_daily), created_by: auth!.admin.email }) });
+    return response.ok ? reply(auth!, { ok: true, message: `${title} añadido como buscador de repuesto de ${portal.name}. Se probará cuando falle el resto o con «Probar con 10 ofertas».` }, 201) : Response.json({ detail: 'No se pudo guardar el buscador.' }, { status: 503 });
+  }
+  if (action === 'retire' || action === 'reactivate') {
+    if (typeof body.id !== 'string' || !/^[0-9a-f-]{36}$/.test(body.id)) return Response.json({ detail: 'Actor no válido.' }, { status: 422 });
+    const response = await serviceRest(`apify_actors?org_id=eq.${ORG}&id=eq.${body.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: action === 'retire' ? 'inactive' : 'pending_validation' }) });
+    return response.ok ? reply(auth!, { ok: true, message: action === 'retire' ? 'Buscador retirado de la cascada. Puedes reactivarlo cuando quieras.' : 'Buscador reactivado.' }) : Response.json({ detail: 'No se pudo guardar el cambio.' }, { status: 503 });
   }
   if (action === 'portal_daily') {
     const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;
