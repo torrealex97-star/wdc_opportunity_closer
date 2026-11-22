@@ -1,3 +1,20 @@
+## Fuentes que devuelven HTML: lectura automática en el cron, con navegador propio y Fetch API — 2026-11-22
+
+- **Antes:** la etapa «Unlocker, ZenRows y ScrapingBee» del waterfall era manual y su extractor solo entendía JSON-LD `JobPosting` y RSS. Una página con las ofertas como enlaces HTML, o pintadas con JavaScript, no producía nada.
+- **Ahora** (*tested*, simulado): el cron lee cada pasada las páginas de empleo de la lista verificada (`companyWatchlist.ts`, `COMPANY_PAGES_MAX`, 6 por defecto, 0 = apagado) con esta cascada, que para en cuanto una vía saca ofertas:
+  1. Lectura directa, gratis.
+  2. Navegador propio de código abierto (Browserless, `POST {BROWSERLESS_URL}/content`), gratis por petición, solo si está configurado: para HTML vacío por JavaScript.
+  3. De pago, **solo** si la página bloquea (401, 403, 429, 503 o red), falta objetivo del día y hay tope para el peor caso (2 intentos): ZenRows → ScrapingBee → Bright Data. Una página que responde bien sin ofertas no se paga. Cada petición se anota con `proveedor=… · coste_usd=…`, también si falla.
+- **Extractor de enlaces** (`extractAnchorJobs`): sin JSON-LD ni RSS, toma los enlaces del propio sitio con ruta de oferta (`/empleo/…`, `/jobs/…`, `/vacantes/…`). Título = texto del enlace; empresa = la de la lista verificada; lugar, sueldo y fecha quedan vacíos (no se infieren). Descarta otros dominios, archivos, el propio listado y la navegación («Ver todas», «Aplicar»). Es una heurística: entra como borrador y pasa por la revisión de siempre. «Revisar ahora» no cambia (no lo pide).
+- **Bright Data Fetch API** (antes Crawl API): `POST /datasets/v3/scrape?dataset_id=gd_m6gjtfmeh43we6cqc` con `{input:[{url}]}`, sin zona. Cuando la clave de Bright Data no incluye la zona del Web Unlocker, `fetchHtml('brightdata')` usa esta vía en vez de quedarse parado. Contrato leído (*inspected*) en https://docs.brightdata.com/api-reference/scrapers/web-content-apis/fetch-api-collect-by-url. Una respuesta 202 se declara y se reintenta en la pasada siguiente.
+- **Panel:** la etapa pasa a «Páginas de empleo de empresas», automática, y va antes del respaldo de SerpApi, que es el orden real del cron.
+- **Evidencia** (*tested*): `tests/admin-auth/companypages.mjs` (10 pasos: enlaces, cascada, no pagar con HTML vacío, navegador propio, bloqueo sin objetivo, gasto anotado, tope agotado, máximo por pasada, contrato de la Fetch API); suite `tests/admin-auth/run.sh` con código 0 (450 pasos, 0 fallos); `npm run design` y `npm run handoff` OK. **Nada se ha *verificado* contra un servicio real.**
+- **Límites:**
+  - La sesión no alcanza esos dominios (el proxy del entorno devuelve 403), así que **no se midió cuántas de las 15 páginas de empleo del motor se dejan leer ni cuántas ofertas dan**.
+  - La lista verificada del panel solo tiene 2 páginas de empleo propias (Monest Capital y Bastida Farina): hasta añadir más con URL comprobada (200 + ofertas), el cron solo lee esas.
+  - Browserless no está desplegado: hay que alojarlo aparte (el servidor web no puede ejecutar un navegador) y fijar `BROWSERLESS_URL` y `BROWSERLESS_TOKEN`, un cambio de entorno que requiere orden expresa del propietario. Su licencia es SSPL-1.0: revisarla antes de usarlo en un producto comercial cerrado. Alternativa documentada sin leer su respuesta real: Crawl4AI (Apache-2.0, `POST /crawl` o `/html`), no implementada.
+  - El precio de la Fetch API se paga por registro correcto; el coste anotado es la estimación prudente de siempre (`BRIGHTDATA_USD_PER_REQUEST`), no un dato de facturación. Confirmar en brightdata.com/pricing/web-scraper.
+
 ## Auditoría de paneles del admin (tercera parte): tablas de APIs legibles en móvil — 2026-11-22
 
 - **Cambio** (*tested*): las tablas «Etapas por orden de coste» (waterfall) y «Gasto del mes y tope por proveedor» (Control de inversión) se apilan cuando el panel mide 640 px o menos (container query, clase `stack-table`). Cada etapa o proveedor pasa a ser una tarjeta con cada dato etiquetado. En escritorio, «Coste» y «Por qué» ya parten línea: antes la columna «Por qué» quedaba fuera de la vista.

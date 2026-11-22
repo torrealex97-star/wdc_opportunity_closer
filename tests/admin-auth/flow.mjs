@@ -979,9 +979,9 @@ await step('Waterfall: el propietario fija el objetivo de ofertas cualificadas y
   const first = await call('/api/admin/waterfall');
   assert.equal(first.status, 200);
   assert.equal(first.json.state.target.source, 'defecto'); assert.equal(first.json.state.target.target, 60, 'sin nada guardado, el 60 de siempre y declarado como defecto');
-  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'respaldo', 'apify', 'unlocker'], 'las etapas van por orden de coste');
+  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'unlocker', 'respaldo', 'apify'], 'las etapas van en el orden en que las lanza el cron');
   const unlocker = first.json.stages.find(s => s.id === 'unlocker');
-  assert.equal(unlocker.automatic, false); assert.equal(unlocker.decision, 'skip'); assert.match(unlocker.why, /a mano/);
+  assert.equal(unlocker.automatic, true, 'las páginas de empresa ya no se lanzan a mano'); assert.match(unlocker.unit, /Gratis si la página se deja leer/);
   assert.ok(!JSON.stringify(first.json).includes('secret'), 'sin secretos');
   for (const bad of [' ', -1, 2.5, 10001, true, 'abc', '', null]) assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: bad } })).status, 422, `no es un objetivo: ${JSON.stringify(bad)}`);
   assert.equal(state.waterfallRow, null, 'un valor inválido no guarda nada');
@@ -1016,8 +1016,11 @@ await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hue
   const stopped = await cron();
   assert.equal(stopped.status, 200);
   assert.equal(stopped.json.waterfall.target, 0); assert.equal(stopped.json.waterfall.gap_before, 0);
-  assert.ok(stopped.json.waterfall.stages.length >= 3 && stopped.json.waterfall.stages.every(s => s.ran === false), 'ninguna etapa de pago corrió');
-  assert.ok(stopped.json.waterfall.stages.every(s => /cumplido/.test(s.why)), 'y cada una dice por qué');
+  // «unlocker» (páginas de empleo de empresas) lee gratis aunque el objetivo esté cumplido; lo que no puede hacer es pagar.
+  const paidStages = stopped.json.waterfall.stages.filter(s => s.id !== 'unlocker');
+  assert.ok(paidStages.length >= 3 && paidStages.every(s => s.ran === false), 'ninguna etapa de pago corrió');
+  assert.ok(paidStages.every(s => /cumplido/.test(s.why)), 'y cada una dice por qué');
+  assert.ok((stopped.json.waterfall.stages.find(s => s.id === 'unlocker')?.cost_usd ?? 0) === 0, 'las páginas de empresa no cobran sin objetivo pendiente');
   assert.equal(stopped.json.googleJobs.skipped, true); assert.equal(stopped.json.fallback, null);
   assert.equal(spendRows(), before, 'sin objetivo pendiente no se anota gasto');
   assert.equal(state.apifyCalls.length, apifyCalls, 'ni se lanza un actor de Apify');

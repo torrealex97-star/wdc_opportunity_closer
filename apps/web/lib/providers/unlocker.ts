@@ -1,4 +1,4 @@
-import { resolveBrightDataConfig, unlockHtml, BrightDataError } from './brightdata';
+import { resolveBrightDataConfig, unlockHtml, fetchApiHtml, BrightDataError } from './brightdata';
 
 // Proveedores que devuelven el HTML de una página (no una lista estructurada). Se usan SOLO donde ya
 // existe un extractor probado —JSON-LD `JobPosting` o RSS—, nunca como sustituto de un portal que la app
@@ -62,7 +62,8 @@ export async function fetchHtml(
     // La API key sola es válida: la zona del Unlocker se descubre en la cuenta (gratis) si no vino escrita.
     const { config } = await resolveBrightDataConfig(secret, { timeoutMs, fetchImpl, useCache: false });
     if (!config) throw new BrightDataError('Formato de clave de Bright Data incorrecto', 422);
-    return unlockHtml(config, url, { timeoutMs, fetchImpl });
+    // Con zona de Web Unlocker se usa esa; sin ella, la Fetch API (solo API key), para no dejar la vía parada por un dato de la cuenta.
+    return config.unlockerZone ? unlockHtml(config, url, { timeoutMs, fetchImpl }) : fetchApiHtml(config, url, { timeoutMs, fetchImpl });
   }
   const preset = UNLOCKER_PRESETS[provider];
   const target = preset.build!(secret, url);
@@ -89,3 +90,32 @@ export async function fetchHtml(
 
 export const unlockerProvider = (value: unknown): value is UnlockerProvider =>
   typeof value === 'string' && value in UNLOCKER_PRESETS;
+
+// Navegador de código abierto en tu propio servidor (Browserless, imagen `ghcr.io/browserless/chromium`): renderiza el
+// JavaScript de la página y devuelve su HTML con `POST /content`. No cobra por petición, así que es la primera opción
+// cuando la página existe pero su HTML llega vacío. No se activa solo: exige BROWSERLESS_URL (y BROWSERLESS_TOKEN si el
+// servidor lo pide). Este código corre en el servidor web, que no puede alojar un navegador: hay que ponerlo en un
+// servidor aparte. Licencia SSPL-1.0 del proyecto: revisarla antes de usarlo en un producto comercial cerrado.
+export const browserlessConfigured = (env: NodeJS.ProcessEnv = process.env) => /^https:\/\//i.test((env.BROWSERLESS_URL ?? '').trim());
+
+export async function renderHtml(url: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch; env?: NodeJS.ProcessEnv } = {}): Promise<string> {
+  const { timeoutMs = 20_000, fetchImpl = fetch, env = process.env } = options;
+  if (!browserlessConfigured(env)) throw new BrightDataError('Sin navegador propio: falta BROWSERLESS_URL (https).', 422);
+  if (!/^https:\/\//i.test(url)) throw new BrightDataError('Solo se leen páginas HTTPS públicas', 422);
+  const base = env.BROWSERLESS_URL!.trim().replace(/\/+$/, '');
+  const token = (env.BROWSERLESS_TOKEN ?? '').trim();
+  let response: Response;
+  try {
+    response = await fetchImpl(`${base}/content${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, waitForTimeout: 2_000 }),
+    });
+  } catch (err) {
+    throw new BrightDataError(`No se pudo contactar con el navegador propio: ${(err as Error).message}`, null, 0);
+  }
+  const text = await response.text().catch(() => '');
+  if (!response.ok) throw new BrightDataError(`El navegador propio respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 0);
+  if (!text.trim()) throw new BrightDataError('El navegador propio devolvió una página vacía', 200, 0);
+  return text;
+}

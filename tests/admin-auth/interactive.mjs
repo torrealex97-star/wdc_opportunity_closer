@@ -100,9 +100,10 @@ try {
       const panel = page.getByTestId('waterfall');
       await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
-      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, respaldo, Apify y manual');
+      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, páginas de empresa, respaldo y Apify');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
-      assert.match(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Manual/);
+      assert.match(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Páginas de empleo de empresas/);
+      assert.doesNotMatch(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Manual/, 'ya no es manual');
       await panel.getByLabel('Objetivo de ofertas cualificadas al día').fill('0');
       await panel.getByRole('button', { name: 'Guardar objetivo' }).click();
       await panel.getByText(/Objetivo guardado: 0 ofertas cualificadas al día/).waitFor({ timeout: 15000 });

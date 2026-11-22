@@ -569,6 +569,47 @@ export async function serpCollectAsync(apiKey: string, responseId: string, optio
 
 export type UnlockResult = { html: string; requests: number; costUsd: number };
 
+/**
+ * Fetch API de Bright Data (antes «Crawl API»): una URL pública → un registro con `page_html`, `markdown` y `ld_json`.
+ * No necesita zona (solo la API key), así que sirve cuando la clave no incluye la zona del Web Unlocker. Contrato leído en
+ * https://docs.brightdata.com/api-reference/scrapers/web-content-apis/fetch-api-collect-by-url (2026-11-22):
+ * `POST /datasets/v3/scrape?dataset_id=gd_m6gjtfmeh43we6cqc` con `{input:[{url}]}`; una petición síncrona espera hasta
+ * 1 minuto y, si no termina, responde 202 con `snapshot_id` (aquí se declara y no se espera). Se paga por registro
+ * correcto; el precio exacto está en brightdata.com/pricing/web-scraper, así que el coste que se anota es la estimación
+ * prudente de siempre (`BRIGHTDATA_USD_PER_REQUEST`), no un dato de facturación.
+ */
+export const BRIGHTDATA_FETCH_DATASET = 'gd_m6gjtfmeh43we6cqc';
+export async function fetchApiHtml(config: BrightDataConfig, url: string, options: { timeoutMs?: number; fetchImpl?: FetchLike } = {}): Promise<UnlockResult> {
+  if (!/^https:\/\//i.test(url)) throw new BrightDataError('La Fetch API solo acepta enlaces HTTPS públicos', 422);
+  const { timeoutMs = 25_000, fetchImpl = fetch } = options;
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/datasets/v3/scrape?dataset_id=${BRIGHTDATA_FETCH_DATASET}&include_errors=true&custom_output_fields=${encodeURIComponent('url|final_url|page_html|ld_json')}`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
+      headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: [{ url }] }),
+    });
+  } catch (err) {
+    throw new BrightDataError(`No se pudo contactar con la Fetch API de Bright Data: ${(err as Error).message}`, null, 1);
+  }
+  const text = await response.text().catch(() => '');
+  if (response.status === 202) throw new BrightDataError('La Fetch API aún procesaba la página (HTTP 202): se vuelve a intentar en la próxima pasada.', 202, 1);
+  if (!response.ok) throw new BrightDataError(`La Fetch API respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 1);
+  // La respuesta por defecto es NDJSON (un registro por línea); también se acepta un array o un objeto JSON.
+  const records: Array<Record<string, unknown>> = [];
+  const push = (value: unknown) => { if (value && typeof value === 'object' && !Array.isArray(value)) records.push(value as Record<string, unknown>); else if (Array.isArray(value)) value.forEach(push); };
+  try { push(JSON.parse(text)); } catch { for (const line of text.split('\n')) { const t = line.trim(); if (t) { try { push(JSON.parse(t)); } catch { /* línea que no es JSON */ } } } }
+  const record = records.find(r => typeof r.page_html === 'string' && (r.page_html as string).trim());
+  if (!record) {
+    const err = records.find(r => typeof r.error === 'string')?.error;
+    throw new BrightDataError(`La Fetch API no devolvió el HTML de la página${typeof err === 'string' ? `: ${err.slice(0, 160)}` : ''}`, 200, 1);
+  }
+  // El JSON-LD que ya extrajo Bright Data se añade como bloque estándar para que el extractor común lo lea aunque el HTML no lo traiga.
+  const html = record.page_html as string;
+  const ld = record.ld_json && !html.includes('application/ld+json') ? `<script type="application/ld+json">${JSON.stringify(record.ld_json)}</script>` : '';
+  return { html: html + ld, requests: 1, costUsd: BRIGHTDATA_USD_PER_REQUEST };
+}
+
 /** HTML de una página con anti-bot. Solo se usa donde hay un extractor probado (JSON-LD/RSS). */
 export async function unlockHtml(config: BrightDataConfig, url: string, options: { timeoutMs?: number; fetchImpl?: FetchLike } = {}): Promise<UnlockResult> {
   if (!config.unlockerZone) throw new BrightDataError('Falta la zona de Web Unlocker (API key:zona SERP:zona Unlocker)', 422);

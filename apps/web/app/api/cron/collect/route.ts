@@ -7,6 +7,7 @@ import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { collectRapidApi } from '../../../../lib/rapidapiCollect';
+import { collectCompanyPages } from '../../../../lib/companyPagesCollect';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
@@ -101,6 +102,20 @@ export async function GET(request: NextRequest) {
     gap = await recount(gap);
     stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.', accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
   }
+  // Páginas de empleo propias de las empresas vigiladas (JSON-LD JobPosting o RSS). La lectura directa es gratis y
+  // corre siempre; un desbloqueador de pago (ZenRows → ScrapingBee → Bright Data) solo si la página bloquea, falta
+  // objetivo y queda tope. Una página que responde sin ofertas no se paga.
+  const paying = canSpend();
+  const companyPages = budget.remaining() >= MIN_STEP_MS
+    ? await (paying ? sharedMeter().catch(() => null) : Promise.resolve(null))
+      .then(meter => collectCompanyPages('cron', budget.deadline(6_000), { allowPaid: paying, meter }))
+      .catch(failed('company_pages', null))
+    : (budget.cut('companyPages'), null);
+  if (companyPages?.truncated) budget.cut('companyPages');
+  if (companyPages) {
+    if (companyPages.accepted > 0) gap = await recount(gap);
+    stages.push({ id: 'unlocker', ran: companyPages.checked > 0, why: companyPages.ok ? `${companyPages.checked} página(s) revisada(s)${paying ? '' : ' (lectura gratuita; sin objetivo pendiente no se paga desbloqueador)'}.` : companyPages.error ?? 'Sin resultado.', accepted: companyPages.accepted, cost_usd: companyPages.cost_usd });
+  }
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
   // o fallo) se buscan en Google acotados a ese portal con SerpApi. Acotado por
   // `SERPAPI_FALLBACK_MAX_SEARCHES` y por lo que FALTA del objetivo; cada búsqueda declara su coste. Una
@@ -147,5 +162,5 @@ export async function GET(request: NextRequest) {
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }
