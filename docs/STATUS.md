@@ -1,3 +1,11 @@
+## CodeQL deja de fallar en un repositorio privado sin Code Security — 2026-11-22
+
+- **Petición del propietario**: averiguar qué rompe CodeQL en `main`, arreglarlo y comprobar que el análisis queda en verde, sin tocar el comportamiento de la app.
+- **Hallazgo** (*inspected*): no rompía ninguna regla. Los dos jobs (`javascript-typescript` y `python`) completaban el análisis y exportaban el SARIF, y fallaban después al subirlo con «Resource not accessible by integration» (`GET /actions/workflow-runs/{id}`). La API de code scanning de este repositorio responde **403 «Code scanning is not enabled for this repository»**: es privado y GitHub solo acepta SARIF de CodeQL en repos públicos o privados con **GitHub Code Security** (Settings → Code security; requiere plan Team/Enterprise). Ningún permiso del workflow podía arreglarlo.
+- **Arreglo** (*tested*): [codeql.yml](../.github/workflows/codeql.yml) ejecuta `analyze` con `upload: never` y `output: codeql-results` (mismo `init`, mismas consultas, `build-mode: none` y las mismas acciones fijadas por SHA), añade `actions: read` —el permiso que faltaba para la llamada a la API de Actions— y un paso que escribe los hallazgos (gravedad, nivel, regla, fichero:línea) en el resumen del run, y pone el job en rojo **solo** con gravedad alta o crítica (`security-severity >= 7.0`). Si algún día se activa Code Security, `upload: always` y el permiso `security-events: write` devuelven Security → Code scanning.
+- **Comprobado en CI** (*verified*, PR #121, run 45022656525): `analyze (javascript-typescript)` **success** con 8 hallazgos y `analyze (python)` **success** con 4, **0 de gravedad alta o crítica**; `verify` y `web-admin` en verde. El diff no toca código de la app: solo el workflow y este bloque.
+- **Límites honestos**: los 12 hallazgos restantes (gravedad baja/media o consultas de calidad) no aparecen en Security → Code scanning mientras no haya licencia; quedan en el resumen de cada run. El análisis no se ejecutó en local (no hay CodeQL CLI en la máquina): la evidencia es el run de Actions.
+
 ## Lo que quedaba de `docs/panel-fuentes-aplicado` llega a `main` — 2026-11-22
 
 - **Petición del propietario**: fusionar `docs/panel-fuentes-aplicado` en `main` con merge commit cuando `verify` y `web-admin` estén en verde, y publicar el Worker con `wrangler` desde `apps/web`.

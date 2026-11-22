@@ -83,6 +83,8 @@ jobs:
             echo ""
             echo "_El SARIF no se publica en Security → Code scanning: el repositorio privado no tiene GitHub Code Security._"
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "--- hallazgos (gravedad, nivel, regla, sitio) ---"
+          cat hallazgos.tsv || true
           echo "CodeQL (${{ matrix.language }}): $total hallazgo(s), $altos de gravedad alta o crítica."
           if [ "$altos" -gt 0 ]; then
             echo "::error::CodeQL encontró $altos hallazgo(s) de gravedad alta o crítica en ${{ matrix.language }}; revisa el resumen del run."
