@@ -17,6 +17,14 @@
 - **Qué se hizo** (*tested*): la cascada de cada dork es hoy Bright Data → JSearch → SerpApi, por coste y con el tope de cada proveedor (`provider_budget` y, como respaldo, su variable). JSearch entra con una petición por dork (`num_pages=1`, sin cursor) y reserva 0,0025 USD antes de lanzar; su gasto se anota con `proveedor=jsearch` y no se atribuye a SerpApi. Un 401/403/429/5xx devuelve la reserva (no se cobra) y el dork baja al siguiente escalón; un 2xx con estado de error o un fallo sin respuesta se anotan como peor caso, la misma regla que su vía del panel (`jsearchBilled`). Un 429 no se reintenta, retira JSearch para el resto de la pasada y queda contado en la nota. La etapa de Google Jobs de `/api/admin/waterfall` declara el escalón nuevo.
 - **Comprobado** (*tested*): `googlejobs.mjs` **33/33** (7 dorks por JSearch a 0,0175 USD sin llamar a SerpApi; tope de JSearch que deja pasar 4 y manda 3 a SerpApi; 429 y 401 sin gasto y con aviso; fallo de red anotado como peor caso; orden Bright Data → JSearch → SerpApi) y `npm run typecheck` 0 errores.
 - **Límites honestos**: sin clave real de OpenWeb Ninja ni de Bright Data, todo se ejercita con `fetch` simulado; no se ha observado una pasada real del cron ni el cobro de un timeout. El tope se guarda en céntimos (`parseCapUsd`), así que `JSEARCH_MONTHLY_USD=0.005` vale 0,01. El botón «Ejecutar dorks» de Fuentes va por el motor Python (`/google/run`) y no se toca aquí.
+## El fallo de red de la vía JSearch se declara como peor caso, y su comentario ya no dice lo contrario — 2026-11-22
+
+- **Petición del propietario**: alinear el comentario de la rama JSearch de `/api/admin/source-routes` con lo que hace `billed`, sin tocar el resto.
+- **Hallazgo** (*inspected*): el comentario decía que «un fallo de red» no se cobra, pero `billed(null)` devuelve `true` —la misma regla de peor caso que ya aplica Bright Data en el mismo fichero— y encima la nota lo llamaba «respuesta ilegible» sin haber respuesta.
+- **Qué se hizo** (*tested*): el comentario declara la regla real (un fallo sin respuesta y un 2xx con estado de error se anotan; 401/403/429/5xx no) y la nota separa `fallo de red · se anota el peor caso` de `respuesta con estado de error`. El cobro, el tope y las demás vías no cambian.
+- **Comprobado** (*tested*): `source-routes.mjs` OK, `npm run typecheck` 0 errores y `node scripts/handoff.mjs check` OK.
+- **Límites honestos**: sin clave de OpenWeb Ninja no se puede observar si un timeout real factura; el cambio no altera el cobro, así que no añade prueba de esa decisión (la ruta no tiene prueba HTTP de ese camino).
+
 ## Bright Data y RapidAPI con los datos reales de las pruebas del propietario — 2026-11-22
 
 - **Medido en producción** (*verified*, `integration_connections.last_test_detail`, 15:54 hora de España):
