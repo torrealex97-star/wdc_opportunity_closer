@@ -226,7 +226,7 @@ type FetchLike = typeof fetch;
  */
 export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
   return fetchImpl(`${apiBase()}/request`, {
-    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(40_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'json' }),
   });
@@ -339,13 +339,13 @@ export function jobToCandidate(item: unknown, now = Date.now()): Candidate | nul
   };
 }
 
-/** Forma documentada: `{ jobs: { items: [...] } }`. También acepta `jobs_results` y el envoltorio `{body}`. */
+/** Forma documentada (Full JSON): `{ jobs: { items: [...] } }`. También acepta `jobs` como lista, `jobs_results` y el envoltorio `{body}`. */
 export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidate[] {
   const payload = unwrapPayload(rawPayload);
   if (!payload || typeof payload !== 'object') return [];
   const body = payload as Record<string, unknown>;
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const items = Array.isArray(jobs?.items) ? jobs.items : Array.isArray(body.jobs_results) ? body.jobs_results : [];
+  const items = Array.isArray(body.jobs) ? body.jobs : Array.isArray(jobs?.items) ? jobs.items : Array.isArray(body.jobs_results) ? body.jobs_results : [];
   const seen = new Set<string>();
   const out: Candidate[] = [];
   for (const item of items) {
@@ -381,7 +381,7 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
   const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const rawItems = Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
+  const rawItems = Array.isArray(body.jobs) ? body.jobs.length : Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
   return {
     candidates: jobsFromPayload(payload, now),
     // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.

@@ -57,6 +57,7 @@ const server = http.createServer(async (req, res) => {
     brightCalls.push(payload);
     if (brightMode === 'error') return send(401, { error: 'invalid api key' });
     if (brightMode === 'nopanel') return send(200, { organic: [] });
+    if (brightMode === 'list') return send(200, { jobs: [{ title: 'Closer lista', company: 'Acme L', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas', link: `https://www.infojobs.net/oferta/bl-${brightCalls.length}` }] });
     if (brightMode === 'html' || !String(payload.url ?? '').includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>Google</html>'); }
     return send(200, { jobs: { items: [{ title: 'Closer BD', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas por videollamada', link: `https://www.infojobs.net/oferta/bd-${brightCalls.length}`, tags: [] }] } });
   }
@@ -325,6 +326,23 @@ await step('cascada: una petición que Bright Data rechaza (401) no se cobra ni 
   assert.equal(out.by_provider.brightdata, undefined, 'lo rechazado no es gasto');
   assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS);
   assert.ok(!runs.some(r => /proveedor=brightdata/.test(r.note ?? '')), 'no hay nota de gasto de Bright Data');
+});
+
+await step('cascada: con poco tiempo en el tramo, Bright Data no se llama (se cortaría y puede cobrarse) y SerpApi cubre', async () => {
+  brightKey = true;
+  const out = await collectGoogleJobs('test', Date.now() + 8_000);
+  assert.equal(brightCalls.length, 0, 'sin ~15 s no se lanza Bright Data');
+  assert.equal(searches.length, DEFAULT_MAX_DORKS, 'SerpApi cubre todos los dorks');
+  assert.equal(out.by_provider.brightdata, undefined, 'no se reserva gasto de Bright Data');
+  assert.ok((out.warnings ?? []).some(w => /Bright Data omitido/.test(w)), 'se dice por qué no se usó Bright Data');
+});
+
+await step('cascada: Bright Data con `jobs` como lista directa también se lee', async () => {
+  brightKey = true; brightMode = 'list';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true);
+  assert.equal(searches.length, 0);
+  assert.ok(saved.some(row => /Closer lista/.test(JSON.stringify(row))), 'las ofertas de la lista se guardan');
 });
 
 await step('cascada: sin clave de SerpApi, un fallo de Bright Data se declara y no se inventa nada', async () => {

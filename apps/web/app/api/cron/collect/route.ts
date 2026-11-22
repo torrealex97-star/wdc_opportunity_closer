@@ -68,12 +68,13 @@ export async function GET(request: NextRequest) {
   // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
   let meterRead: ReturnType<typeof loadMeter> | undefined;
   const sharedMeter = () => (meterRead ??= loadMeter());
-  // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. Entra después de las APIs
+  // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. 18 s: Bright Data tarda 10–25 s
+  // en devolver el Full JSON; con el tramo antiguo (6,5 s) cada llamada se cortaba y SerpApi ya no tenía tiempo. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
   const googleJobs = !canSpend()
     ? (stages.push({ id: 'google-jobs', ran: false, why: noSpendWhy() }), { source: 'google-jobs' as const, ok: false, error: noSpendWhy(), skipped: true })
     : budget.remaining() >= MIN_STEP_MS
-      ? await collectGoogleJobs('cron', budget.deadline(6_500), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
+      ? await collectGoogleJobs('cron', budget.deadline(18_000), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
       : (budget.cut('googleJobs'), { source: 'google-jobs' as const, ok: false, error: 'sin tiempo en el presupuesto del cron' });
   if ('truncated' in googleJobs && googleJobs.truncated) budget.cut('googleJobs');
   if (!('skipped' in googleJobs)) {
