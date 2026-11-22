@@ -162,6 +162,11 @@ export type GoogleJobsOutcome = {
 };
 
 type Fetcher = (dork: Dork, timeoutMs: number) => Promise<Candidate[]>;
+// Bright Data devuelve el Full JSON de Google Jobs en 10–25 s (medido en las pruebas del propietario: un 200 dentro de
+// 20 s y dos cortes a los 20 s). Por debajo de este margen una llamada se cortaría casi seguro y el corte puede
+// facturarse: se manda ese dork a SerpApi y se dice. Configurable con BRIGHTDATA_MIN_MS.
+export const brightMinMs = (env: NodeJS.ProcessEnv = process.env) => { const n = Number(env.BRIGHTDATA_MIN_MS); return Number.isFinite(n) && n >= 5_000 && n <= 60_000 ? n : 15_000; };
+const BRIGHT_CALL_MS = 30_000;
 
 export function serpapiFetcher(secret: string): Fetcher {
   return async (dork, timeoutMs) => {
@@ -250,20 +255,23 @@ export async function collectGoogleJobs(
       bill(provider, -1);
     };
     const blocked: string[] = [];
+    let brightNoTime = 0;
     // En paralelo: los dorks son independientes y en serie no cabían en el tramo del cron (la primera pasada se
     // cortó en el tercero). El proveedor de cada dork se decide ANTES de lanzar para que el tope valga también
     // para las búsquedas simultáneas; si Bright Data falla, ese dork pasa a SerpApi si el tope lo permite.
     const plan = dorks.map(dork => {
-      if (brightFetch && meter.check('brightdata').ok) { bill('brightdata'); return { dork, first: 'brightdata' as const }; }
+      if (brightFetch && meter.check('brightdata').ok && timeLeft(deadline) >= brightMinMs()) { bill('brightdata'); return { dork, first: 'brightdata' as const }; }
+      if (brightFetch && meter.check('brightdata').ok) brightNoTime++;
       if (serpFetch && meter.check('serpapi').ok) { bill('serpapi'); return { dork, first: 'serpapi' as const }; }
       blocked.push(meter.check(serpFetch ? 'serpapi' : 'brightdata').reason ?? 'tope mensual agotado');
       return { dork, first: null };
     });
     const skippedBudget = plan.filter(item => item.first === null).length;
+    if (brightNoTime) warnings.push(`Bright Data omitido en ${brightNoTime} búsqueda(s): necesita ~${Math.round(brightMinMs() / 1000)} s y el tramo tenía ${Math.round(timeLeft(deadline) / 1000)} s; se usó SerpApi si estaba disponible.`);
     const settled = await Promise.allSettled(plan.map(async ({ dork, first }) => {
       if (first === null) return [] as Candidate[];
       if (first === 'brightdata') {
-        try { return await brightFetch!(dork, callTimeout(12_000, deadline)); }
+        try { return await brightFetch!(dork, callTimeout(BRIGHT_CALL_MS, deadline)); }
         catch (err) {
           refund('brightdata', err);
           // Sin SerpApi, sin tope para él o sin tiempo en el reloj compartido, el fallo se declara tal cual.

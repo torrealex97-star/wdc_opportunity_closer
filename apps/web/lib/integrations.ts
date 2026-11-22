@@ -152,7 +152,7 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
     const unwrapped = unwrapPayload(JSON.parse(await response.text()));
     payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
   } catch { /* cuerpo sin JSON */ }
-  const jobs = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
+  const jobs = Array.isArray(payload?.jobs) ? payload.jobs : payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
   const failure = typeof payload?.error === 'string' && payload.error
     ? `Bright Data: ${payload.error.slice(0, 160)}`
     : !Array.isArray(jobs)
