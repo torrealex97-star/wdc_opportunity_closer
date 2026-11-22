@@ -2,7 +2,7 @@
 
 > **Lee esto primero** al retomar el trabajo, junto con `AGENTS.md`, `docs/STATUS.md` y el último commit de `main`.
 > Documento corto a propósito (≤ ~150 líneas). Histórico → `docs/handoff/archive/`. Trabajos vivos → `docs/handoff/claims/` (`npm run handoff`). Reglas → `docs/handoff/README.md`. Diseño y estado pieza a pieza de los módulos IA Winner → [docs/plans/IA_WINNER_MODULOS.md](plans/IA_WINNER_MODULOS.md).
-> Última actualización: 2026-11-21.
+> Última actualización: 2026-11-22.
 
 ## 0. Misión objetivo
 
@@ -15,6 +15,8 @@ Leyenda: ✅ hecho y probado · 🟡 parcial · ⬜ pendiente (construible) · �
 ## 1. Tablero (trabajos vivos)
 
 Fuente: `node scripts/handoff.mjs list`. **Trabajan todos los agentes** (Claude, Codex u otros): ficha propia, `touches` sin solapes, un trabajo en curso cada uno. Carriles propuestos (confirmar con el dueño): *captación/ingesta*, *alumnas/matching/candidaturas*, *infra/CI/BD*. claude-cloud = alumnas, formación, progreso, seguridad de ofertas y paneles.
+
+**Fusionado hoy (2026-11-22):** #131 (tablas de APIs en tarjetas en móvil) y #132 (las fuentes HTML se leen solas en el cron: navegador propio en Cloudflare, Fetch API de Bright Data, enlaces y las páginas que ya vigila el motor; `main` en `c62e4ec`). El reparto del trabajo siguiente entre Claude y Codebuff está en **[docs/plans/OFERTAS_CLOSER_MEJORAS.md](plans/OFERTAS_CLOSER_MEJORAS.md)** (paquetes A–G con criterios de aceptación).
 
 Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 detector de ofertas, #39 retención, #40 clave de Resend, #41 relevo, #42 banderas de riesgo en la revisión, #43 catálogo de la sala (19 situaciones); el 2026-11-19 se sumaron #95, #92, #74, #85 y #69 (dependabot). #96, #71 y #68 se cerraron con el motivo en la PR. Al fusionar una PR, su ficha se borra en la PR siguiente.
 
@@ -97,6 +99,8 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
    - **Verificación en el panel desplegado (pendiente)**: no se ha pulsado el guardado del orden contra el dominio; lo verificado es la base real y el código que la lee.
    - **Trabajo sin versionar**: los dos `tests/db/*.sql` nuevos y las cabeceras de las dos migraciones; `docs/OWNER_GUIDE.md` sigue siendo trabajo de otra sesión y no se ha tocado. Sin commit, push, PR ni merge.
 
+21. **Navegador propio en Cloudflare** (2026-11-22): crear un token de la API con permiso «Browser Run - Edit» y poner `CF_BROWSER_ACCOUNT_ID` y `CF_BROWSER_TOKEN` como secretos del Worker `closer-web` (pasos en `docs/OWNER_GUIDE.md`, Cloudflare). Sin ellos las páginas que se pintan con JavaScript no se leen. Después, tras una pasada del cron, mirar `companyPages` en su respuesta. Alternativa: Browserless alojado aparte (`BROWSERLESS_URL`, licencia SSPL-1.0).
+
 ## 4. Decisiones ya tomadas
 
 - Los vídeos NO se guardan: cada alumna guarda el suyo en su Drive y solo se guarda el enlace.
@@ -105,6 +109,7 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
 - Métricas de alumnas derivadas, sin tabla que inflar (ADR-014). «+2.000 €/mes en 90 días» **no** se muestra como garantía.
 - **Fusión de PRs: autorización PERMANENTE** (2026-10-18): los agentes fusionan sus PRs con `verify` y `web-admin` en verde, sin conflictos y con merge commit. Siguen exigiendo orden expresa: DDL/secretos reales, login de alumnas o revisor IA en `live`, automatización de candidaturas, gasto de pago nuevo (ver `AGENTS.md`).
 - Spike de voz autorizado (2026-10-18), acotado: sin audio real ni datos de alumnas (ADR-013).
+- **No se recorta ninguna fuente de pago por rendimiento** (2026-11-22, dueño): LinkedIn y Workana vía Apify se mantienen **hasta recoger al menos 1.000 ofertas de cada una con las búsquedas de closer bien hechas** (palabras clave y semántica). Hoy hay 104 y 35, así que el dato es «sin conclusión». Detalle: paquetes A1 y A2 del plan.
 
 ## 5. Próximas fases (sin hacer; orden sugerido)
 
@@ -125,10 +130,11 @@ Fusionadas en `main`: #47 etiquetas de nicho y pago, #46 bases de la voz, #38 de
 | 13 | Banco de 10 preguntas de entrevista con intención, fórmula y banderas rojas (modo estudio sin IA) | ✅ | Hecho (módulo 9 de Formación). Conviene que una closer lea las fórmulas y ejemplos. |
 | 14 | Retos asignados por la coordinadora y objetivo semanal elegido por la alumna | 🟡 | **Reto reducido construido** (sesión 229): escenario, nota mínima opcional, plazo y nota del coach, con estado derivado de `student_activity`; migración `20261119_student_challenges.sql` **preparada y sin aplicar** (tu orden) y prueba `BEGIN…ROLLBACK` escrita sin ejecutar. Falta aplicar la migración, ejecutar su prueba y el objetivo semanal de la alumna. Los objetivos fijos ya existen (#39). |
 | 15 | Voz con interrupción (*barge-in*) y copiloto «Jarvis» con memoria | ⛔ | Voz: ver fila 2. Copiloto: proveedor, presupuesto por alumna y decisión de coste tuyos; punto 8-9. |
+| 16 | **Más y mejores ofertas de closer** (paquetes A–G: medir antes de recortar, LatAm y EE. UU. hispano, empresas objetivo y portal para empresas, sueldo/comisión por reglas, contrataciones por fuente) | ⬜ | Plan y reparto Claude / Codebuff en [docs/plans/OFERTAS_CLOSER_MEJORAS.md](plans/OFERTAS_CLOSER_MEJORAS.md). Sin empezar (la lectura de páginas HTML, #132, ya está en `main`). |
 | ✅ | Señales de apertura sumisa y entusiasmo de más; feedback con tarea de 24 h (puntos 2 y 4) | ✅ | Hecho (#50). |
 
 Otros candidatos del agente: guarda SSRF con IP fijada contra DNS rebinding; métricas sin ceros falsos (coste Apify ilegible); el motor repite tarjetas («Conquista Tu Maternidad» ×9); Apify `aakash19/jobspy` devuelve 0 ítems (mirar su dataset con la clave del panel); confirmar el despliegue del respaldo SerpApi.
 
 ## 6. No declarar PASS en
 
-Apify, Groq, Jev, fuentes oficiales, Resend, correos y login reales, cron en Vercel, WhatsApp, el revisor en `live`, ni la calibración del detector de ofertas.
+Apify, Groq, Jev, fuentes oficiales, Resend, correos y login reales, cron en Vercel, WhatsApp, el revisor en `live`, ni la calibración del detector de ofertas, ni el navegador de Cloudflare / Browserless, la Fetch API de Bright Data o la lectura real de las páginas de empleo, ni el rendimiento de LinkedIn y Workana (muestra insuficiente).
