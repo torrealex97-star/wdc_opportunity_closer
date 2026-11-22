@@ -1,0 +1,30 @@
+name: Probe company pages
+
+# Manual y de solo lectura: mide qué páginas de empleo se dejan leer sin desbloqueador y cuántas
+# ofertas saca el extractor del cron. No paga, no ingiere y no escribe en la base. El informe queda
+# como artefacto para adjuntarlo a docs/evidence/.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Medir las páginas de empleo
+        env:
+          CAREER_ENGINE_URL: ${{ vars.CAREER_ENGINE_URL }}
+        run: |
+          node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs \
+            scripts/probe_company_pages.mjs --out "docs/evidence/company-pages-$(date -u +%F).md"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: company-pages-probe
+          path: docs/evidence/company-pages-*.md
+          if-no-files-found: error
