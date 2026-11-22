@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { JSearchError, candidatesFromPayload, jsearchJobs, jsearchUrl } from '../../apps/web/lib/providers/jsearch.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
@@ -124,6 +124,12 @@ clearBrightDataZoneCache();
 await resolveBrightDataConfig('cachekey1234', { fetchImpl: cacheFetch, now: T0 + 60_000 });
 assert.equal(cacheCalls, 4, 'guardar o borrar la clave tira la caché (clearBrightDataZoneCache)');
 
+// 3b'. Sobre real visto en producción (2026-11-22): el cuerpo es un objeto sin `jobs`; se abre igual y el
+// diagnóstico describe lo que trae, sin copiar texto de la página.
+assert.deepEqual(unwrapPayload({ status_code: 200, headers: {}, body: { organic: [] } }), { organic: [] });
+assert.match(describeResponse(JSON.stringify({ status_code: 403, headers: {}, body: '<!doctype html><html></html>' })), /status_code 403 · cuerpo HTML de \d+ caracteres/);
+assert.match(describeResponse(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify({ general: {}, organic: [] }) })), /campos: general, organic/);
+assert.match(describeResponse(''), /cuerpo vacío/);
 // 3c. El envoltorio `{status_code, headers, body}` no pierde las ofertas.
 const wrapped = { status_code: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobs: { items: [{ title: 'Closer', company: 'Acme', link: 'https://acme.test/1' }] } }) };
 assert.equal(unwrapPayload(wrapped).jobs.items.length, 1);
@@ -144,7 +150,7 @@ assert.equal(probeCalls[0].init.headers.Authorization, 'Bearer abc12345key');
 const probeBody = JSON.parse(probeCalls[0].init.body);
 assert.deepEqual(Object.keys(probeBody).sort(), ['format', 'url', 'zone']);
 assert.equal(probeBody.zone, 'serp_zone_1');
-assert.equal(probeBody.format, 'json');
+assert.equal(probeBody.format, 'raw', 'raw + brd_json=1: el JSON llega directo, sin el sobre');
 assert.match(probeBody.url, /brd_json=1/);
 assert.equal(BRIGHTDATA_USD_PER_REQUEST, PROVIDER_METERS.brightdata.usdPerRequest, 'el precio del proveedor y el del medidor del tope no pueden divergir');
 
