@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
     listOffersPage({ ...queryOf(p), limit: pageSize, offset: (page - 1) * pageSize }), countsByStatus(), statsBySource(), recentRuns(), pausedSources(), approvalsToday(),
   ]);
   if (!list) return Response.json({ detail: 'No se pudo leer las fuentes externas.' }, { status: 503 });
-  return reply(auth!, { offers: list.rows.map(offer => { const risk = assessOffer(offer); return { ...offer, tags: offerTags(offer), risk: risk.risk_level === 'SAFE' ? null : { level: risk.risk_level, flags: risk.detected_flags.map(flag => flag.description) } }; }), total: list.total, page, page_size: pageSize, counts: counts ?? {}, sources: sources ?? [], runs: runs ?? [], paused: [...paused], auto: { used_today: autoUsed, cap: DAILY_CAP } });
+  return reply(auth!, { offers: list.rows.map(offer => { const risk = assessOffer(offer); return { ...offer, tags: offerTags(offer), risk: risk.risk_level === 'SAFE' ? null : { level: risk.risk_level, flags: risk.detected_flags.map(flag => flag.description) } }; }), total: list.total, page, page_size: pageSize, // Una lectura fallida es «no se sabe» (null), no «0 en cada estado» ni «ninguna fuente con datos».
+    counts: counts ?? null, sources: sources ?? null, runs: runs ?? [], paused: [...paused], auto: { used_today: autoUsed, cap: DAILY_CAP } });
 }
 
 export async function PATCH(request: NextRequest) {

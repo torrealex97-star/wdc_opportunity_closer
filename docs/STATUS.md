@@ -1,3 +1,9 @@
+## Auditoría de paneles del admin (segunda parte): Externas ya no pinta ceros cuando no puede leer — 2026-11-22
+
+- **Revisados** (*inspected*): Revisión rápida, Externas, Revisión (motor), Catálogo, Empresas, Scorecard, Alumnas, Práctica, Usuarios, Métricas y Embudo, buscando los cuatro estados (cargando, vacío, error, parcial) y ceros sin fuente. Todos tienen carga y error con aviso. Métricas, Empresas, Alumnas y Revisión ya distinguían «—» de 0.
+- **Fallo encontrado y corregido** (*tested*): `/api/admin/external` convertía una lectura fallida del recuento por estado y de las estadísticas por fuente en vacío (`counts ?? {}`, `sources ?? []`). El panel enseñaba entonces **0** en cada estado y «Sin datos aún» con 0 activas en cada fuente. Ahora la API devuelve `null` y el panel pinta «—», «Sin leer» y el aviso «No se pudo leer el recuento por estado». Paso nuevo en `tests/admin-auth/flow.mjs` con el recuento caído (54/54).
+- **Primera parte** (PR #120): tarjeta «Meta del día» y gasto del mes en el Resumen.
+
 ## Revisión de cierre: #122 y #123 integradas con `main`, y 6 hallazgos del code review corregidos — 2026-11-22
 
 - **Ramas** (*inspected*): solo quedaban abiertas #122 (comentario y nota del cobro de JSearch) y #123 (cascada Bright Data → JSearch → SerpApi en el cron), del agente Codebuff, sobre un `main` antiguo. Se fusionó `main` en cada una sin reescribir su historia. En #123 se conservó su cadena y se le añadieron el modo asíncrono, el margen y el plazo de Bright Data de `main` (`googlejobs.mjs` 37/37). Sus fichas pasan al archivo de relevos.
