@@ -1,7 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: feat/latam-portales
+pr: 137
 touches: apps/web/lib/jobPortals.ts, tests/admin-auth/fallback.mjs, docs/STATUS.md
 date: 2026-11-22
 ---
