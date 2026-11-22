@@ -162,8 +162,8 @@ async function probeVariant(config: BrightDataConfig & { serpZone: string }, var
       if (!noted) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
       try {
         const parsedDirect = parseSerpJobs(direct);
-        return parsedDirect.hasJobsPanel
-          ? { ok: true, detail: `Clave válida · ${parsedDirect.candidates.length} ofertas de Google Jobs (la zona no está en modo asíncrono: respondió en síncrono; 1 petición anotada)` }
+        return parsedDirect.hasJobsPanel || parsedDirect.organicJobs > 0
+          ? { ok: true, detail: `Clave válida · ${parsedDirect.candidates.length} ofertas ${parsedDirect.hasJobsPanel ? 'del recuadro de empleos de Google' : 'concretas en resultados normales de Google (sin recuadro de empleos)'} (la zona respondió en síncrono; 1 petición anotada)` }
           : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(direct)})` };
       } catch (err) { return { ok: false, detail: `${(err as Error).message}.` }; }
     }
@@ -181,8 +181,8 @@ async function probeVariant(config: BrightDataConfig & { serpZone: string }, var
         catch (err) { await markDone(id, `ilegible: ${(err as Error).message}`); return { ok: false, detail: `${(err as Error).message}. Lo que llegó: ${describeResponse(got.text)}.` }; }
         await markDone(id, `recogido · ${parsedAsync.candidates.length} ofertas (prueba)`);
         const secs = Math.round((Date.now() - started) / 1000);
-        return parsedAsync.hasJobsPanel
-          ? { ok: true, detail: `Clave válida · modo asíncrono · ${parsedAsync.candidates.length} ofertas de Google Jobs en ~${secs} s (1 petición, ${PROVIDER_METERS.brightdata.usdPerRequest.toFixed(4).replace('.', ',')} USD anotada)` }
+        return parsedAsync.hasJobsPanel || parsedAsync.organicJobs > 0
+          ? { ok: true, detail: `Clave válida · modo asíncrono · ${parsedAsync.candidates.length} ofertas ${parsedAsync.hasJobsPanel ? 'del recuadro de empleos' : 'concretas en resultados normales'} en ~${secs} s (1 petición, ${PROVIDER_METERS.brightdata.usdPerRequest.toFixed(4).replace('.', ',')} USD anotada)` }
           : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(got.text)})` };
       }
       return { ok: true, detail: `Clave y zona válidas · modo asíncrono activo: Bright Data aceptó la búsqueda y aún la procesa (suele tardar hasta 5 min). El resultado se recoge solo en la próxima recogida, sin volver a pagar.` };
@@ -219,14 +219,13 @@ async function probeVariant(config: BrightDataConfig & { serpZone: string }, var
     const unwrapped = unwrapPayload(JSON.parse(rawText));
     payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
   } catch { /* cuerpo sin JSON */ }
-  let parsedAll: unknown = null;
-  try { parsedAll = JSON.parse(rawText); } catch { /* sin JSON */ }
-  const extracted = extractJobItems(parsedAll);
-  const jobs = extracted.panel ? extracted.items : null;
+  let parsedSync: ReturnType<typeof parseSerpJobs> | null = null;
+  try { parsedSync = parseSerpJobs(rawText); } catch { /* sin JSON o error de Bright Data: se trata abajo */ }
+  const jobs = parsedSync && (parsedSync.hasJobsPanel || parsedSync.organicJobs > 0) ? parsedSync.candidates : null;
   if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
   if (typeof payload?.error === 'string' && payload.error) return { ok: false, detail: `Bright Data: ${payload.error.slice(0, 160)}` };
   if (!Array.isArray(jobs)) return { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(rawText)})` };
-  return { ok: true, detail: `Clave válida · ${jobs.length} ofertas de Google Jobs · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)${asyncNote}` };
+  return { ok: true, detail: `Clave válida · ${jobs.length} ofertas ${parsedSync?.hasJobsPanel ? 'del recuadro de empleos de Google' : 'concretas en resultados normales de Google'} · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)${asyncNote}` };
 }
 
 /** Esperas entre consultas de «Probar» asíncrono (~35 s en total). `BRIGHTDATA_PROBE_WAITS_MS` las acorta en pruebas. */

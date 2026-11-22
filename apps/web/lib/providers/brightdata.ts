@@ -1,3 +1,4 @@
+import { organicJobCandidates } from '../jobPortals';
 import type { Candidate } from '../external';
 
 // Bright Data · SERP API y Web Unlocker.
@@ -471,7 +472,7 @@ export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidat
 
 /** `maxAttempts: 1` desactiva el reintento: lo usa el cron, cuyo reloj compartido no admite un segundo intento. */
 export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number; maxAttempts?: number };
-export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; /** La respuesta traía el panel de empleos de Google (aunque estuviera vacío); sin él no es «0 ofertas» comprobado. */ hasJobsPanel: boolean };
+export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; /** La respuesta traía el panel de empleos de Google (aunque estuviera vacío); sin él no es «0 ofertas» comprobado. */ hasJobsPanel: boolean; organicJobs: number };
 
 /**
  * Una búsqueda de Google Jobs. Un fallo se lanza con su motivo (nunca se devuelve una lista vacía
@@ -490,7 +491,7 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
  * Lee una respuesta de Google Jobs de Bright Data (síncrona o recogida en modo asíncrono). Un cuerpo que no es
  * JSON o un `error` de Bright Data se lanzan: no es «0 ofertas».
  */
-export function parseSerpJobs(text: string, attempts = 1, now = Date.now()): { candidates: Candidate[]; rawItems: number; hasJobsPanel: boolean } {
+export function parseSerpJobs(text: string, attempts = 1, now = Date.now()): { candidates: Candidate[]; rawItems: number; hasJobsPanel: boolean; organicJobs: number } {
   let payload: unknown;
   try {
     payload = JSON.parse(text);
@@ -501,12 +502,18 @@ export function parseSerpJobs(text: string, attempts = 1, now = Date.now()): { c
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
   const { items, panel } = extractJobItems(payload);
-  return { candidates: jobsFromPayload(payload, now), rawItems: items.length, hasJobsPanel: panel };
+  const fromPanel = jobsFromPayload(payload, now);
+  // Sin recuadro de empleos (medido en producción para «closer de ventas empleo» en España: Google devolvió solo
+  // resultados normales), se aprovechan los orgánicos que enlazan a una OFERTA CONCRETA de un portal conocido
+  // (LinkedIn /jobs/view/, InfoJobs, Indeed viewjob…). Un listado o una página de búsqueda no cuenta: nada se inventa.
+  const organic = Array.isArray(body.organic) ? body.organic : [];
+  const fromOrganic = panel ? [] : organicJobCandidates(organic, 'brightdata').map(c => ({ ...c, external_id: `bd-${shortId(c.url)}` }));
+  return { candidates: [...fromPanel, ...fromOrganic], rawItems: items.length, hasJobsPanel: panel, organicJobs: fromOrganic.length };
 }
 
 /**
  * MODO ASÍNCRONO (hay que activarlo en la zona: Advanced settings → Asynchronous requests). Encargar es
- * `POST /request?async=1` con el mismo cuerpo que la llamada normal; Bright Data responde enseguida con el
+ * `POST /request?async=true` (booleano, según la especificación OpenAPI de Bright Data) con el mismo cuerpo que la llamada normal; Bright Data responde enseguida con el
  * identificador en la cabecera `x-response-id` y se cobra aquí (al encargar). Recoger con
  * `GET /serp/get_result?response_id=…` no se cobra: 202 = aún procesando, 200 = resultado. El resultado se guarda
  * 48 h, así que lo que no esté listo se recoge en la siguiente pasada sin pagar otra vez.
@@ -516,7 +523,7 @@ export async function serpSubmitAsync(config: BrightDataConfig, url: string, opt
   if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
   let response: Response;
   try {
-    response = await fetchImpl(`${apiBase()}/request?async=1`, {
+    response = await fetchImpl(`${apiBase()}/request?async=true`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
       body: JSON.stringify({ zone: config.serpZone, url, format: 'raw' }),

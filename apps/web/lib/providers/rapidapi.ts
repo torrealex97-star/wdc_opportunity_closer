@@ -22,10 +22,11 @@ const countryName = (gl: string) => COUNTRY[gl] ?? 'Spain';
 
 export const RAPIDAPI_JOB_APIS: readonly RapidApiJobApi[] = [
   {
-    // Documentado: GET /search · respuesta { status, request_id, data: [...] } con job_title, employer_name, job_apply_link.
-    id: 'jsearch', label: 'JSearch (Google for Jobs)', host: 'jsearch.p.rapidapi.com', path: '/search',
+    // Medido en producción (2026-11-22): `/search` responde 404 «Endpoint '/search' does not exist». La ruta vigente es
+    // `/search-v2`, la misma que la integración directa de JSearch (OpenWeb Ninja) ya usa con éxito; mismos parámetros.
+    id: 'jsearch', label: 'JSearch (Google for Jobs)', host: 'jsearch.p.rapidapi.com', path: '/search-v2',
     docs: 'https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch',
-    params: (query, gl) => ({ query, page: '1', num_pages: '1', country: gl }),
+    params: (query, gl) => ({ query, country: gl, language: 'es', num_pages: '1', date_posted: 'week' }),
   },
   {
     // Documentado: GET /v2/linkedin/search con query y location · campos title, companyName, location, applyUrl/linkedinUrl.

@@ -1,3 +1,14 @@
+## Bright Data y RapidAPI con los datos reales de las pruebas del propietario — 2026-11-22
+
+- **Medido en producción** (*verified*, `integration_connections.last_test_detail`, 15:54 hora de España):
+  - Bright Data, búsqueda normal «closer de ventas empleo» (España): JSON con `general`, `input`, `navigation`, `organic`, `pagination`, `related`, `people_also_ask`, **sin recuadro de empleos**. La variante `udm=8` se cortó a los 40 s. La petición fue síncrona: la zona no aceptó `?async=1`.
+  - RapidAPI: JSearch respondió 404 «Endpoint '/search' does not exist» (la clave sí está suscrita); Jobs API LinkedIn 403 (sin suscripción); Jobs API Indeed 429 (cuota agotada).
+- **Cambios** (*tested*):
+  - Bright Data usa los resultados orgánicos que enlazan a una **oferta concreta** de un portal conocido (LinkedIn `/jobs/view/`, InfoJobs, Indeed `viewjob`…) cuando no hay recuadro de empleos; un listado no cuenta. Los patrones viven ahora en [`jobPortals.ts`](../apps/web/lib/jobPortals.ts), compartidos con el respaldo de SerpApi.
+  - Modo asíncrono con `?async=true`, el booleano de la especificación OpenAPI oficial (antes `async=1`, de una referencia de terceros).
+  - RapidAPI JSearch pasa a `/search-v2`, la ruta que la integración directa de JSearch ya usa con éxito.
+- **Sin verificar**: cuántas ofertas concretas trae cada búsqueda orgánica y si la zona acepta `async=true`; lo dice el siguiente «Probar».
+
 ## RapidAPI: una clave para varias APIs de empleo verificadas — 2026-11-22
 
 - **Petición del propietario**: añadir RapidAPI, que tiene muchas APIs de empleo.
