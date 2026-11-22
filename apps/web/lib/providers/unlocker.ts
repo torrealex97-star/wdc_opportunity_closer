@@ -91,31 +91,46 @@ export async function fetchHtml(
 export const unlockerProvider = (value: unknown): value is UnlockerProvider =>
   typeof value === 'string' && value in UNLOCKER_PRESETS;
 
-// Navegador de código abierto en tu propio servidor (Browserless, imagen `ghcr.io/browserless/chromium`): renderiza el
-// JavaScript de la página y devuelve su HTML con `POST /content`. No cobra por petición, así que es la primera opción
-// cuando la página existe pero su HTML llega vacío. No se activa solo: exige BROWSERLESS_URL (y BROWSERLESS_TOKEN si el
-// servidor lo pide). Este código corre en el servidor web, que no puede alojar un navegador: hay que ponerlo en un
-// servidor aparte. Licencia SSPL-1.0 del proyecto: revisarla antes de usarlo en un producto comercial cerrado.
-export const browserlessConfigured = (env: NodeJS.ProcessEnv = process.env) => /^https:\/\//i.test((env.BROWSERLESS_URL ?? '').trim());
+// Navegador propio para páginas que se pintan con JavaScript. Dos opciones, ninguna cobra por petición a terceros:
+//   · Cloudflare Browser Rendering (la web ya corre en Cloudflare: no hace falta otro servidor). Contrato leído en
+//     developers.cloudflare.com (2026-11-22): `POST /client/v4/accounts/{id}/browser-rendering/content` con `{url}` y un
+//     token con permiso «Browser Run - Edit»; responde `{success, result: "<html>"}`. Se activa con CF_BROWSER_ACCOUNT_ID
+//     y CF_BROWSER_TOKEN. Tiene cuota y límite de uso según el plan de Workers.
+//   · Browserless de código abierto (`ghcr.io/browserless/chromium`) en un servidor aparte: `POST {BROWSERLESS_URL}/content`
+//     con `{url}` devuelve el HTML. BROWSERLESS_URL (https) y BROWSERLESS_TOKEN. Licencia SSPL-1.0.
+// Si están las dos, se usa Cloudflare. Sin ninguna, esta vía no existe y se dice.
+const cfReady = (env: NodeJS.ProcessEnv) => /^[a-f0-9]{32}$/i.test((env.CF_BROWSER_ACCOUNT_ID ?? '').trim()) && Boolean((env.CF_BROWSER_TOKEN ?? '').trim());
+export const browserlessConfigured = (env: NodeJS.ProcessEnv = process.env) => cfReady(env) || /^https:\/\//i.test((env.BROWSERLESS_URL ?? '').trim());
+export const browserName = (env: NodeJS.ProcessEnv = process.env) => cfReady(env) ? 'Cloudflare Browser Rendering' : /^https:\/\//i.test((env.BROWSERLESS_URL ?? '').trim()) ? 'Browserless' : null;
 
 export async function renderHtml(url: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch; env?: NodeJS.ProcessEnv } = {}): Promise<string> {
   const { timeoutMs = 20_000, fetchImpl = fetch, env = process.env } = options;
-  if (!browserlessConfigured(env)) throw new BrightDataError('Sin navegador propio: falta BROWSERLESS_URL (https).', 422);
+  if (!browserlessConfigured(env)) throw new BrightDataError('Sin navegador propio: falta CF_BROWSER_ACCOUNT_ID + CF_BROWSER_TOKEN o BROWSERLESS_URL (https).', 422);
   if (!/^https:\/\//i.test(url)) throw new BrightDataError('Solo se leen páginas HTTPS públicas', 422);
-  const base = env.BROWSERLESS_URL!.trim().replace(/\/+$/, '');
-  const token = (env.BROWSERLESS_TOKEN ?? '').trim();
+  const cloudflare = cfReady(env);
+  const name = cloudflare ? 'Cloudflare Browser Rendering' : 'Browserless';
+  const target = cloudflare
+    ? `${(env.CF_API_BASE ?? 'https://api.cloudflare.com').replace(/\/+$/, '')}/client/v4/accounts/${env.CF_BROWSER_ACCOUNT_ID!.trim()}/browser-rendering/content`
+    : `${env.BROWSERLESS_URL!.trim().replace(/\/+$/, '')}/content${(env.BROWSERLESS_TOKEN ?? '').trim() ? `?token=${encodeURIComponent(env.BROWSERLESS_TOKEN!.trim())}` : ''}`;
   let response: Response;
   try {
-    response = await fetchImpl(`${base}/content${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
+    response = await fetchImpl(target, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, waitForTimeout: 2_000 }),
+      headers: { 'Content-Type': 'application/json', ...(cloudflare ? { Authorization: `Bearer ${env.CF_BROWSER_TOKEN!.trim()}` } : {}) },
+      body: JSON.stringify(cloudflare ? { url, gotoOptions: { waitUntil: 'networkidle0' } } : { url, waitForTimeout: 2_000 }),
     });
   } catch (err) {
-    throw new BrightDataError(`No se pudo contactar con el navegador propio: ${(err as Error).message}`, null, 0);
+    throw new BrightDataError(`No se pudo contactar con ${name}: ${(err as Error).message}`, null, 0);
   }
   const text = await response.text().catch(() => '');
-  if (!response.ok) throw new BrightDataError(`El navegador propio respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 0);
-  if (!text.trim()) throw new BrightDataError('El navegador propio devolvió una página vacía', 200, 0);
-  return text;
+  if (!response.ok) throw new BrightDataError(`${name} respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 0);
+  let html = text;
+  if (cloudflare) {
+    let payload: { success?: boolean; result?: unknown; errors?: Array<{ message?: string }> } | null = null;
+    try { payload = JSON.parse(text); } catch { throw new BrightDataError(`${name} devolvió algo que no es JSON`, 200, 0); }
+    if (!payload?.success || typeof payload.result !== 'string') throw new BrightDataError(`${name}: ${payload?.errors?.map(e => e.message).filter(Boolean).join(' · ') || 'sin HTML en la respuesta'}`, 200, 0);
+    html = payload.result;
+  }
+  if (!html.trim()) throw new BrightDataError(`${name} devolvió una página vacía`, 200, 0);
+  return html;
 }

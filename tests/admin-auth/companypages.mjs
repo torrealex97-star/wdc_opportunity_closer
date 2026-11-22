@@ -15,6 +15,14 @@ const server = http.createServer(async (req, res) => {
     return send(200, connections.map(provider => ({ provider })));
   }
   if (url.pathname === '/rest/v1/source_settings') return send(200, []);
+  if (url.pathname === '/v1/company-targets') return send(200, { targets: [
+    { slug: 'ironhack', name: 'Ironhack', monitoring: 'careers_page', careers_url: 'https://jobs.ironhack.com/' },
+    { slug: 'ph', name: 'Product Hackers', monitoring: 'teamtailor_feed', careers_url: 'https://producthackers.teamtailor.com/jobs' },
+    { slug: 'manual', name: 'Manual', monitoring: 'manual', careers_url: 'https://manual.test/empleo' },
+    { slug: 'mail', name: 'Correo', monitoring: 'careers_page', careers_url: 'mailto:rrhh@x.test' },
+    { slug: 'li', name: 'Solo LinkedIn', monitoring: 'linkedin_guest', careers_url: 'https://www.linkedin.com/company/x' },
+    { slug: 'dup', name: 'Bastida (repetida)', monitoring: 'careers_page', careers_url: 'https://www.bastidafarina.com/equipo/posiciones-abiertas/' },
+  ] });
   if (url.pathname === '/rest/v1/rpc/external_upsert') { const rows = JSON.parse(body || '{}').p_rows ?? []; saved.push(...rows); return send(200, rows.length); }
   if (url.pathname === '/rest/v1/external_ingest_runs') { if (req.method === 'GET') return send(200, []); runs.push(JSON.parse(body || '{}')); return send(201, {}); }
   return send(404, {});
@@ -30,6 +38,8 @@ const { extractAnchorJobs, extractJobPostings } = await import('../../apps/web/l
 const { collectCompanyPages } = await import('../../apps/web/lib/companyPagesCollect.ts');
 const { fetchApiHtml, BRIGHTDATA_FETCH_DATASET } = await import('../../apps/web/lib/providers/brightdata.ts');
 const { renderHtml } = await import('../../apps/web/lib/providers/unlocker.ts');
+const { engineCareerPages, mergePages } = await import('../../apps/web/lib/companyPagesCollect.ts');
+const { COMPANY_WATCHLIST } = await import('../../apps/web/lib/companyWatchlist.ts');
 
 let passed = 0, failed = 0;
 const step = async (name, fn) => {
@@ -143,6 +153,30 @@ await step('Fetch API de Bright Data: contrato, NDJSON, JSON-LD añadido, 202 y 
   await assert.rejects(fetchApiHtml(cfg, 'https://x.test/', { fetchImpl: async () => new Response('', { status: 202 }) }), e => e.status === 202 && /próxima pasada/.test(e.message));
   await assert.rejects(fetchApiHtml(cfg, 'https://x.test/', { fetchImpl: async () => new Response(JSON.stringify({ error: 'dead_page' }), { status: 200 }) }), /dead_page/);
   await assert.rejects(fetchApiHtml(cfg, 'http://x.test/', { fetchImpl: ok }), /HTTPS/);
+});
+
+await step('navegador propio en Cloudflare: contrato (cuenta, token, gotoOptions) y lectura de {success, result}', async () => {
+  const env = { CF_BROWSER_ACCOUNT_ID: 'a'.repeat(32), CF_BROWSER_TOKEN: 'cf-tok', BROWSERLESS_URL: 'https://render.test' };
+  let seen;
+  const ok = async (input, init) => { seen = { url: String(input), init }; return new Response(JSON.stringify({ success: true, result: '<html>pintada</html>' }), { status: 200 }); };
+  assert.equal(await renderHtml('https://x.test/empleo', { env, fetchImpl: ok }), '<html>pintada</html>');
+  assert.equal(seen.url, `https://api.cloudflare.com/client/v4/accounts/${'a'.repeat(32)}/browser-rendering/content`, 'con las dos configuradas manda Cloudflare');
+  assert.equal(seen.init.headers.Authorization, 'Bearer cf-tok'); assert.equal(JSON.parse(seen.init.body).url, 'https://x.test/empleo');
+  await assert.rejects(renderHtml('https://x.test/', { env, fetchImpl: async () => new Response(JSON.stringify({ success: false, errors: [{ code: 2001, message: 'Rate limit exceeded' }] }), { status: 200 }) }), /Rate limit exceeded/);
+  await assert.rejects(renderHtml('https://x.test/', { env, fetchImpl: async () => new Response('x', { status: 429 }) }), /HTTP 429/);
+  await assert.rejects(renderHtml('https://x.test/', { env: { CF_BROWSER_ACCOUNT_ID: 'corta', CF_BROWSER_TOKEN: 't' } }), /falta CF_BROWSER_ACCOUNT_ID/, 'una cuenta mal escrita no cuenta como configurada');
+});
+
+await step('páginas del motor: solo las que vigila por página propia o ATS, HTTPS, y sin repetir las del repo', async () => {
+  process.env.CAREER_ENGINE_URL = `http://127.0.0.1:${PORT}`;
+  const engine = await engineCareerPages();
+  assert.deepEqual(engine.map(c => c.code), ['ironhack', 'ph', 'dup'], 'fuera: manual, correo y solo LinkedIn');
+  const merged = mergePages(COMPANY_WATCHLIST, engine);
+  assert.ok(merged.some(c => c.code === 'bastida-farina') && !merged.some(c => c.code === 'dup'), 'la misma página no se lee dos veces');
+  assert.ok(merged.some(c => c.code === 'ironhack'));
+  delete process.env.CAREER_ENGINE_URL;
+  assert.equal(await engineCareerPages(), null, 'sin motor configurado: null (no una lista vacía inventada)');
+  assert.ok(mergePages(COMPANY_WATCHLIST, null).length >= 2, 'y se sigue con la lista del repo');
 });
 
 server.close();

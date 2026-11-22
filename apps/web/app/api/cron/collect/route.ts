@@ -7,7 +7,8 @@ import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { collectRapidApi } from '../../../../lib/rapidapiCollect';
-import { collectCompanyPages } from '../../../../lib/companyPagesCollect';
+import { collectCompanyPages, engineCareerPages, mergePages } from '../../../../lib/companyPagesCollect';
+import { COMPANY_WATCHLIST } from '../../../../lib/companyWatchlist';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
   const paying = canSpend();
   const companyPages = budget.remaining() >= MIN_STEP_MS
     ? await (paying ? sharedMeter().catch(() => null) : Promise.resolve(null))
-      .then(meter => collectCompanyPages('cron', budget.deadline(6_000), { allowPaid: paying, meter }))
+      .then(async meter => collectCompanyPages('cron', budget.deadline(8_000), { allowPaid: paying, meter, list: mergePages(COMPANY_WATCHLIST, await engineCareerPages()) }))
       .catch(failed('company_pages', null))
     : (budget.cut('companyPages'), null);
   if (companyPages?.truncated) budget.cut('companyPages');

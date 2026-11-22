@@ -1,4 +1,5 @@
 import { COMPANY_WATCHLIST, type CompanyWatch } from './companyWatchlist';
+import { engineFetch } from './engineTransport';
 import { callTimeout, timeLeft } from './cronBudget';
 import { ingest, recordSpend } from './external';
 import { getSecret, listConnections } from './integrations';
@@ -44,6 +45,34 @@ export const publicHttps = (value: string) => {
 
 export const companyPages = (list: CompanyWatch[] = COMPANY_WATCHLIST) =>
   list.filter(company => company.kind === 'careers' && company.url && publicHttps(company.url));
+
+const WATCHED = new Set(['careers_page', 'ats_page', 'teamtailor_feed']);
+const keyOf = (value: string) => { try { const u = new URL(value); return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`.toLowerCase(); } catch { return value; } };
+
+/**
+ * Páginas de empleo que el MOTOR ya tiene dadas de alta (`/v1/company-targets`, seguimiento por página propia o ATS).
+ * No se añade ninguna empresa aquí: se leen las que el motor ya vigila y tienen URL HTTPS pública. `null` si el motor
+ * no está configurado o no responde (entonces solo se usa la lista del repo, y se dice).
+ */
+export async function engineCareerPages(env: NodeJS.ProcessEnv = process.env, timeoutMs = 4_000): Promise<CompanyWatch[] | null> {
+  const base = (env.CAREER_ENGINE_URL ?? '').replace(/\/+$/, '');
+  if (!base) return null;
+  try {
+    const response = await engineFetch(`${base}/v1/company-targets`, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null) as { targets?: Array<Record<string, unknown>> } | null;
+    if (!Array.isArray(payload?.targets)) return null;
+    return payload.targets
+      .filter(t => WATCHED.has(String(t.monitoring)) && typeof t.careers_url === 'string' && publicHttps(t.careers_url) && typeof t.slug === 'string')
+      .map(t => ({ code: String(t.slug).slice(0, 60), name: String(t.name ?? t.slug), kind: 'careers' as const, url: t.careers_url as string, source: 'company', note: `Página de empleo del motor (${t.monitoring}).` }));
+  } catch { return null; }
+}
+
+/** Lista del repo + las del motor, sin repetir la misma página. */
+export const mergePages = (repo: CompanyWatch[], engine: CompanyWatch[] | null): CompanyWatch[] => {
+  const seen = new Set<string>();
+  return [...companyPages(repo), ...companyPages(engine ?? [])].filter(c => { const k = keyOf(c.url!); if (seen.has(k)) return false; seen.add(k); return true; });
+};
 
 type Options = { allowPaid: boolean; meter?: Meter | null; fetchImpl?: typeof fetch; list?: CompanyWatch[]; now?: number };
 
