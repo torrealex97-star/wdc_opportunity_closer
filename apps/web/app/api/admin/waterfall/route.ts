@@ -7,6 +7,7 @@ import { PROVIDER_METERS } from '../../../../lib/providerBudget';
 import { spendOverview, type SpendRow } from '../../../../lib/providerCaps';
 import { maxSearches } from '../../../../lib/serpapiFallback';
 import { rapidApiMaxRequests } from '../../../../lib/rapidapiCollect';
+import { companyPages, companyPagesMax } from '../../../../lib/companyPagesCollect';
 import { planStages, type StageInput } from '../../../../lib/waterfall';
 import { readTarget, waterfallState, writeTarget } from '../../../../lib/waterfallStore';
 
@@ -69,6 +70,13 @@ export async function GET(request: NextRequest) {
       reason: !keysKnown || !keys.has('rapidapi') ? noKey('RapidAPI') : rapidApiMaxRequests() === 0 ? 'Desactivado (RAPIDAPI_MAX_REQUESTS=0).' : room(row('rapidapi')).why,
     },
     {
+      // Automática: la lectura directa es gratis y corre en cada pasada; el desbloqueador de pago solo si la página bloquea.
+      id: 'unlocker', label: 'Páginas de empleo de empresas', automatic: true,
+      unit: `Gratis si la página se deja leer; si bloquea, desde ${PROVIDER_METERS.brightdata.usdPerRequest} USD por página (ZenRows, ScrapingBee o Bright Data), hasta ${companyPagesMax()} por pasada`,
+      available: companyPagesMax() > 0 && companyPages().length > 0,
+      reason: companyPagesMax() === 0 ? 'Desactivado (COMPANY_PAGES_MAX=0).' : companyPages().length === 0 ? 'Ninguna empresa con página de empleo verificada.' : null,
+    },
+    {
       id: 'respaldo', label: 'Respaldo por portal (SerpApi)', automatic: true,
       unit: `${PROVIDER_METERS.serpapi.usdPerRequest} USD por búsqueda, hasta ${fallbackMax} por pasada`,
       available: serpOk && fallbackMax !== 0,
@@ -79,12 +87,6 @@ export async function GET(request: NextRequest) {
       unit: 'Pago por resultado, con el tope mensual de Apify',
       available: Boolean(token) && dailyPortals !== null && dailyPortals > 0 && apifyLeft !== null && apifyLeft > 0,
       reason: !token ? 'Sin token de Apify.' : dailyPortals === null ? 'No se pudieron leer los portales de Apify: no se gasta.' : dailyPortals === 0 ? 'Ningún portal con búsqueda diaria activada.' : apifyLeft === null ? 'No se pudo leer lo gastado en Apify: no se gasta.' : apifyLeft <= 0 ? 'Tope mensual de Apify agotado.' : null,
-    },
-    {
-      id: 'unlocker', label: 'Unlocker, ZenRows y ScrapingBee', automatic: false,
-      unit: `Desde ${PROVIDER_METERS.brightdata.usdPerRequest} USD por página`,
-      available: keysKnown && (keys.has('brightdata') || keys.has('zenrows') || keys.has('scrapingbee')),
-      reason: 'Se lanzan a mano (Fuentes → Probar ruta): leer el HTML de una empresa necesita un extractor por página y aún no se automatiza.',
     },
   ];
   return reply(auth!, {

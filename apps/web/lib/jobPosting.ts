@@ -1,14 +1,14 @@
-// Extractor común de páginas de empleo: JSON-LD `JobPosting` y RSS.
+// Extractor común de páginas de empleo: JSON-LD `JobPosting`, RSS y, como último recurso, los ENLACES de la página.
 //
-// Es el mismo extractor para las páginas de empresa, el Unlocker y cualquier feed: si una página no
-// publica `JobPosting` ni RSS, no se inventa una oferta a partir de HTML suelto. Se deduplica por URL y
+// Es el mismo extractor para las páginas de empresa, el Unlocker y cualquier feed. Sin `JobPosting` ni RSS, solo se
+// toman enlaces del propio sitio que apuntan a una oferta concreta (`extractAnchorJobs`); nunca se inventa un dato. Se deduplica por URL y
 // se resuelven los enlaces relativos; la descripción se guarda como texto, sin etiquetas.
 //
 // No usa DOM ni dependencias: Next lo empaqueta igual en servidor y las pruebas lo ejecutan en Node.
 
 import type { Candidate } from './external';
 
-export type DetectedJob = Candidate & { via: 'jsonld' | 'rss' };
+export type DetectedJob = Candidate & { via: 'jsonld' | 'rss' | 'anchors' };
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú', ntilde: 'ñ', Aacute: 'Á', Eacute: 'É', Iacute: 'Í', Oacute: 'Ó', Uacute: 'Ú', Ntilde: 'Ñ', laquo: '«', raquo: '»', ndash: '–', mdash: '—', hellip: '…' };
 
@@ -166,12 +166,61 @@ export function extractRssJobs(xml: string, baseUrl: string): DetectedJob[] {
   return jobs;
 }
 
+const JOB_PATH = /\/(?:jobs?|empleos?|ofertas?(?:-de-(?:empleo|trabajo))?|vacantes?|puestos?|posici[oó]n(?:es)?|trabajos?|careers?|carreras|positions?|openings?|vacancies|opportunit(?:y|ies)|join-us|trabaja-con-nosotros)\/[^/?#]{3,}/i;
+const NOT_A_ROLE = /^(?:ver|m[aá]s|saber|leer|aplicar|apply|inscri|enviar|volver|back|home|inicio|todas?|all|login|iniciar|registr|compartir|share|cookies?|pol[ií]tica|aviso|contacto|contact|suscr|newsletter|blog|noticias)\b/i;
+const FILE = /\.(?:pdf|docx?|jpe?g|png|gif|svg|webp|zip|xml|json|css|js)(?:$|\?)/i;
+const siteOf = (value: string) => { try { return new URL(value).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+
+/**
+ * Último recurso para una página de empleo que no publica `JobPosting` ni RSS: los enlaces del propio sitio cuya ruta es
+ * la de una oferta concreta (`/empleo/…`, `/jobs/…`, `/vacantes/…`). El título es el texto visible del enlace; la
+ * empresa, solo la que indique el llamador (la de la lista verificada); lugar, sueldo y fecha quedan vacíos porque la
+ * página no los da en un formato fiable. Se descartan enlaces a otro sitio, a archivos, al propio listado y los de
+ * navegación («Ver todas», «Aplicar»…). Es una heurística: entra como borrador y pasa por la revisión de siempre.
+ */
+export function extractAnchorJobs(html: string, baseUrl: string, options: { company?: string | null; max?: number } = {}): DetectedJob[] {
+  const { company = null, max = 40 } = options;
+  const host = siteOf(baseUrl);
+  if (!host) return [];
+  let basePath = '';
+  try { basePath = new URL(baseUrl).pathname.replace(/\/+$/, ''); } catch { return []; }
+  const jobs: DetectedJob[] = [];
+  const seen = new Set<string>();
+  const re = /<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi;
+  for (let m = re.exec(html); m && jobs.length < max; m = re.exec(html)) {
+    const href = decodeEntities((m[1] ?? m[2] ?? '').trim());
+    if (!href || href.startsWith('#') || /^(?:mailto|tel|javascript):/i.test(href)) continue;
+    let url: URL;
+    try { url = new URL(href, baseUrl); } catch { continue; }
+    if (url.protocol !== 'https:' || FILE.test(url.pathname + url.search)) continue;
+    const linkHost = url.hostname.replace(/^www\./, '').toLowerCase();
+    if (linkHost !== host && !linkHost.endsWith(`.${host}`)) continue;
+    url.hash = '';
+    const path = url.pathname.replace(/\/+$/, '');
+    if (!JOB_PATH.test(url.pathname) || (path === basePath && !url.search)) continue;
+    const title = stripHtml(m[3]).replace(/\s+/g, ' ').trim();
+    if (title.length < 4 || title.length > 140 || !/\p{L}{3}/u.test(title) || NOT_A_ROLE.test(title)) continue;
+    const link = url.toString();
+    if (seen.has(link)) continue;
+    seen.add(link);
+    jobs.push({
+      external_id: `anchor-${link}`.slice(0, 1000), title, company: company ?? null, location: null, url: link,
+      salary: null, description: null, posted_at: null,
+      raw: { provider: 'html-anchors', site: host, via: 'anchors', note: 'Enlace de una página de empleo sin JobPosting ni RSS: título = texto del enlace; el resto no se infiere.' },
+      apply_url: link, via: 'anchors',
+    });
+  }
+  return jobs;
+}
+
 /** Detecta el formato por el contenido, no por la URL: una página puede servir RSS con otro nombre. */
-export function extractJobPostings(body: string, baseUrl: string): DetectedJob[] {
+export function extractJobPostings(body: string, baseUrl: string, options: { anchors?: boolean; company?: string | null } = {}): DetectedJob[] {
   const trimmed = body.trim();
   const looksXml = /^<\?xml|<rss|<feed[\s>]/i.test(trimmed);
   const jobs = looksXml ? extractRssJobs(body, baseUrl) : extractJsonLdJobs(body, baseUrl);
-  return looksXml && !jobs.length ? extractJsonLdJobs(body, baseUrl) : jobs;
+  const structured = looksXml && !jobs.length ? extractJsonLdJobs(body, baseUrl) : jobs;
+  // Los enlaces solo se leen si el llamador lo pide y la página no trae datos estructurados: «Revisar ahora» sigue igual.
+  return !structured.length && options.anchors && !looksXml ? extractAnchorJobs(body, baseUrl, { company: options.company }) : structured;
 }
 
 export function diffDetected(existingIds: Iterable<string>, detected: DetectedJob[]): { fresh: DetectedJob[]; known: DetectedJob[] } {
