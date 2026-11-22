@@ -104,7 +104,8 @@ Variables opcionales (Vercel): `AI_REVIEW_ENABLED` (`false` apaga), `AI_REVIEW_M
 ## 12. Bright Data: Google Jobs y Web Unlocker (2026-11-21)
 
 - **Clave:** Panel → APIs → Bright Data. Se pega **solo la API key** (la que da Bright Data); el panel lee
-  las zonas activas con `GET /zone/get_active_zones` (gratis) y usa la de tipo SERP. Si se prefiere fijarlas a
+  las zonas activas con `GET /zone/get_active_zones` (gratis) y usa la de tipo SERP; ese resultado se guarda
+  10 minutos en el proceso del panel (guardar la clave lo tira), así que una carga no repite la consulta. Si se prefiere fijarlas a
   mano: `API key:zona SERP` (y `:zona Unlocker` si se quiere leer HTML). Se guarda cifrada; el panel solo
   muestra los últimos 4 caracteres. Guardar no gasta.
 - **Google Jobs:** `POST https://api.brightdata.com/request` con `Authorization: Bearer` y

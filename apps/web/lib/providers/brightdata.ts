@@ -154,25 +154,67 @@ export type ResolvedBrightData = {
 };
 
 /**
- * Completa las zonas que falten con la cuenta de Bright Data. Si el secreto ya trae las dos, no hay red.
- * Un fallo al leer las zonas **no invalida la clave**: se devuelve el motivo y decide el llamador.
+ * Zonas ya resueltas, por clave. La consulta de zonas es gratis, pero el panel la hacía en CADA carga
+ * (y en cada «Probar ruta»): con la clave guardada sola, eso es hasta 6 s de espera y depender de que
+ * Bright Data responda para pintar el panel. Se guarda el resultado 10 minutos **en el proceso**; un
+ * fallo NO se cachea, para no enseñar «sin zona» por un corte pasajero.
  */
-export async function resolveBrightDataConfig(secret: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<ResolvedBrightData> {
+const ZONES_TTL_MS = 10 * 60_000;
+const zoneCache = new Map<string, { zones: BrightDataZone[]; at: number }>();
+
+/** Clave de la caché: FNV-1a de la API key, para no retener la clave en claro en la memoria del proceso. */
+function zoneCacheKey(apiKey: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < apiKey.length; i++) {
+    hash ^= apiKey.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${apiKey.length}:${hash.toString(16)}`;
+}
+
+/**
+ * Guardar o borrar la clave de Bright Data tira la caché: una zona recién creada en la cuenta se ve en
+ * la siguiente carga sin esperar al TTL. Las zonas escritas en el propio secreto no dependen de esto.
+ */
+export function clearBrightDataZoneCache(): void {
+  zoneCache.clear();
+}
+
+export type BrightDataResolveOptions = {
+  fetchImpl?: FetchLike;
+  timeoutMs?: number;
+  /** Reloj de la caché (pruebas); por defecto `Date.now()`. */
+  now?: number;
+  /** `false` pregunta siempre a la cuenta: es lo que hace el botón «Probar». */
+  useCache?: boolean;
+};
+
+/**
+ * Completa las zonas que falten con la cuenta de Bright Data. Si el secreto ya trae las dos, no hay red;
+ * si no, la cuenta se pregunta una vez cada `ZONES_TTL_MS` (caché en el proceso, `clearBrightDataZoneCache`
+ * la tira al guardar la clave). Un fallo al leer las zonas **no invalida la clave** ni se cachea: se
+ * devuelve el motivo y decide el llamador.
+ */
+export async function resolveBrightDataConfig(secret: string, options: BrightDataResolveOptions = {}): Promise<ResolvedBrightData> {
+  const { fetchImpl, timeoutMs, now = Date.now(), useCache = true } = options;
   const parsed = parseBrightDataSecret(secret);
   if (!parsed) return { config: null, zones: null, error: 'Formato incorrecto: se esperaba la API key de Bright Data.' };
   if (parsed.serpZone && parsed.unlockerZone) return { config: parsed, zones: null, error: null };
-  const listed = await listZones(parsed.apiKey, options);
-  if (listed.error) return { config: parsed, zones: null, error: listed.error };
-  const picked = pickBrightDataZones(listed.zones);
-  return {
-    config: {
+  const withZones = (zones: BrightDataZone[]): BrightDataConfig => {
+    const picked = pickBrightDataZones(zones);
+    return {
       apiKey: parsed.apiKey,
       serpZone: parsed.serpZone ?? picked.serpZone,
       unlockerZone: parsed.unlockerZone ?? picked.unlockerZone,
-    },
-    zones: listed.zones,
-    error: null,
+    };
   };
+  const key = zoneCacheKey(parsed.apiKey);
+  const cached = useCache ? zoneCache.get(key) : undefined;
+  if (cached && now - cached.at < ZONES_TTL_MS) return { config: withZones(cached.zones), zones: cached.zones, error: null };
+  const listed = await listZones(parsed.apiKey, { fetchImpl, timeoutMs });
+  if (listed.error) return { config: parsed, zones: null, error: listed.error };
+  if (useCache) zoneCache.set(key, { zones: listed.zones, at: now });
+  return { config: withZones(listed.zones), zones: listed.zones, error: null };
 }
 
 type FetchLike = typeof fetch;
