@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
 
   if (route.provider === 'brightdata') {
     const secret = await getSecret('brightdata');
-    const resolved = secret ? await resolveBrightDataConfig(secret) : null;
+    const resolved = secret ? await resolveBrightDataConfig(secret, { useCache: false }) : null; // una petición de pago no se fía de una zona en caché
     const config = resolved?.config ?? null;
     if (!config) return Response.json({ detail: 'La clave de Bright Data no tiene un formato utilizable: pega la API key o API key:zona SERP.' }, { status: 409 });
     if (!config.serpZone) {

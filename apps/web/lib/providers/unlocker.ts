@@ -60,7 +60,7 @@ export async function fetchHtml(
   const { timeoutMs = 20_000, fetchImpl = fetch } = options;
   if (provider === 'brightdata') {
     // La API key sola es válida: la zona del Unlocker se descubre en la cuenta (gratis) si no vino escrita.
-    const { config } = await resolveBrightDataConfig(secret, { timeoutMs, fetchImpl });
+    const { config } = await resolveBrightDataConfig(secret, { timeoutMs, fetchImpl, useCache: false });
     if (!config) throw new BrightDataError('Formato de clave de Bright Data incorrecto', 422);
     return unlockHtml(config, url, { timeoutMs, fetchImpl });
   }

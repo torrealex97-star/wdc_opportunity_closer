@@ -10,9 +10,11 @@
 // (público para actores públicos) y `GET /v2/acts/{user~nombre}/builds/default` (sin token). Ninguna de estas
 // llamadas gasta crédito. Nada se lanza aquí: lanzar un actor sigue siendo `startRun`, con su tope.
 import type { Portal } from './apifyCatalog';
-import { ACTOR_RE } from './apify';
+import { ACTOR_RE, adaptInput, varsFor } from './apify';
 
 type FetchLike = typeof fetch;
+/** `a/b` y `a~b` son el mismo actor, y mayúsculas y minúsculas no distinguen: una sola forma para comparar. */
+export const normalizeActor = (actor: string) => actor.trim().replace('~', '/').toLowerCase();
 const base = () => process.env.APIFY_API_BASE ?? 'https://api.apify.com';
 const actorPath = (actor: string) => actor.replace('/', '~');
 
@@ -51,6 +53,8 @@ export type ActorCheck = {
   deprecated: boolean | null;
   buildStatus: string | null;
   schemaRead: boolean | null;
+  /** Esquema de entrada leído (propiedades y obligatorias): sirve para comprobar si encaja con el portal. */
+  schema?: { properties: Record<string, { type?: string; default?: unknown }>; required: string[] };
   reasons: string[];
 };
 export type Verdict = 'valid' | 'invalid' | 'unverified';
@@ -102,12 +106,34 @@ export async function checkActor(actor: string, options: { fetchImpl?: FetchLike
       ?? (definition && typeof definition === 'object' ? (definition as Record<string, unknown>).properties : null);
     check.schemaRead = Boolean(properties && typeof properties === 'object' && Object.keys(properties as object).length);
     if (!check.schemaRead) check.reasons.push('No se pudo leer su esquema de entrada.');
+    else {
+      const rawRequired = (schema && typeof schema === 'object' ? (schema as Record<string, unknown>).required : null)
+        ?? (definition && typeof definition === 'object' ? (definition as Record<string, unknown>).required : null);
+      check.schema = { properties: properties as Record<string, { type?: string; default?: unknown }>, required: Array.isArray(rawRequired) ? rawRequired.filter((k): k is string => typeof k === 'string') : [] };
+    }
   } else if (build.status === 404) {
     check.buildStatus = 'SIN BUILD'; check.reasons.push('No tiene build por defecto.');
   } else {
     check.reasons.push(build.status === null ? 'No se pudo contactar con Apify para leer el build.' : `Apify respondió HTTP ${build.status} al leer el build.`);
   }
   return check;
+}
+
+/**
+ * ¿Encaja el esquema del actor con lo que la app sabe pedirle a este portal? «Validado» solo dice que el actor
+ * existe y está sano; no que acepte una búsqueda de este portal. Con plantilla propia del portal, sus campos
+ * tienen que existir en el esquema; sin ella, los campos obligatorios tienen que ser de los que la app rellena
+ * sola (búsqueda, ubicación, país, máximo de resultados…). Sin esquema leído no se afirma nada.
+ */
+export function compatibilityOf(check: Pick<ActorCheck, 'schema'>, portal: Pick<Portal, 'maxItems' | 'query' | 'inputTemplate'>): { ok: boolean; missing: string[] } {
+  if (!check.schema) return { ok: false, missing: ['esquema de entrada'] };
+  if (portal.inputTemplate) {
+    const names = new Set(Object.keys(check.schema.properties).map(k => k.toLowerCase()));
+    const absent = Object.keys(portal.inputTemplate).filter(k => !names.has(k.toLowerCase()));
+    return { ok: absent.length === 0, missing: absent };
+  }
+  const { missing } = adaptInput({ properties: check.schema.properties, required: check.schema.required }, varsFor({ max_items: portal.maxItems }, { query: portal.query ?? 'closer de ventas' }));
+  return { ok: missing.length === 0, missing };
 }
 
 /** Búsquedas que se hacen en la tienda para un portal: su nombre, con y sin «jobs scraper». */
@@ -117,34 +143,61 @@ export const queriesFor = (portal: Pick<Portal, 'name'>): string[] => {
 };
 
 export type Replacement = StoreItem & { verdict: Verdict; reasons: string[]; check: ActorCheck };
-export type ReplacementSearch = { candidates: Replacement[]; searched: string[]; error: string | null; truncated: boolean };
+export type ReplacementSearch = {
+  candidates: Replacement[]; searched: string[];
+  /** Motivo del último fallo de la tienda (parcial o total); `null` si todas las consultas respondieron. */
+  error: string | null;
+  /** TODAS las consultas a la tienda fallaron: no se puede decir «sin repuestos». */
+  allFailed: boolean;
+  /** Quedaron candidatos sin validar (por el tope de validaciones o por el reloj). */
+  truncated: boolean;
+};
 
 /**
  * Candidatos de repuesto para un portal: se busca en la tienda, se descartan los que ya están (activos o
- * retirados) y se valida cada uno con sus metadatos públicos. Acotado: como mucho `maxChecks` validaciones
- * (dos peticiones cada una) y se declara si quedaron candidatos sin comprobar.
+ * retirados) y se valida cada uno con sus metadatos públicos y su encaje con el portal. Acotado: como mucho
+ * `maxChecks` validaciones (en tandas de 3 en paralelo) y un reloj compartido (`deadline`): cada llamada
+ * comprueba cuánto queda y, si no hay tiempo, se corta y se declara `truncated` en vez de pasarse del límite.
  */
 export async function findReplacements(
-  portal: Pick<Portal, 'name'>, known: Set<string>,
-  options: { fetchImpl?: FetchLike; maxChecks?: number; limit?: number } = {},
+  portal: Pick<Portal, 'name' | 'maxItems' | 'query' | 'inputTemplate'>, known: Set<string>,
+  options: { fetchImpl?: FetchLike; maxChecks?: number; limit?: number; deadline?: number } = {},
 ): Promise<ReplacementSearch> {
-  const { fetchImpl = fetch, maxChecks = 6, limit = 12 } = options;
+  const { fetchImpl = fetch, maxChecks = 6, limit = 12, deadline } = options;
+  const left = () => deadline === undefined ? Infinity : deadline - Date.now();
+  const timeout = (usual: number) => Math.max(1_000, Math.min(usual, left()));
+  const knownNorm = new Set([...known].map(normalizeActor));
   const searched = queriesFor(portal);
   const seen = new Map<string, StoreItem>();
   let error: string | null = null;
+  let okQueries = 0;
+  let cut = false;
   for (const query of searched) {
-    const result = await getJson(`${base()}/v2/store?search=${encodeURIComponent(query)}&limit=${limit}&sortBy=popularity`, fetchImpl, 10_000);
+    if (left() < 2_000) { cut = true; break; }
+    const result = await getJson(`${base()}/v2/store?search=${encodeURIComponent(query)}&limit=${limit}&sortBy=popularity`, fetchImpl, timeout(10_000));
     if (result.status !== 200) { error = result.status === null ? 'No se pudo contactar con la tienda de Apify.' : `La tienda de Apify respondió HTTP ${result.status}.`; continue; }
-    for (const item of storeItemsFrom(result.body)) if (!known.has(item.actor.toLowerCase()) && !seen.has(item.actor)) seen.set(item.actor, item);
+    okQueries++;
+    for (const item of storeItemsFrom(result.body)) if (!knownNorm.has(normalizeActor(item.actor)) && !seen.has(normalizeActor(item.actor))) seen.set(normalizeActor(item.actor), item);
   }
   const pool = [...seen.values()];
+  const checked = pool.slice(0, maxChecks);
   const candidates: Replacement[] = [];
-  for (const item of pool.slice(0, maxChecks)) {
-    const check = await checkActor(item.actor, { fetchImpl });
-    candidates.push({ ...item, verdict: verdictOf(check), reasons: check.reasons, check });
+  for (let i = 0; i < checked.length; i += 3) {
+    if (left() < 4_000) { cut = true; break; }
+    const batch = checked.slice(i, i + 3);
+    const results = await Promise.all(batch.map(async item => ({ item, check: await checkActor(item.actor, { fetchImpl, timeoutMs: timeout(8_000) }) })));
+    for (const { item, check } of results) {
+      let verdict = verdictOf(check);
+      const reasons = [...check.reasons];
+      if (verdict === 'valid') {
+        const fit = compatibilityOf(check, portal);
+        if (!fit.ok) { verdict = 'invalid'; reasons.push(`Pide datos que la app no sabe rellenar para este portal: ${fit.missing.join(', ')}.`); }
+      }
+      candidates.push({ ...item, verdict, reasons, check });
+    }
   }
   // Primero los validados y, dentro, los más usados: no hay otra señal de calidad que el uso declarado.
   const rank = { valid: 0, unverified: 1, invalid: 2 } as const;
   candidates.sort((a, b) => rank[a.verdict] - rank[b.verdict] || (b.users ?? 0) - (a.users ?? 0));
-  return { candidates, searched, error, truncated: pool.length > maxChecks };
+  return { candidates, searched, error, allFailed: okQueries === 0 && searched.length > 0 && !cut, truncated: cut || pool.length > maxChecks };
 }

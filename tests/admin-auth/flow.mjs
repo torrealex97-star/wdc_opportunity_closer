@@ -774,10 +774,12 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   state.apifyFailActors = new Set(); state.apifyItems = [];
 });
 await step('Apify: buscadores de repuesto desde la tienda — se validan con metadatos públicos y solo el propietario añade, retira o reactiva', async () => {
-  const savedActors = state.apifyActors; state.apifyActors = []; state.storeDown = false;
+  const savedActors = state.apifyActors; state.apifyActors = []; state.storeDown = false; state.storeFailExact = null;
+  const isInactive = id => state.apifyActors.find(a => a.id === id)?.status === 'inactive';
   state.storeActors = {
     'store-a~infojobs-pro': { users: 500 }, 'store-b~infojobs-old': { deprecated: true, users: 9000 }, 'store-c~infojobs-broken': { build: 'FAILED' },
     'store-d~infojobs-nofield': { hideDeprecated: true }, 'store-e~infojobs-noschema': { noSchema: true },
+    'store-f~infojobs-urls': { props: { startUrls: { type: 'array' } }, required: ['startUrls'] },
   };
   try {
     const view = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
@@ -790,6 +792,8 @@ await step('Apify: buscadores de repuesto desde la tienda — se validan con met
     assert.equal(byActor['store-c/infojobs-broken'], 'invalid', 'build fallido');
     assert.equal(byActor['store-d/infojobs-nofield'], 'unverified', 'la tienda no dice si está obsoleto: no se da por bueno');
     assert.equal(byActor['store-e/infojobs-noschema'], 'invalid', 'sin esquema de entrada legible');
+    assert.equal(byActor['store-f/infojobs-urls'], 'invalid', 'sano pero pide URLs: no encaja con una búsqueda por texto');
+    assert.match(found.json.candidates.find(c => c.actor === 'store-f/infojobs-urls').reasons.join(' '), /startUrls/);
     assert.equal(found.json.candidates[0].actor, 'store-a/infojobs-pro', 'el validado va primero aunque otro tenga más usuarios');
     assert.ok(!found.json.candidates.some(c => c.actor === 'haketa/infojobs-scraper'), 'el del catálogo no se vuelve a proponer');
     assert.ok(state.storeCalls.length > 0 && state.storeCalls.every(c => !('token' in c)), 'la búsqueda en la tienda no envía la clave');
@@ -798,21 +802,35 @@ await step('Apify: buscadores de repuesto desde la tienda — se validan con met
     assert.equal((await add({ actor: 'store-b/infojobs-old' })).status, 422, 'un obsoleto no se añade');
     assert.equal((await add({ actor: 'store-d/infojobs-nofield' })).status, 422, 'un «sin verificar» no se añade');
     assert.equal((await add({ actor: 'no es un actor' })).status, 422);
+    assert.equal((await add({ actor: 'store-f/infojobs-urls' })).status, 422, 'un actor que no encaja con el portal no se añade, aunque esté sano');
     assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'add_replacement', portal: 'nope', actor: 'store-a/infojobs-pro' } })).status, 422);
     const ok = await add({ actor: 'store-a/infojobs-pro', title: 'InfoJobs Pro' });
     assert.equal(ok.status, 201, JSON.stringify(ok.json));
     const row = state.apifyActors.find(a => a.actor === 'store-a/infojobs-pro');
     assert.equal(row.source, 'apify-infojobs'); assert.equal(row.label, 'InfoJobs Pro'); assert.ok(row.created_by);
     assert.equal((await add({ actor: 'store-a/infojobs-pro' })).status, 409, 'no se duplica');
+    assert.equal((await add({ actor: 'Store-A~Infojobs-Pro' })).status, 409, '`a~b` y mayúsculas son el mismo actor: no se duplica');
+    assert.equal((await add({ actor: 'haketa/infojobs-scraper' })).status, 409, 'un actor del catálogo tampoco se añade otra vez');
     const after = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
     assert.equal(after.needs_more, false);
     assert.ok(after.recipes.some(r => r.actor === 'store-a/infojobs-pro' && r.added), 'el añadido entra en la cascada');
 
+    const post = b => call('/api/admin/apify', { method: 'POST', body: b });
+    // Con el catálogo como único otro buscador, hace falta su fila para poder intentar retirarlo.
+    const catalogRow = { id: crypto.randomUUID(), label: 'InfoJobs (catálogo)', actor: 'haketa/infojobs-scraper', source: 'apify-infojobs', schedule_daily: false, created_by: 'x' };
+    state.apifyActors.push(catalogRow);
+    assert.equal((await post({ action: 'retire', id: '00000000-0000-4000-8000-000000000000' })).status, 404, 'un id que no existe no devuelve «retirado»');
+    assert.equal((await post({ action: 'reactivate', id: row.id })).status, 409, 'reactivar uno que no estaba retirado no pisa su estado');
     const retire = await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: row.id } });
     assert.equal(retire.status, 200); assert.equal(state.apifyActors.find(a => a.id === row.id).status, 'inactive');
     const gone = (await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs');
     assert.ok(!gone.recipes.some(r => r.actor === 'store-a/infojobs-pro'), 'retirado: fuera de la cascada');
     assert.ok(gone.retired.some(r => r.actor === 'store-a/infojobs-pro'), 'y visible para reactivarlo');
+    assert.equal((await post({ action: 'retire', id: row.id })).status, 409, 'retirar dos veces: ya estaba retirado');
+    // Con el añadido retirado, el del catálogo es el último activo: la API no deja a un portal sin buscadores.
+    const last = await post({ action: 'retire', id: catalogRow.id });
+    assert.equal(last.status, 409, 'la regla «siempre queda uno» vive en el servidor, no solo en el botón'); assert.match(last.json.detail, /último buscador/);
+    assert.ok(!isInactive(catalogRow.id), 'y no se tocó su estado');
     assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'reactivate', id: row.id } })).status, 200);
     assert.ok((await call('/api/admin/apify')).json.portals.find(p => p.id === 'infojobs').recipes.some(r => r.actor === 'store-a/infojobs-pro'));
     assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: 'no-es-un-id' } })).status, 422);
@@ -824,11 +842,16 @@ await step('Apify: buscadores de repuesto desde la tienda — se validan con met
     assert.equal((await call('/api/admin/apify', { method: 'POST', body: { action: 'retire', id: row.id } })).status, 403);
     jar = savedJar;
 
-    // Tienda caída: se declara, no se presenta como «sin repuestos».
+    // Un fallo PARCIAL de la tienda (una consulta de dos) no es un error: se enseña lo encontrado y el aviso.
+    state.storeFailExact = 'infojobs';
+    const partial = await call('/api/admin/apify', { method: 'POST', body: { action: 'find_replacements', portal: 'infojobs' } });
+    assert.equal(partial.status, 200, 'una consulta respondió: no es un 502'); assert.ok(partial.json.candidates.length > 0); assert.match(partial.json.error, /HTTP 503/); assert.equal(partial.json.allFailed, false);
+    state.storeFailExact = null;
+    // Tienda caída (TODAS las consultas): se declara, no se presenta como «sin repuestos»."
     state.storeDown = true;
     const down = await call('/api/admin/apify', { method: 'POST', body: { action: 'find_replacements', portal: 'infojobs' } });
     assert.equal(down.status, 502); assert.match(down.json.detail, /tienda de Apify/);
-  } finally { state.apifyActors = savedActors; state.storeDown = false; state.storeActors = {}; }
+  } finally { state.apifyActors = savedActors; state.storeDown = false; state.storeFailExact = null; state.storeActors = {}; }
 });
 await step('privacidad: página pública con borrador visible, sin inventar datos del responsable', async () => {
   const res = await fetch(BASE + '/privacidad'); assert.equal(res.status, 200);

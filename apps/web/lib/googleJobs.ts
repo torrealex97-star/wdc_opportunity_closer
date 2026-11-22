@@ -219,7 +219,7 @@ export async function collectGoogleJobs(
     let brightConfig: BrightDataConfig | null = null;
     if (brightSecret) {
       const parsed = parseBrightDataSecret(brightSecret);
-      brightConfig = parsed?.serpZone ? parsed : (await resolveBrightDataConfig(brightSecret).catch(() => null))?.config ?? null;
+      brightConfig = parsed?.serpZone ? parsed : (await resolveBrightDataConfig(brightSecret, { useCache: false }).catch(() => null))?.config ?? null; // gasta: sin caché
       if (brightConfig && !brightConfig.serpZone) brightConfig = null;
     }
     if (!serpSecret && !brightConfig) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Sin clave guardada de SerpApi ni de Bright Data' };
