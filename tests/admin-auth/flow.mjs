@@ -766,12 +766,15 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   assert.equal((await post({ action: 'portal_daily', portal: 'indeed', on: 'si' })).status, 422);
   assert.equal((await post({ action: 'portal_daily', portal: 'indeed', on: true })).status, 200); assert.ok((await call('/api/admin/apify')).json.portals.find(p => p.id === 'indeed').daily);
   state.apifyItems = [{ id: 'z1', title: 'Closer de ventas high ticket', url: 'https://es.indeed.com/viewjob?jk=z1', company: 'Acme', location: 'Madrid' }]; // la búsqueda sí devuelve ofertas
+  // El waterfall solo lanza actores nuevos mientras falte objetivo de ofertas cualificadas: aquí el mock ya tiene más de
+  // 60 aprobadas «de hoy», así que se fija un objetivo alto para probar la cascada de repuestos, no el freno.
+  state.waterfallRow = { org_id: 'cloud-wdc', qualified_per_day: 10000, updated_by: 'dueño', updated_at: new Date().toISOString() };
   calls = state.apifyCalls.length; const cron = () => call('/api/cron/collect', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
   let k = await cron(); assert.equal(k.status, 200); const indeedActors = ['boncross/indeed-jobs', 'chuckling_hemp/indeed-jobs-scraper', 'ayeeyee/indeed-job-scraper'];
-  assert.deepEqual(k.json.apify.started.filter(x => indeedActors.includes(x.actor)).map(x => [x.actor, x.ok]), [['chuckling_hemp/indeed-jobs-scraper', true]], JSON.stringify(k.json.apify)); // A cae → B; solo UNA búsqueda de Indeed
+  assert.deepEqual(k.json.apify.started.filter(x => indeedActors.includes(x.actor)).map(x => [x.actor, x.ok]), [['chuckling_hemp/indeed-jobs-scraper', true]], JSON.stringify({ apify: k.json.apify, waterfall: k.json.waterfall })); // A cae → B; solo UNA búsqueda de Indeed
   const afterFirst = state.apifyCalls.length;
   k = await cron(); assert.equal(state.apifyCalls.length, afterFirst, 'una búsqueda diaria por portal: la segunda pasada no lanza nada');
-  state.apifyFailActors = new Set(); state.apifyItems = [];
+  state.apifyFailActors = new Set(); state.apifyItems = []; state.waterfallRow = null;
 });
 await step('Apify: buscadores de repuesto desde la tienda — se validan con metadatos públicos y solo el propietario añade, retira o reactiva', async () => {
   const savedActors = state.apifyActors; state.apifyActors = []; state.storeDown = false; state.storeFailExact = null;
@@ -960,6 +963,63 @@ await step('cualificación automática: aprueba lo claro, retira lo irrecuperabl
   assert.ok((r.json.withdrawn ?? 0) >= 1, `la base confirma ${r.json.withdrawn} retirada(s)`);
   const listed = await call('/api/admin/external?status=draft');
   assert.equal(listed.status, 200); assert.equal(typeof listed.json.auto.cap, 'number');
+});
+await step('Waterfall: el propietario fija el objetivo de ofertas cualificadas y el plan lo respeta; sin tabla cae al entorno y lo dice', async () => {
+  state.waterfallRow = null; state.waterfallMissing = false;
+  const first = await call('/api/admin/waterfall');
+  assert.equal(first.status, 200);
+  assert.equal(first.json.state.target.source, 'defecto'); assert.equal(first.json.state.target.target, 60, 'sin nada guardado, el 60 de siempre y declarado como defecto');
+  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'respaldo', 'apify', 'unlocker'], 'las etapas van por orden de coste');
+  const unlocker = first.json.stages.find(s => s.id === 'unlocker');
+  assert.equal(unlocker.automatic, false); assert.equal(unlocker.decision, 'skip'); assert.match(unlocker.why, /a mano/);
+  assert.ok(!JSON.stringify(first.json).includes('secret'), 'sin secretos');
+  for (const bad of [' ', -1, 2.5, 10001, true, 'abc', '', null]) assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: bad } })).status, 422, `no es un objetivo: ${JSON.stringify(bad)}`);
+  assert.equal(state.waterfallRow, null, 'un valor inválido no guarda nada');
+  const ok = await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: '25' } });
+  assert.equal(ok.status, 200); assert.equal(state.waterfallRow.qualified_per_day, 25); assert.ok(state.waterfallRow.updated_by);
+  const after = (await call('/api/admin/waterfall')).json.state;
+  assert.equal(after.target.target, 25); assert.equal(after.target.source, 'tabla'); assert.ok(after.target.updated_by);
+  // Cero es un objetivo válido: «no se gasta en vías de pago».
+  assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: 0 } })).status, 200);
+  const zero = await call('/api/admin/waterfall');
+  assert.equal(zero.json.state.target.target, 0); assert.equal(zero.json.state.gap, 0);
+  assert.ok(zero.json.stages.filter(s => s.automatic).every(s => s.decision === 'skip' && /cumplido/.test(s.why)), 'con objetivo 0 ninguna vía de pago se lanza');
+  // Solo el propietario cambia el objetivo; un administrador lo ve.
+  const savedJar = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
+  assert.equal((await call('/api/admin/waterfall')).status, 200);
+  assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: 99 } })).status, 403);
+  jar = {}; assert.equal((await call('/api/admin/waterfall')).status, 401);
+  jar = savedJar;
+  // Sin la tabla: sigue con el entorno/defecto, lo declara y no finge haber guardado.
+  state.waterfallMissing = true;
+  const missing = (await call('/api/admin/waterfall')).json.state.target;
+  assert.equal(missing.source, 'defecto'); assert.match(missing.error, /waterfall_settings/);
+  assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: 10 } })).status, 503);
+  state.waterfallMissing = false;
+});
+await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hueco recorre las etapas por coste', async () => {
+  const cron = () => call('/api/cron/collect', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  const spendRows = () => state.ingestRuns.filter(r => /proveedor=/.test(r.note ?? '')).length;
+  // Objetivo 0 (cumplido): ninguna vía de pago se lanza, ni una petición ni una nota de gasto.
+  state.waterfallRow = { org_id: 'cloud-wdc', qualified_per_day: 0, updated_by: 'dueño', updated_at: new Date().toISOString() };
+  const before = spendRows(), apifyCalls = state.apifyCalls.length;
+  const stopped = await cron();
+  assert.equal(stopped.status, 200);
+  assert.equal(stopped.json.waterfall.target, 0); assert.equal(stopped.json.waterfall.gap_before, 0);
+  assert.ok(stopped.json.waterfall.stages.length >= 3 && stopped.json.waterfall.stages.every(s => s.ran === false), 'ninguna etapa de pago corrió');
+  assert.ok(stopped.json.waterfall.stages.every(s => /cumplido/.test(s.why)), 'y cada una dice por qué');
+  assert.equal(stopped.json.googleJobs.skipped, true); assert.equal(stopped.json.fallback, null);
+  assert.equal(spendRows(), before, 'sin objetivo pendiente no se anota gasto');
+  assert.equal(state.apifyCalls.length, apifyCalls, 'ni se lanza un actor de Apify');
+  // Objetivo enorme: hay hueco y el cron lo declara y recorre las etapas (las que tengan clave y tope).
+  state.waterfallRow = { org_id: 'cloud-wdc', qualified_per_day: 10000, updated_by: 'dueño', updated_at: new Date().toISOString() };
+  const open = await cron();
+  assert.equal(open.status, 200);
+  assert.ok(open.json.waterfall.gap_before > 0, 'con objetivo de 10.000 hay hueco');
+  assert.ok(open.json.waterfall.stages.some(s => s.id === 'google-jobs'), 'la etapa de Google Jobs consta, corra o no');
+  assert.equal(typeof open.json.waterfall.basis, 'string');
+  assert.ok(open.json.waterfall.gap_after <= open.json.waterfall.gap_before, 'el hueco solo baja');
+  state.waterfallRow = null;
 });
 await step('logout limpia cookies y la sesión deja de valer', async () => {
   await call('/api/admin/session', { method: 'DELETE' });
