@@ -86,11 +86,38 @@ export function unwrapPayload(payload: unknown): unknown {
   if (typeof body === 'string' && body.trim()) {
     try { return JSON.parse(body); } catch { return payload; }
   }
+  // Un objeto en `body` es el resultado: se devuelve aunque no traiga `jobs` (antes solo se abría si lo traía y el
+  // diagnóstico veía el sobre —status_code, headers, body— en vez de lo que de verdad respondió Google).
+  if (body && typeof body === 'object' && !Array.isArray(body) && 'status_code' in (payload as Record<string, unknown>)) return body;
   if (body && typeof body === 'object') {
     const inner = body as Record<string, unknown>;
     if (inner.jobs !== undefined || inner.jobs_results !== undefined) return inner;
   }
   return payload;
+}
+
+/**
+ * Describe sin copiar contenido qué devolvió Bright Data, para el mensaje de «Probar»: el código que Google dio dentro
+ * del sobre, si el cuerpo es HTML, JSON (con sus campos) o está vacío, y su tamaño. Nunca incluye texto de la página.
+ */
+export function describeResponse(text: string): string {
+  const parts: string[] = [];
+  let value: unknown = null;
+  try { value = JSON.parse(text); } catch { /* no es JSON */ }
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'status_code' in (value as Record<string, unknown>)) {
+    const envelope = value as Record<string, unknown>;
+    parts.push(`Sobre de Bright Data con status_code ${String(envelope.status_code)}`);
+    const body = envelope.body;
+    if (typeof body === 'string') {
+      try { value = JSON.parse(body); } catch { value = null; text = body; }
+    } else value = body ?? null;
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) parts.push(`cuerpo JSON con campos: ${Object.keys(value as Record<string, unknown>).slice(0, 12).join(', ') || 'ninguno'}`);
+  else if (Array.isArray(value)) parts.push(`cuerpo JSON en lista (${value.length} elementos)`);
+  else if (!text.trim()) parts.push('cuerpo vacío');
+  else if (/^\s*</.test(text)) parts.push(`cuerpo HTML de ${text.length} caracteres (Bright Data no lo interpretó como JSON)`);
+  else parts.push(`cuerpo de texto de ${text.length} caracteres`);
+  return parts.join(' · ');
 }
 
 /** Zonas activas de la cuenta: `[{name, type}]` (la documentación también admite `{zones: [...]}`). */
@@ -228,7 +255,7 @@ export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }
   return fetchImpl(`${apiBase()}/request`, {
     method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(40_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'json' }),
+    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'raw' }),
   });
 }
 
@@ -370,7 +397,7 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now(), maxAttempts = BRIGHTDATA_MAX_ATTEMPTS } = options;
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
   if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
-  const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'json', fetchImpl, timeoutMs, maxAttempts);
+  const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs, maxAttempts);
   let payload: unknown;
   try {
     payload = JSON.parse(text);

@@ -3,7 +3,7 @@ import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
-import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
+import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -148,15 +148,16 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const cost = PROVIDER_METERS.brightdata.usdPerRequest;
   const recorded = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: cost, detail: 'prueba de clave' }));
   let payload: Record<string, unknown> | null = null;
+  const rawText = await response.text().catch(() => '');
   try {
-    const unwrapped = unwrapPayload(JSON.parse(await response.text()));
+    const unwrapped = unwrapPayload(JSON.parse(rawText));
     payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
   } catch { /* cuerpo sin JSON */ }
   const jobs = Array.isArray(payload?.jobs) ? payload.jobs : payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
   const failure = typeof payload?.error === 'string' && payload.error
     ? `Bright Data: ${payload.error.slice(0, 160)}`
     : !Array.isArray(jobs)
-      ? `La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]. ${payload ? `Campos que sí trae: ${Object.keys(payload).slice(0, 12).join(', ') || 'ninguno'}.` : 'El cuerpo no era un objeto JSON.'} Comprueba que la zona sea SERP API y que Google muestre el panel de empleos para esa búsqueda.`
+      ? `La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]. Lo que llegó: ${describeResponse(rawText)}. Comprueba que la zona sea SERP API y que Google muestre el panel de empleos para esa búsqueda.`
       : null;
   if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
   return failure ? { ok: false, detail: failure } : { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` };

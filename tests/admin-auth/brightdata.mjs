@@ -43,7 +43,7 @@ try {
     const body = JSON.parse(calls[0].init.body);
     assert.deepEqual(Object.keys(body).sort(), ['format', 'url', 'zone']);
     assert.equal(body.zone, 'serp_zone');
-    assert.equal(body.format, 'json');
+    assert.equal(body.format, 'raw', 'raw + brd_json=1: el JSON de Google llega directo, sin el sobre {status_code, headers, body}');
     assert.match(body.url, /[?&]q=closer(?:\+|%20)de(?:\+|%20)ventas(?:&|$)/);
     assert.match(body.url, /ibp=htl%3Bjobs/, 'Google Jobs se pide con ibp=htl%3Bjobs');
     assert.match(body.url, /brd_json=1/, 'brd_json=1 pide el JSON interpretado a Bright Data');
