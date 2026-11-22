@@ -357,6 +357,25 @@ try {
     assert.equal(offers.total, 1, 'la huella impide duplicar la misma oferta');
   });
 
+  await step('Fuentes: «Probar ruta» con 0 resultados en la primera vía no se da por buena: lo dice y no finge que recogió', async () => {
+    state.brightEmpty = 'infojobs';
+    try {
+      await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+      await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+      const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
+      await card.waitFor();
+      const button = card.getByRole('button', { name: 'Probar ruta' });
+      await page.waitForFunction(element => !element.disabled, await button.elementHandle(), { timeout: 15000 }).catch(() => undefined);
+      assert.equal(await button.isEnabled(), true, 'con Bright Data listo, la prueba debe poder lanzarse');
+      await button.click();
+      await card.getByText(/Ninguna vía lista recogió ofertas ahora/).waitFor({ timeout: 20000 });
+      const text = await card.innerText();
+      assert.match(text, /0 guardada\(s\)/, 'dice cuántas guardó');
+      assert.match(text, /Sin ofertas nuevas/, 'no lo presenta como éxito');
+      assert.match(text, /Coste: 0,0015 USD/, 'y declara lo que costó el intento');
+    } finally { state.brightEmpty = undefined; }
+  });
+
   await step('sin errores de consola ni respuestas 4xx/5xx en los dos flujos', async () => {
     assert.deepEqual(consoleErrors, []);
     assert.deepEqual(serverErrors, []);

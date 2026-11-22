@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
+import { authenticate, originBlocked, publicBaseUrl, withCookies } from '../../../../lib/adminAuth';
 import { collectAll, type ApiProvider } from '../../../../lib/collectors';
 import { getSecret, listConnections } from '../../../../lib/integrations';
 import { ingest, recordSpend, routeOrders, runsThisMonth, setSourceRouteOrder } from '../../../../lib/external';
@@ -10,6 +10,11 @@ import { readCaps } from '../../../../lib/providerBudgetStore';
 import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
 import { JSearchError, jsearchJobs } from '../../../../lib/providers/jsearch';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
+import { PORTALS } from '../../../../lib/apifyCatalog';
+import { monthSpent } from '../../../../lib/apify';
+import { searchPortal } from '../../../../lib/apifyAuto';
+import { readBudget } from '../../../../lib/paidBudget';
+import { ENGINE_STATUS_TEXT, engineBase, engineGet } from '../../../../lib/engineHealth';
 import { routeReadiness, routesForCatalog, type RouteState } from '../../../../lib/sourceRoutes';
 import sourceCatalog from '../../../../lib/sourceCatalog.json';
 
@@ -59,7 +64,8 @@ async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap
     const used = spent(provider);
     return used === null ? null : Math.max(0, caps[provider].usd - used);
   };
-  const [connections, brightdataSecret] = await Promise.all([listConnections(), getSecret('brightdata')]);
+  const [connections, brightdataSecret, apifyLimit, apifySpent] = await Promise.all([listConnections(), getSecret('brightdata'), readBudget().catch(() => null), monthSpent().catch(() => null)]);
+  const apifyLeft = apifyLimit && apifySpent !== null ? Math.max(0, apifyLimit.usd - apifySpent) : null;
   const keys = new Set((connections ?? []).map(row => row.provider));
   // Si la clave se guardó sola (el formato que da Bright Data), las zonas se descubren en la cuenta, gratis;
   // sin esa consulta la vía Unlocker parecería no estar lista teniendo su zona. `resolveBrightDataConfig`
@@ -75,8 +81,9 @@ async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap
       serpapi: remaining('serpapi'),
       zenrows: remaining('zenrows'),
       scrapingbee: remaining('scrapingbee'),
-      // Apify usa su tabla de presupuesto, no este entorno: aquí no se inventa un saldo.
-      apify: null,
+      // Apify usa su propio límite mensual y su gasto registrado: el saldo es la diferencia, y `null` si no se pudo leer
+      // alguno de los dos (un hueco no es un saldo).
+      apify: apifyLeft,
     },
     // Sin la segunda zona, la ruta Unlocker no está lista aunque la clave SERP exista.
     unlockerReady: Boolean(brightdataConfig?.unlockerZone),
@@ -142,6 +149,37 @@ export async function POST(request: NextRequest) {
   const state = await stateOf(rows, caps);
   const readiness = routeReadiness(route, state);
   if (!readiness.ok) return Response.json({ detail: readiness.reason }, { status: 409 });
+
+  // Motor: recoge él solo en cada pasada y forzar una desde aquí gastó antes su cuota de escrituras (octubre de 2026), así que la
+  // prueba LEE su estado real para esta fuente. Sin ofertas en su catálogo no se da por buena: el panel pasa a la vía siguiente.
+  if (route.provider === 'engine') {
+    const base = engineBase();
+    if (!base) return Response.json({ detail: 'No se puede leer el motor: falta CAREER_ENGINE_URL en el servidor.' }, { status: 409 });
+    const funnel = await engineGet<{ sources?: Array<Record<string, unknown>> }>(`${base}/api/funnel`, { timeoutMs: 12_000 });
+    if (!funnel.ok) return Response.json({ detail: `El motor no responde: ${ENGINE_STATUS_TEXT[funnel.reason]}` }, { status: 502 });
+    const found = Array.isArray(funnel.data?.sources) ? funnel.data!.sources!.find(item => item.code === entry.code) : undefined;
+    const catalog = Number(found?.catalogo ?? 0) || 0;
+    const fetched = typeof found?.revisadas === 'number' ? found.revisadas : null;
+    const runStatus = typeof found?.run_status === 'string' ? found.run_status : null;
+    if (!found || (catalog === 0 && !fetched)) {
+      const why = found ? `su última recogida quedó «${runStatus ?? 'sin estado'}»${found.fuente ? ` (${String(found.fuente).slice(0, 120)})` : ''}` : 'no aparece en su última recogida';
+      return Response.json({ detail: `El motor no tiene ofertas de ${entry.name}: ${why}.` }, { status: 409 });
+    }
+    return reply(auth!, {
+      ok: true, accepted: 0, engine: { catalog, fetched, run_status: runStatus },
+      note: `Motor: ${catalog.toLocaleString('es')} oferta(s) de ${entry.name} en su catálogo; última recogida: ${fetched ?? '—'} revisada(s)${runStatus ? ` (${runStatus})` : ''}. La recoge él solo en cada pasada; esta prueba lee su estado real y no lanza otra para no gastar su cuota de escrituras.`,
+    });
+  }
+
+  // Apify: lanza la búsqueda de prueba del portal (10 ofertas como máximo, tope de gasto de la prueba). Los resultados llegan
+  // después y se recogen solos; la respuesta lo dice, no finge que ya hay ofertas.
+  if (route.provider === 'apify') {
+    const portal = PORTALS.find(item => item.source === `apify-${entry.code}` || item.id === entry.code);
+    if (!portal) return Response.json({ detail: 'Esta fuente no tiene un portal de Apify auditado.' }, { status: 422 });
+    const result = await searchPortal(portal, { by: auth!.admin.email, publicBase: publicBaseUrl(request), test: true });
+    if (!result.ok) return Response.json({ detail: result.error }, { status: result.busy ? 409 : 502 });
+    return reply(auth!, { ok: true, accepted: 0, async: true, note: `Búsqueda de prueba lanzada en Apify con «${result.recipe}»${result.fallback ? ' (el primer buscador falló y entró un repuesto)' : ''}: 10 ofertas como máximo y tope de 0,50 US$. Los resultados llegan en unos minutos y se guardan solos; el coste real aparece al terminar.` });
+  }
 
   // Gratis: no hay llamada que probar; se declara en vez de gastar una petición inútil.
   if (route.cost === 'free' && route.provider !== 'jobspy') {

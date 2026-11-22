@@ -1034,6 +1034,30 @@ await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hue
   assert.ok(open.json.waterfall.gap_after <= open.json.waterfall.gap_before, 'el hueco solo baja');
   state.waterfallRow = null;
 });
+await step('Probar ruta (motor): lee el estado real de la fuente; sin ofertas o con la recogida caída lo dice para pasar a la siguiente vía', async () => {
+  const test = (source, route) => call('/api/admin/source-routes', { method: 'POST', body: { action: 'test', source, route } });
+  const ok = await test('jobtoday', 'jobtoday:engine');
+  assert.equal(ok.status, 200); assert.equal(ok.json.engine.catalog, 10); assert.equal(ok.json.engine.fetched, 16); assert.equal(ok.json.engine.run_status, 'completed');
+  assert.match(ok.json.note, /10 oferta\(s\)/); assert.match(ok.json.note, /no lanza otra/);
+  const failed = await test('ats-ashby-pennylane', 'ats-ashby-pennylane:engine');
+  assert.equal(failed.status, 409); assert.match(failed.json.detail, /no tiene ofertas de Pennylane/); assert.match(failed.json.detail, /failed/); assert.match(failed.json.detail, /HTTP 401/);
+  const absent = await test('himalayas', 'himalayas:engine');
+  assert.equal(absent.status, 409); assert.match(absent.json.detail, /no aparece en su última recogida/);
+  const savedJar = jar; jar = {}; assert.equal((await test('jobtoday', 'jobtoday:engine')).status, 401); jar = savedJar;
+});
+await step('Probar ruta (Apify): lanza la búsqueda de prueba con 10 ofertas y tope, y dice que los resultados llegan después', async () => {
+  state.apifyRuns = []; state.apifyActors = [];
+  const calls = state.apifyCalls.length;
+  const r = await call('/api/admin/source-routes', { method: 'POST', body: { action: 'test', source: 'infojobs', route: 'infojobs:apify' } });
+  assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.async, true); assert.equal(r.json.accepted, 0);
+  assert.match(r.json.note, /10 ofertas como máximo/); assert.match(r.json.note, /llegan en unos minutos/);
+  assert.equal(state.apifyCalls.length, calls + 1, 'se lanzó una ejecución de Apify');
+  assert.equal(state.apifyCalls.at(-1).query.maxItems, '10', 'prueba de 10 ofertas, no el máximo del actor');
+  assert.equal(state.apifyRuns[0].status, 'RUNNING'); assert.equal(state.apifyRuns[0].started_by, 'owner@test.dev');
+  const again = await call('/api/admin/source-routes', { method: 'POST', body: { action: 'test', source: 'infojobs', route: 'infojobs:apify' } });
+  assert.equal(again.status, 409, 'con una ejecución en curso no se lanza otra'); assert.match(again.json.detail, /Ya hay una ejecuci/);
+  state.apifyRuns = []; state.apifyActors = [];
+});
 await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000 y un recuento caído es 503, no ceros', async () => {
   const savedJar = jar; jar = {};
   assert.equal((await call('/api/admin/source-sample')).status, 401);

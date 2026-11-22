@@ -102,6 +102,8 @@ export function startMocks({ authPort, enginePort }) {
         { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
         { title: 'Setter de ventas', company: 'Beta BD', location: 'Barcelona, España', source: 'LinkedIn', description: 'Agenda de citas cualificadas', link: 'https://www.linkedin.com/jobs/view/bd-2', tags: [], posted_at: 'hace 1 día' },
       ] } };
+      // Consulta sin resultados (state.brightEmpty = texto que debe contener la URL): Google sin panel de empleos ni enlaces.
+      if (state.brightEmpty && String(body.url).includes(state.brightEmpty)) { serpResult.jobs.items = []; }
       if (url.searchParams.get('async') === 'true') {
         const id = `mockresp${(state.brightAsync ??= new Map()).size + 1}`;
         state.brightAsync.set(id, serpResult);

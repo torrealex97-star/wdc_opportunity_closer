@@ -29,6 +29,8 @@ node --experimental-strip-types tests/admin-auth/csv.mjs
 node --experimental-strip-types tests/admin-auth/salary.mjs
 # Comisión, OTE y ticket medio por reglas fijas, con la frase literal del anuncio.
 node --experimental-strip-types tests/admin-auth/offerpay.mjs
+# «Probar ruta» recoge de verdad: qué cuenta como recogida y cuántas vías se prueban.
+node --experimental-strip-types tests/admin-auth/probecascade.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/score.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/aireview.mjs
 # Guardián SSRF sin APIs de Node: allowlist medida, IP literales y redirecciones revalidadas salto a salto.
