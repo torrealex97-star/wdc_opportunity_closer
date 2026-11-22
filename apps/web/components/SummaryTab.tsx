@@ -32,6 +32,29 @@ async function get<T>(url: string, init?: RequestInit): Promise<T> {
 }
 const search = (role: string | null) => get<Student>('/api/backend/opportunities/search', { method: 'POST', body: JSON.stringify({ role, market: 'ES', days: 10, include_bilingual: false, starred_only: false, include_extra_roles: true }) });
 
+// Objetivo del día y dinero del mes: lo que decide si hay que tocar algo en APIs. Dos lecturas independientes; si una
+// falla, esa cifra es «—» con su causa, nunca 0 (y el resto del resumen sigue igual).
+type Money = { qualified: number | null; target: number | null; gap: number | null; spent: number | null; cap: number | null; why: string };
+async function readMoney(): Promise<Money> {
+  const [wf, sp] = await Promise.all([
+    get<{ state: { qualified_today: number | null; gap: number | null; target: { target: number } } }>('/api/admin/waterfall').catch((e: Error) => e),
+    get<{ spent_readable: boolean; providers: Array<{ spent_usd: number | null; cap_usd: number }>; apify: { spent_usd: number | null; cap_usd: number } }>('/api/admin/spend').catch((e: Error) => e),
+  ]);
+  const why: string[] = [];
+  let qualified: number | null = null, target: number | null = null, gap: number | null = null, spent: number | null = null, cap: number | null = null;
+  if (wf instanceof Error) why.push(`objetivo: ${wf.message}`);
+  else { qualified = wf.state.qualified_today; target = wf.state.target.target; gap = wf.state.gap; }
+  if (sp instanceof Error) why.push(`gasto: ${sp.message}`);
+  else {
+    const all = [...sp.providers, sp.apify];
+    cap = all.reduce((sum, row) => sum + row.cap_usd, 0);
+    spent = all.every(row => row.spent_usd !== null) ? all.reduce((sum, row) => sum + (row.spent_usd ?? 0), 0) : null;
+    if (spent === null) why.push('gasto: algún proveedor no se pudo leer, no se suma un total parcial');
+  }
+  return { qualified, target, gap, spent, cap, why: why.join(' · ') };
+}
+const usd = (value: number) => new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+
 export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLost: () => void }) {
   const [closers, setClosers] = useState<number | null>(null);
   const [allEs, setAllEs] = useState<number | null>(null);
@@ -40,8 +63,10 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
   const [overview, setOverview] = useState<Overview | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
+  const [money, setMoney] = useState<Money | null>(null);
   const load = useCallback(() => {
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setMoney(null);
+    void readMoney().then(setMoney);
     // Cada consulta es independiente: si una falla, el resto del resumen se muestra igual.
     const errors: string[] = [];
     const safe = <T,>(p: Promise<T>) => p.catch((err: Error & { engine?: boolean }) => { if (!err.engine) errors.push(err.message); return null; });
@@ -116,6 +141,10 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
       <article className="source-card"><span className="eyebrow">POR CLASIFICAR (AUTOMÁTICO)</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{show(drafts)}</strong>reglas + IA, sin ti</span></div>
         <p className="card-meta">{busy ? 'Leyendo las dos colas…' : `${engineDrafts ?? '—'} del motor · ${extDrafts ?? '—'} de fuentes externas${gap ? ` · ${gap}` : ''}`}</p></article>
       <article className="source-card"><span className="eyebrow">LISTAS PARA APROBAR (CUALQUIER MERCADO)</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{overview ? (engineKnown ? poolClosers : '—') : '…'}</strong>de perfil closer que ya cumplen las reglas</span></div></article>
+      <article className="source-card" data-testid="summary-money"><span className="eyebrow">OBJETIVO DEL DÍA (24 H)</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{money === null ? '…' : money.qualified === null ? '—' : money.qualified}</strong>{money?.target != null ? `cualificadas de ${money.target}` : 'cualificadas'}</span></div>
+        <p className="card-meta">{money === null ? 'Leyendo el objetivo y el gasto…' : money.gap === null ? 'Hueco desconocido: las vías de pago no se lanzan.' : money.gap > 0 ? `Faltan ${money.gap}: el cron seguirá con las vías de pago.` : 'Objetivo cubierto: no se gasta más hoy.'}</p>
+        <p className="card-meta">Gasto del mes: {money === null ? '…' : money.spent === null ? '—' : `${usd(money.spent)}${money.cap !== null ? ` de ${usd(money.cap)} de topes` : ''}`}{money?.why ? ` · ${money.why}` : ''}</p>
+        <button type="button" onClick={() => go('apis')}>Ver APIs y topes</button></article>
       <article className="source-card"><span className="eyebrow">FUENTES CON FALLO</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{overview ? (engineKnown ? failed.length : '—') : '…'}</strong>{!overview || engineKnown ? `de ${overview?.sources.length ?? '…'} en el motor cloud` : 'sin datos del motor cloud'}</span></div></article>
     </div>
     <h2 className="section-title">Qué hacer ahora</h2>
