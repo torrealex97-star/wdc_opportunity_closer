@@ -1,3 +1,13 @@
+## Portales LatAm: los anuncios que se descartaban por el TLD del país (B2) — 2026-11-22
+
+- **Petición del propietario**: paquete **B2** de [`docs/plans/OFERTAS_CLOSER_MEJORAS.md`](plans/OFERTAS_CLOSER_MEJORAS.md): comprobar el patrón de URL de una oferta concreta de Computrabajo, OCC y Bumerán contra respuestas reales.
+- **Hallazgo** (*verified* con URLs reales el 2026-11-22): los patrones del respaldo solo aceptaban la forma española.
+  - **Computrabajo** publica en subdominio de país (`co.computrabajo.com/ofertas-de-trabajo/…`) **o** con TLD en el dominio (`www.computrabajo.com.mx/ofertas-de-trabajo/…`); el patrón exigía `computrabajo.com/` y descartaba los anuncios de México.
+  - **Bumerán** usa `.com.ar`, `.com.mx` y `.com.pe` (`/empleos/<slug>-<id>.html`); el patrón exigía `bumeran.com/` y descartaba **todas** sus ofertas por país.
+  - **OCC** usa `/empleo/oferta/<id>-<slug>/`; el patrón aceptaba cualquier `/empleo/`, incluidos listados.
+- **Cambios** (*tested*): `jobPortals.ts` acepta el TLD opcional de Computrabajo y de Bumerán, y en OCC exige la ficha (`/empleo/oferta/`). El fixture de `fallback.mjs` para OCC usaba `/empleo/closer-2`, que no es una URL real: se sustituye por una ficha con la forma verificada, y el paso deja de pasar por accidente.
+- **Evidencia** (*tested*, sin red ni claves): `tests/admin-auth/fallback.mjs` **13/13** con un paso nuevo que prueba las URLs reales de los tres portales por país y rechaza portadas y listados; `npx tsc -p apps/web/tsconfig.json --noEmit` 0 errores.
+- ***limits***: **no se ha medido cuántas ofertas da cada portal por Bright Data ni por SerpApi**: no hay clave real y una llamada de pago exige orden del dueño. Tampoco se leyó OCC por HTTP directo (responde **403**), así que su forma se comprobó en resultados indexados reales, no con una descarga propia. El catálogo sigue diciendo **«sin proveedor verificado»** para estas fuentes: un patrón de URL correcto no es un conector validado. Se sube en su rama con PR.
 ## Páginas de empleo: informe real de lo que se deja leer sin pagar, y la ruta del motor que no existe (C1) — 2026-11-22
 
 - **Petición del propietario**: paquete **C1** de [`docs/plans/OFERTAS_CLOSER_MEJORAS.md`](plans/OFERTAS_CLOSER_MEJORAS.md): probar con internet las páginas de empleo que el motor ya vigila y dejar el informe en `docs/evidence/`.
