@@ -1,7 +1,7 @@
 import { getSecret } from './integrations';
 import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './external';
 import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
-import { loadMeter, type Meter } from './providerCaps';
+import { loadMeter, PROVIDER_NAME, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
 import { BrightDataError, brightAsyncEnabled, brightDataSource, googleJobsUrl, parseBrightDataSecret, parseSerpJobs, resolveBrightDataConfig, serpCollectAsync, serpJobs, serpSubmitAsync, type BrightDataConfig } from './providers/brightdata';
 import { markDone, rememberSubmit } from './brightdataAsync';
@@ -304,12 +304,13 @@ export async function collectGoogleJobs(
     // Orden por coste de la cascada de cada dork: Bright Data (0,0015) → JSearch (0,0025) → SerpApi (0,025).
     const CHAIN = ['brightdata', 'jsearch', 'serpapi'] as const;
     type ChainProvider = typeof CHAIN[number];
-    const PROVIDER_LABEL: Record<ChainProvider, string> = { brightdata: 'Bright Data', jsearch: 'JSearch', serpapi: 'SerpApi' };
+    const PROVIDER_LABEL: Record<ChainProvider, string> = PROVIDER_NAME;
     let brightNoTime = 0;
     const usable = (provider: ChainProvider) => {
       const available = provider === 'brightdata' ? Boolean(brightFetch) : provider === 'jsearch' ? Boolean(jsearchFetch) : Boolean(serpFetch);
       // Bright Data tarda 10–25 s: sin margen en el tramo se salta (el corte podría cobrarse) y el dork baja de escalón.
-      if (provider === 'brightdata' && available && timeLeft(deadline) < brightMinMs()) return false;
+      // En modo asíncrono encargar es inmediato: el margen solo hace falta en síncrono.
+      if (provider === 'brightdata' && available && !brightAsyncEnabled() && timeLeft(deadline) < brightMinMs()) return false;
       // Un 429 de JSearch ya visto en esta pasada lo retira para el resto: no se insiste contra una cuota que
       // acaba de decir que no, y el dork baja a SerpApi si su tope lo permite.
       if (provider === 'jsearch' && jsearchLimits > 0) return false;
@@ -319,7 +320,7 @@ export async function collectGoogleJobs(
     // cortó en el tercero). El proveedor de cada dork se decide ANTES de lanzar para que el tope valga también
     // para las búsquedas simultáneas; si el primero falla, ese dork baja al siguiente escalón si su tope lo permite.
     const plan: Array<{ dork: Dork; first: ChainProvider | null }> = dorks.map(dork => {
-      if (brightFetch && meter.check('brightdata').ok && timeLeft(deadline) < brightMinMs()) brightNoTime++;
+      if (brightFetch && !brightAsyncEnabled() && meter.check('brightdata').ok && timeLeft(deadline) < brightMinMs()) brightNoTime++;
       const first = CHAIN.find(provider => usable(provider)) ?? null;
       if (first === null) {
         const capped = brightFetch ? 'brightdata' : jsearchFetch ? 'jsearch' : 'serpapi';
@@ -330,7 +331,7 @@ export async function collectGoogleJobs(
       return { dork, first };
     });
     const skippedBudget = plan.filter(item => item.first === null).length;
-    if (brightNoTime) warnings.push(`Bright Data omitido en ${brightNoTime} búsqueda(s): necesita ~${Math.round(brightMinMs() / 1000)} s y el tramo tenía ${Math.round(timeLeft(deadline) / 1000)} s; se usó SerpApi si estaba disponible.`);
+    if (brightNoTime) warnings.push(`Bright Data omitido en ${brightNoTime} búsqueda(s): necesita ~${Math.round(brightMinMs() / 1000)} s y el tramo tenía ${Math.round(timeLeft(deadline) / 1000)} s; se usó el siguiente escalón (JSearch o SerpApi) si estaba disponible.`);
     const settled = await Promise.allSettled(plan.map(async ({ dork, first }) => {
       if (first === null) return [] as Candidate[];
       const chain = CHAIN.slice(CHAIN.indexOf(first));
@@ -382,6 +383,8 @@ export async function collectGoogleJobs(
       if (!ok) spendUnrecorded = true;
     }
     if (asyncTally.unrecorded) spendUnrecorded = true;
+    // Lo encargado que aún procesa no es «0 ofertas»: se dice, y se recoge gratis en la siguiente pasada.
+    if (asyncTally.pending) warnings.push(`${asyncTally.pending} búsqueda(s) de Bright Data encargada(s) aún en proceso: se recogen en la siguiente pasada, sin volver a pagar.`);
     const common = { searches, cost_usd: cost, by_provider: used, ...(asyncTally.submitted ? { brightdata_async: { submitted: asyncTally.submitted, pending: asyncTally.pending } } : {}), ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
     if (!all.length && skippedBudget === plan.length) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: `Sin presupuesto: ${blocked[0] ?? 'tope mensual agotado'}`, searches: 0, cost_usd: 0, skipped_budget: skippedBudget };

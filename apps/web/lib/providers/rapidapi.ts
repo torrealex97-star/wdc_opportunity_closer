@@ -77,7 +77,8 @@ export async function rapidApiJobs(key: string, api: RapidApiJobApi, query: stri
   if (response.status === 403) throw new RapidApiError(`${api.label}: sin suscripción en RapidAPI (HTTP 403). Suscríbete a esta API en rapidapi.com o se omite.`, 403);
   if (response.status === 401) throw new RapidApiError(`${api.label}: RapidAPI rechazó la clave (HTTP 401).`, 401);
   if (response.status === 429) throw new RapidApiError(`${api.label}: cuota del plan de RapidAPI agotada (HTTP 429).`, 429);
-  if (!response.ok) throw new RapidApiError(`${api.label} respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, response.status < 500);
+  // 404 = ruta que la API ya no tiene: lo responde la API/pasarela sin servir datos y no se trata como cobrado.
+  if (!response.ok) throw new RapidApiError(`${api.label} respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, response.status < 500 && response.status !== 404);
   let payload: unknown;
   try { payload = JSON.parse(text); } catch { throw new RapidApiError(`${api.label} devolvió algo que no es JSON.`, 200, true); }
   const record = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {};

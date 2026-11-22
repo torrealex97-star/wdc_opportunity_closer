@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
   const rapidapi = !canSpend()
     ? (stages.push({ id: 'rapidapi', ran: false, why: noSpendWhy() }), null)
     : budget.remaining() >= MIN_STEP_MS
-      ? await collectRapidApi('cron', budget.deadline(8_000), await sharedMeter()).catch(failed('rapidapi', null))
+      ? await sharedMeter().then(meter => collectRapidApi('cron', budget.deadline(8_000), meter)).catch(failed('rapidapi', null))
       : (budget.cut('rapidapi'), null);
   if (rapidapi?.truncated) budget.cut('rapidapi');
   if (rapidapi) {

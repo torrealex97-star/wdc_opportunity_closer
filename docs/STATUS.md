@@ -1,3 +1,15 @@
+## Revisión de cierre: #122 y #123 integradas con `main`, y 6 hallazgos del code review corregidos — 2026-11-22
+
+- **Ramas** (*inspected*): solo quedaban abiertas #122 (comentario y nota del cobro de JSearch) y #123 (cascada Bright Data → JSearch → SerpApi en el cron), del agente Codebuff, sobre un `main` antiguo. Se fusionó `main` en cada una sin reescribir su historia. En #123 se conservó su cadena y se le añadieron el modo asíncrono, el margen y el plazo de Bright Data de `main` (`googlejobs.mjs` 37/37). Sus fichas pasan al archivo de relevos.
+- **Code review** de todo lo de hoy (*inspected*, 6 hallazgos, todos corregidos y *tested*):
+  - En modo asíncrono Bright Data se saltaba con menos de 15 s aunque encargar es inmediato, y el dork iba a vías 2–16 veces más caras. Ahora el margen solo aplica en síncrono.
+  - Lo encargado y aún pendiente se declara en un aviso; no pasa por «0 ofertas».
+  - La etapa RapidAPI del cron ya no puede tumbar la pasada si falla la lectura del medidor.
+  - El aviso de Bright Data omitido nombra el siguiente escalón real (JSearch o SerpApi).
+  - Un 404 de RapidAPI (ruta inexistente) no se anota como gasto.
+  - Los nombres de proveedor de la cascada salen de `PROVIDER_NAME` (un solo sitio).
+- **Pruebas**: `googlejobs.mjs` 38/38 y `rapidapi.mjs` 9/9, con casos nuevos para el modo asíncrono con poco tiempo, el aviso de pendientes y el 404. Suite completa en verde.
+
 ## El cron de Google Jobs gasta primero JSearch: 7 dorks a 0,0025 USD con su tope y su 429 — 2026-11-22
 
 - **Petición del propietario**: pasar la recogida de los 7 dorks del cron a JSearch, con su tope y su manejo del 429, con prueba, si el cambio era acotado.

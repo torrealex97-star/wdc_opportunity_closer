@@ -472,13 +472,22 @@ await step('un 429 de JSearch sin SerpApi no se presenta como éxito ni se cobra
   assert.equal(saved.length, 0);
 });
 
-await step('cascada: con poco tiempo en el tramo, Bright Data no se llama (se cortaría y puede cobrarse) y SerpApi cubre', async () => {
-  brightKey = true;
+await step('síncrono: con poco tiempo en el tramo, Bright Data no se llama (se cortaría y puede cobrarse) y SerpApi cubre', async () => {
+  brightKey = true; process.env.BRIGHTDATA_ASYNC = '0';
   const out = await collectGoogleJobs('test', Date.now() + 8_000);
+  delete process.env.BRIGHTDATA_ASYNC;
   assert.equal(brightCalls.length, 0, 'sin ~15 s no se lanza Bright Data');
   assert.equal(searches.length, DEFAULT_MAX_DORKS, 'SerpApi cubre todos los dorks');
   assert.equal(out.by_provider.brightdata, undefined, 'no se reserva gasto de Bright Data');
   assert.ok((out.warnings ?? []).some(w => /Bright Data omitido/.test(w)), 'se dice por qué no se usó Bright Data');
+});
+
+await step('asíncrono: con poco tiempo Bright Data SÍ se usa (encargar es inmediato) y no se paga el escalón caro', async () => {
+  brightKey = true;
+  const out = await collectGoogleJobs('test', Date.now() + 8_000);
+  assert.equal(brightCalls.length, DEFAULT_MAX_DORKS, 'un encargo por dork aunque queden 8 s');
+  assert.equal(searches.length, 0, 'SerpApi no se toca');
+  assert.ok(!(out.warnings ?? []).some(w => /Bright Data omitido/.test(w)));
 });
 
 await step('cascada: Bright Data con `jobs` como lista directa también se lee', async () => {
@@ -496,6 +505,7 @@ await step('asíncrono: si Bright Data aún procesa, no es «0 ofertas» ni se p
   assert.equal(searches.length, 0, 'SerpApi no se toca: el resultado llegará en la siguiente pasada');
   assert.equal(out.brightdata_async.submitted, DEFAULT_MAX_DORKS);
   assert.equal(out.brightdata_async.pending, DEFAULT_MAX_DORKS);
+  assert.ok((out.warnings ?? []).some(w => /aún en proceso/.test(w)), 'lo pendiente se dice, no es «0 ofertas»');
   const spendRows = runs.filter(r => /proveedor=brightdata/.test(r.note ?? ''));
   assert.equal(spendRows.length, DEFAULT_MAX_DORKS, 'una fila de gasto por encargo, sin duplicar en la nota agregada');
   assert.ok(spendRows.every(r => r.via === 'async' && /async_id=resp\d+x/.test(r.note)), 'cada encargo guarda su async_id');
