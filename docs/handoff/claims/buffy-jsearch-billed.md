@@ -2,7 +2,7 @@
 agent: buffy
 status: validated
 branch: fix/jsearch-billed-worstcase
-pr:
+pr: 122
 touches: apps/web/app/api/admin/source-routes/route.ts
 date: 2026-11-22
 ---
