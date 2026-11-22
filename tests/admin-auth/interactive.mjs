@@ -292,6 +292,13 @@ try {
     await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
+    // El orden guardado llega con el resumen, que se pide después de pintar la tarjeta: se espera a verlo en vez de leer a ciegas
+    // (leerlo justo tras `card.waitFor()` era una carrera que solo fallaba con el resumen algo lento).
+    await page.waitForFunction(() => {
+      const found = [...document.querySelectorAll('article.source-route-card')].find(element => element.textContent?.includes('InfoJobs'));
+      const text = found?.querySelector('ol.route-list')?.textContent ?? '';
+      return text.indexOf('SerpApi') >= 0 && text.indexOf('SerpApi') < text.indexOf('API oficial');
+    }, undefined, { timeout: 15000 }).catch(() => undefined);
     const routeList = await card.locator('ol.route-list').first().innerText();
     assert.ok(routeList.indexOf('SerpApi') >= 0 && routeList.indexOf('SerpApi') < routeList.indexOf('API oficial'), 'el panel enseña el orden guardado');
     const reset = await page.evaluate(async () => {
