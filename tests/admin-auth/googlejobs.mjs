@@ -15,6 +15,10 @@ let brightKey = false;      // ¿hay clave de Bright Data guardada?
 let brightMode = 'ok';      // ok | html | error
 let brightCalls = [];       // peticiones a Bright Data de la última recogida
 let capRow = null;          // tope guardado en provider_budget (null = sin fila: manda el entorno)
+const asyncStore = new Map(); // encargos asíncronos de Bright Data simulados: id → respuesta
+let brightCollects = [];      // recogidas (/serp/get_result) de la última recogida
+let asyncPending = false;     // Bright Data aún procesa los encargos (202)
+let brightAsyncOff = false;   // la zona no tiene activado el modo asíncrono (sin x-response-id)
 
 const job = (id, extra = {}) => ({
   job_id: id,
@@ -53,13 +57,36 @@ const server = http.createServer(async (req, res) => {
     return send(200, { jobs_results: rows });
   }
   if (url.pathname === '/request' && req.method === 'POST') {
+    const reply = (code, data) => [code, 'application/json', JSON.stringify(data)];
+    const compute = () => {
     const payload = JSON.parse(body || '{}');
     brightCalls.push(payload);
-    if (brightMode === 'error') return send(401, { error: 'invalid api key' });
-    if (brightMode === 'nopanel') return send(200, { organic: [] });
-    if (brightMode === 'list') return send(200, { jobs: [{ title: 'Closer lista', company: 'Acme L', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas', link: `https://www.infojobs.net/oferta/bl-${brightCalls.length}` }] });
-    if (brightMode === 'html' || !String(payload.url ?? '').includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>Google</html>'); }
-    return send(200, { jobs: { items: [{ title: 'Closer BD', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas por videollamada', link: `https://www.infojobs.net/oferta/bd-${brightCalls.length}`, tags: [] }] } });
+    if (brightMode === 'error') return reply(401, { error: 'invalid api key' });
+    if (brightMode === 'nopanel') return reply(200, { organic: [] });
+    if (brightMode === 'list') return reply(200, { jobs: [{ title: 'Closer lista', company: 'Acme L', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas', link: `https://www.infojobs.net/oferta/bl-${brightCalls.length}` }] });
+    if (brightMode === 'html' || !String(payload.url ?? '').includes('brd_json=1')) return [200, 'text/html', '<html>Google</html>'];
+    return reply(200, { jobs: { items: [{ title: 'Closer BD', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas por videollamada', link: `https://www.infojobs.net/oferta/bd-${brightCalls.length}`, tags: [] }] } });
+    };
+    const [code, ctype, text] = compute();
+    // Modo asíncrono: Bright Data responde enseguida con `x-response-id` (sin el resultado) si la petición es válida.
+    if (url.searchParams.get('async') === '1') {
+      if (code === 401) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end(text); }
+      // Zona sin modo asíncrono: Bright Data responde en síncrono, sin x-response-id.
+      if (brightAsyncOff) { res.writeHead(code, { 'content-type': ctype }); return res.end(text); }
+      const id = `resp${asyncStore.size + 1}x`;
+      asyncStore.set(id, [code, ctype, text]);
+      res.writeHead(200, { 'content-type': 'application/json', 'x-response-id': id });
+      return res.end(JSON.stringify({ response_id: id }));
+    }
+    res.writeHead(code, { 'content-type': ctype }); return res.end(text);
+  }
+  if (url.pathname === '/serp/get_result') {
+    const id = url.searchParams.get('response_id');
+    brightCollects.push(id);
+    if (asyncPending) { res.writeHead(202, { 'content-type': 'text/plain' }); return res.end('Request is pending'); }
+    const stored = asyncStore.get(id);
+    if (!stored) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('Result not found'); }
+    res.writeHead(stored[0], { 'content-type': stored[1] }); return res.end(stored[2]);
   }
   if (url.pathname === '/rest/v1/integration_connections') {
     const wanted = (url.searchParams.get('provider') ?? '').replace('eq.', '');
@@ -75,7 +102,14 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/rest/v1/external_ingest_runs') {
     // Pagina como PostgREST: sin respetar `offset` el paginador nunca vería una página vacía.
-    if (req.method === 'GET') return send(200, runs.slice(Number(url.searchParams.get('offset') ?? 0), Number(url.searchParams.get('offset') ?? 0) + Number(url.searchParams.get('limit') ?? 1000)).map(r => ({ note: r.note })));
+    if (req.method === 'GET') {
+      // Filtros de PostgREST que usa el registro asíncrono: source=eq.X y via=in.(a,b).
+      const list = key => { const v = url.searchParams.get(key) ?? ''; const m = /^in\.\((.*)\)$/.exec(v); return m ? m[1].split(',') : v.startsWith('eq.') ? [v.slice(3)] : null; };
+      const srcs = list('source'), vias = list('via');
+      const rows = runs.filter(r => (!srcs || srcs.includes(r.source)) && (!vias || vias.includes(r.via)));
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      return send(200, rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 1000)).map(r => ({ note: r.note, via: r.via, source: r.source })));
+    }
     const row = JSON.parse(body || '{}'); runs.push(row);
     return send(201, {});
   }
@@ -99,7 +133,7 @@ const { collectGoogleJobs, postedAt, toCandidate, dorkWindow, DAY_MS, GOOGLE_JOB
 const results = [];
 const step = async (name, fn) => {
   searches = []; saved = []; mode = 'ok'; hasKey = true; paused = []; searchDelayMs = 0;
-  runs = []; brightKey = false; brightMode = 'ok'; brightCalls = []; capRow = null;
+  runs = []; brightKey = false; brightMode = 'ok'; brightCalls = []; capRow = null; brightCollects = []; asyncPending = false; brightAsyncOff = false;
   delete process.env.SERPAPI_MONTHLY_USD; delete process.env.BRIGHTDATA_MONTHLY_USD;
   delete process.env.SERPAPI_JOBS_MAX_DORKS;
   try { await fn(); results.push(['PASS', name]); }
@@ -343,6 +377,38 @@ await step('cascada: Bright Data con `jobs` como lista directa también se lee',
   assert.equal(out.ok, true);
   assert.equal(searches.length, 0);
   assert.ok(saved.some(row => /Closer lista/.test(JSON.stringify(row))), 'las ofertas de la lista se guardan');
+});
+
+await step('asíncrono: si Bright Data aún procesa, no es «0 ofertas» ni se paga SerpApi; cada encargo anota su coste una vez', async () => {
+  brightKey = true; asyncPending = true;
+  const out = await collectGoogleJobs('test');
+  assert.equal(brightCalls.length, DEFAULT_MAX_DORKS, 'un encargo por dork');
+  assert.equal(searches.length, 0, 'SerpApi no se toca: el resultado llegará en la siguiente pasada');
+  assert.equal(out.brightdata_async.submitted, DEFAULT_MAX_DORKS);
+  assert.equal(out.brightdata_async.pending, DEFAULT_MAX_DORKS);
+  const spendRows = runs.filter(r => /proveedor=brightdata/.test(r.note ?? ''));
+  assert.equal(spendRows.length, DEFAULT_MAX_DORKS, 'una fila de gasto por encargo, sin duplicar en la nota agregada');
+  assert.ok(spendRows.every(r => r.via === 'async' && /async_id=resp\d+x/.test(r.note)), 'cada encargo guarda su async_id');
+  // Siguiente pasada: Bright Data ya terminó. Recoger es gratis y guarda las ofertas.
+  asyncPending = false; saved = [];
+  const { collectAsync } = await import('../../apps/web/lib/brightdataAsync.ts');
+  const before = runs.filter(r => /proveedor=brightdata/.test(r.note ?? '')).length;
+  const got = await collectAsync('bd-key-test', { via: 'test' });
+  assert.equal(got.collected, DEFAULT_MAX_DORKS, 'se recogen todos los pendientes');
+  assert.ok(got.accepted > 0 && saved.length > 0, 'las ofertas recogidas se guardan');
+  assert.equal(runs.filter(r => /proveedor=brightdata/.test(r.note ?? '')).length, before, 'recoger no se cobra');
+  const again = await collectAsync('bd-key-test', { via: 'test' });
+  assert.equal(again.checked, 0, 'lo recogido no se vuelve a pedir');
+});
+
+await step('asíncrono: si la zona no tiene el modo asíncrono, se lee su respuesta síncrona (ya cobrada) en vez de tirarla', async () => {
+  brightKey = true; brightAsyncOff = true;
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true);
+  assert.equal(searches.length, 0, 'SerpApi no hace falta');
+  assert.ok(saved.some(row => /Closer BD/.test(JSON.stringify(row))), 'las ofertas de la respuesta síncrona se guardan');
+  assert.equal(out.brightdata_async, undefined, 'no hay encargos pendientes');
+  assert.equal(out.by_provider.brightdata.searches, DEFAULT_MAX_DORKS, 'el gasto síncrono se anota en la nota agregada');
 });
 
 await step('cascada: sin clave de SerpApi, un fallo de Bright Data se declara y no se inventa nada', async () => {

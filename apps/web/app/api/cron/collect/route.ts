@@ -5,6 +5,7 @@ import { collectFallback } from '../../../../lib/serpapiFallback';
 import { loadMeter } from '../../../../lib/providerCaps';
 import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
+import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
@@ -68,6 +69,11 @@ export async function GET(request: NextRequest) {
   // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
   let meterRead: ReturnType<typeof loadMeter> | undefined;
   const sharedMeter = () => (meterRead ??= loadMeter());
+  // Encargos asíncronos de Bright Data de pasadas anteriores: recogerlos es gratis y lo que traen cuenta ya para el
+  // objetivo, así que va antes de decidir si se gasta más. Sin clave de Bright Data no hace nada.
+  const brightAsync = budget.remaining() >= MIN_STEP_MS ? await collectBrightAsync('cron', budget.deadline(6_000)).catch(failed('brightdata_async', null)) : null;
+  if (brightAsync?.truncated) budget.cut('brightdataAsync');
+  if (brightAsync?.accepted) gap = await recount(gap);
   // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. 18 s: Bright Data tarda 10–25 s
   // en devolver el Full JSON; con el tramo antiguo (6,5 s) cada llamada se cortaba y SerpApi ya no tenía tiempo. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
@@ -128,5 +134,5 @@ export async function GET(request: NextRequest) {
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

@@ -59,9 +59,14 @@ assert.deepEqual(parseBrightDataSecret('abc12345key::unlock_zone'), { apiKey: 'a
 assert.equal(parseBrightDataSecret('a:b:c:d'), null, 'cuatro partes no es el formato');
 assert.equal(parseBrightDataSecret('corta'), null, 'una clave de 5 caracteres no es una API key');
 const url = googleJobsUrl('closer de ventas', 'es', 'es');
-assert.match(url, /ibp=htl%3Bjobs/);
+// Por defecto: búsqueda normal con intención de empleo. Con ibp=htl;jobs Bright Data devolvió solo general/input/
+// navigation (medido en producción el 2026-11-22): su intérprete lee el recuadro de empleos de la búsqueda normal.
+assert.doesNotMatch(url, /ibp=/, 'la vista ibp no la interpreta Bright Data');
 assert.match(url, /brd_json=1/, 'sin brd_json=1 la respuesta puede volver como HTML');
-assert.match(url, /q=closer\+de\+ventas/);
+assert.match(url, /q=closer\+de\+ventas\+empleo/, 'se añade intención de empleo');
+assert.match(googleJobsUrl('ofertas closer', 'es', 'es'), /q=ofertas\+closer(&|$)/, 'si ya hay intención de empleo no se duplica');
+assert.match(googleJobsUrl('closer', 'es', 'es', 'udm8'), /udm=8/);
+assert.match(googleJobsUrl('closer', 'es', 'es', 'ibp'), /ibp=htl%3Bjobs/);
 assert.equal(brightDataSource('google'), 'brightdata-google', 'Google Jobs se atribuye a brightdata-google');
 assert.equal(brightDataSource('infojobs'), 'brightdata-infojobs', 'cada portal conserva su código, no un «portal» genérico');
 
@@ -198,7 +203,7 @@ const body = JSON.parse(calls[0].init.body);
 assert.deepEqual(Object.keys(body).sort(), ['format', 'url', 'zone']);
 assert.equal(body.zone, 'serp_zone_1');
 assert.ok(['raw', 'json'].includes(body.format), 'el parseo lo activa brd_json=1 en la URL; format raw o json (se desenvuelve)');
-assert.match(body.url, /ibp=htl%3Bjobs/);
+assert.match(body.url, /empleo/);
 assert.match(body.url, /[?&]brd_json=1(&|$)/, 'sin brd_json=1 Bright Data devuelve HTML, no jobs.items[]');
 assert.equal(result.hasJobsPanel, true);
 assert.equal(result.rawItems, 3);

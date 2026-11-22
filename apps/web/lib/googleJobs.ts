@@ -3,7 +3,8 @@ import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './exte
 import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
 import { loadMeter, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
-import { BrightDataError, brightDataSource, parseBrightDataSecret, resolveBrightDataConfig, serpJobs, type BrightDataConfig } from './providers/brightdata';
+import { BrightDataError, brightAsyncEnabled, brightDataSource, googleJobsUrl, parseBrightDataSecret, parseSerpJobs, resolveBrightDataConfig, serpCollectAsync, serpJobs, serpSubmitAsync, type BrightDataConfig } from './providers/brightdata';
+import { markDone, rememberSubmit } from './brightdataAsync';
 
 // Google Jobs vía SerpApi: la única fuente de ofertas ya conectada que puede
 // aportar closers de España sin una clave nueva. Google Jobs indexa InfoJobs,
@@ -191,12 +192,39 @@ export function serpapiFetcher(secret: string): Fetcher {
  * HTML en vez de JSON— se lanza para que la cascada pase a SerpApi; una respuesta sin panel de empleos para
  * ese dork cuenta como «sin ofertas» solo si Bright Data respondió JSON de verdad.
  */
-export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void): Fetcher {
+export type BrightAsyncTally = { submitted: number; pending: number; unrecorded: number };
+
+export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void, tally?: BrightAsyncTally): Fetcher {
   return async (dork, timeoutMs) => {
-    // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
-    const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
-    if (!result.hasJobsPanel) onNoPanel?.();
-    return result.candidates;
+    if (!brightAsyncEnabled()) {
+      // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
+      const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
+      if (!result.hasJobsPanel) onNoPanel?.();
+      return result.candidates;
+    }
+    // Asíncrono: encargar es inmediato y se cobra; si la zona no lo admite se lanza y la cascada pasa a SerpApi.
+    const submitted = await serpSubmitAsync(config, googleJobsUrl(dork.q, dork.gl, dork.hl), { timeoutMs: Math.min(timeoutMs, 15_000) });
+    if ('text' in submitted) {
+      // La zona respondió en síncrono: se lee esa respuesta (cuenta como búsqueda normal en la nota agregada).
+      const direct = parseSerpJobs(submitted.text);
+      if (!direct.hasJobsPanel) onNoPanel?.();
+      return direct.candidates;
+    }
+    const id = submitted.id;
+    if (tally) tally.submitted++;
+    if (!await rememberSubmit(id, dork, 'cascada') && tally) tally.unrecorded++;
+    // Un intento de recogida enseguida (gratis). Si sigue procesando se recoge en la siguiente pasada: no es «0 ofertas».
+    const collected = await serpCollectAsync(config.apiKey, id, { timeoutMs: Math.max(1_000, Math.min(timeoutMs, 10_000)) });
+    if (collected.status !== 'ready') { if (tally) tally.pending++; return []; }
+    try {
+      const parsed = parseSerpJobs(collected.text);
+      if (!parsed.hasJobsPanel) onNoPanel?.();
+      await markDone(id, `recogido · ${parsed.candidates.length} ofertas`);
+      return parsed.candidates;
+    } catch (err) {
+      await markDone(id, `ilegible: ${(err as Error).message}`);
+      throw err;
+    }
   };
 }
 
@@ -236,7 +264,8 @@ export async function collectGoogleJobs(
     const meter = deps.meter ?? await loadMeter();
     let noPanel = 0;
     const serpFetch = serpSecret ? fetchFor(serpSecret) : null;
-    const brightFetch = brightConfig ? (deps.brightFetcher ?? brightDataFetcher)(brightConfig, () => { noPanel++; }) : null;
+    const asyncTally: BrightAsyncTally = { submitted: 0, pending: 0, unrecorded: 0 };
+    const brightFetch = brightConfig ? (deps.brightFetcher ?? ((config, onNoPanel) => brightDataFetcher(config, onNoPanel, asyncTally)))(brightConfig, () => { noPanel++; }) : null;
     const dorks = dorkWindow(Date.now(), limit);
     const all: Candidate[] = []; const errors: string[] = []; const warnings: string[] = []; let truncated = false;
     const used: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>> = {};
@@ -297,11 +326,16 @@ export async function collectGoogleJobs(
     for (const provider of ['brightdata', 'serpapi'] as const) {
       const row = used[provider];
       if (!row) continue;
+      // Los encargos asíncronos ya anotaron su coste uno a uno (con su async_id): aquí solo lo síncrono.
+      const asyncShare = provider === 'brightdata' ? asyncTally.submitted : 0;
+      if (asyncShare >= row.searches) { if (asyncTally.unrecorded) spendUnrecorded = true; continue; }
+      const syncRow = { searches: row.searches - asyncShare, cost_usd: Math.round((row.cost_usd - asyncShare * PROVIDER_METERS.brightdata.usdPerRequest) * 1e6) / 1e6 };
       const source = provider === 'brightdata' ? brightDataSource('google') : GOOGLE_JOBS_SOURCE;
-      const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: row.searches, costUsd: row.cost_usd, detail: 'google-jobs' }));
+      const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: syncRow.searches, costUsd: syncRow.cost_usd, detail: 'google-jobs' }));
       if (!ok) spendUnrecorded = true;
     }
-    const common = { searches, cost_usd: cost, by_provider: used, ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
+    if (asyncTally.unrecorded) spendUnrecorded = true;
+    const common = { searches, cost_usd: cost, by_provider: used, ...(asyncTally.submitted ? { brightdata_async: { submitted: asyncTally.submitted, pending: asyncTally.pending } } : {}), ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
     if (!all.length && skippedBudget === plan.length) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: `Sin presupuesto: ${blocked[0] ?? 'tope mensual agotado'}`, searches: 0, cost_usd: 0, skipped_budget: skippedBudget };
     }

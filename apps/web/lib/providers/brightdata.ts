@@ -71,8 +71,24 @@ export const brightDataSource = (code: string) => `brightdata-${code}`;
  * URL de Google Jobs: `ibp=htl;jobs` activa el panel de vacantes y `brd_json=1` pide a Bright Data el JSON
  * ya interpretado (sin él la respuesta puede ser HTML o un envoltorio y el anuncio no se puede leer).
  */
-export function googleJobsUrl(query: string, gl = 'es', hl = 'es'): string {
-  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', brd_json: '1', hl, gl });
+/**
+ * Variante de URL de Google para empleos. Medido en producción (2026-11-22): con `ibp=htl;jobs` Bright Data
+ * devolvió JSON con solo `general`, `input` y `navigation` —su intérprete no lee esa vista—. Su documentación
+ * describe `jobs` como «ofertas incrustadas en la página de búsqueda»: el recuadro de empleos de una búsqueda
+ * normal. Orden: `search` (búsqueda normal con intención de empleo), `udm8` (pestaña Empleos actual) e `ibp`.
+ */
+export type JobsUrlVariant = 'search' | 'udm8' | 'ibp';
+export const JOBS_URL_VARIANTS: readonly JobsUrlVariant[] = ['search', 'udm8', 'ibp'];
+export const jobsUrlVariant = (env: NodeJS.ProcessEnv = process.env): JobsUrlVariant =>
+  (JOBS_URL_VARIANTS as readonly string[]).includes(env.BRIGHTDATA_JOBS_URL ?? '') ? env.BRIGHTDATA_JOBS_URL as JobsUrlVariant : 'search';
+const JOB_INTENT = /\b(empleo|empleos|trabajo|trabajos|oferta|ofertas|vacante|vacantes|jobs?)\b/i;
+
+export function googleJobsUrl(query: string, gl = 'es', hl = 'es', variant: JobsUrlVariant = jobsUrlVariant()): string {
+  const params = variant === 'search'
+    ? new URLSearchParams({ q: JOB_INTENT.test(query) ? query : `${query} empleo`, brd_json: '1', hl, gl })
+    : variant === 'udm8'
+      ? new URLSearchParams({ q: query, udm: '8', brd_json: '1', hl, gl })
+      : new URLSearchParams({ q: query, ibp: 'htl;jobs', brd_json: '1', hl, gl });
   return `https://www.google.com/search?${params.toString()}`;
 }
 
@@ -244,18 +260,18 @@ export async function resolveBrightDataConfig(secret: string, options: BrightDat
   return { config: withZones(listed.zones), zones: listed.zones, error: null };
 }
 
-type FetchLike = typeof fetch;
+export type FetchLike = typeof fetch;
 
 /**
  * La petición de prueba del panel: UNA búsqueda de Google Jobs, sin reintento (un reintento se cobraría).
  * Se usa con una configuración ya resuelta para no repetir la consulta de zonas. No se ejecuta al guardar.
  * Exige la zona en el tipo: el llamador ya la comprobó, así que no hay una rama de error inalcanzable.
  */
-export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
+export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch, variant: JobsUrlVariant = jobsUrlVariant()): Promise<Response> {
   return fetchImpl(`${apiBase()}/request`, {
     method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(40_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'raw' }),
+    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas', 'es', 'es', variant), format: 'raw' }),
   });
 }
 
@@ -466,6 +482,14 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
   if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
   const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs, maxAttempts);
+  return { ...parseSerpJobs(text, attempts, now), requests: attempts, costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST };
+}
+
+/**
+ * Lee una respuesta de Google Jobs de Bright Data (síncrona o recogida en modo asíncrono). Un cuerpo que no es
+ * JSON o un `error` de Bright Data se lanzan: no es «0 ofertas».
+ */
+export function parseSerpJobs(text: string, attempts = 1, now = Date.now()): { candidates: Candidate[]; rawItems: number; hasJobsPanel: boolean } {
   let payload: unknown;
   try {
     payload = JSON.parse(text);
@@ -476,14 +500,63 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
   const { items, panel } = extractJobItems(payload);
-  return {
-    candidates: jobsFromPayload(payload, now),
-    // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.
-    requests: attempts,
-    costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST,
-    rawItems: items.length,
-    hasJobsPanel: panel,
-  };
+  return { candidates: jobsFromPayload(payload, now), rawItems: items.length, hasJobsPanel: panel };
+}
+
+/**
+ * MODO ASÍNCRONO (hay que activarlo en la zona: Advanced settings → Asynchronous requests). Encargar es
+ * `POST /request?async=1` con el mismo cuerpo que la llamada normal; Bright Data responde enseguida con el
+ * identificador en la cabecera `x-response-id` y se cobra aquí (al encargar). Recoger con
+ * `GET /serp/get_result?response_id=…` no se cobra: 202 = aún procesando, 200 = resultado. El resultado se guarda
+ * 48 h, así que lo que no esté listo se recoge en la siguiente pasada sin pagar otra vez.
+ */
+export async function serpSubmitAsync(config: BrightDataConfig, url: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<{ id: string } | { text: string }> {
+  const { fetchImpl = fetch, timeoutMs = 15_000 } = options;
+  if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/request?async=1`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({ zone: config.serpZone, url, format: 'raw' }),
+    });
+  } catch (err) {
+    throw new BrightDataError(`No se pudo contactar con Bright Data: ${(err as Error).message}`, null, 1);
+  }
+  const text = await response.text().catch(() => '');
+  if (!response.ok) throw new BrightDataError(`Bright Data rechazó la búsqueda asíncrona (HTTP ${response.status})${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 1);
+  let id = response.headers.get('x-response-id');
+  if (!id) {
+    try { const body = JSON.parse(text) as Record<string, unknown>; id = typeof body.response_id === 'string' ? body.response_id : null; } catch { /* sin JSON */ }
+  }
+  if (id && /^[A-Za-z0-9_-]{4,128}$/.test(id)) return { id };
+  // Sin identificador pero con cuerpo: la zona no está en modo asíncrono y Bright Data respondió en síncrono (y lo
+  // cobró). Se devuelve esa respuesta para leerla en vez de tirarla. Sin cuerpo útil se dice qué activar.
+  if (text.trim()) return { text };
+  throw new BrightDataError('Bright Data no devolvió response_id ni resultado: activa «Asynchronous requests» en la zona SERP', response.status, 1);
+}
+
+/** Modo asíncrono de Bright Data: activo salvo `BRIGHTDATA_ASYNC=0` (la zona debe tenerlo activado). */
+export const brightAsyncEnabled = (env: NodeJS.ProcessEnv = process.env) => env.BRIGHTDATA_ASYNC !== '0';
+
+export type AsyncCollect = { status: 'pending' } | { status: 'ready'; text: string } | { status: 'gone'; detail: string } | { status: 'error'; detail: string };
+
+/** Recoge un encargo asíncrono (gratis). Nunca lanza: devuelve el estado para que el llamador decida. */
+export async function serpCollectAsync(apiKey: string, responseId: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<AsyncCollect> {
+  const { fetchImpl = fetch, timeoutMs = 15_000 } = options;
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/serp/get_result?response_id=${encodeURIComponent(responseId)}`, {
+      method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  } catch (err) {
+    return { status: 'error', detail: `No se pudo contactar con Bright Data: ${(err as Error).message}` };
+  }
+  const text = await response.text().catch(() => '');
+  if (response.status === 202 || /request is pending/i.test(text.slice(0, 80))) return { status: 'pending' };
+  if (response.ok) return { status: 'ready', text };
+  if (response.status === 404 || /result not found/i.test(text.slice(0, 80))) return { status: 'gone', detail: 'Bright Data ya no tiene el resultado (caduca a las 48 h)' };
+  return { status: 'error', detail: `Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}` };
 }
 
 export type UnlockResult = { html: string; requests: number; costUsd: number };
