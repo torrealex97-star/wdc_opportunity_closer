@@ -1,7 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: feat/probe-company-pages
+pr: 136
 touches: scripts/probe_company_pages.mjs, .github/workflows/probe-company-pages.yml, tests/probe-company-pages.mjs, tests/admin-auth/run.sh, docs/evidence/company-pages-2026-11-22.md, docs/STATUS.md
 date: 2026-11-22
 ---
