@@ -1,3 +1,9 @@
+## Auditoría de paneles del admin (tercera parte): tablas de APIs legibles en móvil — 2026-11-22
+
+- **Cambio** (*tested*): las tablas «Etapas por orden de coste» (waterfall) y «Gasto del mes y tope por proveedor» (Control de inversión) se apilan cuando el panel mide 640 px o menos (container query, clase `stack-table`). Cada etapa o proveedor pasa a ser una tarjeta con cada dato etiquetado. En escritorio, «Coste» y «Por qué» ya parten línea: antes la columna «Por qué» quedaba fuera de la vista.
+- El botón de «Qué hacer ahora» del Resumen ya no se parte en tres líneas en móvil («Ver fuent / es»).
+- **Evidencia** (*tested*, build de producción con los mocks del admin): a 390 px no hay desplazamiento horizontal en la página ni dentro de las dos tablas, y no hay errores de página. Botón de 44 px de alto. A 1280 px la tabla de etapas cabe entera. La de gasto aún se desplaza 134 px para llegar a «Cambiar tope», porque tiene 8 columnas con formulario; antes eran 310 px. Suite `tests/admin-auth/run.sh` con código 0; `npm run design` OK.
+
 ## Auditoría de paneles del admin (segunda parte): Externas ya no pinta ceros cuando no puede leer — 2026-11-22
 
 - **Revisados** (*inspected*): Revisión rápida, Externas, Revisión (motor), Catálogo, Empresas, Scorecard, Alumnas, Práctica, Usuarios, Métricas y Embudo, buscando los cuatro estados (cargando, vacío, error, parcial) y ceros sin fuente. Todos tienen carga y error con aviso. Métricas, Empresas, Alumnas y Revisión ya distinguían «—» de 0.

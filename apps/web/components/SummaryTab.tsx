@@ -148,6 +148,6 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
       <article className="source-card"><span className="eyebrow">FUENTES CON FALLO</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{overview ? (engineKnown ? failed.length : '—') : '…'}</strong>{!overview || engineKnown ? `de ${overview?.sources.length ?? '…'} en el motor cloud` : 'sin datos del motor cloud'}</span></div></article>
     </div>
     <h2 className="section-title">Qué hacer ahora</h2>
-    <div className="card-grid" style={{ gridTemplateColumns: '1fr' }}>{steps.map((s, i) => <article className="source-card" key={`${s.tab}-${i}`}><div className="card-head"><p style={{ fontSize: 14 }}>{s.text}</p><button className="primary" onClick={() => go(s.tab)}>{s.action} <ArrowRight size={14} /></button></div></article>)}</div>
+    <div className="card-grid" style={{ gridTemplateColumns: '1fr' }}>{steps.map((s, i) => <article className="source-card" key={`${s.tab}-${i}`}><div className="card-head"><p style={{ fontSize: 14 }}>{s.text}</p><button className="primary" style={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => go(s.tab)}>{s.action} <ArrowRight size={14} /></button></div></article>)}</div>
   </section>;
 }

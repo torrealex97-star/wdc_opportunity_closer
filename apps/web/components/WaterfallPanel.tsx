@@ -76,15 +76,15 @@ export default function WaterfallPanel({ owner, onSessionLost }: { owner: boolea
         <button className="primary" disabled={busy !== null || !value.trim()}>{busy === 'save' ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Guardar objetivo</button>
         <span className="card-meta">0 = no se gasta en vías de pago.</span>
       </form>}
-      <div className="scorecard-scroll" style={{ marginBottom: 12 }}>
-        <table className="scorecard-table" data-testid="wf-stages">
+      <div className="scorecard-scroll stack-wrap" style={{ marginBottom: 12 }}>
+        <table className="scorecard-table stack-table" data-testid="wf-stages">
           <caption>Etapas por orden de coste. {data.free}</caption>
           <thead><tr><th scope="col">Etapa</th><th scope="col">Coste</th><th scope="col">Hoy</th><th scope="col">Por qué</th></tr></thead>
           <tbody>{data.stages.map((stage, index) => <tr key={stage.id} data-stage={stage.id}>
             <th scope="row">{index + 1}. {stage.label}{stage.automatic ? '' : <span className="card-meta" style={{ display: 'block' }}>Manual</span>}</th>
-            <td>{stage.unit}</td>
-            <td><span className={DECISION[stage.decision].cls}>{DECISION[stage.decision].text}</span></td>
-            <td>{stage.why}{stage.decision === 'skip' && stage.reason && stage.reason !== stage.why ? <span className="card-meta" style={{ display: 'block' }}>{stage.reason}</span> : null}</td>
+            <td data-label="Coste">{stage.unit}</td>
+            <td data-label="Hoy"><span className={DECISION[stage.decision].cls}>{DECISION[stage.decision].text}</span></td>
+            <td data-label="Por qué">{stage.why}{stage.decision === 'skip' && stage.reason && stage.reason !== stage.why ? <span className="card-meta" style={{ display: 'block' }}>{stage.reason}</span> : null}</td>
           </tr>)}</tbody>
         </table>
       </div>
