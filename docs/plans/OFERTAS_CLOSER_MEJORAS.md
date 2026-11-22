@@ -71,6 +71,21 @@ Se hacen **en este orden y por un solo agente a la vez** (tocan los mismos fiche
 
 - **G1 · 🔒 Activar el navegador en Cloudflare.** Crear un token con permiso «Browser Run - Edit» y poner `CF_BROWSER_ACCOUNT_ID` y `CF_BROWSER_TOKEN` como secretos del Worker `closer-web`. Después, tras la primera pasada del cron, leer `companyPages` en su respuesta (`by página: via, detected, error`). Hasta entonces no se declara PASS del navegador. Alternativa: Browserless alojado aparte (`BROWSERLESS_URL`; licencia SSPL-1.0).
 
+### H. Panel de control: claro, sin repeticiones y con todo el detalle (petición del dueño, 2026-11-22)
+
+El menú del admin tiene nueve entradas que se solapan: *Revisión rápida*, *Fuentes externas*, *Búsqueda automática*, *Revisión una a una*, *Probar ofertas*, *Empresas*, *Fuentes*, *Resultados por fuente* y *APIs*. Hay que reorganizarlo para que se entienda a primera vista, sin datos repetidos, y con un control detallado de **todas las fuentes, sus resultados y sus costes**. Sin empezar; primero la propuesta, que el dueño aprueba antes de mover pestañas.
+
+- **H1 · Mapa de información (propuesta a validar).** Agrupar por lo que la persona decide, no por la tecnología:
+  1. **Resumen** (ya existe): qué hacer ahora.
+  2. **Ofertas** (revisar): *Revisión rápida*, *Revisión una a una* y *Probar ofertas* como **una sola pantalla con modos** (cola · una a una · buscar), con los mismos filtros.
+  3. **Fuentes** (controlar): *Fuentes externas*, *Fuentes*, *Búsqueda automática* y *Resultados por fuente* en **una tabla maestra** con una fila por fuente: vía activa, estado real, recogidas, aprobadas, coste, aprobadas por US$, última recogida y acción «Probar». El detalle de una fuente se abre en un panel lateral (vías, orden, historial de ejecuciones, guía de conexión).
+  4. **Empresas**: se mantiene (lista objetivo y páginas de empleo).
+  5. **Dinero y claves**: *APIs* con claves, topes, gasto y el waterfall; sin repetir el gasto por fuente, que vive en la tabla maestra.
+- **H2 · Tabla maestra de fuentes.** Cada fila: nombre, grupo, vía activa y estado (recoge / falla con la causa / sin clave / sin muestra), recogidas, aprobadas, % aprobadas, coste y aprobadas por US$ (con «Sin conclusión» hasta 1.000, ver A2), última recogida, y **«Probar ruta»**. Incluye las 28 fuentes del motor, que hoy no tienen tarjeta ni botón: su estado sale de `/api/funnel` (catálogo, revisadas, causa del fallo) y, si el motor no tiene ofertas, ofrece la cascada a Google Jobs. Filtros por grupo, estado y coste; orden por cualquier columna; los huecos como «—» con su causa.
+- **H3 · Quitar repeticiones.** Inventario de datos que aparecen en más de una pestaña (gasto, recogidas por fuente, estado de claves, objetivo del día) y una sola fuente de verdad para cada uno. Antes de borrar nada, mapa de qué pestaña muestra qué.
+- **H4 · «Probar ruta» en toda la tabla.** Botón «Probar todas las fuentes listas» con tope de gasto declarado antes de lanzar y resultado por fuente. Hecho ya por fuente: la cascada de la PR de la sesión del 2026-11-22.
+- **Toca:** `apps/web/components/` (AdminShell, SourcesCenter, ExternalTab, ApisTab, SourceScorecard, SourceSample), `apps/web/app/globals.css` (**partir siempre del `origin/main` actual**, ver AGENTS.md), `tests/admin-auth/`. **Depende de:** nada; conviene hacerlo en pasos (tabla maestra primero, luego fusionar pestañas). Leer `.agents/skills/dashboard-design/SKILL.md` y `docs/DESIGN.md`. Un agente a la vez: toca los mismos ficheros que A2.
+
 ## Reparto propuesto (confirmar con el dueño)
 
 | Carril | Claude | Codebuff (`buffy`) |
@@ -78,6 +93,7 @@ Se hacen **en este orden y por un solo agente a la vez** (tocan los mismos fiche
 | Captación | A2, A3, B1 | A1, B2 |
 | Empresas | C3, C4 (documentos) | C1, C2 |
 | Calidad y medición | D1 → D2 → D3, E1 → E2 | — (revisar D1 con sus ejemplos reales) |
+| Panel de control | H1 → H2 → H3 → H4 (un agente a la vez) | — |
 
 ## Orden sugerido
 

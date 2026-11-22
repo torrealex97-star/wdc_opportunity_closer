@@ -1047,6 +1047,12 @@ await step('Probar ruta (motor): lee el estado real de la fuente; sin ofertas o 
 });
 await step('Probar ruta (Apify): lanza la búsqueda de prueba con 10 ofertas y tope, y dice que los resultados llegan después', async () => {
   state.apifyRuns = []; state.apifyActors = [];
+  // El panel decide si la vía está lista con este resumen: sin el saldo de Apify aquí, «Probar ruta» de Apify quedaba desactivada.
+  const summary = (await call('/api/admin/source-routes?summary=1')).json;
+  assert.equal(typeof summary.budget.apify, 'number', 'el resumen trae el saldo de Apify'); assert.ok(summary.budget.apify > 0 && summary.budget.apify <= 5);
+  assert.equal(typeof summary.spent.apify, 'number', 'y su gasto del mes');
+  const routes = summary.routes.find(item => item.source === 'infojobs').routes;
+  assert.equal(routes.find(route => route.provider === 'apify')?.ready, true, 'la vía de Apify figura como lista');
   const calls = state.apifyCalls.length;
   const r = await call('/api/admin/source-routes', { method: 'POST', body: { action: 'test', source: 'infojobs', route: 'infojobs:apify' } });
   assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.async, true); assert.equal(r.json.accepted, 0);

@@ -26,6 +26,9 @@ export type SampleRow = SampleInput & {
   note: string;
 };
 
+/** El coste registrado es acumulado de siempre: con fecha de corte no se mezcla con recogidas y aprobadas desde esa fecha (hueco, no un cociente de ventanas distintas). */
+export const windowedCost = (since: string | null, allTimeUsd: number | null): number | null => since ? null : allTimeUsd;
+
 const round = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits;
 
 /** Pura: un hueco es «—» con su causa, nunca un cero; con menos de `target` no hay conclusión. */
@@ -60,13 +63,15 @@ export async function readSamples(since: Record<string, string | null> = SAMPLE_
     const filters = [`org_id=eq.${ORG}`, `source=eq.${encodeURIComponent(source)}`, ...(from ? [`first_seen_at=gte.${encodeURIComponent(from)}`] : [])];
     const [seen, approved] = await Promise.all([countExact(filters), countExact([...filters, 'editorial_status=in.(approved,published)'])]);
     const usd = cost?.usdBySource.get(source);
-    return sampleRow({ source, seen, approved, cost_usd: cost === null ? null : usd === undefined ? null : usd }, from);
+    return sampleRow({ source, seen, approved, cost_usd: windowedCost(from, cost === null ? null : usd === undefined ? null : usd) }, from);
   }));
   rows.sort((a, b) => (b.seen ?? -1) - (a.seen ?? -1) || a.source.localeCompare(b.source));
   return {
     target: SAMPLE_TARGET, rows,
     basis: 'ofertas únicas recogidas por fuente (una oferta vista varias veces cuenta una)',
-    cost_note: cost === null ? 'No se pudo leer el coste registrado: la columna de coste y de aprobadas por dólar sale en «—».' : null,
+    cost_note: cost === null
+      ? 'No se pudo leer el coste registrado: la columna de coste y de aprobadas por dólar sale en «—».'
+      : Object.values(since).some(Boolean) ? 'Las fuentes con fecha de corte muestran el coste en «—»: el coste registrado es acumulado y no se mezcla con lo recogido desde esa fecha.' : null,
   };
 }
 

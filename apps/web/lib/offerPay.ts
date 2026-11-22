@@ -26,11 +26,12 @@ export function commissionFromText(text: string | null | undefined): string | nu
   if (!text) return null;
   const flat = text.replace(/\s+/g, ' ');
   for (const re of [COMM_AFTER, COMM_BEFORE]) {
-    const m = re.exec(flat);
-    if (!m) continue;
-    const values = [m[1], m[2]].filter(Boolean).map(v => Number(v.replace(',', '.')));
-    // «100 % comisión» es el modelo de pago (solo comisión), no un porcentaje; fuera de 1–50 % no es plausible para un closer.
-    if (values.length && values.every(v => v >= 1 && v <= 50)) return clip(m[0]);
+    for (const m of flat.matchAll(new RegExp(re.source, 'gi'))) {
+      const values = [m[1], m[2]].filter(Boolean).map(v => Number(v.replace(',', '.')));
+      // «100 % comisión» es el modelo de pago (solo comisión), no un porcentaje; fuera de 1–50 % no es plausible para un closer.
+      // Una mención inválida no esconde otra válida más adelante: se sigue con la siguiente.
+      if (values.length && values.every(v => v >= 1 && v <= 50)) return clip(m[0]);
+    }
   }
   return null;
 }

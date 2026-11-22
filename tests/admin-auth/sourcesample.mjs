@@ -1,7 +1,7 @@
 // Muestra por fuente: con menos de 1.000 ofertas recogidas la lectura es «sin conclusión»; un hueco no es un cero.
 // node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/sourcesample.mjs
 import assert from 'node:assert/strict';
-const { sampleRow, SAMPLE_TARGET } = await import('../../apps/web/lib/sourceSample.ts');
+const { sampleRow, SAMPLE_TARGET, windowedCost } = await import('../../apps/web/lib/sourceSample.ts');
 const { fmtInt } = await import('../../apps/web/lib/formatInt.ts');
 
 let passed = 0, failed = 0;
@@ -39,6 +39,14 @@ await step('un hueco no es un cero: sin recuento, sin coste o con coste 0 salen 
 });
 
 await step('la fecha de corte se conserva para enseñarla', () => assert.equal(sampleRow({ source: 'a', seen: 5, approved: 0, cost_usd: null }, '2026-11-25T00:00:00Z').since, '2026-11-25T00:00:00Z'));
+
+await step('con fecha de corte el coste acumulado no se mezcla con lo recogido desde esa fecha', () => {
+  assert.equal(windowedCost('2026-11-25T00:00:00Z', 12.5), null);
+  assert.equal(windowedCost(null, 12.5), 12.5);
+  assert.equal(windowedCost(null, null), null);
+  const row = sampleRow({ source: 'a', seen: 120, approved: 40, cost_usd: windowedCost('2026-11-25T00:00:00Z', 12.5) }, '2026-11-25T00:00:00Z');
+  assert.equal(row.approved_per_usd, null, 'sin coste de la misma ventana no hay aprobadas por dólar');
+});
 
 console.log(`\n${passed}/${passed + failed} pasos OK`);
 if (failed) process.exit(1);

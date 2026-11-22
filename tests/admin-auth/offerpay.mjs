@@ -21,6 +21,12 @@ await step('comisión: «100 % comisión» (modelo de pago), descuentos, porcent
   }
 });
 
+await step('una mención inválida no esconde una válida posterior', () => {
+  assert.equal(commissionFromText('100% comisión el primer mes. Después comisión del 10% sobre cada venta'), 'comisión del 10%');
+  assert.equal(commissionFromText('Hasta un 98% de comisión en alquiler. Closer: 12% de comisión'), '12% de comisión');
+  assert.equal(commissionFromText('100% comisión sin fijo'), null);
+});
+
 await step('OTE: con moneda o «k», con rango; nunca inventa la moneda', () => {
   assert.equal(oteFromText('OTE 45.000 €'), 'OTE 45.000 €');
   assert.equal(oteFromText('Salario + variable. OTE: 40k'), 'OTE: 40k');

@@ -105,6 +105,10 @@ export async function GET(request: NextRequest) {
     spent[provider] = rows === null ? null : (spentFromNotes(notes, provider).usd ?? 0);
     if (budget[provider] === null && state.keys.has(provider)) budget[provider] = caps[provider].usd;
   }
+  // Apify no está en la lista de arriba (su límite y su gasto viven en sus propias tablas), pero el panel decide con este resumen
+  // si su vía está lista: sin su saldo aquí, «Probar ruta» de Apify quedaba desactivada aunque el servidor la diera por lista.
+  budget.apify = state.budget.apify ?? null;
+  spent.apify = await monthSpent().catch(() => null);
   const configuredProxies = Boolean((process.env.JOBSPY_PROXIES ?? '').trim());
   return     reply(auth!, {
     budget, spent,

@@ -21,6 +21,8 @@ await step('como máximo 3 vías por pulsación y el Unlocker solo si es la prim
   assert.deepEqual(planAttempts(ready).map(r => r.id), ['a', 'b', 'c']); assert.equal(MAX_PROBE_ATTEMPTS, 3);
   assert.deepEqual(planAttempts([route('u', 'unlocker'), route('b', 'jsearch')]).map(r => r.id), ['u', 'b'], 'primera: entra');
   assert.deepEqual(planAttempts([route('a', 'brightdata'), route('u', 'unlocker'), route('b', 'jsearch')]).map(r => r.id), ['a', 'b'], 'no primera: se salta');
+  assert.deepEqual(planAttempts([route('a', 'brightdata'), route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['a', 'b'], 'Apify (hasta 0,50 US$) no entra como respaldo automático');
+  assert.deepEqual(planAttempts([route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['p', 'b'], 'si es la elegida, sí');
   assert.deepEqual(planAttempts([]), []);
 });
 

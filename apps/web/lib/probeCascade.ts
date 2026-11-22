@@ -4,7 +4,7 @@ import type { SourceRoute } from './sourceRoutes';
 // respuesta correcta sin ofertas NO cuenta como recogida (era lo que dejaba a muchas fuentes en «0 guardadas» sin intentar
 // nada más). Lógica pura, sin red: el panel solo la ejecuta y la prueba la comprueba.
 
-/** Vías que se intentan como máximo en una pulsación: acota el gasto de una prueba (≈ 0,03 US$ en el peor caso de pago por búsqueda). */
+/** Vías que se intentan como máximo en una pulsación: acota el gasto de una prueba (≈ 0,03 US$ en el peor caso de pago por búsqueda; Apify, con tope de 0,50 US$, solo entra si es la vía elegida). */
 export const MAX_PROBE_ATTEMPTS = 3;
 
 export type ProbeBody = { detail?: string; note?: string; accepted?: number; cost_usd?: number; engine?: unknown; async?: boolean };
@@ -13,9 +13,12 @@ export type ProbeBody = { detail?: string; note?: string; accepted?: number; cos
 export const isCollected = (ok: boolean, body: ProbeBody): boolean =>
   ok && (body.engine !== undefined || body.async === true || (body.accepted ?? 0) > 0);
 
-/** Vías a intentar, en el orden recibido: el Unlocker necesita una URL concreta y solo entra si es la primera; máximo `MAX_PROBE_ATTEMPTS`. */
+/** Vías que solo se prueban si son la elegida (primera): el Unlocker necesita una URL concreta y Apify gasta hasta 0,50 US$ por prueba. */
+const ONLY_IF_FIRST = new Set(['unlocker', 'apify']);
+
+/** Vías a intentar, en el orden recibido y como máximo `MAX_PROBE_ATTEMPTS`; las de `ONLY_IF_FIRST` no entran como respaldo. */
 export function planAttempts(ready: SourceRoute[]): SourceRoute[] {
-  return ready.filter((route, index) => !(route.provider === 'unlocker' && index > 0)).slice(0, MAX_PROBE_ATTEMPTS);
+  return ready.filter((route, index) => !(ONLY_IF_FIRST.has(route.provider) && index > 0)).slice(0, MAX_PROBE_ATTEMPTS);
 }
 
 /** Texto de una vía probada: la causa o la nota, y «Sin ofertas nuevas» si respondió bien pero no recogió nada. */
