@@ -1,7 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: feat/apify-busquedas-closer
+pr: 135
 touches: apps/web/lib/apifyCatalog.ts, apps/web/lib/apifyAuto.ts, tests/admin-auth/apify-queries.mjs, tests/admin-auth/workana.mjs, tests/admin-auth/run.sh, tests/test_apify_portals.py, docs/STATUS.md
 date: 2026-11-22
 ---
