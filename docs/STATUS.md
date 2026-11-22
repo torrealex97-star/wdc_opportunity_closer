@@ -1,3 +1,11 @@
+## Muestra por fuente: 1.000 ofertas antes de juzgar una fuente de pago — 2026-11-22
+
+- **Decisión del dueño** (2026-11-22): ninguna fuente de pago se recorta ni se pausa por rendimiento hasta tener al menos 1.000 ofertas recogidas con las búsquedas de closer bien hechas. Hoy: LinkedIn 104 (1 aprobada), Workana 35 (0). El dato correcto es «sin conclusión», no «rinde mal».
+- **Qué hay** (*tested*, simulado): panel «Muestra por fuente» en la pestaña APIs (`GET /api/admin/source-sample`, solo lectura, cualquier operador). Por fuente: ofertas únicas recogidas frente a 1.000 con barra de progreso, aprobadas, % aprobadas, coste registrado, aprobadas por dólar y una lectura («Sin conclusión», «Muestra suficiente» o «Sin dato»). Un recuento que falla es 503 o «—», nunca ceros; sin coste registrado, «—». No ofrece recortar ni pausar nada. La fecha de corte por fuente (`SAMPLE_SINCE`) está vacía: cuenta todo lo recogido hasta que la búsqueda corregida (paquete A1) fije la suya.
+- **A3 medido** (*inspected*, base real): el tope `MAX_CANDIDATES = 300` **no** es la causa de las cifras redondas (ninguna ingesta pasó de 210 en 45 días). Vienen del `max_items` de cada actor por ejecución y de que se repiten las mismas ofertas: Google Jobs recibió 971 candidatos y hay 400 únicas. LinkedIn solo se ejecutó 3 veces con la consulta por defecto y Workana 1 vez con «ventas». Detalle y coste estimado en `docs/plans/OFERTAS_CLOSER_MEJORAS.md` (A1, A3).
+- **Evidencia:** `tests/admin-auth/sourcesample.mjs` (5 pasos: 999/1.000, caso real de LinkedIn, huecos), un paso nuevo en `flow.mjs` (401 sin sesión, 200, recuento caído = 503) y comprobaciones en `interactive.mjs`; suite `run.sh` con código 0 (458 pasos); `npm run design` OK. Visto a 1280 y 390 px sin desbordes ni errores de página. **Nada verificado contra el panel desplegado.**
+- **Límites:** la columna de coste solo existe para las fuentes con coste registrado (Apify y el respaldo de SerpApi); las demás salen «—».
+
 ## Fuentes que devuelven HTML: lectura automática en el cron, con navegador propio y Fetch API — 2026-11-22
 
 - **Antes:** la etapa «Unlocker, ZenRows y ScrapingBee» del waterfall era manual y su extractor solo entendía JSON-LD `JobPosting` y RSS. Una página con las ofertas como enlaces HTML, o pintadas con JavaScript, no producía nada.

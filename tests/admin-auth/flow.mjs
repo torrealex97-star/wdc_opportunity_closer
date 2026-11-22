@@ -1034,6 +1034,22 @@ await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hue
   assert.ok(open.json.waterfall.gap_after <= open.json.waterfall.gap_before, 'el hueco solo baja');
   state.waterfallRow = null;
 });
+await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000 y un recuento caído es 503, no ceros', async () => {
+  const savedJar = jar; jar = {};
+  assert.equal((await call('/api/admin/source-sample')).status, 401);
+  jar = savedJar;
+  const ok = await call('/api/admin/source-sample');
+  assert.equal(ok.status, 200); assert.equal(ok.json.target, 1000); assert.ok(Array.isArray(ok.json.rows) && ok.json.rows.length > 0, 'hay fuentes con ofertas');
+  for (const row of ok.json.rows) {
+    assert.equal(typeof row.seen, 'number'); assert.ok(row.seen < 1000, 'en el entorno de prueba ninguna llega a 1.000');
+    assert.equal(row.state, 'sin_conclusion'); assert.equal(row.missing, 1000 - row.seen); assert.match(row.note, /no se recorta/);
+  }
+  assert.match(ok.json.basis, /únicas/); assert.ok(!JSON.stringify(ok.json).includes('secret'), 'sin secretos');
+  state.externalCountsFail = true;
+  const down = await call('/api/admin/source-sample');
+  state.externalCountsFail = false;
+  assert.equal(down.status, 503, 'con el recuento caído no se pintan ceros'); assert.match(down.json.detail, /fuentes/);
+});
 await step('logout limpia cookies y la sesión deja de valer', async () => {
   await call('/api/admin/session', { method: 'DELETE' });
   assert.deepEqual(jar, {}); assert.equal((await call('/api/admin/opportunities')).status, 401);

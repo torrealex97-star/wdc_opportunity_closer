@@ -66,6 +66,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/rapidapi.mjs
 # Páginas de empleo de empresas en el cron: cascada directa → navegador propio → de pago, extractor de enlaces y Fetch API.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/companypages.mjs
+# Muestra por fuente: 1.000 ofertas recogidas antes de juzgar una fuente de pago; un hueco no es un cero.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/sourcesample.mjs
 # Rutas por fuente: orden por coste, contrato de Bright Data, extractor y cascada sin gastar sin clave/tope.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
 # Cliente de Bright Data: contrato, Unlocker, reintento único en 5xx, errores y tope, sin red ni clave.
