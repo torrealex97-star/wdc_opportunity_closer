@@ -1,7 +1,14 @@
 name: CodeQL
-# Análisis estático de seguridad (CodeQL) del repositorio público: la app web (TypeScript), el Worker del motor
-# (JavaScript) y el backend (Python). Gratis en repos públicos. Los hallazgos salen en Security → Code scanning.
-# Nada de lo que analiza se ejecuta: `build-mode: none` solo lee el código.
+# Análisis estático de seguridad (CodeQL) del repositorio: la app web (TypeScript), el Worker del motor
+# (JavaScript) y el backend (Python). Nada de lo que analiza se ejecuta: `build-mode: none` solo lee el código.
+#
+# Por qué no se sube el SARIF: el repositorio es privado y no tiene GitHub Code Security, y GitHub solo
+# acepta resultados de CodeQL en repos públicos o en privados con esa licencia (Settings → Code security).
+# Sin ella, `analyze` falla al subirlos («Resource not accessible by integration») aunque el análisis acabe
+# bien. Aquí el análisis se ejecuta igual, el informe va al resumen del run y el job se pone en rojo solo
+# si aparece un hallazgo de gravedad alta o crítica (security-severity >= 7.0). Si algún día se activa
+# Code Security, basta con `upload: always` y el permiso `security-events: write` para volver a tener
+# Security → Code scanning.
 on:
   push:
     branches: [main]
@@ -20,7 +27,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      security-events: write
+      # `actions: read` es lo que pide la API de Actions cuando la acción consulta su propio run; sin él
+      # la llamada devuelve «Resource not accessible by integration».
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -34,3 +43,50 @@ jobs:
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:${{ matrix.language }}
+          # El SARIF se queda en el run: subirlo exige GitHub Code Security (no está en este repo privado).
+          upload: never
+          output: codeql-results
+      - name: Resumen del análisis y puerta de gravedad
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find codeql-results -type f -name '*.sarif' | sort)
+          if [ -z "$files" ]; then
+            echo "::error::CodeQL no escribió ningún SARIF: el análisis no se completó."
+            exit 1
+          fi
+          total=0
+          altos=0
+          : > hallazgos.tsv
+          for f in $files; do
+            total=$((total + $(jq '[.runs[].results[]] | length' "$f")))
+            altos=$((altos + $(jq '[.runs[].results[]
+              | select((.properties["security-severity"] // "0" | tonumber) >= 7.0)] | length' "$f")))
+            jq -r '.runs[].results[]?
+              | [ (.properties["security-severity"] // "-"),
+                  (.level // "note"),
+                  .ruleId,
+                  ((.locations[0].physicalLocation.artifactLocation.uri // "-") + ":"
+                    + ((.locations[0].physicalLocation.region.startLine // 0) | tostring)) ]
+              | @tsv' "$f" >> hallazgos.tsv
+          done
+          {
+            echo "## CodeQL · ${{ matrix.language }}"
+            echo ""
+            echo "**$total hallazgo(s)**; $altos con gravedad alta o crítica (security-severity ≥ 7.0)."
+            if [ -s hallazgos.tsv ]; then
+              echo ""
+              echo "| Gravedad | Nivel | Regla | Sitio |"
+              echo "| --- | --- | --- | --- |"
+              sort -r hallazgos.tsv | awk -F'\t' '{ printf "| %s | %s | `%s` | `%s` |\n", $1, $2, $3, $4 }'
+            fi
+            echo ""
+            echo "_El SARIF no se publica en Security → Code scanning: el repositorio privado no tiene GitHub Code Security._"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "--- hallazgos (gravedad, nivel, regla, sitio) ---"
+          cat hallazgos.tsv || true
+          echo "CodeQL (${{ matrix.language }}): $total hallazgo(s), $altos de gravedad alta o crítica."
+          if [ "$altos" -gt 0 ]; then
+            echo "::error::CodeQL encontró $altos hallazgo(s) de gravedad alta o crítica en ${{ matrix.language }}; revisa el resumen del run."
+            exit 1
+          fi

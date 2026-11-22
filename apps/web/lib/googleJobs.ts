@@ -3,7 +3,8 @@ import { ingest, pausedSourcesStrict, recordSpend, type Candidate } from './exte
 import { callTimeout, MIN_STEP_MS, timeLeft } from './cronBudget';
 import { loadMeter, type Meter } from './providerCaps';
 import { PROVIDER_METERS, spendNote, type MeteredProvider } from './providerBudget';
-import { BrightDataError, brightDataSource, parseBrightDataSecret, resolveBrightDataConfig, serpJobs, type BrightDataConfig } from './providers/brightdata';
+import { BrightDataError, brightAsyncEnabled, brightDataSource, googleJobsUrl, parseBrightDataSecret, parseSerpJobs, resolveBrightDataConfig, serpCollectAsync, serpJobs, serpSubmitAsync, type BrightDataConfig } from './providers/brightdata';
+import { markDone, rememberSubmit } from './brightdataAsync';
 import { JSearchError, jsearchBilled, jsearchJobs } from './providers/jsearch';
 
 // Google Jobs vía Bright Data, JSearch y SerpApi: la fuente de ofertas ya
@@ -163,6 +164,11 @@ export type GoogleJobsOutcome = {
 };
 
 type Fetcher = (dork: Dork, timeoutMs: number) => Promise<Candidate[]>;
+// Bright Data devuelve el Full JSON de Google Jobs en 10–25 s (medido en las pruebas del propietario: un 200 dentro de
+// 20 s y dos cortes a los 20 s). Por debajo de este margen una llamada se cortaría casi seguro y el corte puede
+// facturarse: se manda ese dork a SerpApi y se dice. Configurable con BRIGHTDATA_MIN_MS.
+export const brightMinMs = (env: NodeJS.ProcessEnv = process.env) => { const n = Number(env.BRIGHTDATA_MIN_MS); return Number.isFinite(n) && n >= 5_000 && n <= 60_000 ? n : 15_000; };
+const BRIGHT_CALL_MS = 30_000;
 
 export function serpapiFetcher(secret: string): Fetcher {
   return async (dork, timeoutMs) => {
@@ -199,12 +205,39 @@ export function jsearchFetcher(secret: string): Fetcher {
  * HTML en vez de JSON— se lanza para que la cascada pase a SerpApi; una respuesta sin panel de empleos para
  * ese dork cuenta como «sin ofertas» solo si Bright Data respondió JSON de verdad.
  */
-export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void): Fetcher {
+export type BrightAsyncTally = { submitted: number; pending: number; unrecorded: number };
+
+export function brightDataFetcher(config: BrightDataConfig, onNoPanel?: () => void, tally?: BrightAsyncTally): Fetcher {
   return async (dork, timeoutMs) => {
-    // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
-    const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
-    if (!result.hasJobsPanel) onNoPanel?.();
-    return result.candidates;
+    if (!brightAsyncEnabled()) {
+      // Sin reintento: el cron tiene un reloj compartido y el fallback (SerpApi) ya es el segundo intento.
+      const result = await serpJobs(config, { query: dork.q, gl: dork.gl, hl: dork.hl, timeoutMs, maxAttempts: 1 });
+      if (!result.hasJobsPanel) onNoPanel?.();
+      return result.candidates;
+    }
+    // Asíncrono: encargar es inmediato y se cobra; si la zona no lo admite se lanza y la cascada pasa a SerpApi.
+    const submitted = await serpSubmitAsync(config, googleJobsUrl(dork.q, dork.gl, dork.hl), { timeoutMs: Math.min(timeoutMs, 15_000) });
+    if ('text' in submitted) {
+      // La zona respondió en síncrono: se lee esa respuesta (cuenta como búsqueda normal en la nota agregada).
+      const direct = parseSerpJobs(submitted.text);
+      if (!direct.hasJobsPanel) onNoPanel?.();
+      return direct.candidates;
+    }
+    const id = submitted.id;
+    if (tally) tally.submitted++;
+    if (!await rememberSubmit(id, dork, 'cascada') && tally) tally.unrecorded++;
+    // Un intento de recogida enseguida (gratis). Si sigue procesando se recoge en la siguiente pasada: no es «0 ofertas».
+    const collected = await serpCollectAsync(config.apiKey, id, { timeoutMs: Math.max(1_000, Math.min(timeoutMs, 10_000)) });
+    if (collected.status !== 'ready') { if (tally) tally.pending++; return []; }
+    try {
+      const parsed = parseSerpJobs(collected.text);
+      if (!parsed.hasJobsPanel) onNoPanel?.();
+      await markDone(id, `recogido · ${parsed.candidates.length} ofertas`);
+      return parsed.candidates;
+    } catch (err) {
+      await markDone(id, `ilegible: ${(err as Error).message}`);
+      throw err;
+    }
   };
 }
 
@@ -245,7 +278,8 @@ export async function collectGoogleJobs(
     let noPanel = 0;
     const serpFetch = serpSecret ? fetchFor(serpSecret) : null;
     const jsearchFetch = jsearchSecret ? (deps.jsearchFetcher ?? jsearchFetcher)(jsearchSecret) : null;
-    const brightFetch = brightConfig ? (deps.brightFetcher ?? brightDataFetcher)(brightConfig, () => { noPanel++; }) : null;
+    const asyncTally: BrightAsyncTally = { submitted: 0, pending: 0, unrecorded: 0 };
+    const brightFetch = brightConfig ? (deps.brightFetcher ?? ((config, onNoPanel) => brightDataFetcher(config, onNoPanel, asyncTally)))(brightConfig, () => { noPanel++; }) : null;
     const dorks = dorkWindow(Date.now(), limit);
     const all: Candidate[] = []; const errors: string[] = []; const warnings: string[] = []; let truncated = false;
     const used: Partial<Record<MeteredProvider, { searches: number; cost_usd: number }>> = {};
@@ -271,8 +305,11 @@ export async function collectGoogleJobs(
     const CHAIN = ['brightdata', 'jsearch', 'serpapi'] as const;
     type ChainProvider = typeof CHAIN[number];
     const PROVIDER_LABEL: Record<ChainProvider, string> = { brightdata: 'Bright Data', jsearch: 'JSearch', serpapi: 'SerpApi' };
+    let brightNoTime = 0;
     const usable = (provider: ChainProvider) => {
       const available = provider === 'brightdata' ? Boolean(brightFetch) : provider === 'jsearch' ? Boolean(jsearchFetch) : Boolean(serpFetch);
+      // Bright Data tarda 10–25 s: sin margen en el tramo se salta (el corte podría cobrarse) y el dork baja de escalón.
+      if (provider === 'brightdata' && available && timeLeft(deadline) < brightMinMs()) return false;
       // Un 429 de JSearch ya visto en esta pasada lo retira para el resto: no se insiste contra una cuota que
       // acaba de decir que no, y el dork baja a SerpApi si su tope lo permite.
       if (provider === 'jsearch' && jsearchLimits > 0) return false;
@@ -282,6 +319,7 @@ export async function collectGoogleJobs(
     // cortó en el tercero). El proveedor de cada dork se decide ANTES de lanzar para que el tope valga también
     // para las búsquedas simultáneas; si el primero falla, ese dork baja al siguiente escalón si su tope lo permite.
     const plan: Array<{ dork: Dork; first: ChainProvider | null }> = dorks.map(dork => {
+      if (brightFetch && meter.check('brightdata').ok && timeLeft(deadline) < brightMinMs()) brightNoTime++;
       const first = CHAIN.find(provider => usable(provider)) ?? null;
       if (first === null) {
         const capped = brightFetch ? 'brightdata' : jsearchFetch ? 'jsearch' : 'serpapi';
@@ -292,6 +330,7 @@ export async function collectGoogleJobs(
       return { dork, first };
     });
     const skippedBudget = plan.filter(item => item.first === null).length;
+    if (brightNoTime) warnings.push(`Bright Data omitido en ${brightNoTime} búsqueda(s): necesita ~${Math.round(brightMinMs() / 1000)} s y el tramo tenía ${Math.round(timeLeft(deadline) / 1000)} s; se usó SerpApi si estaba disponible.`);
     const settled = await Promise.allSettled(plan.map(async ({ dork, first }) => {
       if (first === null) return [] as Candidate[];
       const chain = CHAIN.slice(CHAIN.indexOf(first));
@@ -308,7 +347,7 @@ export async function collectGoogleJobs(
         }
         try {
           const call = provider === 'brightdata' ? brightFetch! : provider === 'jsearch' ? jsearchFetch! : serpFetch!;
-          return await call(dork, callTimeout(12_000, deadline));
+          return await call(dork, callTimeout(provider === 'brightdata' ? BRIGHT_CALL_MS : 12_000, deadline));
         } catch (err) {
           lastError = err;
           refund(provider, err);
@@ -334,11 +373,16 @@ export async function collectGoogleJobs(
     for (const provider of ['brightdata', 'jsearch', 'serpapi'] as const) {
       const row = used[provider];
       if (!row) continue;
+      // Los encargos asíncronos ya anotaron su coste uno a uno (con su async_id): aquí solo lo síncrono.
+      const asyncShare = provider === 'brightdata' ? asyncTally.submitted : 0;
+      if (asyncShare >= row.searches) { if (asyncTally.unrecorded) spendUnrecorded = true; continue; }
+      const syncRow = { searches: row.searches - asyncShare, cost_usd: Math.round((row.cost_usd - asyncShare * PROVIDER_METERS.brightdata.usdPerRequest) * 1e6) / 1e6 };
       const source = provider === 'brightdata' ? brightDataSource('google') : GOOGLE_JOBS_SOURCE;
-      const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: row.searches, costUsd: row.cost_usd, detail: 'google-jobs' }));
+      const ok = await recordSpend(source, via, spendNote({ route: 'cascada', provider, requests: syncRow.searches, costUsd: syncRow.cost_usd, detail: 'google-jobs' }));
       if (!ok) spendUnrecorded = true;
     }
-    const common = { searches, cost_usd: cost, by_provider: used, ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
+    if (asyncTally.unrecorded) spendUnrecorded = true;
+    const common = { searches, cost_usd: cost, by_provider: used, ...(asyncTally.submitted ? { brightdata_async: { submitted: asyncTally.submitted, pending: asyncTally.pending } } : {}), ...(warnings.length ? { warnings } : {}), ...(noPanel ? { no_jobs_panel: noPanel } : {}), ...(skippedBudget ? { skipped_budget: skippedBudget } : {}), ...(spendUnrecorded ? { spend_unrecorded: true } : {}), ...(truncated ? { truncated: true } : {}) };
     if (!all.length && skippedBudget === plan.length) {
       return { source: GOOGLE_JOBS_SOURCE, ok: false, error: `Sin presupuesto: ${blocked[0] ?? 'tope mensual agotado'}`, searches: 0, cost_usd: 0, skipped_budget: skippedBudget };
     }

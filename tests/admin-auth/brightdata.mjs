@@ -29,7 +29,7 @@ async function failure(run) {
 
 const realFetch = globalThis.fetch;
 try {
-  // 1) Contrato de la búsqueda: POST, Bearer, cuerpo exacto y Google Jobs con ibp=htl;jobs.
+  // 1) Contrato de la búsqueda: POST, Bearer, cuerpo exacto y búsqueda de Google con intención de empleo.
   {
     const calls = [];
     const result = await serpJobs(config, {
@@ -43,9 +43,8 @@ try {
     const body = JSON.parse(calls[0].init.body);
     assert.deepEqual(Object.keys(body).sort(), ['format', 'url', 'zone']);
     assert.equal(body.zone, 'serp_zone');
-    assert.equal(body.format, 'json');
-    assert.match(body.url, /[?&]q=closer(?:\+|%20)de(?:\+|%20)ventas(?:&|$)/);
-    assert.match(body.url, /ibp=htl%3Bjobs/, 'Google Jobs se pide con ibp=htl%3Bjobs');
+    assert.equal(body.format, 'raw', 'raw + brd_json=1: el JSON de Google llega directo, sin el sobre {status_code, headers, body}');
+    assert.match(body.url, /q=closer(?:\+|%20)de(?:\+|%20)ventas(?:\+|%20)empleo/, 'búsqueda normal con intención de empleo (Bright Data interpreta su recuadro de empleos)');
     assert.match(body.url, /brd_json=1/, 'brd_json=1 pide el JSON interpretado a Bright Data');
     assert.equal(result.rawItems, 3);
     assert.equal(result.candidates.length, 2, 'sin enlace no hay oferta verificable');

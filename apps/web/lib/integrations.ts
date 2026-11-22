@@ -3,7 +3,9 @@ import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
-import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, type BrightDataZone } from './providers/brightdata';
+import { markDone, rememberSubmit } from './brightdataAsync';
+import { RAPIDAPI_JOB_APIS, rapidApiJobs, rapidApiUsdPerRequest, type RapidApiError } from './providers/rapidapi';
+import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, brightAsyncEnabled, googleJobsUrl, JOBS_URL_VARIANTS, jobsUrlVariant, type JobsUrlVariant, type BrightDataConfig, parseSerpJobs, serpCollectAsync, serpSubmitAsync, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -34,13 +36,17 @@ export const PROVIDERS = {
   // JSearch (OpenWeb Ninja): no hay endpoint de cuenta gratuito, así que «Probar» hace UNA búsqueda real
   // (~0,0025 USD) y se anota; sin tope legible no se lanza (lo hace `testConnection`).
   jsearch: { name: 'JSearch', hint: 'API key de OpenWeb Ninja', probe: (k: string) => get(`${(process.env.JSEARCH_API_BASE ?? 'https://api.openwebninja.com/jsearch').replace(/\/+$/, '')}/search-v2?query=${encodeURIComponent('closer de ventas España')}&country=es&language=es&num_pages=1`, { 'x-api-key': k }) },
+  // RapidAPI: UNA clave para todas las APIs de empleo del marketplace a las que te suscribas. «Probar» hace una
+  // búsqueda en cada API verificada (JSearch, Jobs API LinkedIn e Indeed) y dice a cuáles estás suscrito; vive en
+  // `testRapidApiConnection` porque son varias peticiones, cada una con su anotación de gasto.
+  rapidapi: { name: 'RapidAPI', hint: 'X-RapidAPI-Key (una clave para todas las APIs de empleo a las que te suscribas)' },
   // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
   zenrows: { name: 'ZenRows', hint: 'API key de ZenRows', probe: (k: string) => get(`https://api.zenrows.com/v1/?apikey=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
   scrapingbee: { name: 'ScrapingBee', hint: 'API key de ScrapingBee', probe: (k: string) => get(`https://app.scrapingbee.com/api/v1/?api_key=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
 } as const;
 
 /** Proveedores cuya prueba hace una petición real y se cobra (se avisa en la tarjeta). */
-export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'jsearch', 'zenrows', 'scrapingbee']);
+export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'jsearch', 'rapidapi', 'zenrows', 'scrapingbee']);
 export type Provider = keyof typeof PROVIDERS;
 // `in` también acepta nombres heredados del prototipo (`toString`, `constructor`): se comprueba que la clave
 // sea propia, o el panel guardaría filas para un proveedor que no existe.
@@ -122,9 +128,69 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const cap = await capForOrg('brightdata');
   const check = canSpend('brightdata', spent, process.env, 1, cap.usd);
   if (!check.ok) return { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
+  // Se prueban las variantes de URL por orden y se para en la primera que trae el bloque de empleos (como mucho 3
+  // peticiones). El mensaje dice cuál funcionó; si no es la primera, la recogida necesita BRIGHTDATA_JOBS_URL.
+  const tried: string[] = [];
+  for (const variant of JOBS_URL_VARIANTS) {
+    const result = await probeVariant(config as BrightDataConfig & { serpZone: string }, variant);
+    if (result.noPanel) { tried.push(`${VARIANT_LABEL[variant]}: ${result.detail}`); continue; }
+    const tag = variant === jobsUrlVariant() ? '' : ` · funcionó con la variante «${VARIANT_LABEL[variant]}»: pon BRIGHTDATA_JOBS_URL=${variant} para que la recogida la use`;
+    return { ok: result.ok, detail: `${result.detail}${result.ok ? tag : ''}${tried.length ? ` (antes, sin empleos: ${tried.join(' | ')})` : ''}` };
+  }
+  return { ok: false, detail: `La clave y la zona funcionan, pero ninguna forma de pedir Google Jobs trajo empleos: ${tried.join(' | ')}. Prueba la misma búsqueda en el Playground de Bright Data y pásame el JSON.` };
+}
+
+const VARIANT_LABEL: Record<JobsUrlVariant, string> = { search: 'búsqueda normal con «empleo»', udm8: 'pestaña Empleos (udm=8)', ibp: 'vista Google Jobs (ibp)' };
+
+async function probeVariant(config: BrightDataConfig & { serpZone: string }, variant: JobsUrlVariant): Promise<{ ok: boolean; detail: string; noPanel?: boolean }> {
+  // Modo asíncrono (el que usa la recogida): encargar es inmediato y recoger es gratis. Se consulta cada pocos
+  // segundos hasta ~35 s; si aún procesa, la clave, la zona y el modo asíncrono quedan comprobados y el resultado lo
+  // recoge la siguiente pasada (ya anotado). Si la zona no admite el modo asíncrono se sigue con la llamada normal.
+  let asyncNote = '';
+  if (brightAsyncEnabled()) {
+    const dork = { q: 'closer de ventas', gl: 'es', hl: 'es' };
+    let id: string | null = null;
+    let direct: string | null = null;
+    try {
+      const submitted = await serpSubmitAsync({ ...config, serpZone: config.serpZone }, googleJobsUrl(dork.q, dork.gl, dork.hl, variant));
+      if ('id' in submitted) id = submitted.id; else direct = submitted.text;
+    } catch (err) { asyncNote = ` (modo asíncrono no disponible: ${(err as Error).message}; se probó en modo normal)`; }
+    if (direct !== null) {
+      // La zona respondió en síncrono (cobrado): se anota y se lee esa respuesta.
+      const cost = PROVIDER_METERS.brightdata.usdPerRequest;
+      const noted = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: cost, detail: 'prueba de clave' }));
+      if (!noted) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+      try {
+        const parsedDirect = parseSerpJobs(direct);
+        return parsedDirect.hasJobsPanel || parsedDirect.organicJobs > 0
+          ? { ok: true, detail: `Clave válida · ${parsedDirect.candidates.length} ofertas ${parsedDirect.hasJobsPanel ? 'del recuadro de empleos de Google' : 'concretas en resultados normales de Google (sin recuadro de empleos)'} (la zona respondió en síncrono; 1 petición anotada)` }
+          : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(direct)})` };
+      } catch (err) { return { ok: false, detail: `${(err as Error).message}.` }; }
+    }
+    if (id) {
+      const recorded = await rememberSubmit(id, dork, 'prueba');
+      if (!recorded) return { ok: false, detail: 'Bright Data aceptó la búsqueda, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+      const started = Date.now();
+      for (const wait of probeWaits()) {
+        await new Promise(resolve => setTimeout(resolve, wait));
+        const got = await serpCollectAsync(config.apiKey, id, { timeoutMs: 8_000 });
+        if (got.status === 'pending') continue;
+        if (got.status !== 'ready') return { ok: false, detail: `Bright Data aceptó la búsqueda asíncrona, pero al recogerla: ${got.detail}` };
+        let parsedAsync: ReturnType<typeof parseSerpJobs>;
+        try { parsedAsync = parseSerpJobs(got.text); }
+        catch (err) { await markDone(id, `ilegible: ${(err as Error).message}`); return { ok: false, detail: `${(err as Error).message}. Lo que llegó: ${describeResponse(got.text)}.` }; }
+        await markDone(id, `recogido · ${parsedAsync.candidates.length} ofertas (prueba)`);
+        const secs = Math.round((Date.now() - started) / 1000);
+        return parsedAsync.hasJobsPanel || parsedAsync.organicJobs > 0
+          ? { ok: true, detail: `Clave válida · modo asíncrono · ${parsedAsync.candidates.length} ofertas ${parsedAsync.hasJobsPanel ? 'del recuadro de empleos' : 'concretas en resultados normales'} en ~${secs} s (1 petición, ${PROVIDER_METERS.brightdata.usdPerRequest.toFixed(4).replace('.', ',')} USD anotada)` }
+          : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(got.text)})` };
+      }
+      return { ok: true, detail: `Clave y zona válidas · modo asíncrono activo: Bright Data aceptó la búsqueda y aún la procesa (suele tardar hasta 5 min). El resultado se recoge solo en la próxima recogida, sin volver a pagar.` };
+    }
+  }
   let response: Response;
   try {
-    response = await serpProbeRequest({ ...config, serpZone: config.serpZone });
+    response = await serpProbeRequest({ ...config, serpZone: config.serpZone }, fetch, variant);
   } catch (err) {
     // Un timeout o un corte de red pudo facturarse sin respuesta: se anota el peor caso para que el tope
     // no quede corto, igual que en «Probar ruta».
@@ -148,18 +214,60 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const cost = PROVIDER_METERS.brightdata.usdPerRequest;
   const recorded = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: cost, detail: 'prueba de clave' }));
   let payload: Record<string, unknown> | null = null;
+  const rawText = await response.text().catch(() => '');
   try {
-    const unwrapped = unwrapPayload(JSON.parse(await response.text()));
+    const unwrapped = unwrapPayload(JSON.parse(rawText));
     payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
   } catch { /* cuerpo sin JSON */ }
-  const jobs = payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
-  const failure = typeof payload?.error === 'string' && payload.error
-    ? `Bright Data: ${payload.error.slice(0, 160)}`
-    : !Array.isArray(jobs)
-      ? 'La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]: comprueba que la zona sea SERP API.'
-      : null;
+  let parsedSync: ReturnType<typeof parseSerpJobs> | null = null;
+  try { parsedSync = parseSerpJobs(rawText); } catch { /* sin JSON o error de Bright Data: se trata abajo */ }
+  const jobs = parsedSync && (parsedSync.hasJobsPanel || parsedSync.organicJobs > 0) ? parsedSync.candidates : null;
   if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
-  return failure ? { ok: false, detail: failure } : { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` };
+  if (typeof payload?.error === 'string' && payload.error) return { ok: false, detail: `Bright Data: ${payload.error.slice(0, 160)}` };
+  if (!Array.isArray(jobs)) return { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(rawText)})` };
+  return { ok: true, detail: `Clave válida · ${jobs.length} ofertas ${parsedSync?.hasJobsPanel ? 'del recuadro de empleos de Google' : 'concretas en resultados normales de Google'} · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)${asyncNote}` };
+}
+
+/** Esperas entre consultas de «Probar» asíncrono (~35 s en total). `BRIGHTDATA_PROBE_WAITS_MS` las acorta en pruebas. */
+const probeWaits = (): number[] => {
+  const raw = (process.env.BRIGHTDATA_PROBE_WAITS_MS ?? '').split(',').map(Number).filter(n => Number.isFinite(n) && n >= 0 && n <= 20_000);
+  return raw.length ? raw.slice(0, 8) : [8_000, 7_000, 7_000, 7_000, 6_000];
+};
+
+/**
+ * «Probar» RapidAPI: una búsqueda en cada API de empleo verificada. Cada petición pasa por el tope mensual y se anota
+ * al responder (aunque responda error: el plan pudo contarla). Dice a qué APIs está suscrita la clave y cuántas
+ * ofertas trajo cada una; 403 = no suscrito (no se cobra), no «clave mala».
+ */
+async function testRapidApiConnection(secret: string): Promise<{ ok: boolean; detail: string }> {
+  const key = secret.trim();
+  if (key.length < 10) return { ok: false, detail: 'Formato incorrecto: pega la X-RapidAPI-Key de tu aplicación en RapidAPI.' };
+  const runs = await runsThisMonth();
+  let spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), 'rapidapi').usd ?? 0);
+  const cap = await capForOrg('rapidapi');
+  const price = rapidApiUsdPerRequest();
+  const lines: string[] = [];
+  let working = 0, rejected = false;
+  for (const api of RAPIDAPI_JOB_APIS) {
+    const check = canSpend('rapidapi', spent, process.env, 1, cap.usd);
+    if (!check.ok) { lines.push(`${api.label}: no probado (${check.reason ?? 'sin tope'})`); continue; }
+    try {
+      const result = await rapidApiJobs(key, api, 'closer de ventas', 'es');
+      working++;
+      lines.push(`${api.label}: suscrito · ${result.candidates.length} ofertas`);
+      spent = (spent ?? 0) + price;
+      await recordSpend(`rapidapi-${api.id}`, 'probe', spendNote({ route: 'prueba', provider: 'rapidapi', requests: 1, costUsd: price, detail: `prueba ${api.id}` }));
+    } catch (err) {
+      const e = err as RapidApiError;
+      if (e.status === 401) rejected = true;
+      lines.push(e.message);
+      if (e.billed) { spent = (spent ?? 0) + price; await recordSpend(`rapidapi-${api.id}`, 'probe', spendNote({ route: 'prueba', provider: 'rapidapi', requests: 1, costUsd: price, detail: `prueba ${api.id} · error` })); }
+    }
+  }
+  if (rejected) return { ok: false, detail: `RapidAPI rechazó la clave (HTTP 401). ${lines.join(' · ')}` };
+  return working
+    ? { ok: true, detail: `Clave válida · ${working} de ${RAPIDAPI_JOB_APIS.length} APIs de empleo responden · ${lines.join(' · ')}` }
+    : { ok: false, detail: `La clave no tiene ninguna API de empleo suscrita que responda: ${lines.join(' · ')}` };
 }
 
 export async function testConnection(provider: Provider): Promise<{ ok: boolean; detail: string } | null> {
@@ -171,6 +279,8 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
     const secret = decryptSecret(rows[0].secret_ciphertext);
     if (provider === 'brightdata') {
       outcome = await testBrightDataConnection(secret);
+    } else if (provider === 'rapidapi') {
+      outcome = await testRapidApiConnection(secret);
     } else if (SPEND_PROBES.has(provider)) {
       const meter = provider as MeteredProvider;
       // La prueba hace una petición real: antes de lanzarla se comprueba el tope y, si responde, se anota

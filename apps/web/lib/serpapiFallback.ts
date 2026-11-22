@@ -5,6 +5,8 @@ import { getSecret } from './integrations';
 import { ORG } from './external';
 import { callTimeout, timeLeft, MIN_STEP_MS } from './cronBudget';
 import { serviceRest } from './supabaseAuth';
+import { FALLBACK_PORTALS, cleanTitle, organicToCandidate, type FallbackPortal } from './jobPortals';
+export { FALLBACK_PORTALS, cleanTitle, organicToCandidate, type FallbackPortal };
 
 // Respaldo de cobertura: si un portal no tiene API oficial conectada (o su clave falla), se busca en
 // Google con SerpApi acotado a ese portal (`site:`). Google ya rastrea InfoJobs, Indeed, Computrabajo,
@@ -18,29 +20,7 @@ export const SEARCH_USD = 0.025;
 export const DEFAULT_MAX = 4;
 export const DEFAULT_TARGET = 60;
 
-export type FallbackPortal = {
-  source: string;            // código con el que se guarda (`serpapi-<portal>`)
-  name: string;
-  site: string;              // operador `site:` de la búsqueda
-  query: string;             // término principal del SOP
-  gl: 'es' | 'mx' | 'co' | 'ar';
-  url: RegExp;               // qué enlaces son de verdad una oferta del portal
-  replaces?: 'infojobs' | 'adzuna' | 'jooble' | 'indeed' | 'linkedin'; // API oficial o recolector que cubre
-};
 
-// Orden = prioridad cuando no hay presupuesto para todas. Primero los portales que no tienen ninguna
-// otra vía (LatAm y agregadores) y después los que dependen de una API o de JobSpy.
-export const FALLBACK_PORTALS: FallbackPortal[] = [
-  { source: 'serpapi-computrabajo', name: 'Computrabajo', site: 'computrabajo.com', query: 'closer de ventas', gl: 'co', url: /computrabajo\.(?:com|es)\/ofertas-de-trabajo\//i },
-  { source: 'serpapi-occ', name: 'OCCMundial', site: 'occ.com.mx', query: 'closer de ventas', gl: 'mx', url: /occ\.com\.mx\/empleo\//i },
-  { source: 'serpapi-bumeran', name: 'Bumerán', site: 'bumeran.com', query: 'closer', gl: 'ar', url: /bumeran\.com\/(?:empleos|avisos)\//i },
-  { source: 'serpapi-bebee', name: 'BeBee', site: 'bebee.com', query: 'sales closer', gl: 'es', url: /bebee\.com\/jobs\//i },
-  { source: 'serpapi-infojobs', name: 'InfoJobs', site: 'infojobs.net', query: 'closer de ventas', gl: 'es', url: /infojobs\.net\/(?:oferta|empleo|ofertas-trabajo)\//i, replaces: 'infojobs' },
-  { source: 'serpapi-indeed', name: 'Indeed España', site: 'es.indeed.com', query: 'closer de ventas', gl: 'es', url: /indeed\.(?:es|com)\/(?:viewjob|rc\/clk|m\/viewjob)/i, replaces: 'indeed' },
-  { source: 'serpapi-linkedin', name: 'LinkedIn', site: 'linkedin.com/jobs', query: 'high ticket closer', gl: 'es', url: /linkedin\.com\/jobs\/view\//i, replaces: 'linkedin' },
-  { source: 'serpapi-adzuna', name: 'Adzuna', site: 'adzuna.es', query: 'closer', gl: 'es', url: /adzuna\.es\/details\//i, replaces: 'adzuna' },
-  { source: 'serpapi-jooble', name: 'Jooble', site: 'jooble.org', query: 'closer de ventas', gl: 'es', url: /jooble\.org\/desc\//i, replaces: 'jooble' },
-];
 
 export const maxSearches = (env: NodeJS.ProcessEnv = process.env) => {
   const raw = Number(env.SERPAPI_FALLBACK_MAX_SEARCHES ?? DEFAULT_MAX);
@@ -75,23 +55,6 @@ export function planFallback({ missing, paused, recent, max = DEFAULT_MAX }: Pla
   const second = available.filter(p => !coversMissingApi(p) && !p.replaces);
   const third = available.filter(p => !coversMissingApi(p) && Boolean(p.replaces));
   return [...first, ...second, ...third].slice(0, Math.min(max, available.length));
-}
-
-export const cleanTitle = (title: string) => title.replace(/\s*[|·–-]\s*(?:infojobs|indeed|linkedin|computrabajo|bumeran|occ mundial|occ|bebee|adzuna|jooble).*$/i, '').trim();
-
-/** Una ficha orgánica de Google → candidato. `null` si el enlace no es una oferta del portal. */
-export function organicToCandidate(result: unknown, portal: FallbackPortal): Candidate | null {
-  if (!result || typeof result !== 'object') return null;
-  const r = result as Record<string, unknown>;
-  const link = typeof r.link === 'string' ? r.link.trim() : '';
-  const title = typeof r.title === 'string' ? cleanTitle(r.title).slice(0, 200) : '';
-  if (!/^https?:\/\//i.test(link) || !title || !portal.url.test(link)) return null;
-  const snippet = typeof r.snippet === 'string' ? r.snippet.replace(/\s+/g, ' ').trim().slice(0, 500) : '';
-  return {
-    external_id: link.slice(0, 1000), title, company: null, location: null, url: link,
-    salary: null, description: snippet || null, posted_at: null,
-    raw: { provider: 'serpapi', portal: portal.site, via: 'site' },
-  };
 }
 
 type Fetcher = (portal: FallbackPortal, timeoutMs: number) => Promise<Candidate[]>;

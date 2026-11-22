@@ -6,6 +6,7 @@ import { readBudget } from '../../../../lib/paidBudget';
 import { PROVIDER_METERS } from '../../../../lib/providerBudget';
 import { spendOverview, type SpendRow } from '../../../../lib/providerCaps';
 import { maxSearches } from '../../../../lib/serpapiFallback';
+import { rapidApiMaxRequests } from '../../../../lib/rapidapiCollect';
 import { planStages, type StageInput } from '../../../../lib/waterfall';
 import { readTarget, waterfallState, writeTarget } from '../../../../lib/waterfallStore';
 
@@ -60,6 +61,12 @@ export async function GET(request: NextRequest) {
       id: 'google-jobs', label: 'Google Jobs', automatic: true,
       unit: `Bright Data ${PROVIDER_METERS.brightdata.usdPerRequest} USD primero; JSearch ${PROVIDER_METERS.jsearch.usdPerRequest} USD; SerpApi ${PROVIDER_METERS.serpapi.usdPerRequest} USD de respaldo, por búsqueda`,
       available: brightOk || jsrOk || serpOk, reason: googleWhy,
+    },
+    {
+      id: 'rapidapi', label: 'APIs de empleo de RapidAPI', automatic: true,
+      unit: `~${PROVIDER_METERS.rapidapi.usdPerRequest} USD por búsqueda (según el plan de cada API), hasta ${rapidApiMaxRequests()} por pasada`,
+      available: keysKnown && keys.has('rapidapi') && room(row('rapidapi')).ok && rapidApiMaxRequests() > 0,
+      reason: !keysKnown || !keys.has('rapidapi') ? noKey('RapidAPI') : rapidApiMaxRequests() === 0 ? 'Desactivado (RAPIDAPI_MAX_REQUESTS=0).' : room(row('rapidapi')).why,
     },
     {
       id: 'respaldo', label: 'Respaldo por portal (SerpApi)', automatic: true,

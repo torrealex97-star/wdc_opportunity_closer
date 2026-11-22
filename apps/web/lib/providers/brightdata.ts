@@ -1,3 +1,4 @@
+import { organicJobCandidates } from '../jobPortals';
 import type { Candidate } from '../external';
 
 // Bright Data · SERP API y Web Unlocker.
@@ -71,8 +72,24 @@ export const brightDataSource = (code: string) => `brightdata-${code}`;
  * URL de Google Jobs: `ibp=htl;jobs` activa el panel de vacantes y `brd_json=1` pide a Bright Data el JSON
  * ya interpretado (sin él la respuesta puede ser HTML o un envoltorio y el anuncio no se puede leer).
  */
-export function googleJobsUrl(query: string, gl = 'es', hl = 'es'): string {
-  const params = new URLSearchParams({ q: query, ibp: 'htl;jobs', brd_json: '1', hl, gl });
+/**
+ * Variante de URL de Google para empleos. Medido en producción (2026-11-22): con `ibp=htl;jobs` Bright Data
+ * devolvió JSON con solo `general`, `input` y `navigation` —su intérprete no lee esa vista—. Su documentación
+ * describe `jobs` como «ofertas incrustadas en la página de búsqueda»: el recuadro de empleos de una búsqueda
+ * normal. Orden: `search` (búsqueda normal con intención de empleo), `udm8` (pestaña Empleos actual) e `ibp`.
+ */
+export type JobsUrlVariant = 'search' | 'udm8' | 'ibp';
+export const JOBS_URL_VARIANTS: readonly JobsUrlVariant[] = ['search', 'udm8', 'ibp'];
+export const jobsUrlVariant = (env: NodeJS.ProcessEnv = process.env): JobsUrlVariant =>
+  (JOBS_URL_VARIANTS as readonly string[]).includes(env.BRIGHTDATA_JOBS_URL ?? '') ? env.BRIGHTDATA_JOBS_URL as JobsUrlVariant : 'search';
+const JOB_INTENT = /\b(empleo|empleos|trabajo|trabajos|oferta|ofertas|vacante|vacantes|jobs?)\b/i;
+
+export function googleJobsUrl(query: string, gl = 'es', hl = 'es', variant: JobsUrlVariant = jobsUrlVariant()): string {
+  const params = variant === 'search'
+    ? new URLSearchParams({ q: JOB_INTENT.test(query) ? query : `${query} empleo`, brd_json: '1', hl, gl })
+    : variant === 'udm8'
+      ? new URLSearchParams({ q: query, udm: '8', brd_json: '1', hl, gl })
+      : new URLSearchParams({ q: query, ibp: 'htl;jobs', brd_json: '1', hl, gl });
   return `https://www.google.com/search?${params.toString()}`;
 }
 
@@ -86,11 +103,38 @@ export function unwrapPayload(payload: unknown): unknown {
   if (typeof body === 'string' && body.trim()) {
     try { return JSON.parse(body); } catch { return payload; }
   }
+  // Un objeto en `body` es el resultado: se devuelve aunque no traiga `jobs` (antes solo se abría si lo traía y el
+  // diagnóstico veía el sobre —status_code, headers, body— en vez de lo que de verdad respondió Google).
+  if (body && typeof body === 'object' && !Array.isArray(body) && 'status_code' in (payload as Record<string, unknown>)) return body;
   if (body && typeof body === 'object') {
     const inner = body as Record<string, unknown>;
     if (inner.jobs !== undefined || inner.jobs_results !== undefined) return inner;
   }
   return payload;
+}
+
+/**
+ * Describe sin copiar contenido qué devolvió Bright Data, para el mensaje de «Probar»: el código que Google dio dentro
+ * del sobre, si el cuerpo es HTML, JSON (con sus campos) o está vacío, y su tamaño. Nunca incluye texto de la página.
+ */
+export function describeResponse(text: string): string {
+  const parts: string[] = [];
+  let value: unknown = null;
+  try { value = JSON.parse(text); } catch { /* no es JSON */ }
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'status_code' in (value as Record<string, unknown>)) {
+    const envelope = value as Record<string, unknown>;
+    parts.push(`Sobre de Bright Data con status_code ${String(envelope.status_code)}`);
+    const body = envelope.body;
+    if (typeof body === 'string') {
+      try { value = JSON.parse(body); } catch { value = null; text = body; }
+    } else value = body ?? null;
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) parts.push(`cuerpo JSON con campos: ${Object.keys(value as Record<string, unknown>).slice(0, 12).join(', ') || 'ninguno'}`);
+  else if (Array.isArray(value)) parts.push(`cuerpo JSON en lista (${value.length} elementos)`);
+  else if (!text.trim()) parts.push('cuerpo vacío');
+  else if (/^\s*</.test(text)) parts.push(`cuerpo HTML de ${text.length} caracteres (Bright Data no lo interpretó como JSON)`);
+  else parts.push(`cuerpo de texto de ${text.length} caracteres`);
+  return parts.join(' · ');
 }
 
 /** Zonas activas de la cuenta: `[{name, type}]` (la documentación también admite `{zones: [...]}`). */
@@ -217,18 +261,18 @@ export async function resolveBrightDataConfig(secret: string, options: BrightDat
   return { config: withZones(listed.zones), zones: listed.zones, error: null };
 }
 
-type FetchLike = typeof fetch;
+export type FetchLike = typeof fetch;
 
 /**
  * La petición de prueba del panel: UNA búsqueda de Google Jobs, sin reintento (un reintento se cobraría).
  * Se usa con una configuración ya resuelta para no repetir la consulta de zonas. No se ejecuta al guardar.
  * Exige la zona en el tipo: el llamador ya la comprobó, así que no hay una rama de error inalcanzable.
  */
-export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
+export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch, variant: JobsUrlVariant = jobsUrlVariant()): Promise<Response> {
   return fetchImpl(`${apiBase()}/request`, {
-    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(40_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'json' }),
+    body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas', 'es', 'es', variant), format: 'raw' }),
   });
 }
 
@@ -315,37 +359,106 @@ const tagsText = (tags: unknown): string | null => {
   return names.length ? names.join(' · ') : null;
 };
 
-/** Un item de `jobs.items[]` → candidato de la app. Sin enlace o sin título no hay oferta verificable. */
+const str = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value : null);
+const firstLink = (value: unknown): string | null => {
+  if (!Array.isArray(value)) return null;
+  for (const option of value) {
+    const link = option && typeof option === 'object' ? str((option as RawJob).link) ?? str((option as RawJob).url) : str(option);
+    if (link && /^https?:\/\//i.test(link)) return link;
+  }
+  return null;
+};
+const ext = (job: RawJob): RawJob => (job.detected_extensions && typeof job.detected_extensions === 'object' ? job.detected_extensions as RawJob : job.extensions && typeof job.extensions === 'object' && !Array.isArray(job.extensions) ? job.extensions as RawJob : {});
+
+/**
+ * Un item de empleo → candidato de la app. Acepta los nombres de campo de cualquier entrega (Full JSON de Bright
+ * Data, Google Jobs de SerpApi y variantes): title/job_title/position, company/company_name/employer_name,
+ * link/url/share_link/job_link/apply_link/apply_options[].link… Sin título o sin enlace http(s) no hay oferta
+ * verificable y se descarta; ningún dato que falte se rellena.
+ */
 export function jobToCandidate(item: unknown, now = Date.now()): Candidate | null {
-  if (!item || typeof item !== 'object') return null;
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
   const job = item as RawJob;
-  const title = clip(job.title, 200);
-  const url = clip(job.link, 1000) ?? clip(job.url, 1000);
+  const title = clip(job.title ?? job.job_title ?? job.jobTitle ?? job.position ?? job.name, 200);
+  const url = [job.link, job.url, job.share_link, job.job_link, job.apply_link, job.job_url, job.job_apply_link, job.applyUrl, job.jobUrl, job.linkedinUrl, job.job_google_link]
+    .map(value => clip(value, 1000))
+    .find(value => value && /^https?:\/\//i.test(value)) ?? clip(firstLink(job.apply_options) ?? firstLink(job.related_links), 1000);
   if (!title || !url || !/^https?:\/\//i.test(url)) return null;
-  const company = clip(job.company, 200) ?? clip(job.company_name, 200);
-  const location = clip(job.location, 200);
-  const source = clip(job.source, 80) ?? clip(job.via, 80);
-  const description = [clip(job.description, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
+  const extensions = ext(job);
+  const company = clip(job.company ?? job.company_name ?? job.companyName ?? job.employer_name ?? job.employer ?? job.organization, 200);
+  const cityCountry = [str(job.job_city), str(job.job_country)].filter(Boolean).join(', ') || null;
+  const location = clip(job.location ?? job.job_location ?? cityCountry, 200);
+  const source = clip(job.source ?? job.via ?? job.publisher ?? job.job_publisher, 80);
+  const description = [clip(job.description ?? job.snippet ?? job.job_description ?? job.descriptionText, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
   return {
     external_id: `bd-${shortId(url)}`,
     title,
     company,
     location,
     url,
-    salary: clip(job.salary, 200),
+    salary: clip(job.salary ?? extensions.salary, 200),
     description,
-    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted, now),
+    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted ?? job.job_posted_at ?? job.postedTimeAgo ?? extensions.posted_at, now),
     raw: { provider: 'brightdata', site: source ?? undefined },
   };
 }
 
-/** Forma documentada: `{ jobs: { items: [...] } }`. También acepta `jobs_results` y el envoltorio `{body}`. */
+const JOB_KEY = /job/i;
+const looksLikeJob = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const job = value as RawJob;
+  const titled = Boolean(str(job.title) ?? str(job.job_title) ?? str(job.jobTitle) ?? str(job.position));
+  const company = Boolean(str(job.company) ?? str(job.company_name) ?? str(job.companyName) ?? str(job.employer_name) ?? str(job.employer) ?? str(job.organization));
+  return titled && company;
+};
+const parseMaybeJson = (value: string): unknown => {
+  const trimmed = value.trim();
+  if (!/^[[{]/.test(trimmed)) return undefined;
+  try { return JSON.parse(trimmed); } catch { return undefined; }
+};
+
+/**
+ * Busca el listado de empleos en CUALQUIER forma JSON que entregue el proveedor: directo (`jobs.items`, `jobs`,
+ * `jobs_results`), dentro de un sobre `{status_code, headers, body}` con el cuerpo como objeto o como texto JSON, o
+ * anidado a cualquier profundidad. Una lista cuenta como empleos si cuelga de una clave con «job» o si sus
+ * elementos tienen título y empresa: así los resultados orgánicos de Google (título y enlace, sin empresa) no se
+ * confunden con ofertas. `panel` dice si apareció un bloque de empleos aunque viniera vacío.
+ */
+export function extractJobItems(rawPayload: unknown): { items: unknown[]; panel: boolean } {
+  const found: unknown[] = [];
+  let panel = false;
+  const seen = new Set<unknown>();
+  const visit = (value: unknown, key: string, depth: number) => {
+    if (depth > 8 || value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      if (value.length < 2 || depth > 6) return;
+      const parsed = parseMaybeJson(value);
+      if (parsed !== undefined) visit(parsed, key, depth + 1);
+      return;
+    }
+    if (typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      const jobLike = value.filter(looksLikeJob);
+      if (JOB_KEY.test(key)) { panel = true; found.push(...value.filter(item => item && typeof item === 'object' && !Array.isArray(item))); return; }
+      if (jobLike.length && jobLike.length >= Math.ceil(value.length / 2)) { panel = true; found.push(...jobLike); return; }
+      value.forEach(item => visit(item, key, depth + 1));
+      return;
+    }
+    const record = value as RawJob;
+    for (const [childKey, child] of Object.entries(record)) {
+      if (childKey === 'html' || childKey === 'headers') continue;
+      if (JOB_KEY.test(childKey) && child && typeof child === 'object' && !Array.isArray(child)) panel = true;
+      visit(child, JOB_KEY.test(key) && childKey === 'items' ? key : childKey, depth + 1);
+    }
+  };
+  visit(rawPayload, '', 0);
+  return { items: found, panel };
+}
+
+/** Candidatos de una respuesta en cualquier forma (ver `extractJobItems`), sin duplicados por enlace. */
 export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidate[] {
-  const payload = unwrapPayload(rawPayload);
-  if (!payload || typeof payload !== 'object') return [];
-  const body = payload as Record<string, unknown>;
-  const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const items = Array.isArray(jobs?.items) ? jobs.items : Array.isArray(body.jobs_results) ? body.jobs_results : [];
+  const { items } = extractJobItems(rawPayload);
   const seen = new Set<string>();
   const out: Candidate[] = [];
   for (const item of items) {
@@ -359,7 +472,7 @@ export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidat
 
 /** `maxAttempts: 1` desactiva el reintento: lo usa el cron, cuyo reloj compartido no admite un segundo intento. */
 export type SerpJobsOptions = { query: string; gl?: string; hl?: string; timeoutMs?: number; fetchImpl?: FetchLike; now?: number; maxAttempts?: number };
-export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; /** La respuesta traía el panel de empleos de Google (aunque estuviera vacío); sin él no es «0 ofertas» comprobado. */ hasJobsPanel: boolean };
+export type SerpJobsResult = { candidates: Candidate[]; requests: number; costUsd: number; rawItems: number; /** La respuesta traía el panel de empleos de Google (aunque estuviera vacío); sin él no es «0 ofertas» comprobado. */ hasJobsPanel: boolean; organicJobs: number };
 
 /**
  * Una búsqueda de Google Jobs. Un fallo se lanza con su motivo (nunca se devuelve una lista vacía
@@ -370,26 +483,88 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   const { query, gl = 'es', hl = 'es', timeoutMs = 15_000, fetchImpl = fetch, now = Date.now(), maxAttempts = BRIGHTDATA_MAX_ATTEMPTS } = options;
   if (!query.trim()) throw new BrightDataError('La búsqueda está vacía');
   if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
-  const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'json', fetchImpl, timeoutMs, maxAttempts);
+  const { text, attempts } = await postRequest(config, config.serpZone, googleJobsUrl(query, gl, hl), 'raw', fetchImpl, timeoutMs, maxAttempts);
+  return { ...parseSerpJobs(text, attempts, now), requests: attempts, costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST };
+}
+
+/**
+ * Lee una respuesta de Google Jobs de Bright Data (síncrona o recogida en modo asíncrono). Un cuerpo que no es
+ * JSON o un `error` de Bright Data se lanzan: no es «0 ofertas».
+ */
+export function parseSerpJobs(text: string, attempts = 1, now = Date.now()): { candidates: Candidate[]; rawItems: number; hasJobsPanel: boolean; organicJobs: number } {
   let payload: unknown;
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, attempts);
+    throw new BrightDataError(`Bright Data devolvió algo que no es JSON (${describeResponse(text)}); revisa la zona SERP`, 200, attempts);
   }
   const unwrapped = unwrapPayload(payload);
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
-  const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const rawItems = Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
-  return {
-    candidates: jobsFromPayload(payload, now),
-    // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.
-    requests: attempts,
-    costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST,
-    rawItems,
-    hasJobsPanel: Boolean(jobs) || Array.isArray(body.jobs_results),
-  };
+  const { items, panel } = extractJobItems(payload);
+  const fromPanel = jobsFromPayload(payload, now);
+  // Sin recuadro de empleos (medido en producción para «closer de ventas empleo» en España: Google devolvió solo
+  // resultados normales), se aprovechan los orgánicos que enlazan a una OFERTA CONCRETA de un portal conocido
+  // (LinkedIn /jobs/view/, InfoJobs, Indeed viewjob…). Un listado o una página de búsqueda no cuenta: nada se inventa.
+  const organic = Array.isArray(body.organic) ? body.organic : [];
+  const fromOrganic = panel ? [] : organicJobCandidates(organic, 'brightdata').map(c => ({ ...c, external_id: `bd-${shortId(c.url)}` }));
+  return { candidates: [...fromPanel, ...fromOrganic], rawItems: items.length, hasJobsPanel: panel, organicJobs: fromOrganic.length };
+}
+
+/**
+ * MODO ASÍNCRONO (hay que activarlo en la zona: Advanced settings → Asynchronous requests). Encargar es
+ * `POST /request?async=true` (booleano, según la especificación OpenAPI de Bright Data) con el mismo cuerpo que la llamada normal; Bright Data responde enseguida con el
+ * identificador en la cabecera `x-response-id` y se cobra aquí (al encargar). Recoger con
+ * `GET /serp/get_result?response_id=…` no se cobra: 202 = aún procesando, 200 = resultado. El resultado se guarda
+ * 48 h, así que lo que no esté listo se recoge en la siguiente pasada sin pagar otra vez.
+ */
+export async function serpSubmitAsync(config: BrightDataConfig, url: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<{ id: string } | { text: string }> {
+  const { fetchImpl = fetch, timeoutMs = 15_000 } = options;
+  if (!config.serpZone) throw new BrightDataError('Falta la zona SERP de Bright Data (API key:zona SERP)', 422);
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/request?async=true`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({ zone: config.serpZone, url, format: 'raw' }),
+    });
+  } catch (err) {
+    throw new BrightDataError(`No se pudo contactar con Bright Data: ${(err as Error).message}`, null, 1);
+  }
+  const text = await response.text().catch(() => '');
+  if (!response.ok) throw new BrightDataError(`Bright Data rechazó la búsqueda asíncrona (HTTP ${response.status})${text ? `: ${text.slice(0, 160)}` : ''}`, response.status, 1);
+  let id = response.headers.get('x-response-id');
+  if (!id) {
+    try { const body = JSON.parse(text) as Record<string, unknown>; id = typeof body.response_id === 'string' ? body.response_id : null; } catch { /* sin JSON */ }
+  }
+  if (id && /^[A-Za-z0-9_-]{4,128}$/.test(id)) return { id };
+  // Sin identificador pero con cuerpo: la zona no está en modo asíncrono y Bright Data respondió en síncrono (y lo
+  // cobró). Se devuelve esa respuesta para leerla en vez de tirarla. Sin cuerpo útil se dice qué activar.
+  if (text.trim()) return { text };
+  throw new BrightDataError('Bright Data no devolvió response_id ni resultado: activa «Asynchronous requests» en la zona SERP', response.status, 1);
+}
+
+/** Modo asíncrono de Bright Data: activo salvo `BRIGHTDATA_ASYNC=0` (la zona debe tenerlo activado). */
+export const brightAsyncEnabled = (env: NodeJS.ProcessEnv = process.env) => env.BRIGHTDATA_ASYNC !== '0';
+
+export type AsyncCollect = { status: 'pending' } | { status: 'ready'; text: string } | { status: 'gone'; detail: string } | { status: 'error'; detail: string };
+
+/** Recoge un encargo asíncrono (gratis). Nunca lanza: devuelve el estado para que el llamador decida. */
+export async function serpCollectAsync(apiKey: string, responseId: string, options: { fetchImpl?: FetchLike; timeoutMs?: number } = {}): Promise<AsyncCollect> {
+  const { fetchImpl = fetch, timeoutMs = 15_000 } = options;
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiBase()}/serp/get_result?response_id=${encodeURIComponent(responseId)}`, {
+      method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  } catch (err) {
+    return { status: 'error', detail: `No se pudo contactar con Bright Data: ${(err as Error).message}` };
+  }
+  const text = await response.text().catch(() => '');
+  if (response.status === 202 || /request is pending/i.test(text.slice(0, 80))) return { status: 'pending' };
+  if (response.ok) return { status: 'ready', text };
+  if (response.status === 404 || /result not found/i.test(text.slice(0, 80))) return { status: 'gone', detail: 'Bright Data ya no tiene el resultado (caduca a las 48 h)' };
+  return { status: 'error', detail: `Bright Data respondió HTTP ${response.status}${text ? `: ${text.slice(0, 160)}` : ''}` };
 }
 
 export type UnlockResult = { html: string; requests: number; costUsd: number };

@@ -95,12 +95,26 @@ export function startMocks({ authPort, enginePort }) {
       }
       // Contrato de la documentación: `brd_json=1` EN LA URL (`format` raw o json: el cliente desenvuelve el envoltorio). Sin él Bright Data devuelve el
       // HTML de Google (aquí, un 200 con HTML), que es lo que rompía la integración con la clave real.
-      if (body.zone !== 'serp_zone' || !['raw', 'json'].includes(body.format) || !String(body.url ?? '').includes('ibp=htl%3Bjobs')) return send(res, 422, { error: 'contrato inesperado' });
+      if (body.zone !== 'serp_zone' || !['raw', 'json'].includes(body.format) || !/google\.com\/search\?/.test(String(body.url ?? ''))) return send(res, 422, { error: 'contrato inesperado' });
       if (!String(body.url).includes('brd_json=1')) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><body>Google</body></html>'); }
-      return send(res, 200, { jobs: { items: [
+      // Modo asíncrono (`?async=true`): responde enseguida con `x-response-id`; el resultado se recoge en /serp/get_result.
+      const serpResult = { jobs: { items: [
         { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
         { title: 'Setter de ventas', company: 'Beta BD', location: 'Barcelona, España', source: 'LinkedIn', description: 'Agenda de citas cualificadas', link: 'https://www.linkedin.com/jobs/view/bd-2', tags: [], posted_at: 'hace 1 día' },
-      ] } });
+      ] } };
+      if (url.searchParams.get('async') === 'true') {
+        const id = `mockresp${(state.brightAsync ??= new Map()).size + 1}`;
+        state.brightAsync.set(id, serpResult);
+        res.writeHead(200, { 'content-type': 'application/json', 'x-response-id': id });
+        return res.end(JSON.stringify({ response_id: id }));
+      }
+      return send(res, 200, serpResult);
+    }
+    if (url.pathname === '/serp/get_result') {
+      if (bearer !== 'testkey-1234') return send(res, 401, { error: 'invalid api key' });
+      const stored = state.brightAsync?.get(url.searchParams.get('response_id') ?? '');
+      if (!stored) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('Result not found'); }
+      return send(res, 200, stored);
     }
     if (url.pathname === '/rest/v1/engine_alerts') {
       if (state.alertsTableMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.engine_alerts' in the schema cache" });

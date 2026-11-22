@@ -5,6 +5,58 @@
 - **Qué se hizo** (*tested*): la cascada de cada dork es hoy Bright Data → JSearch → SerpApi, por coste y con el tope de cada proveedor (`provider_budget` y, como respaldo, su variable). JSearch entra con una petición por dork (`num_pages=1`, sin cursor) y reserva 0,0025 USD antes de lanzar; su gasto se anota con `proveedor=jsearch` y no se atribuye a SerpApi. Un 401/403/429/5xx devuelve la reserva (no se cobra) y el dork baja al siguiente escalón; un 2xx con estado de error o un fallo sin respuesta se anotan como peor caso, la misma regla que su vía del panel (`jsearchBilled`). Un 429 no se reintenta, retira JSearch para el resto de la pasada y queda contado en la nota. La etapa de Google Jobs de `/api/admin/waterfall` declara el escalón nuevo.
 - **Comprobado** (*tested*): `googlejobs.mjs` **33/33** (7 dorks por JSearch a 0,0175 USD sin llamar a SerpApi; tope de JSearch que deja pasar 4 y manda 3 a SerpApi; 429 y 401 sin gasto y con aviso; fallo de red anotado como peor caso; orden Bright Data → JSearch → SerpApi) y `npm run typecheck` 0 errores.
 - **Límites honestos**: sin clave real de OpenWeb Ninja ni de Bright Data, todo se ejercita con `fetch` simulado; no se ha observado una pasada real del cron ni el cobro de un timeout. El tope se guarda en céntimos (`parseCapUsd`), así que `JSEARCH_MONTHLY_USD=0.005` vale 0,01. El botón «Ejecutar dorks» de Fuentes va por el motor Python (`/google/run`) y no se toca aquí.
+## Bright Data y RapidAPI con los datos reales de las pruebas del propietario — 2026-11-22
+
+- **Medido en producción** (*verified*, `integration_connections.last_test_detail`, 15:54 hora de España):
+  - Bright Data, búsqueda normal «closer de ventas empleo» (España): JSON con `general`, `input`, `navigation`, `organic`, `pagination`, `related`, `people_also_ask`, **sin recuadro de empleos**. La variante `udm=8` se cortó a los 40 s. La petición fue síncrona: la zona no aceptó `?async=1`.
+  - RapidAPI: JSearch respondió 404 «Endpoint '/search' does not exist» (la clave sí está suscrita); Jobs API LinkedIn 403 (sin suscripción); Jobs API Indeed 429 (cuota agotada).
+- **Cambios** (*tested*):
+  - Bright Data usa los resultados orgánicos que enlazan a una **oferta concreta** de un portal conocido (LinkedIn `/jobs/view/`, InfoJobs, Indeed `viewjob`…) cuando no hay recuadro de empleos; un listado no cuenta. Los patrones viven ahora en [`jobPortals.ts`](../apps/web/lib/jobPortals.ts), compartidos con el respaldo de SerpApi.
+  - Modo asíncrono con `?async=true`, el booleano de la especificación OpenAPI oficial (antes `async=1`, de una referencia de terceros).
+  - RapidAPI JSearch pasa a `/search-v2`, la ruta que la integración directa de JSearch ya usa con éxito.
+- **Sin verificar**: cuántas ofertas concretas trae cada búsqueda orgánica y si la zona acepta `async=true`; lo dice el siguiente «Probar».
+
+## RapidAPI: una clave para varias APIs de empleo verificadas — 2026-11-22
+
+- **Petición del propietario**: añadir RapidAPI, que tiene muchas APIs de empleo.
+- **Qué APIs** (*inspected*, documentación pública de rapidapi.com): solo las de ruta y respuesta documentadas. **JSearch** (`jsearch.p.rapidapi.com/search`, `data[]` con `job_title`, `employer_name`, `job_apply_link`) y **Jobs API** de Pat92 (`jobs-api14.p.rapidapi.com/v2/linkedin/search` y `/v2/indeed/search`, campos `title`, `companyName`, `applyUrl`). LinkedIn Job Search API (fantastic.jobs) queda fuera: su ruta exacta no se pudo leer en la documentación pública.
+- **Cambio** (*tested* con simulador, `tests/admin-auth/rapidapi.mjs` 8/8, suite completa en verde):
+  - [`providers/rapidapi.ts`](../apps/web/lib/providers/rapidapi.ts): cabeceras `X-RapidAPI-Key`/`X-RapidAPI-Host`; 403 = sin suscripción (no se cobra), 429 = cuota agotada, 401 = clave rechazada.
+  - «Probar» busca una vez en cada API y dice a cuáles está suscrita la clave.
+  - Etapa `rapidapi` del waterfall tras Google Jobs, solo si falta objetivo; como mucho `RAPIDAPI_MAX_REQUESTS` (3) por pasada; cada API guarda con su fuente `rapidapi-<api>`.
+  - Tope mensual `RAPIDAPI_MONTHLY_USD` (5 USD). El coste por petición es una **estimación prudente** (0,005 USD, `RAPIDAPI_USD_PER_REQUEST`): cada API factura según su plan.
+- **Migración** `20261122_rapidapi_provider.sql` (amplía los CHECK de `integration_connections` y `provider_budget`): **aplicada en la base real** por orden expresa del propietario. Antes, prueba `BEGIN … ROLLBACK` (`tests/db/rapidapi_provider.sql`) en la base real: la conexión y el tope se guardan y un proveedor inventado sigue rechazado. Asesores de seguridad después: sin avisos nuevos.
+
+## Bright Data: de «no trae empleos» a una integración que lee cualquier entrega — 2026-11-22 (PR #120, #124, #125, #126)
+
+- **Lo observado en producción** (*verified* en `integration_connections.last_test_detail` y en los logs de Supabase):
+  - Una respuesta HTTP 200 llegó en 4 s dentro de un sobre `{status_code, headers, body}` que la app no abría.
+  - Con `ibp=htl;jobs` Bright Data devolvió JSON con solo `general`, `input` y `navigation`: su intérprete no lee la vista de Google Jobs. Su documentación describe `jobs` como «ofertas incrustadas en la página de búsqueda» (*inspected*).
+  - Varias pruebas se cortaron sin respuesta a los 20 y a los 40 s.
+- **Hallazgo del code review**: en el cron la etapa de Google Jobs tenía 6,5 s; Bright Data se cortaba siempre y SerpApi ya no tenía tiempo.
+- **Cambios** (*tested* con simuladores; suite completa en verde en cada PR):
+  - Lector universal (`extractJobItems`, `jobToCandidate`): cualquier forma JSON (sobre con cuerpo objeto o texto, `jobs` lista u objeto, `jobs_results`, anidado) y nombres de campo de cualquier proveedor. Lo orgánico no cuenta como oferta; el HTML no se interpreta.
+  - URL por defecto: búsqueda normal con intención de empleo; `udm=8` e `ibp=htl;jobs` como variantes (`BRIGHTDATA_JOBS_URL`). «Probar» prueba las tres por orden (como mucho 3 peticiones) y dice cuál trae empleos.
+  - **Modo asíncrono** (el propietario lo activó en la zona): encargar con `POST /request?async=1` (cobrado), recoger con `GET /serp/get_result` (gratis). Cada encargo y cada recogida quedan anotados en `external_ingest_runs` (vías `async` y `async-done`); el cron recoge lo pendiente antes de Google Jobs. Si la zona responde en síncrono, se usa esa respuesta.
+  - Cron: Google Jobs con 18 s y Bright Data solo con margen (`BRIGHTDATA_MIN_MS`); si no cabe, el dork va a SerpApi con aviso. «Probar» espera hasta ~40 s.
+- **Sin verificar**: que la búsqueda normal traiga el recuadro de empleos para estas consultas en España; lo dice el siguiente «Probar» en producción.
+
+## Resumen del admin: tarjeta de objetivo del día y gasto del mes — 2026-11-22 (PR #120)
+
+- **Hallazgo** (*inspected*): el Resumen trataba bien los huecos, pero no decía nada del dinero ni del objetivo del día.
+- **Cambio** (*tested*): tarjeta «Meta del día (24 h)» en [`SummaryTab`](../apps/web/components/SummaryTab.tsx): cualificadas frente al objetivo, si falta o está cubierto, gasto del mes frente a la suma de topes y enlace a APIs. Si una lectura falla, «—» con su causa; no se suma un gasto parcial.
+
+## Nota sobre este archivo — 2026-11-22
+
+- Las entradas anteriores de esta sesión (PR #120 a #126) no llegaron a guardarse: el encabezado `# Estado` desapareció en otro cambio y el script de inserción lo usaba como ancla sin avisar. Se reponen arriba; no se ha tocado lo de otras sesiones.
+
+## CodeQL deja de fallar en un repositorio privado sin Code Security — 2026-11-22
+
+- **Petición del propietario**: averiguar qué rompe CodeQL en `main`, arreglarlo y comprobar que el análisis queda en verde, sin tocar el comportamiento de la app.
+- **Hallazgo** (*inspected*): no rompía ninguna regla. Los dos jobs (`javascript-typescript` y `python`) completaban el análisis y exportaban el SARIF, y fallaban después al subirlo con «Resource not accessible by integration» (`GET /actions/workflow-runs/{id}`). La API de code scanning de este repositorio responde **403 «Code scanning is not enabled for this repository»**: es privado y GitHub solo acepta SARIF de CodeQL en repos públicos o privados con **GitHub Code Security** (Settings → Code security; requiere plan Team/Enterprise). Ningún permiso del workflow podía arreglarlo.
+- **Arreglo** (*tested*): [codeql.yml](../.github/workflows/codeql.yml) ejecuta `analyze` con `upload: never` y `output: codeql-results` (mismo `init`, mismas consultas, `build-mode: none` y las mismas acciones fijadas por SHA), añade `actions: read` —el permiso que faltaba para la llamada a la API de Actions— y un paso que escribe los hallazgos (gravedad, nivel, regla, fichero:línea) en el resumen del run, y pone el job en rojo **solo** con gravedad alta o crítica (`security-severity >= 7.0`). Si algún día se activa Code Security, `upload: always` y el permiso `security-events: write` devuelven Security → Code scanning.
+- **Comprobado en CI** (*verified*, PR #121, run 45022656525): `analyze (javascript-typescript)` **success** con 8 hallazgos y `analyze (python)` **success** con 4, **0 de gravedad alta o crítica**; `verify` y `web-admin` en verde. El diff no toca código de la app: solo el workflow y este bloque.
+- **Límites honestos**: los 12 hallazgos restantes (gravedad baja/media o consultas de calidad) no aparecen en Security → Code scanning mientras no haya licencia; quedan en el resumen de cada run. El análisis no se ejecutó en local (no hay CodeQL CLI en la máquina): la evidencia es el run de Actions.
 
 ## Lo que quedaba de `docs/panel-fuentes-aplicado` llega a `main` — 2026-11-22
 
