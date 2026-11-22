@@ -15,7 +15,7 @@ import SourceIdeas from './SourceIdeas';
 type Offer = { id: string; source: string; title: string; company: string | null; location: string | null; url: string; salary: string | null; posted_at: string | null; first_seen_at: string; editorial_status: string; verified_result: string | null; role: string | null; spain: boolean | null; score: number; also_seen: string[]; ai_review?: AiReview | null; risk?: { level: 'WARNING' | 'BLOCKED'; flags: string[] } | null; tags?: OfferTags };
 type AiReview = { verdict: string; confidence: number; reasons: string[]; red_flags: string[]; would_decide: string; gate: string; mode: string; applied: boolean; audit_sample?: boolean; link?: { result: string; reason: string }; jev?: { verdict: string | null; score: number | null; note: string | null } };
 const WOULD: Record<string, string> = { approve: 'Aprobaría', withdraw: 'Retiraría', human: 'Cola humana' };
-type Data = { offers: Offer[]; total: number; page: number; page_size: number; counts: Record<string, number>; sources: Array<{ source: string; live: number; approved: number; last_seen: string | null }>; runs: Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }>; paused: string[]; auto?: { used_today: number | null; cap: number } };
+type Data = { offers: Offer[]; total: number; page: number; page_size: number; counts: Record<string, number> | null; sources: Array<{ source: string; live: number; approved: number; last_seen: string | null }> | null; runs: Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }>; paused: string[]; auto?: { used_today: number | null; cap: number } };
 const STATUS: Record<string, string> = { draft: 'Borrador', needs_review: 'A revisar', approved: 'Aprobada', published: 'Publicada', withdrawn: 'Retirada' };
 const PLURAL: Record<string, string> = { draft: 'borradores', needs_review: 'a revisar', approved: 'aprobadas', published: 'publicadas', withdrawn: 'retiradas' };
 const VERDICT: Record<string, string> = { open: 'Activa', closed: 'Cerrada', unknown: 'No verificable' };
@@ -145,13 +145,15 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
     } catch (err) { lost(err as Error); } finally { setWorking(''); }
   }
 
-  const counts = data?.counts ?? {};
+  // `null` = la lectura falló: se pinta «—», nunca 0 (un hueco no es un cero).
+  const counts = data?.counts ?? null;
+  const sourcesKnown = !data || data.sources !== null;
   return <section aria-label="Fuentes externas">
     <p className="card-meta" style={{ marginTop: 0, marginBottom: 20, maxWidth: 760 }}>Cada fuente entra por la vía que le corresponde, y Apify es solo una de ellas: InfoJobs, Adzuna y Jooble con sus claves (pestaña APIs) cada día a las 6:00; los portales con API o feed público por el conector del motor, sin clave; Google Jobs por SerpApi (hasta 7 búsquedas al día, 0,175 USD) y, si un portal no tiene API oficial (sin clave o caída), su búsqueda se hace en Google acotada a ese portal (hasta 4 más, 0,1 USD) para que no falte inventario. También entra lo que trae el workflow de GitHub con JobSpy, y solo los portales sin API ni feed se conectan con un actor de Apify, que se paga por resultado. Abre «Cómo conectarla» en el catálogo para ver el requisito y las alternativas de cada una. Todo entra como borrador, con puntuación para quedarte con las mejores, y enlaza siempre al anuncio original.</p>
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
     {notice && <div className="auth-note" role="status" style={{ marginBottom: 16 }}>{notice}</div>}
     <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}>
-      <div className="stat-strip" style={{ margin: 0 }}>{Object.entries(PLURAL).map(([k, l]) => <span key={k}><strong>{counts[k] ?? 0}</strong>{l}</span>)}</div>
+      <div className="stat-strip" style={{ margin: 0 }}>{Object.entries(PLURAL).map(([k, l]) => <span key={k}><strong>{!data ? '…' : counts === null ? '—' : counts[k] ?? 0}</strong>{l}</span>)}{data && counts === null && <span className="card-meta" role="status">No se pudo leer el recuento por estado.</span>}</div>
         <div className="admin-toolbar" style={{ gap: 8, margin: 0 }}>
         {owner && <button disabled={working !== ''} onClick={() => void autoReview()} title="Reglas: perfil, mercado, español, puntuación y enlace vivo. Solo lo dudoso va a tu cola.">{working === 'auto' ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />} Aprobar las claras</button>}
         {owner && <button disabled={working !== ''} onClick={() => void collect()}>{working === 'collect' ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />} Recoger APIs ahora</button>}
@@ -165,10 +167,10 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
     <SourceIdeas />
     <div className="table-wrap" style={{ marginBottom: 20 }}><table className="data-table">
       <thead><tr><th>Fuente</th><th>Vía</th><th>Estado</th><th className="num">Activas</th><th className="num">Aprobadas</th><th>Última vez</th><th /></tr></thead>
-      <tbody>{KNOWN.map(([code, name, via]) => { const st = data?.sources.find(x => x.source === code); const off = data?.paused.includes(code); return <tr key={code}>
+      <tbody>{KNOWN.map(([code, name, via]) => { const st = data?.sources?.find(x => x.source === code); const off = data?.paused.includes(code); return <tr key={code}>
         <td className="primary-cell"><strong>{name}</strong><span>{code}</span></td><td>{via}</td>
-        <td><span className={off ? 'status bad' : st ? 'status ok' : 'status'}>{off ? 'Pausada' : st ? 'Activa' : 'Sin datos aún'}</span></td>
-        <td className="num">{st?.live ?? 0}</td><td className="num">{st?.approved ?? 0}</td><td>{fmt(st?.last_seen ?? null)}</td>
+        <td><span className={off ? 'status bad' : st ? 'status ok' : 'status'}>{off ? 'Pausada' : !sourcesKnown ? 'Sin leer' : st ? 'Activa' : 'Sin datos aún'}</span></td>
+        <td className="num">{!sourcesKnown ? '—' : st?.live ?? 0}</td><td className="num">{!sourcesKnown ? '—' : st?.approved ?? 0}</td><td>{fmt(st?.last_seen ?? null)}</td>
         <td style={{ textAlign: 'right' }}>{owner && <button disabled={working !== ''} onClick={() => void toggle(code, !!off)} aria-label={`${off ? 'Reanudar' : 'Pausar'} ${name}`}>{off ? <Play size={14} /> : <Pause size={14} />} {off ? 'Reanudar' : 'Pausar'}</button>}</td></tr>; })}</tbody></table></div>
     {!!data?.runs.length && <p className="card-meta">Última entrada: {data.runs[0].source} vía {data.runs[0].via}, {data.runs[0].accepted} de {data.runs[0].received} guardadas · {fmt(data.runs[0].created_at)}</p>}
     <div className="search-panel admin-toolbar">
@@ -182,13 +184,13 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
       <button disabled={busy} onClick={load}>{busy ? <LoaderCircle size={15} className="spin" /> : <RefreshCcw size={15} />} Actualizar</button>
     </div>
     {status === 'needs_review' && data && data.total === 0 && (data.counts?.draft ?? 0) > 0 && <div className="alert" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-      <span>No hay excepciones ahora mismo: las <strong>{data.counts.draft}</strong> oferta(s) pendientes esperan a la pasada automática (reglas + IA).</span>
+      <span>No hay excepciones ahora mismo: las <strong>{data.counts?.draft}</strong> oferta(s) pendientes esperan a la pasada automática (reglas + IA).</span>
       <button onClick={() => change(setStatus)('draft')}>Ver borradores</button>
     </div>}
     <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}>
       <div className="stat-strip" style={{ margin: 0 }}><span><strong>{data?.total ?? '…'}</strong>cumplen los filtros</span><span><strong>{chosen.length}</strong>seleccionadas en esta página</span>
         {/* La cola entera, sin los filtros de perfil/España: si no, «cumplen los filtros» esconde el trabajo real. */}
-        {status === 'needs_review' && data && <span><strong>{data.counts.needs_review ?? 0}</strong>en tu cola de excepciones (sin filtros)</span>}</div>
+        {status === 'needs_review' && data && <span><strong>{data.counts === null ? '—' : data.counts.needs_review ?? 0}</strong>en tu cola de excepciones (sin filtros)</span>}</div>
       <label className="check-label" style={{ flexDirection: 'row', alignItems: 'center' }}><input type="checkbox" checked={onlySpain} onChange={e => change(setOnlySpain)(e.target.checked)} /> Solo con señal clara de España</label>
     </div>
     {status === 'draft' && <div className="search-panel admin-toolbar" style={{ alignItems: 'center' }}>

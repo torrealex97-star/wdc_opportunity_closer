@@ -525,6 +525,16 @@ await step('externas (panel): lista con contadores, aprobación en bloque y veri
   const patch = await call('/api/admin/external', { method: 'PATCH', body: { ids: [ok.id], editorial_status: 'approved' } });
   assert.equal(patch.json.changed, 1); assert.equal(ok.editorial_status, 'approved');
 });
+await step('externas (panel): si el recuento por estado no se puede leer, es «desconocido» (null), no ceros', async () => {
+  state.externalCountsFail = true;
+  try {
+    const list = await call('/api/admin/external?status=draft');
+    assert.equal(list.status, 200, 'la lista sigue sirviéndose');
+    assert.equal(list.json.counts, null, 'un recuento caído no se pinta como 0 en cada estado');
+  } finally { state.externalCountsFail = false; }
+  const again = await call('/api/admin/external?status=draft');
+  assert.ok(again.json.counts && typeof again.json.counts === 'object', 'con el recuento sano vuelve el objeto');
+});
 await step('recogida de APIs oficiales: solo propietario; usa las claves guardadas y guarda borradores', async () => {
   for (const [provider, secret] of [['infojobs', 'cid:good-key-1234'], ['adzuna', 'aid:good-key-1234'], ['jooble', 'good-key-1234']]) {
     assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider, secret } })).status, 200);

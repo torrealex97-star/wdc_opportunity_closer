@@ -249,6 +249,8 @@ export function startMocks({ authPort, enginePort }) {
       return send(res, 200, [...state.leads.values()]);
     }
     if (url.pathname === '/rest/v1/external_offers') {
+      // Recuento por estado caído (lo usa `countsByStatus`): `select=id&limit=1` con `count=exact`.
+      if (state.externalCountsFail && req.method === 'GET' && url.searchParams.get('select') === 'id' && url.searchParams.get('limit') === '1') return send(res, 500, { message: 'recuento caído' });
       const q = Object.fromEntries(url.searchParams); const ids = q.id?.startsWith('in.(') ? q.id.slice(4, -1).split(',') : q.id?.startsWith('eq.') ? [q.id.slice(3)] : null;
       let rows = [...state.external.values()];
       if (ids) rows = rows.filter(r => ids.includes(r.id));
