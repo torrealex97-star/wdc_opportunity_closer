@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { JSearchError, candidatesFromPayload, jsearchJobs, jsearchUrl } from '../../apps/web/lib/providers/jsearch.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
@@ -130,6 +130,33 @@ assert.deepEqual(unwrapPayload({ status_code: 200, headers: {}, body: { organic:
 assert.match(describeResponse(JSON.stringify({ status_code: 403, headers: {}, body: '<!doctype html><html></html>' })), /status_code 403 · cuerpo HTML de \d+ caracteres/);
 assert.match(describeResponse(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify({ general: {}, organic: [] }) })), /campos: general, organic/);
 assert.match(describeResponse(''), /cuerpo vacío/);
+// 3b''. Lector universal: cualquier forma JSON en la que Bright Data (u otro proveedor) entregue los empleos.
+{
+  const item = { title: 'Closer', company: 'Acme', location: 'Madrid', link: 'https://acme.test/a' };
+  const shapes = {
+    'Full JSON documentado': { jobs: { title: 'Empleos', items: [item] } },
+    'jobs como lista': { jobs: [item] },
+    'sobre con body objeto': { status_code: 200, headers: {}, body: { jobs: { items: [item] } } },
+    'sobre con body texto JSON': { status_code: 200, headers: {}, body: JSON.stringify({ jobs: { items: [item] } }) },
+    'anidado a fondo': { results: { page: { widgets: [{ type: 'jobs', job_listings: [item] }] } } },
+    'estilo SerpApi': { jobs_results: [{ title: 'Closer', company_name: 'Acme', via: 'InfoJobs', share_link: 'https://acme.test/a', detected_extensions: { salary: '30k', posted_at: 'hace 2 días' } }] },
+    'enlace solo en apply_options': { jobs: [{ job_title: 'Closer', employer_name: 'Acme', apply_options: [{ title: 'InfoJobs', link: 'https://acme.test/a' }] }] },
+  };
+  for (const [name, shape] of Object.entries(shapes)) {
+    const got = jobsFromPayload(shape);
+    assert.equal(got.length, 1, `lee los empleos en forma «${name}»`);
+    assert.equal(got[0].url, 'https://acme.test/a', name);
+    assert.equal(got[0].title, 'Closer', name);
+  }
+  const serp = jobsFromPayload(shapes['estilo SerpApi'])[0];
+  assert.equal(serp.company, 'Acme'); assert.equal(serp.salary, '30k');
+  // Los resultados orgánicos (título y enlace, sin empresa) NO son ofertas.
+  assert.equal(jobsFromPayload({ organic: [{ title: 'Pizza Hut', link: 'https://pizzahut.com', source: 'Pizza Hut' }] }).length, 0);
+  assert.equal(extractJobItems({ organic: [{ title: 'x', link: 'https://x.test' }] }).panel, false, 'sin bloque de empleos no hay panel');
+  assert.equal(extractJobItems({ jobs: { items: [] } }).panel, true, 'un bloque de empleos vacío es panel (0 ofertas comprobado)');
+  // HTML: no se inventa nada.
+  assert.equal(jobsFromPayload('<html>Google</html>').length, 0);
+}
 // 3c. El envoltorio `{status_code, headers, body}` no pierde las ofertas.
 const wrapped = { status_code: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobs: { items: [{ title: 'Closer', company: 'Acme', link: 'https://acme.test/1' }] } }) };
 assert.equal(unwrapPayload(wrapped).jobs.items.length, 1);

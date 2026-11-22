@@ -3,7 +3,7 @@ import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
-import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, type BrightDataZone } from './providers/brightdata';
+import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -153,7 +153,10 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
     const unwrapped = unwrapPayload(JSON.parse(rawText));
     payload = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? unwrapped as Record<string, unknown> : null;
   } catch { /* cuerpo sin JSON */ }
-  const jobs = Array.isArray(payload?.jobs) ? payload.jobs : payload?.jobs && typeof payload.jobs === 'object' ? (payload.jobs as Record<string, unknown>).items : null;
+  let parsedAll: unknown = null;
+  try { parsedAll = JSON.parse(rawText); } catch { /* sin JSON */ }
+  const extracted = extractJobItems(parsedAll);
+  const jobs = extracted.panel ? extracted.items : null;
   const failure = typeof payload?.error === 'string' && payload.error
     ? `Bright Data: ${payload.error.slice(0, 160)}`
     : !Array.isArray(jobs)
