@@ -16,18 +16,18 @@ const server = http.createServer(async (req, res) => {
   const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
   let body = '';
   for await (const chunk of req) body += chunk;
-  if (url.pathname === '/search' || url.pathname.startsWith('/v2/')) {
+  if (url.pathname === '/search-v2' || url.pathname.startsWith('/v2/')) {
     const host = req.headers['x-rapidapi-host'];
     calls.push({ host, path: url.pathname, key: req.headers['x-rapidapi-key'], params: Object.fromEntries(url.searchParams) });
     const m = mode[host] ?? 'ok';
     if (m === 'nosub') return send(403, { message: 'You are not subscribed to this API.' });
     if (m === 'quota') return send(429, { message: 'You have exceeded the MONTHLY quota' });
     if (m === 'badkey') return send(401, { message: 'Invalid API key' });
-    if (url.pathname === '/search') {
-      return send(200, { status: 'OK', request_id: 'r1', data: [
+    if (url.pathname === '/search-v2') {
+      return send(200, { status: 'OK', request_id: 'r1', data: { jobs: [
         { job_id: 'j1', job_title: 'Closer de ventas', employer_name: 'Acme', job_publisher: 'LinkedIn', job_city: 'Madrid', job_country: 'ES', job_apply_link: 'https://acme.test/j1', job_posted_at: 'hace 2 dÃ­as' },
         { job_id: 'j2', job_title: 'Sin enlace', employer_name: 'Beta' },
-      ] });
+      ] } });
     }
     return send(200, { data: [{ id: 'x1', title: `Closer ${url.pathname.includes('indeed') ? 'Indeed' : 'LinkedIn'}`, companyName: 'Gamma', location: 'Barcelona', applyUrl: `https://gamma.test${url.pathname}/x1`, postedTimeAgo: '1 day ago' }], errors: [], hasError: false });
   }
@@ -68,13 +68,13 @@ await step('contrato: X-RapidAPI-Key y X-RapidAPI-Host de cada API, con sus parÃ
   await rapidApiJobs('rapid-key-123456', jsearch, 'closer', 'es');
   await rapidApiJobs('rapid-key-123456', linkedin, 'closer', 'es');
   await rapidApiJobs('rapid-key-123456', indeed, 'closer', 'es');
-  assert.deepEqual(calls.map(c => [c.host, c.path]), [['jsearch.p.rapidapi.com', '/search'], ['jobs-api14.p.rapidapi.com', '/v2/linkedin/search'], ['jobs-api14.p.rapidapi.com', '/v2/indeed/search']]);
+  assert.deepEqual(calls.map(c => [c.host, c.path]), [['jsearch.p.rapidapi.com', '/search-v2'], ['jobs-api14.p.rapidapi.com', '/v2/linkedin/search'], ['jobs-api14.p.rapidapi.com', '/v2/indeed/search']]);
   assert.ok(calls.every(c => c.key === 'rapid-key-123456'));
   assert.equal(calls[0].params.country, 'es'); assert.equal(calls[0].params.num_pages, '1');
   assert.equal(calls[1].params.location, 'Spain'); assert.equal(calls[2].params.countryCode, 'es');
 });
 
-await step('lee la forma de JSearch (data[] con job_*) y descarta lo que no tiene enlace', async () => {
+await step('lee la forma de JSearch (/search-v2: data.jobs[] con job_*) y descarta lo que no tiene enlace', async () => {
   const out = await rapidApiJobs('k', jsearch, 'closer', 'es');
   assert.equal(out.candidates.length, 1, 'sin enlace no hay oferta');
   const [c] = out.candidates;

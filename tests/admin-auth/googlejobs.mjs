@@ -69,7 +69,7 @@ const server = http.createServer(async (req, res) => {
     };
     const [code, ctype, text] = compute();
     // Modo asíncrono: Bright Data responde enseguida con `x-response-id` (sin el resultado) si la petición es válida.
-    if (url.searchParams.get('async') === '1') {
+    if (url.searchParams.get('async') === 'true') {
       if (code === 401) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end(text); }
       // Zona sin modo asíncrono: Bright Data responde en síncrono, sin x-response-id.
       if (brightAsyncOff) { res.writeHead(code, { 'content-type': ctype }); return res.end(text); }

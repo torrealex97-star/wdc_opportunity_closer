@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { routesForSource, routesForCatalog, planCascade, runCascade, routeReadiness, groupForSource, orderRoutes, AGENT_GAP_FILL } from '../../apps/web/lib/sourceRoutes.ts';
-import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
+import { BRIGHTDATA_USD_PER_REQUEST, brightDataSource, parseBrightDataSecret, serpJobs, jobsFromPayload, googleJobsUrl, zonesFromPayload, pickBrightDataZones, listZones, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, parseSerpJobs, clearBrightDataZoneCache } from '../../apps/web/lib/providers/brightdata.ts';
 import { PROVIDER_METERS, spendNote, costFromNote, spentFromNotes, canSpend } from '../../apps/web/lib/providerBudget.ts';
 import { JSearchError, candidatesFromPayload, jsearchJobs, jsearchUrl } from '../../apps/web/lib/providers/jsearch.ts';
 import { extractJobPostings } from '../../apps/web/lib/jobPosting.ts';
@@ -161,6 +161,21 @@ assert.match(describeResponse(''), /cuerpo vacío/);
   assert.equal(extractJobItems({ jobs: { items: [] } }).panel, true, 'un bloque de empleos vacío es panel (0 ofertas comprobado)');
   // HTML: no se inventa nada.
   assert.equal(jobsFromPayload('<html>Google</html>').length, 0);
+}
+// 3b'''. Sin recuadro de empleos (lo medido en producción el 2026-11-22), los orgánicos que enlazan a una OFERTA
+// CONCRETA de un portal se aprovechan; un listado no.
+{
+  const realShape = { general: {}, input: {}, navigation: [], pagination: {}, related: [], people_also_ask: [], organic: [
+    { title: 'Closer de ventas high ticket - LinkedIn', link: 'https://es.linkedin.com/jobs/view/closer-de-ventas-123', description: 'Buscamos closer' },
+    { title: 'Empleos de closer de ventas en España - Indeed', link: 'https://es.indeed.com/q-closer-de-ventas-empleos.html', description: 'Listado' },
+    { title: 'Oferta closer | InfoJobs', link: 'https://www.infojobs.net/madrid/closer/of-i123abc', description: 'Oferta' },
+  ] };
+  const parsed = parseSerpJobs(JSON.stringify(realShape));
+  assert.equal(parsed.hasJobsPanel, false);
+  assert.equal(parsed.organicJobs, 1, 'solo el enlace de oferta concreta (LinkedIn /jobs/view/); el listado de Indeed no');
+  assert.equal(parsed.candidates[0].url, 'https://es.linkedin.com/jobs/view/closer-de-ventas-123');
+  assert.equal(parsed.candidates[0].title, 'Closer de ventas high ticket', 'sin el sufijo del portal');
+  assert.equal(parsed.candidates[0].company, null, 'la empresa no se inventa');
 }
 // 3c. El envoltorio `{status_code, headers, body}` no pierde las ofertas.
 const wrapped = { status_code: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobs: { items: [{ title: 'Closer', company: 'Acme', link: 'https://acme.test/1' }] } }) };
