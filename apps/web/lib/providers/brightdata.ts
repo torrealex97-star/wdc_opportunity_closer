@@ -342,37 +342,105 @@ const tagsText = (tags: unknown): string | null => {
   return names.length ? names.join(' · ') : null;
 };
 
-/** Un item de `jobs.items[]` → candidato de la app. Sin enlace o sin título no hay oferta verificable. */
+const str = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value : null);
+const firstLink = (value: unknown): string | null => {
+  if (!Array.isArray(value)) return null;
+  for (const option of value) {
+    const link = option && typeof option === 'object' ? str((option as RawJob).link) ?? str((option as RawJob).url) : str(option);
+    if (link && /^https?:\/\//i.test(link)) return link;
+  }
+  return null;
+};
+const ext = (job: RawJob): RawJob => (job.detected_extensions && typeof job.detected_extensions === 'object' ? job.detected_extensions as RawJob : job.extensions && typeof job.extensions === 'object' && !Array.isArray(job.extensions) ? job.extensions as RawJob : {});
+
+/**
+ * Un item de empleo → candidato de la app. Acepta los nombres de campo de cualquier entrega (Full JSON de Bright
+ * Data, Google Jobs de SerpApi y variantes): title/job_title/position, company/company_name/employer_name,
+ * link/url/share_link/job_link/apply_link/apply_options[].link… Sin título o sin enlace http(s) no hay oferta
+ * verificable y se descarta; ningún dato que falte se rellena.
+ */
 export function jobToCandidate(item: unknown, now = Date.now()): Candidate | null {
-  if (!item || typeof item !== 'object') return null;
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
   const job = item as RawJob;
-  const title = clip(job.title, 200);
-  const url = clip(job.link, 1000) ?? clip(job.url, 1000);
+  const title = clip(job.title ?? job.job_title ?? job.position ?? job.name, 200);
+  const url = [job.link, job.url, job.share_link, job.job_link, job.apply_link, job.job_url]
+    .map(value => clip(value, 1000))
+    .find(value => value && /^https?:\/\//i.test(value)) ?? clip(firstLink(job.apply_options) ?? firstLink(job.related_links), 1000);
   if (!title || !url || !/^https?:\/\//i.test(url)) return null;
-  const company = clip(job.company, 200) ?? clip(job.company_name, 200);
-  const location = clip(job.location, 200);
-  const source = clip(job.source, 80) ?? clip(job.via, 80);
-  const description = [clip(job.description, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
+  const extensions = ext(job);
+  const company = clip(job.company ?? job.company_name ?? job.employer_name ?? job.employer, 200);
+  const location = clip(job.location ?? job.job_location, 200);
+  const source = clip(job.source ?? job.via ?? job.publisher, 80);
+  const description = [clip(job.description ?? job.snippet ?? job.job_description, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
   return {
     external_id: `bd-${shortId(url)}`,
     title,
     company,
     location,
     url,
-    salary: clip(job.salary, 200),
+    salary: clip(job.salary ?? extensions.salary, 200),
     description,
-    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted, now),
+    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted ?? extensions.posted_at, now),
     raw: { provider: 'brightdata', site: source ?? undefined },
   };
 }
 
-/** Forma documentada (Full JSON): `{ jobs: { items: [...] } }`. También acepta `jobs` como lista, `jobs_results` y el envoltorio `{body}`. */
+const JOB_KEY = /job/i;
+const looksLikeJob = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const job = value as RawJob;
+  const titled = Boolean(str(job.title) ?? str(job.job_title) ?? str(job.position));
+  const company = Boolean(str(job.company) ?? str(job.company_name) ?? str(job.employer_name) ?? str(job.employer));
+  return titled && company;
+};
+const parseMaybeJson = (value: string): unknown => {
+  const trimmed = value.trim();
+  if (!/^[[{]/.test(trimmed)) return undefined;
+  try { return JSON.parse(trimmed); } catch { return undefined; }
+};
+
+/**
+ * Busca el listado de empleos en CUALQUIER forma JSON que entregue el proveedor: directo (`jobs.items`, `jobs`,
+ * `jobs_results`), dentro de un sobre `{status_code, headers, body}` con el cuerpo como objeto o como texto JSON, o
+ * anidado a cualquier profundidad. Una lista cuenta como empleos si cuelga de una clave con «job» o si sus
+ * elementos tienen título y empresa: así los resultados orgánicos de Google (título y enlace, sin empresa) no se
+ * confunden con ofertas. `panel` dice si apareció un bloque de empleos aunque viniera vacío.
+ */
+export function extractJobItems(rawPayload: unknown): { items: unknown[]; panel: boolean } {
+  const found: unknown[] = [];
+  let panel = false;
+  const seen = new Set<unknown>();
+  const visit = (value: unknown, key: string, depth: number) => {
+    if (depth > 8 || value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      if (value.length < 2 || depth > 6) return;
+      const parsed = parseMaybeJson(value);
+      if (parsed !== undefined) visit(parsed, key, depth + 1);
+      return;
+    }
+    if (typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      const jobLike = value.filter(looksLikeJob);
+      if (JOB_KEY.test(key)) { panel = true; found.push(...value.filter(item => item && typeof item === 'object' && !Array.isArray(item))); return; }
+      if (jobLike.length && jobLike.length >= Math.ceil(value.length / 2)) { panel = true; found.push(...jobLike); return; }
+      value.forEach(item => visit(item, key, depth + 1));
+      return;
+    }
+    const record = value as RawJob;
+    for (const [childKey, child] of Object.entries(record)) {
+      if (childKey === 'html' || childKey === 'headers') continue;
+      if (JOB_KEY.test(childKey) && child && typeof child === 'object' && !Array.isArray(child)) panel = true;
+      visit(child, JOB_KEY.test(key) && childKey === 'items' ? key : childKey, depth + 1);
+    }
+  };
+  visit(rawPayload, '', 0);
+  return { items: found, panel };
+}
+
+/** Candidatos de una respuesta en cualquier forma (ver `extractJobItems`), sin duplicados por enlace. */
 export function jobsFromPayload(rawPayload: unknown, now = Date.now()): Candidate[] {
-  const payload = unwrapPayload(rawPayload);
-  if (!payload || typeof payload !== 'object') return [];
-  const body = payload as Record<string, unknown>;
-  const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const items = Array.isArray(body.jobs) ? body.jobs : Array.isArray(jobs?.items) ? jobs.items : Array.isArray(body.jobs_results) ? body.jobs_results : [];
+  const { items } = extractJobItems(rawPayload);
   const seen = new Set<string>();
   const out: Candidate[] = [];
   for (const item of items) {
@@ -402,20 +470,19 @@ export async function serpJobs(config: BrightDataConfig, options: SerpJobsOption
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new BrightDataError('Bright Data devolvió una respuesta que no es JSON; revisa la zona SERP', 200, attempts);
+    throw new BrightDataError(`Bright Data devolvió algo que no es JSON (${describeResponse(text)}); revisa la zona SERP`, 200, attempts);
   }
   const unwrapped = unwrapPayload(payload);
   const body = unwrapped && typeof unwrapped === 'object' ? unwrapped as Record<string, unknown> : {};
   if (typeof body.error === 'string' && body.error) throw new BrightDataError(`Bright Data: ${body.error.slice(0, 180)}`, 200, attempts);
-  const jobs = body.jobs && typeof body.jobs === 'object' ? body.jobs as Record<string, unknown> : null;
-  const rawItems = Array.isArray(body.jobs) ? body.jobs.length : Array.isArray(jobs?.items) ? jobs.items.length : Array.isArray(body.jobs_results) ? body.jobs_results.length : 0;
+  const { items, panel } = extractJobItems(payload);
   return {
     candidates: jobsFromPayload(payload, now),
     // Se cobra por intento: un reintento pudo facturarse y el tope debe verlo igual que el proveedor.
     requests: attempts,
     costUsd: attempts * BRIGHTDATA_USD_PER_REQUEST,
-    rawItems,
-    hasJobsPanel: Boolean(jobs) || Array.isArray(body.jobs_results),
+    rawItems: items.length,
+    hasJobsPanel: panel,
   };
 }
 
