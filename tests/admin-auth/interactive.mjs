@@ -79,6 +79,28 @@ try {
     assert.equal(summary.unlocker_ready, true, 'la clave de prueba incluye la zona Unlocker');
   });
 
+  await step('APIs: el Objetivo diario muestra lo cualificado de hoy y el plan por etapas, y el propietario cambia el objetivo', async () => {
+    state.waterfallRow = null;
+    try {
+      await page.reload();
+      await page.getByRole('button', { name: 'APIs', exact: true }).click();
+      const panel = page.getByTestId('waterfall');
+      await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
+      await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
+      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 4, 'Google Jobs, respaldo, Apify y manual');
+      assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
+      assert.match(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Manual/);
+      await panel.getByLabel('Objetivo de ofertas cualificadas al día').fill('0');
+      await panel.getByRole('button', { name: 'Guardar objetivo' }).click();
+      await panel.getByText(/Objetivo guardado: 0 ofertas cualificadas al día/).waitFor({ timeout: 15000 });
+      assert.equal(state.waterfallRow?.qualified_per_day, 0);
+      await panel.getByTestId('wf-origin').getByText(/guardado por el propietario/).waitFor({ timeout: 15000 });
+      assert.match(await panel.getByTestId('wf-gap').innerText(), /^0$/, 'con objetivo 0 no falta nada');
+      assert.match(await panel.getByTestId('wf-stages').innerText(), /Objetivo del día cumplido/, 'las etapas de pago dicen por qué no se lanzan');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin scroll horizontal de página');
+    } finally { state.waterfallRow = null; }
+  });
+
   await step('APIs: el Control de inversión enseña el gasto de TODOS los proveedores y el propietario cambia un tope', async () => {
     try {
     await page.reload();

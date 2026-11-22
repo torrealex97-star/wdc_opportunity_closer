@@ -6,7 +6,7 @@ export function startMocks({ authPort, enginePort }) {
   const state = {
     users: new Map([['owner@test.dev', { id: 'u1', password: 'Correcta-12345' }]]),
     admins: [{ email: 'owner@test.dev', role: 'owner', invited_by: 'bootstrap', created_at: '2026-10-16T00:00:00Z' }],
-    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], storeCalls: [], providerBudget: [], providerBudgetMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
+    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], storeCalls: [], providerBudget: [], providerBudgetMissing: false, waterfallRow: null, waterfallMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
     engineDown: false, // simula la pausa de cuota del motor (Sites devuelve 503)
     // Pausa REAL de la plataforma, medida en producción: el sitio está publicado pero la cuota del mes se
     // agotó, y TODAS sus rutas responden 429 con texto plano. `error` imita una caída de verdad (500 HTML).
@@ -138,6 +138,12 @@ export function startMocks({ authPort, enginePort }) {
       if (q.source?.startsWith('eq.')) rows = rows.filter(r => r.source === decodeURIComponent(q.source.slice(3)));
       if (q.enabled === 'eq.false') rows = rows.filter(r => r.enabled === false);
       return send(res, 200, rows.map(r => ({ source: r.source, enabled: r.enabled, route_order: r.route_order ?? [] })));
+    }
+    // Objetivo diario del waterfall (tabla `waterfall_settings`): una fila por organización, upsert por `org_id`.
+    if (url.pathname === '/rest/v1/waterfall_settings') {
+      if (state.waterfallMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.waterfall_settings' in the schema cache" });
+      if (req.method === 'POST') { state.waterfallRow = { org_id: body.org_id, qualified_per_day: body.qualified_per_day, updated_by: body.updated_by, updated_at: body.updated_at }; return send(res, 201, null); }
+      return send(res, 200, state.waterfallRow ? [state.waterfallRow] : []);
     }
     // Topes por proveedor (tabla `provider_budget`): upsert por (org_id, provider), como PostgREST con on_conflict.
     if (url.pathname === '/rest/v1/provider_budget') {

@@ -261,7 +261,8 @@ export type SourceStat = { source: string; live: number; approved: number; last_
 
 // Recuento exacto que hace la BASE: `count=exact` sin traer filas (la consulta pide una sola). Devuelve `null` si
 // la lectura falla: un fallo no se publica como 0.
-async function countExact(filters: string[]): Promise<number | null> {
+/** Recuento exacto de ofertas con esos filtros PostgREST; `null` si no se pudo contar (un hueco, no un cero). */
+export async function countExact(filters: string[]): Promise<number | null> {
   const response = await serviceRest(`external_offers?${filters.join('&')}&select=id&limit=1`, { headers: { Prefer: 'count=exact' } });
   if (!response.ok) return null;
   const total = Number((response.headers.get('content-range') ?? '').split('/')[1]);
