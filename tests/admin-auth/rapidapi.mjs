@@ -23,6 +23,7 @@ const server = http.createServer(async (req, res) => {
     if (m === 'nosub') return send(403, { message: 'You are not subscribed to this API.' });
     if (m === 'quota') return send(429, { message: 'You have exceeded the MONTHLY quota' });
     if (m === 'badkey') return send(401, { message: 'Invalid API key' });
+    if (m === 'gone') return send(404, { message: "Endpoint '/search' does not exist" });
     if (url.pathname === '/search-v2') {
       return send(200, { status: 'OK', request_id: 'r1', data: { jobs: [
         { job_id: 'j1', job_title: 'Closer de ventas', employer_name: 'Acme', job_publisher: 'LinkedIn', job_city: 'Madrid', job_country: 'ES', job_apply_link: 'https://acme.test/j1', job_posted_at: 'hace 2 días' },
@@ -131,6 +132,11 @@ await step('cuota agotada (429) se dice y esa API se salta', async () => {
   mode['jobs-api14.p.rapidapi.com'] = 'quota';
   const out = await collectRapidApi('test', undefined, meter());
   assert.ok(Object.values(out.by_api).some(row => /cuota/.test(row.error ?? '')));
+});
+
+await step('una ruta que ya no existe (404) se dice y no se anota como gasto', async () => {
+  mode['jsearch.p.rapidapi.com'] = 'gone';
+  await assert.rejects(rapidApiJobs('k', jsearch, 'closer', 'es'), err => /HTTP 404/.test(err.message) && err.billed === false);
 });
 
 server.close();

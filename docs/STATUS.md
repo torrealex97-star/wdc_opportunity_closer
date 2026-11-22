@@ -1,3 +1,22 @@
+## Revisión de cierre: #122 y #123 integradas con `main`, y 6 hallazgos del code review corregidos — 2026-11-22
+
+- **Ramas** (*inspected*): solo quedaban abiertas #122 (comentario y nota del cobro de JSearch) y #123 (cascada Bright Data → JSearch → SerpApi en el cron), del agente Codebuff, sobre un `main` antiguo. Se fusionó `main` en cada una sin reescribir su historia. En #123 se conservó su cadena y se le añadieron el modo asíncrono, el margen y el plazo de Bright Data de `main` (`googlejobs.mjs` 37/37). Sus fichas pasan al archivo de relevos.
+- **Code review** de todo lo de hoy (*inspected*, 6 hallazgos, todos corregidos y *tested*):
+  - En modo asíncrono Bright Data se saltaba con menos de 15 s aunque encargar es inmediato, y el dork iba a vías 2–16 veces más caras. Ahora el margen solo aplica en síncrono.
+  - Lo encargado y aún pendiente se declara en un aviso; no pasa por «0 ofertas».
+  - La etapa RapidAPI del cron ya no puede tumbar la pasada si falla la lectura del medidor.
+  - El aviso de Bright Data omitido nombra el siguiente escalón real (JSearch o SerpApi).
+  - Un 404 de RapidAPI (ruta inexistente) no se anota como gasto.
+  - Los nombres de proveedor de la cascada salen de `PROVIDER_NAME` (un solo sitio).
+- **Pruebas**: `googlejobs.mjs` 38/38 y `rapidapi.mjs` 9/9, con casos nuevos para el modo asíncrono con poco tiempo, el aviso de pendientes y el 404. Suite completa en verde.
+
+## El cron de Google Jobs gasta primero JSearch: 7 dorks a 0,0025 USD con su tope y su 429 — 2026-11-22
+
+- **Petición del propietario**: pasar la recogida de los 7 dorks del cron a JSearch, con su tope y su manejo del 429, con prueba, si el cambio era acotado.
+- **Qué había** (*inspected*): [`collectGoogleJobs`](../apps/web/lib/googleJobs.ts) resolvía cada dork con Bright Data (0,0015 USD) y caía directamente a SerpApi (0,025 USD), así que con la clave de JSearch guardada la pasada seguía costando hasta 0,175 USD/día.
+- **Qué se hizo** (*tested*): la cascada de cada dork es hoy Bright Data → JSearch → SerpApi, por coste y con el tope de cada proveedor (`provider_budget` y, como respaldo, su variable). JSearch entra con una petición por dork (`num_pages=1`, sin cursor) y reserva 0,0025 USD antes de lanzar; su gasto se anota con `proveedor=jsearch` y no se atribuye a SerpApi. Un 401/403/429/5xx devuelve la reserva (no se cobra) y el dork baja al siguiente escalón; un 2xx con estado de error o un fallo sin respuesta se anotan como peor caso, la misma regla que su vía del panel (`jsearchBilled`). Un 429 no se reintenta, retira JSearch para el resto de la pasada y queda contado en la nota. La etapa de Google Jobs de `/api/admin/waterfall` declara el escalón nuevo.
+- **Comprobado** (*tested*): `googlejobs.mjs` **33/33** (7 dorks por JSearch a 0,0175 USD sin llamar a SerpApi; tope de JSearch que deja pasar 4 y manda 3 a SerpApi; 429 y 401 sin gasto y con aviso; fallo de red anotado como peor caso; orden Bright Data → JSearch → SerpApi) y `npm run typecheck` 0 errores.
+- **Límites honestos**: sin clave real de OpenWeb Ninja ni de Bright Data, todo se ejercita con `fetch` simulado; no se ha observado una pasada real del cron ni el cobro de un timeout. El tope se guarda en céntimos (`parseCapUsd`), así que `JSEARCH_MONTHLY_USD=0.005` vale 0,01. El botón «Ejecutar dorks» de Fuentes va por el motor Python (`/google/run`) y no se toca aquí.
 ## El fallo de red de la vía JSearch se declara como peor caso, y su comentario ya no dice lo contrario — 2026-11-22
 
 - **Petición del propietario**: alinear el comentario de la rama JSearch de `/api/admin/source-routes` con lo que hace `billed`, sin tocar el resto.

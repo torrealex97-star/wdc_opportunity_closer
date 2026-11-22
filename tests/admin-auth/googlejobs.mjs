@@ -15,6 +15,9 @@ let brightKey = false;      // ¿hay clave de Bright Data guardada?
 let brightMode = 'ok';      // ok | html | error
 let brightCalls = [];       // peticiones a Bright Data de la última recogida
 let capRow = null;          // tope guardado en provider_budget (null = sin fila: manda el entorno)
+let jsearchKey = false;     // ¿hay clave de JSearch guardada?
+let jsearchMode = 'ok';     // ok | 401 | 429 | network
+let jsearchCalls = [];      // peticiones a JSearch de la última recogida
 const asyncStore = new Map(); // encargos asíncronos de Bright Data simulados: id → respuesta
 let brightCollects = [];      // recogidas (/serp/get_result) de la última recogida
 let asyncPending = false;     // Bright Data aún procesa los encargos (202)
@@ -56,6 +59,21 @@ const server = http.createServer(async (req, res) => {
     }), job('job-2'), job('job-3', { share_link: 'javascript:alert(1)', link: null, apply_options: [] })];
     return send(200, { jobs_results: rows });
   }
+  if (url.pathname === '/jsearch/search-v2') {
+    jsearchCalls.push({ params: Object.fromEntries(url.searchParams), key: req.headers['x-api-key'] });
+    if (jsearchMode === 'network') { req.destroy(); return; }
+    if (jsearchMode === '401') return send(401, { status: 'ERROR', message: 'Invalid API key' });
+    if (jsearchMode === '429') return send(429, { status: 'ERROR', message: 'Too many requests' });
+    return send(200, { status: 'OK', data: { jobs: [{
+      job_id: 'js-1',
+      job_title: 'Closer high ticket (JSearch)',
+      employer_name: 'Acme JSearch',
+      job_apply_link: 'https://es.infojobs.net/oferta/js-1',
+      job_location: 'Madrid, ES',
+      job_description: 'Cierre de ventas por videollamada con leads cualificados.',
+      job_posted_at_datetime_utc: '2026-11-20T09:00:00Z',
+    }] } });
+  }
   if (url.pathname === '/request' && req.method === 'POST') {
     const reply = (code, data) => [code, 'application/json', JSON.stringify(data)];
     const compute = () => {
@@ -91,6 +109,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/rest/v1/integration_connections') {
     const wanted = (url.searchParams.get('provider') ?? '').replace('eq.', '');
     if (wanted === 'brightdata') return send(200, brightKey ? [{ secret_ciphertext: process.env.TEST_BD_SECRET }] : []);
+    if (wanted === 'jsearch') return send(200, jsearchKey ? [{ secret_ciphertext: process.env.TEST_JS_SECRET }] : []);
     return send(200, hasKey ? [{ secret_ciphertext: process.env.TEST_SECRET }] : []);
   }
   if (url.pathname === '/rest/v1/provider_budget') return send(200, capRow ? [capRow] : []);
@@ -123,19 +142,23 @@ process.env.SUPABASE_PUBLISHABLE_KEY = 'anon';
 process.env.ADMIN_SECRETS_KEY = 'test-root';
 process.env.SERPAPI_API_BASE = `http://127.0.0.1:${PORT}`;
 process.env.BRIGHTDATA_API_BASE = `http://127.0.0.1:${PORT}`;
+process.env.JSEARCH_API_BASE = `http://127.0.0.1:${PORT}/jsearch`;
 delete process.env.SERPAPI_JOBS_MAX_DORKS;
 
 const { encryptSecret } = await import('../../apps/web/lib/secrets.ts');
 process.env.TEST_SECRET = encryptSecret('serpapi-key-1234');
 process.env.TEST_BD_SECRET = encryptSecret('bdkey-12345678:serp_zone');
+process.env.TEST_JS_SECRET = encryptSecret('jsearch-key-1234');
 const { collectGoogleJobs, postedAt, toCandidate, dorkWindow, DAY_MS, GOOGLE_JOBS_DORKS, DEFAULT_MAX_DORKS, SEARCH_USD } = await import('../../apps/web/lib/googleJobs.ts');
+const { JSEARCH_USD_PER_REQUEST } = await import('../../apps/web/lib/providers/jsearch.ts');
 
 const results = [];
 const step = async (name, fn) => {
   searches = []; saved = []; mode = 'ok'; hasKey = true; paused = []; searchDelayMs = 0;
   runs = []; brightKey = false; brightMode = 'ok'; brightCalls = []; capRow = null; brightCollects = []; asyncPending = false; brightAsyncOff = false;
+  jsearchKey = false; jsearchMode = 'ok'; jsearchCalls = [];
   delete process.env.SERPAPI_MONTHLY_USD; delete process.env.BRIGHTDATA_MONTHLY_USD;
-  delete process.env.SERPAPI_JOBS_MAX_DORKS;
+  delete process.env.SERPAPI_JOBS_MAX_DORKS; delete process.env.JSEARCH_MONTHLY_USD;
   try { await fn(); results.push(['PASS', name]); }
   catch (err) { results.push(['FAIL', name, err.message.split('\n')[0]]); }
 };
@@ -304,7 +327,7 @@ await step('Bright Data falla y SerpApi cubre: es un aviso, no un fallo de la fu
   assert.equal(out.accepted, 0);
   assert.equal(out.warnings.length, DEFAULT_MAX_DORKS);
   assert.match(out.warnings[0], /Bright Data/);
-  assert.ok(runs.some(r => /pasaron de Bright Data a SerpApi/.test(r.note ?? '')), 'el aviso queda en la nota de la ejecución');
+  assert.ok(runs.some(r => /pasaron al siguiente proveedor/.test(r.note ?? '')), 'el aviso queda en la nota de la ejecución');
 });
 
 await step('Google sin panel de empleos con Bright Data se declara, no se confunde con «0 ofertas»', async () => {
@@ -362,13 +385,109 @@ await step('cascada: una petición que Bright Data rechaza (401) no se cobra ni 
   assert.ok(!runs.some(r => /proveedor=brightdata/.test(r.note ?? '')), 'no hay nota de gasto de Bright Data');
 });
 
-await step('cascada: con poco tiempo en el tramo, Bright Data no se llama (se cortaría y puede cobrarse) y SerpApi cubre', async () => {
-  brightKey = true;
+
+await step('JSearch sustituye a SerpApi en los 7 dorks, a 0,0025 USD y con su propia nota', async () => {
+  jsearchKey = true;
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(searches.length, 0, 'SerpApi no se llama si JSearch responde');
+  assert.equal(jsearchCalls.length, DEFAULT_MAX_DORKS, `JSearch recibió ${jsearchCalls.length}`);
+  for (const call of jsearchCalls) {
+    assert.equal(call.key, 'jsearch-key-1234', 'la clave va en x-api-key, no en la URL');
+    assert.equal(call.params.num_pages, '1', 'no se paga una segunda página');
+    assert.equal(call.params.language, 'es');
+    assert.ok(GOOGLE_JOBS_DORKS.some(d => d.q === call.params.query && d.gl === call.params.country), `dork sin país: ${call.params.query} / ${call.params.country}`);
+  }
+  assert.equal(out.cost_usd, Number((DEFAULT_MAX_DORKS * JSEARCH_USD_PER_REQUEST).toFixed(4)), 'la pasada cuesta 7 × 0,0025');
+  assert.deepEqual(out.by_provider.jsearch, { searches: DEFAULT_MAX_DORKS, cost_usd: Number((DEFAULT_MAX_DORKS * JSEARCH_USD_PER_REQUEST).toFixed(6)) });
+  assert.equal(out.by_provider.serpapi, undefined, 'el respaldo caro no se toca');
+  assert.equal(out.received, 1, 'el mismo anuncio en 7 dorks se guarda una vez');
+  assert.ok(runs.some(r => /proveedor=jsearch/.test(r.note ?? '')), 'el gasto se anota con su proveedor');
+  assert.ok(!runs.some(r => /proveedor=serpapi/.test(r.note ?? '')), 'y no se atribuye a SerpApi');
+});
+
+await step('el tope mensual de JSearch frena sus búsquedas y SerpApi cubre lo que no cabe', async () => {
+  jsearchKey = true;
+  process.env.JSEARCH_MONTHLY_USD = '0.01'; // caben 4 de 0,0025 (el tope se guarda en céntimos)
+  const out = await collectGoogleJobs('test');
+  assert.equal(jsearchCalls.length, 4, `JSearch lanzó ${jsearchCalls.length}`);
+  assert.equal(searches.length, DEFAULT_MAX_DORKS - 4, 'el resto baja a SerpApi');
+  assert.equal(out.by_provider.jsearch.searches, 4);
+  assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS - 4);
+  assert.equal(out.skipped_budget, undefined, 'nada se queda sin lanzar: hay respaldo');
+});
+
+await step('un 429 de JSearch no se cobra, no se reintenta y cada dork baja a SerpApi', async () => {
+  jsearchKey = true; jsearchMode = '429';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(jsearchCalls.length, DEFAULT_MAX_DORKS, 'un intento por dork y ninguno más');
+  assert.equal(out.by_provider.jsearch, undefined, 'un 429 no se factura');
+  assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS);
+  assert.equal(out.warnings.length, DEFAULT_MAX_DORKS);
+  assert.match(out.warnings[0], /JSearch .*429.*→ SerpApi/);
+  assert.match(runs.find(r => /429/.test(r.note ?? ''))?.note ?? '', /7 búsqueda\(s\) de JSearch con 429/, 'la nota declara el 429');
+  assert.ok(!runs.some(r => /proveedor=jsearch/.test(r.note ?? '')), 'no hay nota de gasto de JSearch');
+});
+
+await step('un 401 de JSearch tampoco se cobra y el dork baja a SerpApi', async () => {
+  jsearchKey = true; jsearchMode = '401';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true);
+  assert.equal(out.by_provider.jsearch, undefined);
+  assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS);
+});
+
+await step('un fallo sin respuesta de JSearch se anota como peor caso, no como gratis', async () => {
+  jsearchKey = true; jsearchMode = 'network';
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(out.by_provider.jsearch.searches, DEFAULT_MAX_DORKS, 'sin estado no se puede afirmar que no se cobró');
+  assert.equal(out.by_provider.serpapi.searches, DEFAULT_MAX_DORKS, 'SerpApi sigue cubriendo el dork');
+  assert.ok(runs.some(r => /proveedor=jsearch/.test(r.note ?? '')));
+});
+
+await step('cascada completa: Bright Data primero, JSearch antes que SerpApi y ningún gasto de más', async () => {
+  brightKey = true; jsearchKey = true;
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.by_provider.brightdata.searches, DEFAULT_MAX_DORKS);
+  assert.equal(jsearchCalls.length, 0, 'con Bright Data no se paga JSearch');
+  assert.equal(searches.length, 0);
+  brightMode = 'error'; jsearchCalls = []; searches = []; runs = [];
+  const second = await collectGoogleJobs('test');
+  assert.equal(second.ok, true, JSON.stringify(second));
+  assert.equal(jsearchCalls.length, DEFAULT_MAX_DORKS, 'JSearch cubre lo que Bright Data rechaza');
+  assert.equal(searches.length, 0, 'y SerpApi no llega a usarse');
+  assert.equal(second.by_provider.brightdata, undefined, 'el 401 de Bright Data no se cobra');
+  assert.equal(second.warnings.length, DEFAULT_MAX_DORKS);
+  assert.match(second.warnings[0], /Bright Data .*→ JSearch/);
+});
+
+await step('un 429 de JSearch sin SerpApi no se presenta como éxito ni se cobra', async () => {
+  jsearchKey = true; jsearchMode = '429'; hasKey = false;
+  const out = await collectGoogleJobs('test');
+  assert.equal(out.ok, false);
+  assert.equal(out.by_provider.jsearch, undefined);
+  assert.match(out.error, /429/);
+  assert.equal(saved.length, 0);
+});
+
+await step('síncrono: con poco tiempo en el tramo, Bright Data no se llama (se cortaría y puede cobrarse) y SerpApi cubre', async () => {
+  brightKey = true; process.env.BRIGHTDATA_ASYNC = '0';
   const out = await collectGoogleJobs('test', Date.now() + 8_000);
+  delete process.env.BRIGHTDATA_ASYNC;
   assert.equal(brightCalls.length, 0, 'sin ~15 s no se lanza Bright Data');
   assert.equal(searches.length, DEFAULT_MAX_DORKS, 'SerpApi cubre todos los dorks');
   assert.equal(out.by_provider.brightdata, undefined, 'no se reserva gasto de Bright Data');
   assert.ok((out.warnings ?? []).some(w => /Bright Data omitido/.test(w)), 'se dice por qué no se usó Bright Data');
+});
+
+await step('asíncrono: con poco tiempo Bright Data SÍ se usa (encargar es inmediato) y no se paga el escalón caro', async () => {
+  brightKey = true;
+  const out = await collectGoogleJobs('test', Date.now() + 8_000);
+  assert.equal(brightCalls.length, DEFAULT_MAX_DORKS, 'un encargo por dork aunque queden 8 s');
+  assert.equal(searches.length, 0, 'SerpApi no se toca');
+  assert.ok(!(out.warnings ?? []).some(w => /Bright Data omitido/.test(w)));
 });
 
 await step('cascada: Bright Data con `jobs` como lista directa también se lee', async () => {
@@ -386,6 +505,7 @@ await step('asíncrono: si Bright Data aún procesa, no es «0 ofertas» ni se p
   assert.equal(searches.length, 0, 'SerpApi no se toca: el resultado llegará en la siguiente pasada');
   assert.equal(out.brightdata_async.submitted, DEFAULT_MAX_DORKS);
   assert.equal(out.brightdata_async.pending, DEFAULT_MAX_DORKS);
+  assert.ok((out.warnings ?? []).some(w => /aún en proceso/.test(w)), 'lo pendiente se dice, no es «0 ofertas»');
   const spendRows = runs.filter(r => /proveedor=brightdata/.test(r.note ?? ''));
   assert.equal(spendRows.length, DEFAULT_MAX_DORKS, 'una fila de gasto por encargo, sin duplicar en la nota agregada');
   assert.ok(spendRows.every(r => r.via === 'async' && /async_id=resp\d+x/.test(r.note)), 'cada encargo guarda su async_id');
@@ -422,7 +542,7 @@ await step('sin ninguna clave no hay recogida', async () => {
   hasKey = false;
   const out = await collectGoogleJobs('test');
   assert.equal(out.ok, false);
-  assert.match(out.error, /Sin clave guardada de SerpApi ni de Bright Data/);
+  assert.match(out.error, /Sin clave guardada de SerpApi, JSearch ni de Bright Data/);
 });
 
 await step('«sin resultados» es un dork vacío, no un fallo', async () => {

@@ -41,6 +41,12 @@ export class JSearchError extends Error {
 }
 
 /**
+ * Si la petición se cobra: todo 2xx, aunque el cuerpo no sirva, y un fallo sin respuesta (red, timeout), que
+ * se anota como peor caso porque la petición pudo salir y facturarse. Un 401/403/429/5xx no se cobra.
+ */
+export const jsearchBilled = (status: number | null) => status === null || (status >= 200 && status < 300);
+
+/**
  * Las ofertas del cuerpo documentado (`data.jobs`). El endpoint antiguo `/search` devolvía `data` como
  * lista y `data[].jobs[]`; se aceptan las dos formas para no romper con una respuesta mixta.
  */
