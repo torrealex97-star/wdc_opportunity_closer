@@ -85,8 +85,8 @@ export default function SpendControl({ owner, onSessionLost }: { owner: boolean;
       </div>
       {!data.table_ok && <p className="inline-hint" role="alert">No se pudo leer la tabla de topes (provider_budget): se usan las variables de entorno o los valores por defecto. Cambiar un tope desde aquí no funcionará hasta que la tabla esté disponible.</p>}
       {!data.spent_readable && <p className="inline-hint" role="alert">No se pudo leer el historial de gasto de Bright Data, SerpApi, ZenRows y ScrapingBee: la app no lanzará gasto nuevo con ellos hasta poder comprobarlo.</p>}
-      <div className="scorecard-scroll" style={{ marginBottom: 12 }}>
-        <table className="scorecard-table" data-testid="spend-table">
+      <div className="scorecard-scroll stack-wrap" style={{ marginBottom: 12 }}>
+        <table className="scorecard-table stack-table" data-testid="spend-table">
           <caption>Gasto del mes y tope por proveedor de pago, en dólares (la moneda en la que se registra).</caption>
           <thead><tr>
             <th scope="col">Proveedor</th><th scope="col">Clave</th><th scope="col">Gastado</th><th scope="col">Tope</th><th scope="col">Uso del tope</th><th scope="col">Peticiones</th><th scope="col">Origen del tope</th>{owner && <th scope="col">Cambiar tope (USD)</th>}
@@ -97,10 +97,10 @@ export default function SpendControl({ owner, onSessionLost }: { owner: boolean;
               const hot = pct !== null && pct >= 90;
               return <tr key={row.provider} data-provider={row.provider}>
                 <th scope="row">{row.name}<span className="card-meta" style={{ display: 'block' }}>{row.usd_per_request !== null ? `${usd(row.usd_per_request)} por petición` : row.note}</span></th>
-                <td>{row.configured === null ? <span className="status">—</span> : row.configured ? <span className="status ok">Con clave</span> : <span className="status">Sin clave</span>}</td>
-                <td title={row.spent_usd === null ? 'No se pudo leer el gasto: no es cero.' : row.partial ? 'Mínimo: alguna ejecución no informó su importe.' : undefined}>{usd(row.spent_usd)}{row.partial ? '*' : ''}</td>
-                <td>{usd(row.cap_usd)}{row.cap_usd === 0 ? <span className="card-meta" style={{ display: 'block' }}>Tope 0: no gasta</span> : null}</td>
-                <td>
+                <td data-label="Clave">{row.configured === null ? <span className="status">—</span> : row.configured ? <span className="status ok">Con clave</span> : <span className="status">Sin clave</span>}</td>
+                <td data-label="Gastado" title={row.spent_usd === null ? 'No se pudo leer el gasto: no es cero.' : row.partial ? 'Mínimo: alguna ejecución no informó su importe.' : undefined}>{usd(row.spent_usd)}{row.partial ? '*' : ''}</td>
+                <td data-label="Tope">{usd(row.cap_usd)}{row.cap_usd === 0 ? <span className="card-meta" style={{ display: 'block' }}>Tope 0: no gasta</span> : null}</td>
+                <td data-label="Uso del tope">
                   {pct === null ? '—' : <>
                     <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`Uso del tope de ${row.name}`} style={{ height: 8, borderRadius: 99, background: 'var(--inset)', overflow: 'hidden', minWidth: 80 }}>
                       <div style={{ width: `${pct}%`, height: '100%', background: hot ? 'var(--warning)' : 'var(--accent)' }} />
@@ -109,9 +109,9 @@ export default function SpendControl({ owner, onSessionLost }: { owner: boolean;
                   </>}
                   {row.remaining_usd !== null && <span className="card-meta" style={{ display: 'block' }}>Quedan {usd(row.remaining_usd)}</span>}
                 </td>
-                <td className="num">{row.requests === null ? '—' : row.requests.toLocaleString('es')}</td>
-                <td>{ORIGIN[row.cap_source]}{row.cap_updated_by ? <span className="card-meta" style={{ display: 'block' }}>{row.cap_updated_by}{date(row.cap_updated_at) ? `, ${date(row.cap_updated_at)}` : ''}</span> : null}</td>
-                {owner && <td>{row.editable
+                <td data-label="Peticiones" className="num">{row.requests === null ? '—' : row.requests.toLocaleString('es')}</td>
+                <td data-label="Origen del tope">{ORIGIN[row.cap_source]}{row.cap_updated_by ? <span className="card-meta" style={{ display: 'block' }}>{row.cap_updated_by}{date(row.cap_updated_at) ? `, ${date(row.cap_updated_at)}` : ''}</span> : null}</td>
+                {owner && <td data-label="Cambiar tope (USD)">{row.editable
                   ? <form className="card-form" onSubmit={e => { e.preventDefault(); void save(row.provider); }}>
                     <input id={`cap-${row.provider}`} aria-label={`Tope mensual de ${row.name} en USD`} type="number" min={0} max={5000} step="0.5" placeholder={String(row.cap_usd)} value={caps[row.provider] ?? ''} onChange={e => setCaps(current => ({ ...current, [row.provider]: e.target.value }))} />
                     <button className="primary" aria-label={`Guardar tope de ${row.name}`} disabled={busy !== null || !(caps[row.provider] ?? '').trim() || !data.table_ok} title={!data.table_ok ? 'La tabla de topes no está disponible.' : undefined}>{busy === row.provider ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Guardar tope</button>

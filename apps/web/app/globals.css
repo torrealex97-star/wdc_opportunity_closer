@@ -929,6 +929,25 @@ textarea{font:inherit;width:100%;min-width:0;border:1px solid var(--line);border
   .rubric-table td:not([data-label]){align-items:flex-end}
   .rubric-table td:not([data-label])::before{display:none}
 }
+/* Tablas de datos del admin que se apilan en espacio estrecho (según el ancho del panel): cada fila es una tarjeta
+   con su nombre arriba y cada dato con su etiqueta, sin columnas cortadas ni desplazamiento horizontal. */
+.stack-wrap{container-type:inline-size}
+.stack-table td{white-space:normal}
+.stack-table td[data-label="Por qué"]{text-align:left;min-width:220px}
+@container (max-width:640px){
+  .stack-table{min-width:0}
+  .stack-table caption{display:block;border-bottom:1px solid var(--line)}
+  .stack-table thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .stack-table,.stack-table tbody{display:block}
+  .stack-table tbody tr{display:flex;flex-direction:column;gap:8px;padding:14px 12px;border-bottom:1px solid var(--line)}
+  .stack-table tbody tr:last-child{border-bottom:0}
+  .stack-table tbody th,.stack-table td{display:block;padding:0;border:0;text-align:left;white-space:normal;min-width:0}
+  .stack-table tbody th{font-size:12px}
+  .stack-table td[data-label]{display:grid;grid-template-columns:minmax(88px,34%) 1fr;gap:10px;align-items:baseline}
+  .stack-table td[data-label]::before{content:attr(data-label);color:var(--secondary);font-size:var(--text-2xs);font-weight:650;letter-spacing:.6px;text-transform:uppercase;line-height:1.4}
+  .stack-table td[data-label]>*{grid-column:2}
+  .stack-table td .card-form{flex-wrap:wrap}
+}
 .rubric-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px}
 .rubric-bant{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 16px}
 .rubric-priorities{list-style:none;margin:0;padding:0}
