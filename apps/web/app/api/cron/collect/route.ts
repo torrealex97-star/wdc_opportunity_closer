@@ -6,6 +6,7 @@ import { loadMeter } from '../../../../lib/providerCaps';
 import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
+import { collectRapidApi } from '../../../../lib/rapidapiCollect';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
@@ -88,6 +89,18 @@ export async function GET(request: NextRequest) {
     gap = await recount(gap);
     stages.push({ id: 'google-jobs', ran: googleJobs.ok || accepted > 0, why: googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.', accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
   }
+  // RapidAPI (APIs de empleo verificadas con una sola clave): entra tras Google Jobs solo si aún falta objetivo; cada
+  // API respeta el tope mensual de RapidAPI y una sin suscripción se salta sin cobrarse.
+  const rapidapi = !canSpend()
+    ? (stages.push({ id: 'rapidapi', ran: false, why: noSpendWhy() }), null)
+    : budget.remaining() >= MIN_STEP_MS
+      ? await collectRapidApi('cron', budget.deadline(8_000), await sharedMeter()).catch(failed('rapidapi', null))
+      : (budget.cut('rapidapi'), null);
+  if (rapidapi?.truncated) budget.cut('rapidapi');
+  if (rapidapi) {
+    gap = await recount(gap);
+    stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.', accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
+  }
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
   // o fallo) se buscan en Google acotados a ese portal con SerpApi. Acotado por
   // `SERPAPI_FALLBACK_MAX_SEARCHES` y por lo que FALTA del objetivo; cada búsqueda declara su coste. Una
@@ -134,5 +147,5 @@ export async function GET(request: NextRequest) {
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

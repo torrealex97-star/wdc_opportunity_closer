@@ -15,7 +15,7 @@ import { serviceRest } from './supabaseAuth';
 
 export const METERED: readonly MeteredProvider[] = METERED_PROVIDERS;
 export const PROVIDER_NAME: Record<MeteredProvider, string> = {
-  brightdata: 'Bright Data', jsearch: 'JSearch', serpapi: 'SerpApi', zenrows: 'ZenRows', scrapingbee: 'ScrapingBee',
+  brightdata: 'Bright Data', jsearch: 'JSearch', rapidapi: 'RapidAPI', serpapi: 'SerpApi', zenrows: 'ZenRows', scrapingbee: 'ScrapingBee',
 };
 export const isMetered = (value: unknown): value is MeteredProvider =>
   typeof value === 'string' && (METERED as readonly string[]).includes(value);
