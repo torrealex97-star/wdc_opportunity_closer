@@ -1,5 +1,19 @@
 # Estado
 
+## Revisión de cierre: ramas y agentes integrados en `main`, y 7 hallazgos de code review corregidos — 2026-11-22
+
+- **Petición del propietario**: revisar todas las ramas y agentes, hacer un code review y fusionar todo en `main`.
+- **Inventario** (*inspected*): `main` con #112 y #116 fusionadas; PR **#115** (`fix/zonas-cache`, caché de 10 minutos de las zonas de Bright Data, de otra sesión) con `verify` y `web-admin` en verde y solo un conflicto de documentación: integrada aquí tras su propia revisión (solo cachea aciertos, se tira al guardar/borrar la clave, «Probar» pregunta siempre) y su ficha cerrada; rama `docs/panel-fuentes-aplicado` **superada** (la PR #106 y su fix de Bright Data ya están en `main`, este con otro SHA vía #109): no queda nada pendiente y no se borra. No hay más ramas ni fichas vivas.
+- **Code review de #116 y #115** (*inspected*, 7 hallazgos, todos corregidos y probados):
+  - *Retirada automática*: tres fallos en la misma tarde (p. ej. 5xx de Apify) retiraban buenos buscadores. Ahora los tres fallos abarcan ≥ 24 h y dos días distintos, y si **todos** los buscadores del portal fallaron en su última ejecución es una caída del proveedor y no se retira ninguno ([`retirementCandidates`](../apps/web/lib/apifyAuto.ts)).
+  - *Reloj compartido*: `find_replacements` podía tardar más de los 60 s de la ruta. Ahora hay un reloj de 40 s, validaciones en tandas de 3 y el corte se declara (`truncated`); un fallo **parcial** de la tienda se enseña como aviso (502 solo si fallan todas las consultas).
+  - *Servidor, no solo botón*: `retire`/`reactivate` comprueban que la fila exista (404), que no sea el último buscador del portal (409) y que su estado sea el esperado (el PATCH lleva el filtro y devuelve la fila; antes decía «retirado» sin haber cambiado nada).
+  - *Encaje con el portal*: «validado» solo decía que el actor está sano. [`compatibilityOf`](../apps/web/lib/apifyStore.ts) comprueba que lo que el actor pide (esquema, campos obligatorios) lo sepa rellenar la app (o que los campos de la plantilla del portal existan); si no, «no utilizable» con el motivo y no se puede añadir.
+  - *Mismo actor*: `a/b`, `a~b` y las mayúsculas son el mismo actor en todas las comparaciones y se guarda con `/`.
+  - *Caché de zonas (#115)*: las vías que **gastan** (Google Jobs del cron, «Probar ruta», Unlocker) ya no usan la caché de zonas; solo el panel. Y un JSDoc duplicado fuera.
+- **Comprobado** (*tested*): `apify-store.mjs` (unitario, ampliado), pasos nuevos de `flow` (404, 409, último buscador, encaje, `~`, fallo parcial) y `provider-budget-org`, `source-routes`, `googlejobs`, `fallback`; la suite completa se anota abajo.
+- **Límites honestos**: ninguna llamada a la API real de Apify ni de Bright Data desde aquí; la caché de zonas es por instancia del proceso (otra instancia tarda hasta 10 minutos en ver una zona nueva, y por eso las vías de gasto no la usan). Sigue pendiente lo que necesita al propietario: el *waterfall* con objetivo de ofertas **cualificadas** guardado en la app (tabla nueva, DDL con su orden) y la auditoría del resto de paneles.
+
 ## Apify: buscadores de repuesto desde la tienda y retirada de los que fallan, y arreglo de `main` por JSearch — 2026-11-21
 
 - **Petición del propietario**: que la cascada de Apify pruebe siempre varios actores y que la app pueda ir actualizándolos cuando no funcionen bien.
@@ -10,6 +24,14 @@
 - **Panel** (*tested* con navegador simulado): [`PortalActors`](../apps/web/components/PortalActors.tsx) en cada portal: aviso «solo hay un buscador», «Buscar repuestos en la tienda» con el veredicto y sus motivos, y añadir (solo un «validado», revalidado en el servidor), retirar y reactivar (solo el propietario).
 - **Comprobado** (*tested*): `apify-store.mjs` (unitario) y los pasos nuevos de `flow` y `interactive`; `bash tests/admin-auth/run.sh` con Chromium simulado: **exit 0, 412 PASS, 0 FAIL, 13/13** pasos de interfaz y **14/14** flujos interactivos; `typecheck` y `design` en verde.
 - **Límites honestos**: nunca se ha llamado a la API real de Apify desde aquí (el *proxy* del entorno lo bloquea): el contrato se contrastó con su documentación y se probó con *mock*; los nombres de los campos `isDeprecated` y `status` del build se tratan de forma tolerante (si faltan, «sin verificar»). «Validado» no garantiza que el actor extraiga bien: la primera prueba con 10 ofertas lo comprueba. El waterfall completo con objetivo de ofertas **cualificadas** guardado en la app necesita tabla nueva (DDL con orden del propietario) y la auditoría del resto de paneles sigue pendiente.
+
+## El panel no pregunta las zonas de Bright Data en cada carga (sesión 291) — 2026-11-21
+
+- **Petición del propietario**: «Evita que el panel consulte las zonas de Bright Data en cada carga cuando la clave está guardada sin zona: resuélvelas al guardar o guárdalas en caché, sin gastar ni cambiar el comportamiento.»
+- **Causa** (*inspected*): `stateOf()` en `app/api/admin/source-routes/route.ts` llama a `resolveBrightDataConfig` en **cada GET** del panel y en cada «Probar ruta». Con la clave guardada sola (`API key`), esa función consulta `GET /zone/get_active_zones` siempre: es gratis, pero son hasta 6 s de espera por carga y el panel depende de que Bright Data responda para pintar la vía Unlocker.
+- **Qué se hizo** (*tested*): caché en el proceso dentro de `providers/brightdata.ts` — `resolveBrightDataConfig` guarda las zonas resueltas por clave (FNV-1a de la API key, para no retener la clave en claro) con TTL de **10 minutos**; un **fallo no se cachea**; `clearBrightDataZoneCache()` la tira y se llama al **guardar** y al **borrar** la conexión de Bright Data; el botón **«Probar»** y cualquier comprobación explícita usan `useCache: false`. Si el secreto ya trae las zonas escritas, se sigue sin red y sin caché. No se guarda nada nuevo en la base (eso pediría DDL y orden del owner) y la consulta de zonas no gasta crédito: el gasto no cambia.
+- **Comprobado** (*tested*, sin red): `tests/admin-auth/source-routes.mjs` — primera resolución 1 llamada, segunda carga con la misma clave 0 llamadas y mismo resultado (incluida la zona Unlocker), TTL cumplido → 1 llamada más, `useCache:false` → siempre, secreto con zonas escritas → 0 llamadas, fallo de red repetido → 2 llamadas (no se cachea), `clearBrightDataZoneCache()` → vuelve a preguntar. Typecheck de `apps/web` sin errores.
+- **Límites honestos**: la caché vive en el proceso; en Cloudflare Workers cada instancia nueva empieza vacía, así que la primera carga de una instancia fría sí consulta (una vez). No se ha probado contra Bright Data real (sin clave en este entorno): lo verificado es la lógica con `fetch` simulado y el typecheck.
 
 ## «Web deploy» publica solo, y su verde ya no puede mentir (sesión 290) — 2026-11-21
 

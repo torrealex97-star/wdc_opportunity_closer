@@ -275,7 +275,14 @@ export function startMocks({ authPort, enginePort }) {
     if (url.pathname === '/rest/v1/apify_actors') {
       const q = Object.fromEntries(url.searchParams); const id = q.id?.replace('eq.', '');
       if (req.method === 'POST') { state.apifyActors.push({ id: crypto.randomUUID(), created_at: new Date().toISOString(), ...body }); return send(res, 201, {}); }
-      if (req.method === 'PATCH') { const src = q.source?.startsWith('eq.') ? decodeURIComponent(q.source.slice(3)) : null; for (const a of state.apifyActors) if (id ? a.id === id : a.source === src) Object.assign(a, body); return send(res, 204, {}); }
+      if (req.method === 'PATCH') {
+        const src = q.source?.startsWith('eq.') ? decodeURIComponent(q.source.slice(3)) : null;
+        // Como PostgREST: el filtro `status=eq./neq.` limita qué filas cambian y `return=representation` devuelve las cambiadas.
+        const wanted = q.status?.startsWith('neq.') ? a => a.status !== q.status.slice(4) : q.status?.startsWith('eq.') ? a => a.status === q.status.slice(3) : () => true;
+        const changed = [];
+        for (const a of state.apifyActors) if ((id ? a.id === id : a.source === src) && wanted(a)) { Object.assign(a, body); changed.push({ ...a }); }
+        return /return=representation/.test(req.headers.prefer ?? '') ? send(res, 200, changed) : send(res, 204, {});
+      }
       if (req.method === 'DELETE') { state.apifyActors = state.apifyActors.filter(a => a.id !== id); state.apifyRuns = state.apifyRuns.filter(r => r.actor_id !== id); return send(res, 204, {}); }
       return send(res, 200, state.apifyActors);
     }
@@ -292,7 +299,7 @@ export function startMocks({ authPort, enginePort }) {
     // `state.storeActors` dice qué existe, cuál está obsoleto y en qué estado quedó su build por defecto.
     if (url.pathname === '/v2/store') {
       state.storeCalls.push(Object.fromEntries(url.searchParams));
-      if (state.storeDown) return send(res, 503, {});
+      if (state.storeDown || (state.storeFailExact && (url.searchParams.get('search') ?? '').toLowerCase() === state.storeFailExact)) return send(res, 503, {});
       const term = (url.searchParams.get('search') ?? '').toLowerCase();
       const items = Object.keys(state.storeActors ?? {}).filter(id => id.includes(term.split(' ')[0].replace(/[^a-z0-9]/g, '')) || term === '')
         .map(id => { const [username, name] = id.split('~'); return { id, username, name, title: state.storeActors[id].title ?? name, description: `Buscador ${name}`, stats: { totalUsers: state.storeActors[id].users ?? 100, totalRuns: 5000 } }; });
@@ -302,7 +309,7 @@ export function startMocks({ authPort, enginePort }) {
     if (storeAct && req.method === 'GET') {
       const a = state.storeActors?.[storeAct[1]];
       if (!a) return send(res, 404, {});
-      if (storeAct[2]) return send(res, 200, { data: { status: a.build ?? 'SUCCEEDED', inputSchema: a.noSchema ? null : JSON.stringify({ properties: { query: { type: 'string' }, maxItems: { type: 'integer' } } }) } });
+      if (storeAct[2]) return send(res, 200, { data: { status: a.build ?? 'SUCCEEDED', inputSchema: a.noSchema ? null : JSON.stringify({ properties: a.props ?? { query: { type: 'string' }, maxItems: { type: 'integer' } }, required: a.required ?? [] }) } });
       return send(res, 200, { data: a.hideDeprecated ? {} : { isDeprecated: Boolean(a.deprecated) } });
     }
     const apifyMatch = url.pathname.match(/^\/v2\/(acts\/([^/]+)\/(builds\/default|runs)|actor-runs\/([^/]+)|datasets\/([^/]+)\/items)$/);

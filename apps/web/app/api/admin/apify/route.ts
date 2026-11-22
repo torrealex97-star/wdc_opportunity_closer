@@ -4,9 +4,10 @@ import { ACTOR_RE, apifyToken, fetchSchema, harvestPending, listActors, listRuns
 import { readBudget, writeBudget } from '../../../../lib/paidBudget';
 import { approvedBySource, ORG, SOURCE_RE } from '../../../../lib/external';
 import { startRun } from '../../../../lib/apify';
-import { measuredSince, portalViews, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
+import { isRetired, measuredSince, portalViews, recipesOf, recoverAfter, searchPortal, plainError } from '../../../../lib/apifyAuto';
+import { portalBySource } from '../../../../lib/apifyCatalog';
 import { PORTALS, portalById } from '../../../../lib/apifyCatalog';
-import { checkActor, findReplacements, verdictOf } from '../../../../lib/apifyStore';
+import { checkActor, compatibilityOf, findReplacements, normalizeActor, verdictOf } from '../../../../lib/apifyStore';
 import { serviceRest } from '../../../../lib/supabaseAuth';
 
 export const dynamic = 'force-dynamic';
@@ -71,29 +72,51 @@ export async function POST(request: NextRequest) {
     const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;
     if (!portal) return Response.json({ detail: 'Portal no válido.' }, { status: 422 });
     const rows = (await listActors() ?? []).filter(a => a.source === portal.source);
-    // Se excluyen los que ya están (activos o retirados) y los del catálogo.
-    const known = new Set([...rows.map(a => a.actor), ...portal.recipes.map(r => r.actor)].map(a => a.toLowerCase()));
-    const found = await findReplacements(portal, known);
-    if (found.error && !found.candidates.length) return Response.json({ detail: `${found.error} No se pudieron buscar repuestos ahora.` }, { status: 502 });
+    // Se excluyen los que ya están (activos o retirados) y los del catálogo; `a/b` y `a~b` son el mismo actor.
+    const known = new Set([...rows.map(a => a.actor), ...portal.recipes.map(r => r.actor)].map(normalizeActor));
+    // Un solo reloj para toda la búsqueda (40 s de los 60 de la ruta): cada llamada comprueba cuánto queda.
+    const found = await findReplacements(portal, known, { deadline: Date.now() + 40_000 });
+    // 502 solo si la tienda no respondió a NINGUNA consulta; un fallo parcial se enseña como aviso junto a lo encontrado.
+    if (found.allFailed) return Response.json({ detail: `${found.error ?? 'La tienda de Apify no respondió.'} No se pudieron buscar repuestos ahora.` }, { status: 502 });
     return reply(auth!, found);
   }
   if (action === 'add_replacement') {
     const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;
-    const actor = typeof body.actor === 'string' ? body.actor.trim() : '';
-    if (!portal || !ACTOR_RE.test(actor)) return Response.json({ detail: 'Portal o actor no válido.' }, { status: 422 });
+    const raw = typeof body.actor === 'string' ? body.actor.trim() : '';
+    if (!portal || !ACTOR_RE.test(raw)) return Response.json({ detail: 'Portal o actor no válido.' }, { status: 422 });
+    const actor = raw.replace('~', '/'); // una sola forma guardada: la cascada y `ensureRows` comparan el mismo texto
     const rows = (await listActors() ?? []).filter(a => a.source === portal.source);
-    if (rows.some(a => a.actor.toLowerCase() === actor.toLowerCase())) return Response.json({ detail: 'Ese buscador ya está en este portal.' }, { status: 409 });
+    if ([...rows.map(a => a.actor), ...portal.recipes.map(r => r.actor)].some(a => normalizeActor(a) === normalizeActor(actor))) return Response.json({ detail: 'Ese buscador ya está en este portal (activo o retirado).' }, { status: 409 });
     const check = await checkActor(actor);
     const verdict = verdictOf(check);
     if (verdict !== 'valid') return Response.json({ detail: `No se añade: ${verdict === 'invalid' ? 'la tienda lo marca como no utilizable' : 'no se pudo verificar'}. ${check.reasons.join(' ')}`.trim(), check }, { status: 422 });
+    // «Validado» dice que el actor está sano, no que acepte una búsqueda de ESTE portal: se comprueba su esquema.
+    const fit = compatibilityOf(check, portal);
+    if (!fit.ok) return Response.json({ detail: `No se añade: pide datos que la app no sabe rellenar para este portal (${fit.missing.join(', ')}).`, check }, { status: 422 });
     const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 80) : actor;
     const response = await serviceRest('apify_actors', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ org_id: ORG, label: title, actor, source: portal.source, input_template: portal.inputTemplate ?? null, max_items: portal.maxItems, memory_mb: 1024, timeout_s: 900, schedule_daily: rows.some(a => a.schedule_daily), created_by: auth!.admin.email }) });
     return response.ok ? reply(auth!, { ok: true, message: `${title} añadido como buscador de repuesto de ${portal.name}. Se probará cuando falle el resto o con «Probar con 10 ofertas».` }, 201) : Response.json({ detail: 'No se pudo guardar el buscador.' }, { status: 503 });
   }
   if (action === 'retire' || action === 'reactivate') {
     if (typeof body.id !== 'string' || !/^[0-9a-f-]{36}$/.test(body.id)) return Response.json({ detail: 'Actor no válido.' }, { status: 422 });
-    const response = await serviceRest(`apify_actors?org_id=eq.${ORG}&id=eq.${body.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: action === 'retire' ? 'inactive' : 'pending_validation' }) });
-    return response.ok ? reply(auth!, { ok: true, message: action === 'retire' ? 'Buscador retirado de la cascada. Puedes reactivarlo cuando quieras.' : 'Buscador reactivado.' }) : Response.json({ detail: 'No se pudo guardar el cambio.' }, { status: 503 });
+    const all = await listActors() ?? [];
+    const row = all.find(a => a.id === body.id);
+    if (!row) return Response.json({ detail: 'Ese buscador no existe (¿se borró en otra pestaña?). Recarga el panel.' }, { status: 404 });
+    if (action === 'retire') {
+      if (isRetired(row)) return Response.json({ detail: 'Ese buscador ya estaba retirado.' }, { status: 409 });
+      // La regla «siempre queda uno» vive AQUÍ, no solo en el botón: la API no deja a un portal sin buscadores.
+      const portal = portalBySource(row.source);
+      if (portal && recipesOf(portal, all.filter(a => a.source === row.source)).length < 2) return Response.json({ detail: 'Es el último buscador activo de este portal: añade un repuesto antes de retirarlo.' }, { status: 409 });
+    } else if (!isRetired(row)) {
+      return Response.json({ detail: 'Ese buscador no estaba retirado.' }, { status: 409 });
+    }
+    // El PATCH lleva el estado esperado y devuelve la fila: si otra pestaña lo cambió entretanto, no se pisa ni se dice «hecho».
+    const filter = action === 'retire' ? 'status=neq.inactive' : 'status=eq.inactive';
+    const response = await serviceRest(`apify_actors?org_id=eq.${ORG}&id=eq.${row.id}&${filter}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: action === 'retire' ? 'inactive' : 'pending_validation' }) }).catch(() => null);
+    const changed = response?.ok ? await response.json().catch(() => null) : null;
+    if (!response?.ok) return Response.json({ detail: 'No se pudo guardar el cambio.' }, { status: 503 });
+    if (!Array.isArray(changed) || changed.length === 0) return Response.json({ detail: 'El buscador cambió de estado mientras tanto. Recarga el panel.' }, { status: 409 });
+    return reply(auth!, { ok: true, message: action === 'retire' ? 'Buscador retirado de la cascada. Puedes reactivarlo cuando quieras.' : 'Buscador reactivado.' });
   }
   if (action === 'portal_daily') {
     const portal = typeof body.portal === 'string' ? portalById(body.portal) : undefined;

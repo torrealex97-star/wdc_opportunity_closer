@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 process.env.SUPABASE_URL = 'http://127.0.0.1:1'; process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key'; process.env.SUPABASE_PUBLISHABLE_KEY = 'anon';
 process.env.ADMIN_SECRETS_KEY = 'test-root'; process.env.APIFY_API_BASE = 'https://apify.test';
 
-const { storeItemsFrom, verdictOf, checkActor, findReplacements, queriesFor } = await import('../../apps/web/lib/apifyStore.ts');
+const { storeItemsFrom, verdictOf, checkActor, findReplacements, queriesFor, compatibilityOf, normalizeActor } = await import('../../apps/web/lib/apifyStore.ts');
 const { recipesOf, orderRecipes, retirementCandidates, portalViews, isRetired, RETIRE_AFTER } = await import('../../apps/web/lib/apifyAuto.ts');
 const { portalById } = await import('../../apps/web/lib/apifyCatalog.ts');
 
@@ -107,19 +107,25 @@ const now = Date.parse('2026-11-21T12:00:00Z');
 const run = (actor, status, hoursAgo, extra = {}) => ({ id: `r-${actor}-${hoursAgo}`, actor_id: `id-${actor}`, run_id: `x${hoursAgo}${actor}`, status, started_at: new Date(now - hoursAgo * 3600e3).toISOString(), finished_at: new Date(now - hoursAgo * 3600e3 + 60e3).toISOString(), harvested: 0, items_total: 0, error: null, ...extra });
 const first = indeed.recipes[0].actor;
 const failedRuns = [run(first, 'FAILED', 1), run(first, 'FAILED', 30), run(first, 'FAILED', 60)];
-assert.deepEqual(orderRecipes(indeed, catalogRows, failedRuns, now).at(-1).actor, first, 'el que falló va al final aunque siga activo');
+// Los otros buscadores del portal siguen sanos: el que falla solo es un actor roto, no una caída del proveedor.
+const healthyOthers = indeed.recipes.slice(1).map(r => run(r.actor, 'SUCCEEDED', 2, { harvested: 20 }));
+assert.deepEqual(orderRecipes(indeed, catalogRows, [...failedRuns, ...healthyOthers], now).at(-1).actor, first, 'el que falló va al final aunque siga activo');
 assert.equal(RETIRE_AFTER, 3);
-assert.deepEqual(retirementCandidates(indeed, catalogRows, failedRuns, now).map(a => a.actor), [first], 'tres fallos seguidos: se retira');
-assert.deepEqual(retirementCandidates(indeed, catalogRows, failedRuns.slice(0, 2), now), [], 'con dos fallos todavía no');
-assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'FAILED', 1), run(first, 'SUCCEEDED', 30, { harvested: 12 }), run(first, 'FAILED', 60), run(first, 'FAILED', 90)], now), [], 'una ejecución buena en la ventana lo salva');
-assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'SUCCEEDED', 1, { harvested: 5 }), run(first, 'FAILED', 30), run(first, 'FAILED', 60)], now), [], 'la más reciente trajo ofertas: no son tres fallos seguidos');
-assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'FAILED', 24 * 20), run(first, 'FAILED', 24 * 21), run(first, 'FAILED', 24 * 22)], now), [], 'fuera de la ventana de 14 días no cuenta');
-// Un fallo con 0 ofertas también cuenta como fallo (terminó bien pero no trajo nada).
-assert.equal(retirementCandidates(indeed, catalogRows, [run(first, 'SUCCEEDED', 1), run(first, 'SUCCEEDED', 30), run(first, 'SUCCEEDED', 60)], now).length, 1, 'tres ejecuciones sin ofertas son tres fallos');
-// Nunca se retira el último: si todos fallan, se queda al menos uno.
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [...failedRuns, ...healthyOthers], now).map(a => a.actor), [first], 'tres fallos en días distintos con los demás sanos: se retira');
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [...failedRuns.slice(0, 2), ...healthyOthers], now), [], 'con dos fallos todavía no');
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'FAILED', 1), run(first, 'SUCCEEDED', 30, { harvested: 12 }), run(first, 'FAILED', 60), run(first, 'FAILED', 90), ...healthyOthers], now), [], 'una ejecución buena en la ventana lo salva');
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'SUCCEEDED', 1, { harvested: 5 }), run(first, 'FAILED', 30), run(first, 'FAILED', 60), ...healthyOthers], now), [], 'la más reciente trajo ofertas: no son tres fallos seguidos');
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'FAILED', 24 * 20), run(first, 'FAILED', 24 * 21), run(first, 'FAILED', 24 * 22), ...healthyOthers], now), [], 'fuera de la ventana de 14 días no cuenta');
+assert.equal(retirementCandidates(indeed, catalogRows, [run(first, 'SUCCEEDED', 1), run(first, 'SUCCEEDED', 30), run(first, 'SUCCEEDED', 60), ...healthyOthers], now).length, 1, 'tres ejecuciones sin ofertas, en días distintos, son tres fallos');
+// Un mal día no retira a nadie: tres fallos en la misma tarde (p. ej. 5xx de Apify) no bastan.
+assert.deepEqual(retirementCandidates(indeed, catalogRows, [run(first, 'FAILED', 1), run(first, 'FAILED', 2), run(first, 'FAILED', 3), ...healthyOthers], now), [], 'tres fallos en la misma jornada no retiran');
+// Caída del proveedor: si TODOS fallaron en su última ejecución no se retira ninguno (no es culpa de un actor).
 const allFailed = indeed.recipes.flatMap(r => [run(r.actor, 'FAILED', 1), run(r.actor, 'FAILED', 30), run(r.actor, 'FAILED', 60)]);
-const retiring = retirementCandidates(indeed, catalogRows, allFailed, now);
-assert.equal(retiring.length, indeed.recipes.length - 1, 'siempre queda un buscador');
+assert.deepEqual(retirementCandidates(indeed, catalogRows, allFailed, now), [], 'todos caídos a la vez = caída del proveedor: no se retira nadie');
+// Con solo dos buscadores y uno sano, el roto sí se retira y el sano queda (nunca se retira el último).
+const two = [row(indeed.recipes[0].actor), row(indeed.recipes[1].actor)];
+const twoRetired = retirementCandidates({ ...indeed, recipes: indeed.recipes.slice(0, 2) }, two, [...failedRuns, run(indeed.recipes[1].actor, 'SUCCEEDED', 2, { harvested: 9 })], now);
+assert.deepEqual(twoRetired.map(a => a.actor), [first]);
 const single = portalById('infojobs');
 assert.deepEqual(retirementCandidates(single, [{ ...row(single.recipes[0].actor), source: single.source }], [run(single.recipes[0].actor, 'FAILED', 1), run(single.recipes[0].actor, 'FAILED', 30), run(single.recipes[0].actor, 'FAILED', 60)], now), [], 'un portal con un solo buscador no retira nada');
 
@@ -134,5 +140,44 @@ assert.equal(retiredView.recipes.length, indeed.recipes.length - 1);
 const infojobsView = views.find(p => p.id === 'infojobs');
 assert.equal(infojobsView.needs_more, true, 'un portal con un solo buscador avisa de que no hay repuesto');
 assert.equal(views.find(p => p.id === 'multi').needs_more, false, 'el multi-portal es un solo buscador por diseño');
+
+// ---- `a/b` y `a~b` son el mismo actor; el esquema tiene que encajar con el portal ----
+assert.equal(normalizeActor('Ana~Infojobs-Pro'), 'ana/infojobs-pro');
+assert.equal(normalizeActor(' ana/infojobs-pro '), 'ana/infojobs-pro');
+const tilde = recipesOf(indeed, [row('Boncross~Indeed-Jobs'), ...indeed.recipes.slice(1).map(r => row(r.actor))]);
+assert.equal(tilde.length, indeed.recipes.length, 'un actor del catálogo guardado con ~ y otras mayúsculas no se duplica como «añadido»');
+const fitOk = compatibilityOf({ schema: { properties: { searchTerm: { type: 'string' }, maxItems: { type: 'integer' } }, required: ['searchTerm'] } }, { maxItems: 100, query: 'closer' });
+assert.equal(fitOk.ok, true, 'pide un campo que la app sabe rellenar (búsqueda)');
+const fitBad = compatibilityOf({ schema: { properties: { startUrls: { type: 'array' } }, required: ['startUrls'] } }, { maxItems: 100, query: 'closer' });
+assert.equal(fitBad.ok, false); assert.deepEqual(fitBad.missing, ['startUrls'], 'un obligatorio que la app no rellena = no encaja');
+assert.equal(compatibilityOf({}, { maxItems: 100 }).ok, false, 'sin esquema no se afirma encaje');
+assert.equal(compatibilityOf({ schema: { properties: { query: {}, locale: {} }, required: [] } }, { maxItems: 100, inputTemplate: { query: '{{query}}', locale: 'es' } }).ok, true, 'con plantilla del portal, sus campos existen en el esquema');
+assert.deepEqual(compatibilityOf({ schema: { properties: { query: {} }, required: [] } }, { maxItems: 100, inputTemplate: { query: '{{query}}', country: 'ES' } }).missing, ['country']);
+
+// ---- la búsqueda en la tienda: reloj compartido, fallo parcial y encaje ----
+const slowFetch = async target => { await new Promise(r => setTimeout(r, 30)); return fakeFetch(target); };
+const rushed = await findReplacements({ name: 'InfoJobs', maxItems: 100 }, new Set(), { fetchImpl: slowFetch, deadline: Date.now() + 500 });
+assert.equal(rushed.candidates.length, 0, 'con el reloj casi agotado no se valida nada');
+assert.equal(rushed.truncated, true, 'y se declara el corte');
+assert.equal(rushed.allFailed, false, 'un corte por tiempo no es «la tienda no responde»');
+const partialFetch = async target => {
+  const u = new URL(String(target));
+  return u.pathname === '/v2/store' && u.searchParams.get('search') === 'InfoJobs' ? json(503) : fakeFetch(target);
+};
+const partial = await findReplacements({ name: 'InfoJobs', maxItems: 100 }, new Set(), { fetchImpl: partialFetch });
+assert.equal(partial.allFailed, false, 'una de dos consultas respondió: no es un fallo total');
+assert.match(partial.error ?? '', /HTTP 503/, 'el fallo parcial se declara como aviso');
+assert.ok(partial.candidates.length > 0, 'y se enseña lo encontrado');
+assert.equal(noStore.allFailed, true, 'si TODAS las consultas fallan, sí es un fallo total');
+const tildeKnown = await findReplacements({ name: 'InfoJobs', maxItems: 100 }, new Set(['ANA~ok']), { fetchImpl: fakeFetch });
+assert.ok(!tildeKnown.candidates.some(c => c.actor === 'ana/ok'), '`ANA~ok` ya conocido excluye a `ana/ok`');
+const incompat = await findReplacements({ name: 'InfoJobs', maxItems: 100 }, new Set(), { fetchImpl: async target => {
+  const path = new URL(String(target)).pathname;
+  if (path === '/v2/store') return json(200, { data: { items: [{ username: 'ana', name: 'urls-only', title: 'Solo URLs' }] } });
+  if (path === '/v2/acts/ana~urls-only') return json(200, { data: { isDeprecated: false } });
+  return json(200, { data: { status: 'SUCCEEDED', inputSchema: JSON.stringify({ properties: { startUrls: { type: 'array' } }, required: ['startUrls'] }) } });
+} });
+assert.equal(incompat.candidates[0].verdict, 'invalid', 'un actor sano que pide URLs no encaja con una búsqueda por texto');
+assert.match(incompat.candidates[0].reasons.join(' '), /startUrls/);
 
 console.log('PASS  apify-store: validación estricta desde la tienda, cascada con añadidos y retirada de los caídos');

@@ -4,6 +4,7 @@ import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TE
 import { approvedBySource, ORG } from './external';
 import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
 import { PORTALS, portalBySource, portalById, type Portal, type Recipe } from './apifyCatalog';
+import { normalizeActor } from './apifyStore';
 import { serviceRest } from './supabaseAuth';
 
 // Búsqueda automática con buscadores de repuesto. Si el primero no arranca, falla o termina sin ofertas, se prueba el
@@ -28,38 +29,52 @@ export function recipeState(actorId: string | undefined, runs: RunRow[], now = D
 // `apify_actors` de ese portal que el catálogo no trae). El catálogo es el punto de partida; la app lo va actualizando.
 export const isRetired = (row: Pick<ActorRow, 'status'> | undefined) => row?.status === 'inactive';
 export function recipesOf(portal: Portal, rows: ActorRow[]): Recipe[] {
-  const inCatalog = new Set(portal.recipes.map(r => r.actor.toLowerCase()));
-  const fromCatalog = portal.recipes.filter(r => !isRetired(rows.find(a => a.actor.toLowerCase() === r.actor.toLowerCase())));
-  const added = rows.filter(a => a.source === portal.source && !inCatalog.has(a.actor.toLowerCase()) && !isRetired(a))
+  const same = (a: string, b: string) => normalizeActor(a) === normalizeActor(b);
+  const inCatalog = new Set(portal.recipes.map(r => normalizeActor(r.actor)));
+  const fromCatalog = portal.recipes.filter(r => !isRetired(rows.find(a => same(a.actor, r.actor))));
+  const added = rows.filter(a => a.source === portal.source && !inCatalog.has(normalizeActor(a.actor)) && !isRetired(a))
     .map((a): Recipe => ({ actor: a.actor, name: a.label || a.actor }));
   return [...fromCatalog, ...added];
 }
 
 // Los que fallaron en las últimas 24 h van al final; el resto conserva el orden del catálogo.
 export function orderRecipes(portal: Portal, rows: ActorRow[], runs: RunRow[], now = Date.now()): Recipe[] {
-  const failed = (r: Recipe) => recipeState(rows.find(a => a.actor === r.actor)?.id, runs, now).state === 'failed';
+  const failed = (r: Recipe) => recipeState(rows.find(a => normalizeActor(a.actor) === normalizeActor(r.actor))?.id, runs, now).state === 'failed';
   const usable = recipesOf(portal, rows);
   return [...usable.filter(r => !failed(r)), ...usable.filter(failed)];
 }
 
-// Retirada automática: un buscador con 3 fallos seguidos en 14 días y ninguna ejecución buena sale de la cascada
-// (`status = inactive`, reversible desde el panel). Nunca se retira el último que queda de un portal.
+// Retirada automática: un buscador con 3 fallos seguidos que NO caen el mismo día y ninguna ejecución buena en 14
+// días sale de la cascada (`status = inactive`, reversible desde el panel). Tres salvaguardas contra retirar buenos
+// buscadores por un mal día: (1) los tres fallos abarcan al menos 24 h y dos días distintos; (2) si TODOS los
+// buscadores del portal han fallado en su última ejecución es una caída del proveedor, no de un actor: no se retira
+// ninguno; (3) nunca se retira el último que queda.
 export const RETIRE_AFTER = 3, RETIRE_WINDOW_DAYS = 14;
 export function retirementCandidates(portal: Portal, rows: ActorRow[], runs: RunRow[], now = Date.now()): ActorRow[] {
   const usable = recipesOf(portal, rows);
   if (usable.length < 2) return [];
-  const mine = rows.filter(a => a.source === portal.source && !isRetired(a) && usable.some(r => r.actor.toLowerCase() === a.actor.toLowerCase()));
+  const mine = rows.filter(a => a.source === portal.source && !isRetired(a) && usable.some(r => normalizeActor(r.actor) === normalizeActor(a.actor)));
+  const recentOf = (row: ActorRow) => runs.filter(r => r.actor_id === row.id && age(r, now) < RETIRE_WINDOW_DAYS * DAY).sort((a, b) => b.started_at.localeCompare(a.started_at));
+  // Caída del proveedor: todos los buscadores con historial reciente fallaron en su última ejecución.
+  const withHistory = mine.filter(row => recentOf(row).length > 0);
+  if (withHistory.length >= 2 && withHistory.every(row => isFailed(recentOf(row)[0]))) return [];
   const out: ActorRow[] = [];
   for (const row of mine) {
-    const recent = runs.filter(r => r.actor_id === row.id && age(r, now) < RETIRE_WINDOW_DAYS * DAY).sort((a, b) => b.started_at.localeCompare(a.started_at));
-    if (recent.length >= RETIRE_AFTER && recent.slice(0, RETIRE_AFTER).every(isFailed) && !recent.some(isGood) && out.length < usable.length - 1) out.push(row);
+    const recent = recentOf(row);
+    if (recent.length < RETIRE_AFTER) continue;
+    const last3 = recent.slice(0, RETIRE_AFTER);
+    if (!last3.every(isFailed) || recent.some(isGood)) continue;
+    const newest = Date.parse(last3[0].started_at), oldest = Date.parse(last3[RETIRE_AFTER - 1].started_at);
+    const days = new Set(last3.map(r => r.started_at.slice(0, 10)));
+    if (newest - oldest < DAY || days.size < 2) continue; // un solo mal día no retira a nadie
+    if (out.length < usable.length - 1) out.push(row);
   }
   return out;
 }
 
 async function ensureRows(portal: Portal, by: string): Promise<ActorRow[]> {
   let rows = (await listActors() ?? []).filter(a => a.source === portal.source);
-  for (const r of portal.recipes.filter(x => !rows.some(a => a.actor === x.actor))) {
+  for (const r of portal.recipes.filter(x => !rows.some(a => normalizeActor(a.actor) === normalizeActor(x.actor)))) {
     // La plantilla del portal (si la tiene) viaja a cada fila: los repuestos de un mismo portal comparten
     // contrato de búsqueda; si alguno no lo acepta, el intento se anota y se pasa al siguiente.
     await serviceRest('apify_actors', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ org_id: ORG, label: r.name, actor: r.actor, source: portal.source, input_template: portal.inputTemplate ?? null, max_items: portal.maxItems, memory_mb: 1024, timeout_s: 900, schedule_daily: rows.some(a => a.schedule_daily), created_by: by }) }).catch(() => null);
@@ -84,7 +99,7 @@ export async function searchPortal(portal: Portal, opts: { by: string; publicBas
   const todays = runs.filter(r => rows.some(a => a.id === r.actor_id) && age(r, now) < DAY).length;
   if (todays >= MAX_PER_DAY * 2) return { ok: false, stopped: true, error: 'Ya se han hecho muchos intentos hoy en este portal; se vuelve a intentar mañana.', attempts };
   for (const recipe of orderRecipes(portal, rows, runs, now).slice(0, opts.maxAttempts ?? MAX_ATTEMPTS)) {
-    const row = rows.find(a => a.actor === recipe.actor); if (!row) continue;
+    const row = rows.find(a => normalizeActor(a.actor) === normalizeActor(recipe.actor)); if (!row) continue;
     const usable = opts.test ? { ...row, max_items: portal.testItems } : row;
     const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(portal.query ? { query: portal.query } : {}) } });
     if (r.ok) return { ok: true, recipe: recipe.name, actor: recipe.actor, fallback: attempts.length > 0, attempts };
@@ -205,12 +220,12 @@ export function portalViews(actors: ActorRow[], runs: RunRow[], now = Date.now()
   const rank = new Map(ranked.map((m, i) => [m.p.id, i + 1]));
   return measured.map(({ p, rows, mine: unsorted, ap, usd, per }) => {
     const mine = [...unsorted].sort((a, b) => b.started_at.localeCompare(a.started_at));
-    const inCatalog = new Set(p.recipes.map(r => r.actor.toLowerCase()));
-    const recipes = recipesOf(p, rows).map(r => { const row = rows.find(a => a.actor.toLowerCase() === r.actor.toLowerCase()); const s = recipeState(row?.id, runs, now);
+    const inCatalog = new Set(p.recipes.map(r => normalizeActor(r.actor)));
+    const recipes = recipesOf(p, rows).map(r => { const row = rows.find(a => normalizeActor(a.actor) === normalizeActor(r.actor)); const s = recipeState(row?.id, runs, now);
       // Los buscadores generados desde la auditoría declaran qué campos exige el actor: se dice en la tarjeta
       // para que nadie se pregunte por qué un intento no arrancó por falta de un dato.
       const needs = r.needs?.length ? ` · pide ${r.needs.join(', ')}` : '';
-      return { name: r.name, actor: r.actor, id: row?.id ?? null, added: !inCatalog.has(r.actor.toLowerCase()), state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : `Aún sin probar${needs}` }; });
+      return { name: r.name, actor: r.actor, id: row?.id ?? null, added: !inCatalog.has(normalizeActor(r.actor)), state: s.state, detail: s.state === 'ok' ? `Funcionó: ${s.items} ofertas` : s.state === 'failed' ? plainError(s.error) : s.state === 'running' ? 'Buscando ahora…' : `Aún sin probar${needs}` }; });
     const retired = rows.filter(isRetired).map(a => ({ id: a.id, name: a.label || a.actor, actor: a.actor }));
     const good = mine.find(isGood), daily = rows.some(a => a.schedule_daily);
     const last = good ? { when: ago(good.finished_at ?? good.started_at, now), items: good.harvested, cost: good.cost_usd == null ? null : Number(good.cost_usd) } : null;
