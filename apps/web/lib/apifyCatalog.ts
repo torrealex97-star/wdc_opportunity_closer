@@ -16,10 +16,19 @@
 // ejecutan en Node (`tests/apify-portals.mjs`), así que lo que se prueba es lo que ve el panel.
 import { GENERATED_PORTALS } from './apifyPortals';
 
-export type Recipe = { actor: string; name: string; needs?: string[] };
+export type Recipe = {
+  actor: string; name: string; needs?: string[];
+  // Plantilla propia del buscador. Manda sobre la del portal: los repuestos de un mismo portal no
+  // siempre comparten contrato (Workana: `query` + `locale` en uno, `searchQuery` en otro, `keyword`
+  // + `language` en el tercero). Sin ella se usa la del portal.
+  inputTemplate?: Record<string, unknown>;
+};
 export type Portal = {
   id: string; source: string; name: string; plain: string; caution?: string;
   maxItems: number; testItems: number; query?: string; sites?: string[]; recipes: Recipe[];
+  // Términos por los que rota la búsqueda, uno por día UTC: una ejecución sigue siendo UNA búsqueda,
+  // así que cubrir varios sinónimos no multiplica el gasto. `query` es el primero de la lista.
+  queries?: string[];
   // Plantilla de entrada para los actores cuyo contrato no encaja con los sinónimos genéricos
   // (p. ej. Workana espera `country` como código ISO de 2 letras, no «España»). Se guarda en la
   // fila del actor y solo se rellenan los huecos {{query}}, {{max_items}}, etc.
@@ -43,28 +52,40 @@ const CURATED: Portal[] = [
     recipes: [{ actor: 'haketa/infojobs-scraper', name: 'Buscador de InfoJobs' }],
   },
   {
+    // LinkedIn: un término al día, rotando por el vocabulario canónico del motor (español e inglés).
+    // La muestra de 104 ofertas con 1 aprobada no basta para concluir nada (decisión del dueño,
+    // 2026-11-22): no se recorta la fuente, se busca mejor. `crawlworks/linkedin-job-scraper`
+    // devolvía 404 en la API pública el 2026-11-22 y se sustituye por el candidato auditado
+    // `cheap_scraper/linkedin-job-scraper` (campo `keyword` y `maxItems`, que la app sabe rellenar).
     id: 'linkedin', source: 'apify-linkedin', name: 'LinkedIn', maxItems: 100, testItems: 10, query: 'closer de ventas',
+    queries: ['closer de ventas', 'high ticket closer', 'sales closer', 'setter de ventas', 'appointment setter', 'cold caller', 'closer remoto'],
     plain: 'Ofertas públicas de LinkedIn (sin cuentas personales ni datos de contacto).',
     caution: 'LinkedIn limita el uso automático en sus condiciones. Se busca poco volumen y es una decisión tuya (ADR-011). Viene apagado.',
     recipes: [
       { actor: 'curious_coder/linkedin-jobs-scraper', name: 'Buscador de LinkedIn A' },
-      { actor: 'crawlworks/linkedin-job-scraper', name: 'Buscador de LinkedIn B' },
+      { actor: 'cheap_scraper/linkedin-job-scraper', name: 'Buscador de LinkedIn B' },
       { actor: 'gopalakrishnan/linkedin-jobs', name: 'Buscador de LinkedIn C' },
       { actor: 'harvestapi/linkedin-job-search', name: 'Buscador de LinkedIn D' },
     ],
   },
   {
-    // Workana: mercado de proyectos freelance de ventas en España y LatAm (P04B). El actor documenta
-    // `query`, `locale`, `maxItems` y `maxPages`; NO se le pasa `country` (espera un código ISO de dos
-    // letras) ni se infiere sueldo del presupuesto: un presupuesto por proyecto no es un salario.
-    id: 'workana', source: 'apify-workana', name: 'Workana', maxItems: 100, testItems: 10, query: 'ventas',
+    // Workana: mercado de proyectos freelance de ventas en España y LatAm (P04B). «ventas» a secas
+    // traía proyectos de cualquier cosa: se busca por términos de cierre, uno al día, con la categoría
+    // de ventas del actor principal. NO se le pasa `country` (espera un código ISO de dos letras) ni se
+    // infiere sueldo del presupuesto: un presupuesto por proyecto no es un salario.
+    // Los esquemas leídos el 2026-11-22 no coinciden entre buscadores: A usa `query`/`locale`/`maxPages`,
+    // B exige `searchQuery`/`maxRequestsPerCrawl` y C usa `keyword`/`language`. Por eso cada uno lleva
+    // su plantilla; con la común, B no arrancaba (le faltaba su campo obligatorio) y C buscaba sin filtro.
+    id: 'workana', source: 'apify-workana', name: 'Workana', maxItems: 100, testItems: 10, query: 'closer de ventas',
+    queries: ['closer de ventas', 'setter de ventas', 'cold caller', 'cierre de ventas', 'closer high ticket', 'cerrador de ventas'],
     plain: 'Proyectos freelance de ventas en España y LatAm. El presupuesto es por proyecto, no un sueldo.',
-    /* eslint-disable-next-line */
-    inputTemplate: { query: '{{query}}', locale: 'es', maxItems: '{{max_items}}', maxPages: 5 },
+    inputTemplate: { query: '{{query}}', category: 'sales-marketing', locale: 'es', maxItems: '{{max_items}}', maxPages: 5 },
     recipes: [
       { actor: 'automation-lab/workana-freelance-projects-scraper', name: 'Buscador de Workana A' },
-      { actor: 'getdataforme/workana-job-scraper', name: 'Buscador de Workana B' },
-      { actor: 'gio21/workana-scraper', name: 'Buscador de Workana C' },
+      { actor: 'getdataforme/workana-job-scraper', name: 'Buscador de Workana B',
+        inputTemplate: { searchQuery: '{{query}}', maxRequestsPerCrawl: 5 } },
+      { actor: 'gio21/workana-scraper', name: 'Buscador de Workana C',
+        inputTemplate: { keyword: '{{query}}', language: 'es', maxItems: '{{max_items}}' } },
     ],
   },
   {
@@ -89,3 +110,16 @@ export const PORTALS: Portal[] = [...CURATED, ...GENERATED];
 
 export const portalBySource = (source: string) => PORTALS.find(p => p.source === source);
 export const portalById = (id: string) => PORTALS.find(p => p.id === id);
+
+/** Día UTC desde la época: la rotación no depende de la hora ni del arranque del proceso. */
+export const dayIndex = (now = Date.now()): number => Math.floor(now / 86_400_000);
+
+/**
+ * Búsqueda de hoy para el portal: rota por su lista de términos un día cada uno. Devuelve `undefined`
+ * solo si el portal no declara ninguna búsqueda. Una ejecución = un término, así que el coste diario
+ * no cambia y el resto de sinónimos se cubren a lo largo de la semana.
+ */
+export function queryForDay(portal: Pick<Portal, 'query' | 'queries'>, now = Date.now()): string | undefined {
+  const list = portal.queries?.length ? portal.queries : portal.query ? [portal.query] : [];
+  return list.length ? list[dayIndex(now) % list.length] : undefined;
+}
