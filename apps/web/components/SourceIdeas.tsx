@@ -22,8 +22,9 @@ export default function SourceIdeas() {
     <p className="card-meta" style={{ marginTop: 12 }}>
       Tomadas del SOP diario de WDC. Solo se listan las que el documento da con enlace real. Las comunidades
       (Facebook, Telegram) piden sesión personal y sus normas no permiten recogida automática: quedan como
-      ritual manual de la alumna. Google Jobs usa 7 búsquedas al día (4 España + 3 LatAm ≈ 0,175 USD); para
-      ampliarlo, sube <code>SERPAPI_JOBS_MAX_DORKS</code> y cada búsqueda extra cuesta 0,025 USD.
+      ritual manual de la alumna. Google Jobs usa 7 búsquedas al día (4 España + 3 LatAm): 0,0175 USD con
+      JSearch y hasta 0,175 USD si caen a SerpApi. Para ampliarlo, sube <code>SERPAPI_JOBS_MAX_DORKS</code>;
+      cada búsqueda extra cuesta 0,0025 USD con JSearch y 0,025 USD con SerpApi.
     </p>
     {FAMILIES.map(family => {
       const rows = SOURCE_IDEAS.filter(i => i.family === family);

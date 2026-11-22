@@ -43,19 +43,23 @@ export async function GET(request: NextRequest) {
   const keysKnown = connections !== null;
   const noKey = (name: string) => keysKnown ? `Sin clave de ${name}.` : `No se pudieron leer las conexiones: no se sabe si hay clave de ${name}.`;
   const row = (provider: string) => overview.rows.find(r => r.provider === provider);
-  const bright = row('brightdata'), serp = row('serpapi');
-  const brightOk = keysKnown && keys.has('brightdata') && room(bright).ok, serpOk = keysKnown && keys.has('serpapi') && room(serp).ok;
+  const bright = row('brightdata'), jsr = row('jsearch'), serp = row('serpapi');
+  const brightOk = keysKnown && keys.has('brightdata') && room(bright).ok, jsrOk = keysKnown && keys.has('jsearch') && room(jsr).ok, serpOk = keysKnown && keys.has('serpapi') && room(serp).ok;
   const fallbackMax = maxSearches();
-  const googleWhy = !brightOk && !serpOk
-    ? [!keysKnown || !keys.has('brightdata') ? noKey('Bright Data') : room(bright).why, !keysKnown || !keys.has('serpapi') ? noKey('SerpApi') : room(serp).why].filter(Boolean).join(' ')
+  const googleWhy = !brightOk && !jsrOk && !serpOk
+    ? [
+        !keysKnown || !keys.has('brightdata') ? noKey('Bright Data') : room(bright).why,
+        !keysKnown || !keys.has('jsearch') ? noKey('JSearch') : room(jsr).why,
+        !keysKnown || !keys.has('serpapi') ? noKey('SerpApi') : room(serp).why,
+      ].filter(Boolean).join(' ')
     : null;
   const dailyPortals = actors === null ? null : actors.filter(a => a.schedule_daily).length;
   const apifyLeft = apifySpent === null ? null : Math.max(0, budget.usd - apifySpent);
   const stages: StageInput[] = [
     {
       id: 'google-jobs', label: 'Google Jobs', automatic: true,
-      unit: `Bright Data ${PROVIDER_METERS.brightdata.usdPerRequest} USD primero; SerpApi ${PROVIDER_METERS.serpapi.usdPerRequest} USD de respaldo, por búsqueda`,
-      available: brightOk || serpOk, reason: googleWhy,
+      unit: `Bright Data ${PROVIDER_METERS.brightdata.usdPerRequest} USD primero; JSearch ${PROVIDER_METERS.jsearch.usdPerRequest} USD; SerpApi ${PROVIDER_METERS.serpapi.usdPerRequest} USD de respaldo, por búsqueda`,
+      available: brightOk || jsrOk || serpOk, reason: googleWhy,
     },
     {
       id: 'respaldo', label: 'Respaldo por portal (SerpApi)', automatic: true,

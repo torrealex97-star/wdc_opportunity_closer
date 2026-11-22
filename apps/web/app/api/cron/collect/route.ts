@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   const outcomes = await collectAll('cron', undefined, budget.deadline(10_000)).catch(failed('collect', []));
   if (outcomes.some(o => o.truncated)) budget.cut('apis');
   // WATERFALL: lo gratuito (motor y APIs oficiales) ya corrió. Las vías de pago se recorren por coste —Google Jobs
-  // (Bright Data → SerpApi), respaldo por portal y actores de Apify— y SOLO mientras falte objetivo de ofertas
+  // (Bright Data → JSearch → SerpApi), respaldo por portal y actores de Apify— y SOLO mientras falte objetivo de ofertas
   // CUALIFICADAS (aprobadas o publicadas) del día, que el propietario fija en el panel. Tras cada etapa se descuenta
   // lo que se espera que aporte (con la tasa de aprobación medida; sin tasa, nada). Sin poder contar lo cualificado
   // de hoy no se gasta: un hueco no es un cero. Cada etapa además respeta el tope mensual de su proveedor.
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
   // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
   let meterRead: ReturnType<typeof loadMeter> | undefined;
   const sharedMeter = () => (meterRead ??= loadMeter());
-  // Google Jobs (Bright Data primero, SerpApi de respaldo): dorks de closer/ES y LatAm. Entra después de las APIs
+  // Google Jobs (Bright Data primero, JSearch y SerpApi de respaldo): dorks de closer/ES y LatAm. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
   const googleJobs = !canSpend()
     ? (stages.push({ id: 'google-jobs', ran: false, why: noSpendWhy() }), { source: 'google-jobs' as const, ok: false, error: noSpendWhy(), skipped: true })
