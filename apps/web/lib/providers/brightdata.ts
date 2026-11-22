@@ -226,7 +226,7 @@ type FetchLike = typeof fetch;
  */
 export function serpProbeRequest(config: BrightDataConfig & { serpZone: string }, fetchImpl: FetchLike = fetch): Promise<Response> {
   return fetchImpl(`${apiBase()}/request`, {
-    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(40_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify({ zone: config.serpZone, url: googleJobsUrl('closer de ventas'), format: 'json' }),
   });
