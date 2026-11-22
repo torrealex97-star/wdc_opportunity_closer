@@ -1,3 +1,37 @@
+## RapidAPI: una clave para varias APIs de empleo verificadas — 2026-11-22
+
+- **Petición del propietario**: añadir RapidAPI, que tiene muchas APIs de empleo.
+- **Qué APIs** (*inspected*, documentación pública de rapidapi.com): solo las de ruta y respuesta documentadas. **JSearch** (`jsearch.p.rapidapi.com/search`, `data[]` con `job_title`, `employer_name`, `job_apply_link`) y **Jobs API** de Pat92 (`jobs-api14.p.rapidapi.com/v2/linkedin/search` y `/v2/indeed/search`, campos `title`, `companyName`, `applyUrl`). LinkedIn Job Search API (fantastic.jobs) queda fuera: su ruta exacta no se pudo leer en la documentación pública.
+- **Cambio** (*tested* con simulador, `tests/admin-auth/rapidapi.mjs` 8/8, suite completa en verde):
+  - [`providers/rapidapi.ts`](../apps/web/lib/providers/rapidapi.ts): cabeceras `X-RapidAPI-Key`/`X-RapidAPI-Host`; 403 = sin suscripción (no se cobra), 429 = cuota agotada, 401 = clave rechazada.
+  - «Probar» busca una vez en cada API y dice a cuáles está suscrita la clave.
+  - Etapa `rapidapi` del waterfall tras Google Jobs, solo si falta objetivo; como mucho `RAPIDAPI_MAX_REQUESTS` (3) por pasada; cada API guarda con su fuente `rapidapi-<api>`.
+  - Tope mensual `RAPIDAPI_MONTHLY_USD` (5 USD). El coste por petición es una **estimación prudente** (0,005 USD, `RAPIDAPI_USD_PER_REQUEST`): cada API factura según su plan.
+- **Migración** `20261122_rapidapi_provider.sql` (amplía los CHECK de `integration_connections` y `provider_budget`): **aplicada en la base real** por orden expresa del propietario. Antes, prueba `BEGIN … ROLLBACK` (`tests/db/rapidapi_provider.sql`) en la base real: la conexión y el tope se guardan y un proveedor inventado sigue rechazado. Asesores de seguridad después: sin avisos nuevos.
+
+## Bright Data: de «no trae empleos» a una integración que lee cualquier entrega — 2026-11-22 (PR #120, #124, #125, #126)
+
+- **Lo observado en producción** (*verified* en `integration_connections.last_test_detail` y en los logs de Supabase):
+  - Una respuesta HTTP 200 llegó en 4 s dentro de un sobre `{status_code, headers, body}` que la app no abría.
+  - Con `ibp=htl;jobs` Bright Data devolvió JSON con solo `general`, `input` y `navigation`: su intérprete no lee la vista de Google Jobs. Su documentación describe `jobs` como «ofertas incrustadas en la página de búsqueda» (*inspected*).
+  - Varias pruebas se cortaron sin respuesta a los 20 y a los 40 s.
+- **Hallazgo del code review**: en el cron la etapa de Google Jobs tenía 6,5 s; Bright Data se cortaba siempre y SerpApi ya no tenía tiempo.
+- **Cambios** (*tested* con simuladores; suite completa en verde en cada PR):
+  - Lector universal (`extractJobItems`, `jobToCandidate`): cualquier forma JSON (sobre con cuerpo objeto o texto, `jobs` lista u objeto, `jobs_results`, anidado) y nombres de campo de cualquier proveedor. Lo orgánico no cuenta como oferta; el HTML no se interpreta.
+  - URL por defecto: búsqueda normal con intención de empleo; `udm=8` e `ibp=htl;jobs` como variantes (`BRIGHTDATA_JOBS_URL`). «Probar» prueba las tres por orden (como mucho 3 peticiones) y dice cuál trae empleos.
+  - **Modo asíncrono** (el propietario lo activó en la zona): encargar con `POST /request?async=1` (cobrado), recoger con `GET /serp/get_result` (gratis). Cada encargo y cada recogida quedan anotados en `external_ingest_runs` (vías `async` y `async-done`); el cron recoge lo pendiente antes de Google Jobs. Si la zona responde en síncrono, se usa esa respuesta.
+  - Cron: Google Jobs con 18 s y Bright Data solo con margen (`BRIGHTDATA_MIN_MS`); si no cabe, el dork va a SerpApi con aviso. «Probar» espera hasta ~40 s.
+- **Sin verificar**: que la búsqueda normal traiga el recuadro de empleos para estas consultas en España; lo dice el siguiente «Probar» en producción.
+
+## Resumen del admin: tarjeta de objetivo del día y gasto del mes — 2026-11-22 (PR #120)
+
+- **Hallazgo** (*inspected*): el Resumen trataba bien los huecos, pero no decía nada del dinero ni del objetivo del día.
+- **Cambio** (*tested*): tarjeta «Meta del día (24 h)» en [`SummaryTab`](../apps/web/components/SummaryTab.tsx): cualificadas frente al objetivo, si falta o está cubierto, gasto del mes frente a la suma de topes y enlace a APIs. Si una lectura falla, «—» con su causa; no se suma un gasto parcial.
+
+## Nota sobre este archivo — 2026-11-22
+
+- Las entradas anteriores de esta sesión (PR #120 a #126) no llegaron a guardarse: el encabezado `# Estado` desapareció en otro cambio y el script de inserción lo usaba como ancla sin avisar. Se reponen arriba; no se ha tocado lo de otras sesiones.
+
 ## CodeQL deja de fallar en un repositorio privado sin Code Security — 2026-11-22
 
 - **Petición del propietario**: averiguar qué rompe CodeQL en `main`, arreglarlo y comprobar que el análisis queda en verde, sin tocar el comportamiento de la app.
