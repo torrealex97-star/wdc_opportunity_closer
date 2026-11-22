@@ -766,12 +766,15 @@ await step('Apify sencillo: portales con buscadores de repuesto (arranque fallid
   assert.equal((await post({ action: 'portal_daily', portal: 'indeed', on: 'si' })).status, 422);
   assert.equal((await post({ action: 'portal_daily', portal: 'indeed', on: true })).status, 200); assert.ok((await call('/api/admin/apify')).json.portals.find(p => p.id === 'indeed').daily);
   state.apifyItems = [{ id: 'z1', title: 'Closer de ventas high ticket', url: 'https://es.indeed.com/viewjob?jk=z1', company: 'Acme', location: 'Madrid' }]; // la búsqueda sí devuelve ofertas
+  // El waterfall solo lanza actores nuevos mientras falte objetivo de ofertas cualificadas: aquí el mock ya tiene más de
+  // 60 aprobadas «de hoy», así que se fija un objetivo alto para probar la cascada de repuestos, no el freno.
+  state.waterfallRow = { org_id: 'cloud-wdc', qualified_per_day: 10000, updated_by: 'dueño', updated_at: new Date().toISOString() };
   calls = state.apifyCalls.length; const cron = () => call('/api/cron/collect', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
   let k = await cron(); assert.equal(k.status, 200); const indeedActors = ['boncross/indeed-jobs', 'chuckling_hemp/indeed-jobs-scraper', 'ayeeyee/indeed-job-scraper'];
-  assert.deepEqual(k.json.apify.started.filter(x => indeedActors.includes(x.actor)).map(x => [x.actor, x.ok]), [['chuckling_hemp/indeed-jobs-scraper', true]], JSON.stringify(k.json.apify)); // A cae → B; solo UNA búsqueda de Indeed
+  assert.deepEqual(k.json.apify.started.filter(x => indeedActors.includes(x.actor)).map(x => [x.actor, x.ok]), [['chuckling_hemp/indeed-jobs-scraper', true]], JSON.stringify({ apify: k.json.apify, waterfall: k.json.waterfall })); // A cae → B; solo UNA búsqueda de Indeed
   const afterFirst = state.apifyCalls.length;
   k = await cron(); assert.equal(state.apifyCalls.length, afterFirst, 'una búsqueda diaria por portal: la segunda pasada no lanza nada');
-  state.apifyFailActors = new Set(); state.apifyItems = [];
+  state.apifyFailActors = new Set(); state.apifyItems = []; state.waterfallRow = null;
 });
 await step('Apify: buscadores de repuesto desde la tienda — se validan con metadatos públicos y solo el propietario añade, retira o reactiva', async () => {
   const savedActors = state.apifyActors; state.apifyActors = []; state.storeDown = false; state.storeFailExact = null;
