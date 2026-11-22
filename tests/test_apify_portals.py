@@ -79,7 +79,16 @@ def test_curated_portals_lead_in_their_order_with_their_own_recipes():
     # Los buscadores escritos a mano no cambian por generar el resto de portales.
     assert [len(curated[i]['recipes']) for i in CURATED_IDS] == [4, 1, 4, 3, 1]
     assert curated['indeed']['source'] == 'apify-indeed' and curated['multi']['source'] == 'apify-jobspy'
-    assert curated['workana']['query'] == 'ventas' and curated['workana']['inputTemplate']['locale'] == 'es'
+    assert curated['workana']['query'] == 'closer de ventas' and curated['workana']['inputTemplate']['locale'] == 'es'
+    # Búsquedas por término: cubrir sinónimos sin multiplicar ejecuciones (una al día, rotando).
+    for code in ('linkedin', 'workana'):
+        queries = curated[code]['queries']
+        assert len(queries) >= 6 and len(set(queries)) == len(queries)
+        assert queries[0] == curated[code]['query']
+    # Los repuestos de Workana no comparten esquema: cada uno lleva su plantilla.
+    templates = {r['actor']: r.get('inputTemplate') for r in curated['workana']['recipes']}
+    assert templates['getdataforme/workana-job-scraper']['searchQuery'] == '{{query}}'
+    assert templates['gio21/workana-scraper']['keyword'] == '{{query}}'
     ids = [p['id'] for p in portals]
     assert len(ids) == len(set(ids)), 'el panel tiene dos portales con el mismo id'
     assert not (set(p['id'] for p in generated()) & CURATED), 'un portal curado se generó también'

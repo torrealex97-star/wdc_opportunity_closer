@@ -31,9 +31,16 @@ step('la plantilla no mete `country` (Workana espera un código de 2 letras) y h
   assert.equal(t.maxItems, '{{max_items}}');
 });
 
-step('la plantilla se rellena con la búsqueda y el tope de la pasada', () => {
-  const filled = fillTemplate(workana.inputTemplate, { query: 'ventas', location: 'España', country: 'Spain', max_items: 100, hours_old: 240, sites: [] });
-  assert.deepEqual(filled, { query: 'ventas', locale: 'es', maxItems: 100, maxPages: 5 });
+step('la plantilla se rellena con la búsqueda, su categoría de ventas y el tope de la pasada', () => {
+  const filled = fillTemplate(workana.inputTemplate, { query: 'closer de ventas', location: 'España', country: 'Spain', max_items: 100, hours_old: 240, sites: [] });
+  assert.deepEqual(filled, { query: 'closer de ventas', category: 'sales-marketing', locale: 'es', maxItems: 100, maxPages: 5 });
+});
+
+step('la búsqueda rota por términos de cierre, no por «ventas» a secas', () => {
+  assert.ok(workana.queries?.length >= 6, 'Workana cubre varios sinónimos a lo largo de la semana');
+  assert.equal(workana.queries[0], 'closer de ventas');
+  assert.ok(!workana.queries.includes('ventas'), '«ventas» era el término que traía proyectos de cualquier cosa');
+  assert.equal(workana.queries[1], 'setter de ventas');
 });
 
 step('el adaptador genérico NO se usa: sin plantilla mandaría country=España', () => {

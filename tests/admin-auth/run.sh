@@ -81,6 +81,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/fallback.mjs
 # Workana como portal de Apify: plantilla propia, sin país ISO roto y presupuesto que no es salario.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/workana.mjs
+# Búsquedas de LinkedIn y Workana: rotación diaria de términos canónicos y plantilla por buscador.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/apify-queries.mjs
 # Panel: los conectores del motor se cruzan con el catálogo por portal (Himalayas no es «fuera del cloud»).
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/families.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/roleui.mjs
