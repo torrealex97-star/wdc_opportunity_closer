@@ -113,4 +113,6 @@ export function planStages(gap: number | null, stages: StageInput[]): StageDecis
 
 /** Inicio del día en UTC (como el resto de recuentos del día). */
 export const dayStart = (now = new Date()): string => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+/** Ventana móvil de 24 h: el cron corre a las 06:00 UTC y un «día natural» siempre le saldría casi vacío. */
+export const windowStart = (now = new Date()): string => new Date(now.getTime() - 86_400_000).toISOString();
 export const weekStart = (now = new Date()): string => new Date(Date.parse(dayStart(now)) - 6 * 86_400_000).toISOString();

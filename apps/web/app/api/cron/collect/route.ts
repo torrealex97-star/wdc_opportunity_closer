@@ -4,7 +4,6 @@ import { collectAll } from '../../../../lib/collectors';
 import { collectFallback } from '../../../../lib/serpapiFallback';
 import { loadMeter } from '../../../../lib/providerCaps';
 import { waterfallState } from '../../../../lib/waterfallStore';
-import { expectedQualified } from '../../../../lib/waterfall';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
@@ -50,11 +49,21 @@ export async function GET(request: NextRequest) {
   // CUALIFICADAS (aprobadas o publicadas) del día, que el propietario fija en el panel. Tras cada etapa se descuenta
   // lo que se espera que aporte (con la tasa de aprobación medida; sin tasa, nada). Sin poder contar lo cualificado
   // de hoy no se gasta: un hueco no es un cero. Cada etapa además respeta el tope mensual de su proveedor.
-  const wf = budget.remaining() >= MIN_STEP_MS ? await waterfallState().catch(() => null) : null;
+  const wfTime = budget.remaining() >= MIN_STEP_MS;
+  if (!wfTime) budget.cut('waterfall');
+  const wf = wfTime ? await waterfallState().catch(failed('waterfall_state', null)) : null;
   let gap: number | null = wf?.gap ?? null;
   const stages: Array<{ id: string; ran: boolean; why: string; accepted?: number; cost_usd?: number }> = [];
   const canSpend = () => gap !== null && gap > 0;
-  const noSpendWhy = () => wf === null ? 'No se pudo leer el objetivo o lo cualificado de hoy: no se gasta.' : gap === null ? 'No se pudo contar lo cualificado de hoy: no se gasta.' : 'Objetivo del día cumplido: no se gasta más.';
+  // Tras cada etapa se RECUENTA lo cualificado y pendiente (no se estima con `accepted`, que incluye ofertas ya vistas
+  // que solo se actualizaron). Sin tiempo para recontar se mantiene el hueco; si el recuento falla, es desconocido y no se gasta.
+  const recount = async (current: number | null): Promise<number | null> => {
+    if (current === null) return null;
+    if (budget.remaining() < MIN_STEP_MS) return current;
+    const next = await waterfallState().catch(failed('waterfall_recount', null));
+    return next === null ? null : next.gap;
+  };
+  const noSpendWhy = () => !wfTime ? 'Sin tiempo en el presupuesto del cron para leer el objetivo: no se gasta (cortado, no fallo).' : wf === null ? 'No se pudo leer el objetivo o lo cualificado de hoy: no se gasta.' : gap === null ? 'No se pudo contar lo cualificado de hoy: no se gasta.' : 'Objetivo del día cumplido: no se gasta más.';
   // Un solo medidor de gasto para Google Jobs y el respaldo: lo gastado por el primero cuenta para el segundo y el
   // historial del mes se lee una vez (es paginado), y solo si queda tiempo para gastar.
   let meterRead: ReturnType<typeof loadMeter> | undefined;
@@ -69,15 +78,15 @@ export async function GET(request: NextRequest) {
   if ('truncated' in googleJobs && googleJobs.truncated) budget.cut('googleJobs');
   if (!('skipped' in googleJobs)) {
     const accepted = 'accepted' in googleJobs ? googleJobs.accepted ?? 0 : 0;
-    if (gap !== null) gap = Math.max(0, gap - expectedQualified(accepted, wf?.approval_rate ?? null));
-    stages.push({ id: 'google-jobs', ran: true, why: googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.', accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
+    gap = await recount(gap);
+    stages.push({ id: 'google-jobs', ran: googleJobs.ok || accepted > 0, why: googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.', accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
   }
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
   // o fallo) se buscan en Google acotados a ese portal con SerpApi. Acotado por
   // `SERPAPI_FALLBACK_MAX_SEARCHES` y por lo que FALTA del objetivo; cada búsqueda declara su coste. Una
   // fuente pausada a propósito no cuenta como ausente y no se paga su respaldo.
   const missingApis = outcomes.filter(o => !o.ok && o.error !== 'Fuente pausada').map(o => o.provider);
-  const fallbackNeed = gap !== null && gap > 0 ? (wf?.approval_rate ? Math.ceil(gap / wf.approval_rate) : gap) : 0;
+  const fallbackNeed = gap !== null && gap > 0 ? (wf?.approval_rate != null && wf.approval_rate > 0 ? Math.ceil(gap / wf.approval_rate) : gap) : 0;
   const fallback = !canSpend()
     ? (stages.push({ id: 'respaldo', ran: false, why: noSpendWhy() }), null)
     : budget.remaining() >= MIN_STEP_MS
@@ -86,8 +95,8 @@ export async function GET(request: NextRequest) {
   if (fallback?.truncated) budget.cut('fallback');
   if (fallback) {
     const accepted = fallback.outcomes.reduce((sum, o) => sum + (o.accepted ?? 0), 0);
-    if (gap !== null) gap = Math.max(0, gap - expectedQualified(accepted, wf?.approval_rate ?? null));
-    stages.push({ id: 'respaldo', ran: true, why: fallback.ok ? 'Búsquedas hechas.' : 'Sin resultado.', accepted, cost_usd: fallback.cost_usd });
+    gap = await recount(gap);
+    stages.push({ id: 'respaldo', ran: fallback.ok || accepted > 0, why: fallback.ok ? 'Búsquedas hechas.' : 'Sin resultado.', accepted, cost_usd: fallback.cost_usd });
   }
   // Nivel de pago opt-in: con APIFY_SKIP_IF_GOOD_PER_DAY, si las fuentes gratuitas ya cubren el objetivo no se lanza gasto nuevo
   // (lo ya lanzado sí se recoge). Sin esa variable, comportamiento de siempre. El waterfall añade su propio freno:
@@ -95,8 +104,9 @@ export async function GET(request: NextRequest) {
   const paid = budget.remaining() >= MIN_STEP_MS ? skipPaidTier(await loadMetrics().catch(() => null)) : { skip: true as const };
   const apifyStart = !paid.skip && canSpend();
   if (!apifyStart) stages.push({ id: 'apify', ran: false, why: !canSpend() ? noSpendWhy() : ('reason' in paid && paid.reason ? paid.reason : 'Sin tiempo en el presupuesto del cron.') });
-  const apify = await dailyApify(publicBaseUrl(request), { start: apifyStart, deadline: budget.deadline(9_000) }).catch(() => ({ started: [], harvested: [], truncated: false } as Awaited<ReturnType<typeof dailyApify>>));
-  if (apifyStart) stages.push({ id: 'apify', ran: true, why: apify.started.length ? `${apify.started.length} búsqueda(s) lanzada(s); los resultados llegan después.` : 'Ningún portal con búsqueda diaria pendiente.' });
+  let apifyError: string | null = null;
+  const apify = await dailyApify(publicBaseUrl(request), { start: apifyStart, deadline: budget.deadline(9_000) }).catch(error => { apifyError = String((error as Error)?.message ?? error); return failed('apify', { started: [], harvested: [], truncated: false } as Awaited<ReturnType<typeof dailyApify>>)(error); });
+  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apify.started.length ? `${apify.started.length} búsqueda(s) lanzada(s); los resultados llegan después.` : 'Ningún portal con búsqueda diaria pendiente.' });
   if ('truncated' in apify && apify.truncated) budget.cut('apify');
   const vigencia = budget.remaining() >= MIN_STEP_MS ? await refreshVigencia(20, budget.deadline(5_000)).catch(() => ({ checked: 0, withdrawn: 0 })) : (budget.cut('vigencia'), { checked: 0, withdrawn: 0 });
   if ('truncated' in vigencia && vigencia.truncated) budget.cut('vigencia');

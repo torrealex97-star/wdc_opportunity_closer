@@ -5,6 +5,7 @@ import { listConnections } from '../../../../lib/integrations';
 import { readBudget } from '../../../../lib/paidBudget';
 import { PROVIDER_METERS } from '../../../../lib/providerBudget';
 import { spendOverview, type SpendRow } from '../../../../lib/providerCaps';
+import { maxSearches } from '../../../../lib/serpapiFallback';
 import { planStages, type StageInput } from '../../../../lib/waterfall';
 import { readTarget, waterfallState, writeTarget } from '../../../../lib/waterfallStore';
 
@@ -39,14 +40,16 @@ export async function GET(request: NextRequest) {
     waterfallState(), spendOverview(), listConnections(), apifyToken(), listActors(), readBudget(), monthSpent(),
   ]);
   const keys = new Set((connections ?? []).map(row => row.provider));
+  const keysKnown = connections !== null;
+  const noKey = (name: string) => keysKnown ? `Sin clave de ${name}.` : `No se pudieron leer las conexiones: no se sabe si hay clave de ${name}.`;
   const row = (provider: string) => overview.rows.find(r => r.provider === provider);
   const bright = row('brightdata'), serp = row('serpapi');
-  const brightOk = keys.has('brightdata') && room(bright).ok, serpOk = keys.has('serpapi') && room(serp).ok;
-  const fallbackMax = Number(process.env.SERPAPI_FALLBACK_MAX_SEARCHES ?? 4);
+  const brightOk = keysKnown && keys.has('brightdata') && room(bright).ok, serpOk = keysKnown && keys.has('serpapi') && room(serp).ok;
+  const fallbackMax = maxSearches();
   const googleWhy = !brightOk && !serpOk
-    ? [!keys.has('brightdata') ? 'Sin clave de Bright Data.' : room(bright).why, !keys.has('serpapi') ? 'Sin clave de SerpApi.' : room(serp).why].filter(Boolean).join(' ')
+    ? [!keysKnown || !keys.has('brightdata') ? noKey('Bright Data') : room(bright).why, !keysKnown || !keys.has('serpapi') ? noKey('SerpApi') : room(serp).why].filter(Boolean).join(' ')
     : null;
-  const dailyPortals = (actors ?? []).filter(a => a.schedule_daily).length;
+  const dailyPortals = actors === null ? null : actors.filter(a => a.schedule_daily).length;
   const apifyLeft = apifySpent === null ? null : Math.max(0, budget.usd - apifySpent);
   const stages: StageInput[] = [
     {
@@ -56,20 +59,20 @@ export async function GET(request: NextRequest) {
     },
     {
       id: 'respaldo', label: 'Respaldo por portal (SerpApi)', automatic: true,
-      unit: `${PROVIDER_METERS.serpapi.usdPerRequest} USD por búsqueda, hasta ${Number.isFinite(fallbackMax) ? fallbackMax : 4} por pasada`,
+      unit: `${PROVIDER_METERS.serpapi.usdPerRequest} USD por búsqueda, hasta ${fallbackMax} por pasada`,
       available: serpOk && fallbackMax !== 0,
-      reason: !keys.has('serpapi') ? 'Sin clave de SerpApi.' : fallbackMax === 0 ? 'Respaldo desactivado (SERPAPI_FALLBACK_MAX_SEARCHES=0).' : room(serp).why,
+      reason: !keysKnown || !keys.has('serpapi') ? noKey('SerpApi') : fallbackMax === 0 ? 'Respaldo desactivado (SERPAPI_FALLBACK_MAX_SEARCHES=0).' : room(serp).why,
     },
     {
       id: 'apify', label: 'Actores de Apify', automatic: true,
       unit: 'Pago por resultado, con el tope mensual de Apify',
-      available: Boolean(token) && dailyPortals > 0 && apifyLeft !== null && apifyLeft > 0,
-      reason: !token ? 'Sin token de Apify.' : dailyPortals === 0 ? 'Ningún portal con búsqueda diaria activada.' : apifyLeft === null ? 'No se pudo leer lo gastado en Apify: no se gasta.' : apifyLeft <= 0 ? 'Tope mensual de Apify agotado.' : null,
+      available: Boolean(token) && dailyPortals !== null && dailyPortals > 0 && apifyLeft !== null && apifyLeft > 0,
+      reason: !token ? 'Sin token de Apify.' : dailyPortals === null ? 'No se pudieron leer los portales de Apify: no se gasta.' : dailyPortals === 0 ? 'Ningún portal con búsqueda diaria activada.' : apifyLeft === null ? 'No se pudo leer lo gastado en Apify: no se gasta.' : apifyLeft <= 0 ? 'Tope mensual de Apify agotado.' : null,
     },
     {
       id: 'unlocker', label: 'Unlocker, ZenRows y ScrapingBee', automatic: false,
       unit: `Desde ${PROVIDER_METERS.brightdata.usdPerRequest} USD por página`,
-      available: keys.has('brightdata') || keys.has('zenrows') || keys.has('scrapingbee'),
+      available: keysKnown && (keys.has('brightdata') || keys.has('zenrows') || keys.has('scrapingbee')),
       reason: 'Se lanzan a mano (Fuentes → Probar ruta): leer el HTML de una empresa necesita un extractor por página y aún no se automatiza.',
     },
   ];
@@ -84,7 +87,7 @@ export async function POST(request: NextRequest) {
   const { auth, error } = await gate(request, true);
   if (error) return error;
   const saved = await writeTarget(body.qualified_per_day, auth!.admin.email);
-  if (!saved.ok) return Response.json({ detail: saved.error }, { status: saved.error.startsWith('El objetivo debe') ? 422 : 503 });
+  if (!saved.ok) return Response.json({ detail: saved.error }, { status: saved.kind === 'invalid' ? 422 : 503 });
   const target = await readTarget();
   return reply(auth!, { ok: true, target: saved.target, source: target.source, message: `Objetivo guardado: ${saved.target} ofertas cualificadas al día. Manda desde la siguiente recogida automática.` });
 }

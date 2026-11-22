@@ -42,7 +42,7 @@ export const FALLBACK_PORTALS: FallbackPortal[] = [
   { source: 'serpapi-jooble', name: 'Jooble', site: 'jooble.org', query: 'closer de ventas', gl: 'es', url: /jooble\.org\/desc\//i, replaces: 'jooble' },
 ];
 
-const maxSearches = (env: NodeJS.ProcessEnv = process.env) => {
+export const maxSearches = (env: NodeJS.ProcessEnv = process.env) => {
   const raw = Number(env.SERPAPI_FALLBACK_MAX_SEARCHES ?? DEFAULT_MAX);
   return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 0), FALLBACK_PORTALS.length) : DEFAULT_MAX;
 };
