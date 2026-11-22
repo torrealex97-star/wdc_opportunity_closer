@@ -1,3 +1,11 @@
+## El fallo de red de la vía JSearch se declara como peor caso, y su comentario ya no dice lo contrario — 2026-11-22
+
+- **Petición del propietario**: alinear el comentario de la rama JSearch de `/api/admin/source-routes` con lo que hace `billed`, sin tocar el resto.
+- **Hallazgo** (*inspected*): el comentario decía que «un fallo de red» no se cobra, pero `billed(null)` devuelve `true` —la misma regla de peor caso que ya aplica Bright Data en el mismo fichero— y encima la nota lo llamaba «respuesta ilegible» sin haber respuesta.
+- **Qué se hizo** (*tested*): el comentario declara la regla real (un fallo sin respuesta y un 2xx con estado de error se anotan; 401/403/429/5xx no) y la nota separa `fallo de red · se anota el peor caso` de `respuesta con estado de error`. El cobro, el tope y las demás vías no cambian.
+- **Comprobado** (*tested*): `source-routes.mjs` OK, `npm run typecheck` 0 errores y `node scripts/handoff.mjs check` OK.
+- **Límites honestos**: sin clave de OpenWeb Ninja no se puede observar si un timeout real factura; el cambio no altera el cobro, así que no añade prueba de esa decisión (la ruta no tiene prueba HTTP de ese camino).
+
 ## Lo que quedaba de `docs/panel-fuentes-aplicado` llega a `main` — 2026-11-22
 
 - **Petición del propietario**: fusionar `docs/panel-fuentes-aplicado` en `main` con merge commit cuando `verify` y `web-admin` estén en verde, y publicar el Worker con `wrangler` desde `apps/web`.
