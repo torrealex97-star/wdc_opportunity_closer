@@ -1,8 +1,8 @@
 ---
 agent: buffy
-status: in_progress
+status: validated
 branch: fix/cron-jsearch-cascada
-pr:
+pr: 123
 touches: apps/web/lib/googleJobs.ts, apps/web/lib/providers/jsearch.ts, apps/web/app/api/admin/waterfall/route.ts, apps/web/app/api/cron/collect/route.ts, apps/web/components/SourceIdeas.tsx, tests/admin-auth/googlejobs.mjs, docs/EXTERNAL_SOURCES.md
 date: 2026-11-22
 ---
