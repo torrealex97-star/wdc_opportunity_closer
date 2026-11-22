@@ -19,7 +19,7 @@ export const GOOGLE_JOBS_SOURCE = 'google-jobs';
 // Cada dork se busca en su país (`gl`) y en español (`hl`). El documento de prospección de WDC
 // confirma que el mismo perfil se busca en España y en LatAm; las ofertas de LatAm son las que
 // suelen pagar en dólares y antes no entraban en ninguna búsqueda.
-export type Dork = { q: string; gl: 'es' | 'mx' | 'co' | 'ar'; hl: 'es' };
+export type Dork = { q: string; gl: 'es' | 'mx' | 'co' | 'ar' | 'cl' | 'pe' | 'us'; hl: 'es' };
 export const GOOGLE_JOBS_DORKS: readonly Dork[] = [
   // España
   { q: 'closer de ventas España', gl: 'es', hl: 'es' },
@@ -34,10 +34,22 @@ export const GOOGLE_JOBS_DORKS: readonly Dork[] = [
   { q: 'cerrador de ventas España', gl: 'es', hl: 'es' },
   { q: 'closer inbound', gl: 'mx', hl: 'es' },
   { q: 'ejecutivo de ventas remoto', gl: 'ar', hl: 'es' },
+  // Más países y más vocabulario (plan de ofertas, B1). Se buscan en español; en EE. UU. es el mercado hispano en dólares.
+  // Ninguno cambia el coste diario: el presupuesto es el mismo y la ventana rota por día, así que solo se amplía lo que se recorre.
+  { q: 'closer de ventas remoto', gl: 'cl', hl: 'es' },
+  { q: 'closer de ventas', gl: 'pe', hl: 'es' },
+  { q: 'closer de ventas high ticket', gl: 'us', hl: 'es' },
+  { q: 'closer de ventas remoto', gl: 'co', hl: 'es' },
+  { q: 'setter de ventas remoto', gl: 'mx', hl: 'es' },
+  { q: 'closer high ticket remoto', gl: 'ar', hl: 'es' },
+  { q: 'closer infoproductos España', gl: 'es', hl: 'es' },
+  { q: 'setter de ventas España', gl: 'es', hl: 'es' },
+  { q: 'closer comisiones España', gl: 'es', hl: 'es' },
 ];
 
-// Búsquedas incluidas en el presupuesto por defecto: 4 de España + 3 de LatAm = 7 × 0,025 USD.
-// Subirlo se hace con SERPAPI_JOBS_MAX_DORKS (hasta el total de dorks de arriba); el panel muestra el coste.
+// Búsquedas incluidas en el presupuesto por defecto: 7 (reparto entre España y el resto en proporción a la lista) × 0,025 USD
+// en el peor caso de SerpApi; con Bright Data primero cada búsqueda cuesta 0,0015 USD. Subirlo se hace con
+// SERPAPI_JOBS_MAX_DORKS (hasta el total de dorks de arriba); el panel muestra el coste y cada llamada respeta el tope mensual.
 export const DEFAULT_MAX_DORKS = 7;
 
 // Precio de lista de SerpApi por búsqueda (Starter: 25 USD/1000). En el plan
@@ -50,11 +62,11 @@ export const maxDorks = (env: NodeJS.ProcessEnv = process.env) => {
   return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 0), GOOGLE_JOBS_DORKS.length) : DEFAULT_MAX_DORKS;
 };
 
-// Con el presupuesto por defecto solo caben 7 de los 10 dorks. Enviar siempre los MISMOS 7 dos veces al día
+// Con el presupuesto por defecto solo caben 7 de los dorks de la lista. Enviar siempre los MISMOS 7 dos veces al día
 // devuelve el mismo inventario y el catálogo deja de crecer aunque la recogida «vaya bien»: medido el
 // 2026-11-19, 25 filas aceptadas por día y **una** nueva (el resto eran republicaciones ya guardadas).
 // Se rota la ventana por día, sin gastar una búsqueda más, para que todo el vocabulario se ejecute en unos
-// días. El reparto entre España y LatAm se mantiene (4+3): lo que rota es el término, no la cobertura.
+// días. El reparto entre España y el resto es proporcional al tamaño de cada lista: lo que rota es el término, no la cobertura.
 export const DAY_MS = 86_400_000;
 export function dorkWindow(now = Date.now(), limit = maxDorks()): Dork[] {
   const total = GOOGLE_JOBS_DORKS.length;

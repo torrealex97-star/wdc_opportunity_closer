@@ -27,6 +27,8 @@ BASE="http://127.0.0.1:$PORT" node --experimental-strip-types --import ./tests/a
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/parity.mjs
 node --experimental-strip-types tests/admin-auth/csv.mjs
 node --experimental-strip-types tests/admin-auth/salary.mjs
+# Comisión, OTE y ticket medio por reglas fijas, con la frase literal del anuncio.
+node --experimental-strip-types tests/admin-auth/offerpay.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/score.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/aireview.mjs
 # Guardián SSRF sin APIs de Node: allowlist medida, IP literales y redirecciones revalidadas salto a salto.
