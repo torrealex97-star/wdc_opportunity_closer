@@ -3,7 +3,8 @@ import { serviceRest } from './supabaseAuth';
 import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
-import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, type BrightDataZone } from './providers/brightdata';
+import { markDone, rememberSubmit } from './brightdataAsync';
+import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, brightAsyncEnabled, googleJobsUrl, JOBS_URL_VARIANTS, jobsUrlVariant, type JobsUrlVariant, type BrightDataConfig, parseSerpJobs, serpCollectAsync, serpSubmitAsync, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
 // crédito (listar modelos, ver cuenta): probar una conexión nunca cuesta dinero. Guardar una clave no
@@ -122,9 +123,69 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   const cap = await capForOrg('brightdata');
   const check = canSpend('brightdata', spent, process.env, 1, cap.usd);
   if (!check.ok) return { ok: false, detail: check.reason ?? 'No se puede gastar ahora.' };
+  // Se prueban las variantes de URL por orden y se para en la primera que trae el bloque de empleos (como mucho 3
+  // peticiones). El mensaje dice cuál funcionó; si no es la primera, la recogida necesita BRIGHTDATA_JOBS_URL.
+  const tried: string[] = [];
+  for (const variant of JOBS_URL_VARIANTS) {
+    const result = await probeVariant(config as BrightDataConfig & { serpZone: string }, variant);
+    if (result.noPanel) { tried.push(`${VARIANT_LABEL[variant]}: ${result.detail}`); continue; }
+    const tag = variant === jobsUrlVariant() ? '' : ` · funcionó con la variante «${VARIANT_LABEL[variant]}»: pon BRIGHTDATA_JOBS_URL=${variant} para que la recogida la use`;
+    return { ok: result.ok, detail: `${result.detail}${result.ok ? tag : ''}${tried.length ? ` (antes, sin empleos: ${tried.join(' | ')})` : ''}` };
+  }
+  return { ok: false, detail: `La clave y la zona funcionan, pero ninguna forma de pedir Google Jobs trajo empleos: ${tried.join(' | ')}. Prueba la misma búsqueda en el Playground de Bright Data y pásame el JSON.` };
+}
+
+const VARIANT_LABEL: Record<JobsUrlVariant, string> = { search: 'búsqueda normal con «empleo»', udm8: 'pestaña Empleos (udm=8)', ibp: 'vista Google Jobs (ibp)' };
+
+async function probeVariant(config: BrightDataConfig & { serpZone: string }, variant: JobsUrlVariant): Promise<{ ok: boolean; detail: string; noPanel?: boolean }> {
+  // Modo asíncrono (el que usa la recogida): encargar es inmediato y recoger es gratis. Se consulta cada pocos
+  // segundos hasta ~35 s; si aún procesa, la clave, la zona y el modo asíncrono quedan comprobados y el resultado lo
+  // recoge la siguiente pasada (ya anotado). Si la zona no admite el modo asíncrono se sigue con la llamada normal.
+  let asyncNote = '';
+  if (brightAsyncEnabled()) {
+    const dork = { q: 'closer de ventas', gl: 'es', hl: 'es' };
+    let id: string | null = null;
+    let direct: string | null = null;
+    try {
+      const submitted = await serpSubmitAsync({ ...config, serpZone: config.serpZone }, googleJobsUrl(dork.q, dork.gl, dork.hl, variant));
+      if ('id' in submitted) id = submitted.id; else direct = submitted.text;
+    } catch (err) { asyncNote = ` (modo asíncrono no disponible: ${(err as Error).message}; se probó en modo normal)`; }
+    if (direct !== null) {
+      // La zona respondió en síncrono (cobrado): se anota y se lee esa respuesta.
+      const cost = PROVIDER_METERS.brightdata.usdPerRequest;
+      const noted = await recordSpend('brightdata-probe', 'probe', spendNote({ route: 'prueba', provider: 'brightdata', requests: 1, costUsd: cost, detail: 'prueba de clave' }));
+      if (!noted) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+      try {
+        const parsedDirect = parseSerpJobs(direct);
+        return parsedDirect.hasJobsPanel
+          ? { ok: true, detail: `Clave válida · ${parsedDirect.candidates.length} ofertas de Google Jobs (la zona no está en modo asíncrono: respondió en síncrono; 1 petición anotada)` }
+          : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(direct)})` };
+      } catch (err) { return { ok: false, detail: `${(err as Error).message}.` }; }
+    }
+    if (id) {
+      const recorded = await rememberSubmit(id, dork, 'prueba');
+      if (!recorded) return { ok: false, detail: 'Bright Data aceptó la búsqueda, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
+      const started = Date.now();
+      for (const wait of probeWaits()) {
+        await new Promise(resolve => setTimeout(resolve, wait));
+        const got = await serpCollectAsync(config.apiKey, id, { timeoutMs: 8_000 });
+        if (got.status === 'pending') continue;
+        if (got.status !== 'ready') return { ok: false, detail: `Bright Data aceptó la búsqueda asíncrona, pero al recogerla: ${got.detail}` };
+        let parsedAsync: ReturnType<typeof parseSerpJobs>;
+        try { parsedAsync = parseSerpJobs(got.text); }
+        catch (err) { await markDone(id, `ilegible: ${(err as Error).message}`); return { ok: false, detail: `${(err as Error).message}. Lo que llegó: ${describeResponse(got.text)}.` }; }
+        await markDone(id, `recogido · ${parsedAsync.candidates.length} ofertas (prueba)`);
+        const secs = Math.round((Date.now() - started) / 1000);
+        return parsedAsync.hasJobsPanel
+          ? { ok: true, detail: `Clave válida · modo asíncrono · ${parsedAsync.candidates.length} ofertas de Google Jobs en ~${secs} s (1 petición, ${PROVIDER_METERS.brightdata.usdPerRequest.toFixed(4).replace('.', ',')} USD anotada)` }
+          : { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(got.text)})` };
+      }
+      return { ok: true, detail: `Clave y zona válidas · modo asíncrono activo: Bright Data aceptó la búsqueda y aún la procesa (suele tardar hasta 5 min). El resultado se recoge solo en la próxima recogida, sin volver a pagar.` };
+    }
+  }
   let response: Response;
   try {
-    response = await serpProbeRequest({ ...config, serpZone: config.serpZone });
+    response = await serpProbeRequest({ ...config, serpZone: config.serpZone }, fetch, variant);
   } catch (err) {
     // Un timeout o un corte de red pudo facturarse sin respuesta: se anota el peor caso para que el tope
     // no quede corto, igual que en «Probar ruta».
@@ -157,14 +218,17 @@ async function testBrightDataConnection(secret: string): Promise<{ ok: boolean; 
   try { parsedAll = JSON.parse(rawText); } catch { /* sin JSON */ }
   const extracted = extractJobItems(parsedAll);
   const jobs = extracted.panel ? extracted.items : null;
-  const failure = typeof payload?.error === 'string' && payload.error
-    ? `Bright Data: ${payload.error.slice(0, 160)}`
-    : !Array.isArray(jobs)
-      ? `La clave y la zona son válidas (HTTP 200), pero la respuesta no trae jobs.items[]. Lo que llegó: ${describeResponse(rawText)}. Comprueba que la zona sea SERP API y que Google muestre el panel de empleos para esa búsqueda.`
-      : null;
   if (!recorded) return { ok: false, detail: 'La clave respondió, pero no se pudo anotar el gasto; no se vuelve a probar hasta reparar el historial.' };
-  return failure ? { ok: false, detail: failure } : { ok: true, detail: `Clave válida · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)` };
+  if (typeof payload?.error === 'string' && payload.error) return { ok: false, detail: `Bright Data: ${payload.error.slice(0, 160)}` };
+  if (!Array.isArray(jobs)) return { ok: false, noPanel: true, detail: `sin bloque de empleos (${describeResponse(rawText)})` };
+  return { ok: true, detail: `Clave válida · ${jobs.length} ofertas de Google Jobs · 1 petición de prueba (${cost.toFixed(4).replace('.', ',')} USD anotada)${asyncNote}` };
 }
+
+/** Esperas entre consultas de «Probar» asíncrono (~35 s en total). `BRIGHTDATA_PROBE_WAITS_MS` las acorta en pruebas. */
+const probeWaits = (): number[] => {
+  const raw = (process.env.BRIGHTDATA_PROBE_WAITS_MS ?? '').split(',').map(Number).filter(n => Number.isFinite(n) && n >= 0 && n <= 20_000);
+  return raw.length ? raw.slice(0, 8) : [8_000, 7_000, 7_000, 7_000, 6_000];
+};
 
 export async function testConnection(provider: Provider): Promise<{ ok: boolean; detail: string } | null> {
   const row = await serviceRest(`integration_connections?provider=eq.${provider}&select=secret_ciphertext&limit=1`);
