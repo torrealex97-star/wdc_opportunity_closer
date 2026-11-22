@@ -87,7 +87,7 @@ try {
     await card.waitFor({ timeout: 15000 });
     await card.getByText(/Leyendo el objetivo y el gasto/).waitFor({ state: 'detached', timeout: 15000 });
     const text = await card.innerText();
-    assert.match(text, /OBJETIVO DEL DÍA \(24 H\)/);
+    assert.match(text, /META DEL DÍA \(24 H\)/);
     assert.match(text, /Gasto del mes: (—|\$|US\$|\d)/, 'el gasto es una cifra en dólares o una raya: ' + JSON.stringify(text));
     await card.getByRole('button', { name: 'Ver APIs y topes' }).click();
     await page.getByTestId('waterfall').waitFor({ timeout: 15000 });
