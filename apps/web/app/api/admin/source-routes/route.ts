@@ -214,9 +214,11 @@ export async function POST(request: NextRequest) {
     try {
       result = await jsearchJobs(secret, { query, country: 'es', language: 'es', timeoutMs: 20_000 });
     } catch (err) {
-      // Un 2xx sin cuerpo legible ya se pagó; un 401/403/429 o un fallo de red, no.
+      // Un fallo sin respuesta (red, timeout) se anota como peor caso: la petición pudo salir y cobrarse.
+      // Un 2xx con estado de error ya se pagó; un 401/403/429/5xx, no.
       if (err instanceof JSearchError && billed(err.status)) {
-        await recordSpend('google-jobs', 'jsearch-ruta', jsearchNote(1, PROVIDER_METERS.jsearch.usdPerRequest, `${entry.code} · respuesta ilegible`));
+        const reason = err.status === null ? 'fallo de red · se anota el peor caso' : 'respuesta con estado de error';
+        await recordSpend('google-jobs', 'jsearch-ruta', jsearchNote(1, PROVIDER_METERS.jsearch.usdPerRequest, `${entry.code} · ${reason}`));
       }
       return Response.json({ detail: err instanceof Error ? err.message : 'JSearch no respondió.' }, { status: 502 });
     }
