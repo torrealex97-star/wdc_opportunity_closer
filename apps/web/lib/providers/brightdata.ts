@@ -378,16 +378,17 @@ const ext = (job: RawJob): RawJob => (job.detected_extensions && typeof job.dete
 export function jobToCandidate(item: unknown, now = Date.now()): Candidate | null {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
   const job = item as RawJob;
-  const title = clip(job.title ?? job.job_title ?? job.position ?? job.name, 200);
-  const url = [job.link, job.url, job.share_link, job.job_link, job.apply_link, job.job_url]
+  const title = clip(job.title ?? job.job_title ?? job.jobTitle ?? job.position ?? job.name, 200);
+  const url = [job.link, job.url, job.share_link, job.job_link, job.apply_link, job.job_url, job.job_apply_link, job.applyUrl, job.jobUrl, job.linkedinUrl, job.job_google_link]
     .map(value => clip(value, 1000))
     .find(value => value && /^https?:\/\//i.test(value)) ?? clip(firstLink(job.apply_options) ?? firstLink(job.related_links), 1000);
   if (!title || !url || !/^https?:\/\//i.test(url)) return null;
   const extensions = ext(job);
-  const company = clip(job.company ?? job.company_name ?? job.employer_name ?? job.employer, 200);
-  const location = clip(job.location ?? job.job_location, 200);
-  const source = clip(job.source ?? job.via ?? job.publisher, 80);
-  const description = [clip(job.description ?? job.snippet ?? job.job_description, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
+  const company = clip(job.company ?? job.company_name ?? job.companyName ?? job.employer_name ?? job.employer ?? job.organization, 200);
+  const cityCountry = [str(job.job_city), str(job.job_country)].filter(Boolean).join(', ') || null;
+  const location = clip(job.location ?? job.job_location ?? cityCountry, 200);
+  const source = clip(job.source ?? job.via ?? job.publisher ?? job.job_publisher, 80);
+  const description = [clip(job.description ?? job.snippet ?? job.job_description ?? job.descriptionText, 5900), tagsText(job.tags)].filter(Boolean).join(' · ') || null;
   return {
     external_id: `bd-${shortId(url)}`,
     title,
@@ -396,7 +397,7 @@ export function jobToCandidate(item: unknown, now = Date.now()): Candidate | nul
     url,
     salary: clip(job.salary ?? extensions.salary, 200),
     description,
-    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted ?? extensions.posted_at, now),
+    posted_at: postedAtFrom(job.posted_at ?? job.date ?? job.posted ?? job.job_posted_at ?? job.postedTimeAgo ?? extensions.posted_at, now),
     raw: { provider: 'brightdata', site: source ?? undefined },
   };
 }
@@ -405,8 +406,8 @@ const JOB_KEY = /job/i;
 const looksLikeJob = (value: unknown): boolean => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const job = value as RawJob;
-  const titled = Boolean(str(job.title) ?? str(job.job_title) ?? str(job.position));
-  const company = Boolean(str(job.company) ?? str(job.company_name) ?? str(job.employer_name) ?? str(job.employer));
+  const titled = Boolean(str(job.title) ?? str(job.job_title) ?? str(job.jobTitle) ?? str(job.position));
+  const company = Boolean(str(job.company) ?? str(job.company_name) ?? str(job.companyName) ?? str(job.employer_name) ?? str(job.employer) ?? str(job.organization));
   return titled && company;
 };
 const parseMaybeJson = (value: string): unknown => {

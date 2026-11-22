@@ -4,6 +4,7 @@ import { recordSpend, runsThisMonth } from './external';
 import { canSpend, PROVIDER_METERS, spendNote, spentFromNotes, type MeteredProvider } from './providerBudget';
 import { capForOrg } from './providerBudgetStore';
 import { markDone, rememberSubmit } from './brightdataAsync';
+import { RAPIDAPI_JOB_APIS, rapidApiJobs, rapidApiUsdPerRequest, type RapidApiError } from './providers/rapidapi';
 import { clearBrightDataZoneCache, parseBrightDataSecret, resolveBrightDataConfig, serpProbeRequest, unwrapPayload, describeResponse, extractJobItems, brightAsyncEnabled, googleJobsUrl, JOBS_URL_VARIANTS, jobsUrlVariant, type JobsUrlVariant, type BrightDataConfig, parseSerpJobs, serpCollectAsync, serpSubmitAsync, type BrightDataZone } from './providers/brightdata';
 
 // Conexiones con proveedores externos. Las comprobaciones usan SOLO endpoints gratuitos que no gastan
@@ -35,13 +36,17 @@ export const PROVIDERS = {
   // JSearch (OpenWeb Ninja): no hay endpoint de cuenta gratuito, así que «Probar» hace UNA búsqueda real
   // (~0,0025 USD) y se anota; sin tope legible no se lanza (lo hace `testConnection`).
   jsearch: { name: 'JSearch', hint: 'API key de OpenWeb Ninja', probe: (k: string) => get(`${(process.env.JSEARCH_API_BASE ?? 'https://api.openwebninja.com/jsearch').replace(/\/+$/, '')}/search-v2?query=${encodeURIComponent('closer de ventas España')}&country=es&language=es&num_pages=1`, { 'x-api-key': k }) },
+  // RapidAPI: UNA clave para todas las APIs de empleo del marketplace a las que te suscribas. «Probar» hace una
+  // búsqueda en cada API verificada (JSearch, Jobs API LinkedIn e Indeed) y dice a cuáles estás suscrito; vive en
+  // `testRapidApiConnection` porque son varias peticiones, cada una con su anotación de gasto.
+  rapidapi: { name: 'RapidAPI', hint: 'X-RapidAPI-Key (una clave para todas las APIs de empleo a las que te suscribas)' },
   // ZenRows y ScrapingBee: una página de prueba por el proxy. También cuesta una petición (~0,002 USD).
   zenrows: { name: 'ZenRows', hint: 'API key de ZenRows', probe: (k: string) => get(`https://api.zenrows.com/v1/?apikey=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
   scrapingbee: { name: 'ScrapingBee', hint: 'API key de ScrapingBee', probe: (k: string) => get(`https://app.scrapingbee.com/api/v1/?api_key=${encodeURIComponent(k)}&url=${encodeURIComponent('https://example.com')}`) },
 } as const;
 
 /** Proveedores cuya prueba hace una petición real y se cobra (se avisa en la tarjeta). */
-export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'jsearch', 'zenrows', 'scrapingbee']);
+export const SPEND_PROBES: ReadonlySet<Provider> = new Set<Provider>(['brightdata', 'jsearch', 'rapidapi', 'zenrows', 'scrapingbee']);
 export type Provider = keyof typeof PROVIDERS;
 // `in` también acepta nombres heredados del prototipo (`toString`, `constructor`): se comprueba que la clave
 // sea propia, o el panel guardaría filas para un proveedor que no existe.
@@ -230,6 +235,42 @@ const probeWaits = (): number[] => {
   return raw.length ? raw.slice(0, 8) : [8_000, 7_000, 7_000, 7_000, 6_000];
 };
 
+/**
+ * «Probar» RapidAPI: una búsqueda en cada API de empleo verificada. Cada petición pasa por el tope mensual y se anota
+ * al responder (aunque responda error: el plan pudo contarla). Dice a qué APIs está suscrita la clave y cuántas
+ * ofertas trajo cada una; 403 = no suscrito (no se cobra), no «clave mala».
+ */
+async function testRapidApiConnection(secret: string): Promise<{ ok: boolean; detail: string }> {
+  const key = secret.trim();
+  if (key.length < 10) return { ok: false, detail: 'Formato incorrecto: pega la X-RapidAPI-Key de tu aplicación en RapidAPI.' };
+  const runs = await runsThisMonth();
+  let spent = runs === null ? null : (spentFromNotes(runs.map(run => ({ note: run.note })), 'rapidapi').usd ?? 0);
+  const cap = await capForOrg('rapidapi');
+  const price = rapidApiUsdPerRequest();
+  const lines: string[] = [];
+  let working = 0, rejected = false;
+  for (const api of RAPIDAPI_JOB_APIS) {
+    const check = canSpend('rapidapi', spent, process.env, 1, cap.usd);
+    if (!check.ok) { lines.push(`${api.label}: no probado (${check.reason ?? 'sin tope'})`); continue; }
+    try {
+      const result = await rapidApiJobs(key, api, 'closer de ventas', 'es');
+      working++;
+      lines.push(`${api.label}: suscrito · ${result.candidates.length} ofertas`);
+      spent = (spent ?? 0) + price;
+      await recordSpend(`rapidapi-${api.id}`, 'probe', spendNote({ route: 'prueba', provider: 'rapidapi', requests: 1, costUsd: price, detail: `prueba ${api.id}` }));
+    } catch (err) {
+      const e = err as RapidApiError;
+      if (e.status === 401) rejected = true;
+      lines.push(e.message);
+      if (e.billed) { spent = (spent ?? 0) + price; await recordSpend(`rapidapi-${api.id}`, 'probe', spendNote({ route: 'prueba', provider: 'rapidapi', requests: 1, costUsd: price, detail: `prueba ${api.id} · error` })); }
+    }
+  }
+  if (rejected) return { ok: false, detail: `RapidAPI rechazó la clave (HTTP 401). ${lines.join(' · ')}` };
+  return working
+    ? { ok: true, detail: `Clave válida · ${working} de ${RAPIDAPI_JOB_APIS.length} APIs de empleo responden · ${lines.join(' · ')}` }
+    : { ok: false, detail: `La clave no tiene ninguna API de empleo suscrita que responda: ${lines.join(' · ')}` };
+}
+
 export async function testConnection(provider: Provider): Promise<{ ok: boolean; detail: string } | null> {
   const row = await serviceRest(`integration_connections?provider=eq.${provider}&select=secret_ciphertext&limit=1`);
   const rows = row.ok ? await row.json().catch(() => []) : [];
@@ -239,6 +280,8 @@ export async function testConnection(provider: Provider): Promise<{ ok: boolean;
     const secret = decryptSecret(rows[0].secret_ciphertext);
     if (provider === 'brightdata') {
       outcome = await testBrightDataConnection(secret);
+    } else if (provider === 'rapidapi') {
+      outcome = await testRapidApiConnection(secret);
     } else if (SPEND_PROBES.has(provider)) {
       const meter = provider as MeteredProvider;
       // La prueba hace una petición real: antes de lanzarla se comprueba el tope y, si responde, se anota
