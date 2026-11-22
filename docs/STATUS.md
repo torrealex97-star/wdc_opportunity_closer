@@ -1,4 +1,12 @@
-# Estado
+## Lo que quedaba de `docs/panel-fuentes-aplicado` llega a `main` — 2026-11-22
+
+- **Petición del propietario**: fusionar `docs/panel-fuentes-aplicado` en `main` con merge commit cuando `verify` y `web-admin` estén en verde, y publicar el Worker con `wrangler` desde `apps/web`.
+- **Hallazgo** (*inspected*): la revisión de cierre dio la rama por «superada», pero su árbol aún tenía trabajo que `main` nunca recibió: 6 commits propios, 13 ficheros en conflicto y ~378 líneas útiles que solo existían allí.
+- **Qué se trae de la rama** (*inspected*): la revisión de cada ATS deja fecha aunque su bolsa esté vacía ([`companyReviewHistory`](../apps/web/lib/external.ts) lee `external_ingest_runs` por fuente de la lista de empresas y devuelve `bySource`); la celda de Empresas dice «Sin revisar» / «Dato no disponible» en vez de un guion; el Unlocker del panel exige URL pública HTTPS antes de enviar nada y no usa la portada del catálogo como respaldo ([`SourcesCenter`](../apps/web/components/SourcesCenter.tsx)); [`unlockerProviderFor`](../apps/web/lib/sourceRoutes.ts) elige el mismo proveedor (clave, zona y saldo para el peor caso de dos intentos) que anuncia `routeReadiness`, y Hermes/Manus se declara como hueco (`AGENT_GAP_FILL`) sin pintarse conectado.
+- **Qué se queda como estaba en `main`** (*inspected*): la caché de zonas de Bright Data (#115), el tope por organización de `provider_budget` (#110/#112), `unlockHtml` en vez del `unlock` viejo, los errores tipados por estado HTTP y el `last4` de la clave. Fusionar la rama tal cual habría deshecho 53 commits.
+- **Prueba portada** (*tested*): `tests/admin-auth/brightdata.mjs` se adaptó al contrato actual (firma de `unlockHtml`, `status` en vez de `kind`, reintento único en 5xx, `{ jobs: {} }` sin `items[]` no es un cero comprobado, nota de gasto con «petición(es)», `last4` de la clave) y se registró en `run.sh`.
+- **Comprobado** (*tested*): `npm run typecheck`; `brightdata.mjs` → «PASS … contrato, unlock, 429/503 con un reintento, errores tipados, payload, tope y Guardar sin gasto»; `source-routes.mjs` OK; `scripts/handoff.mjs check` (0 trabajos vivos); `tests/orphan-refs.mjs` PASS (43 rutas); `tests/secrets.mjs` PASS (708 ficheros).
+- **Límites honestos**: la suite completa de `web-admin` la corre el CI de la PR, no esta sesión; ninguna llamada real a Bright Data ni a los portales desde aquí. Las 28 modificaciones sin commitear del árbol de trabajo (catálogo de fuentes, motor, `docs/SOURCES.md`) no forman parte de la rama y se dejan intactas.
 
 ## Revisión de cierre: ramas y agentes integrados en `main`, y 7 hallazgos de code review corregidos — 2026-11-22
 

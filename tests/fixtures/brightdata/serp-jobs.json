@@ -1,0 +1,32 @@
+{
+  "jobs": {
+    "items": [
+      {
+        "title": "Closer high ticket",
+        "company": "Acme",
+        "location": "Madrid, España",
+        "source": "InfoJobs",
+        "description": "Ventas B2B con clientes de alto ticket.",
+        "link": "https://www.infojobs.net/oferta/1",
+        "tags": ["Remoto", "Jornada completa"]
+      },
+      {
+        "title": "Sin enlace",
+        "company": "Nadie",
+        "location": "Madrid",
+        "source": "Portal de ejemplo",
+        "description": "Este anuncio no publica enlace; no es una oferta verificable.",
+        "tags": []
+      },
+      {
+        "title": "Setter",
+        "company": "Beta",
+        "location": "Bogotá",
+        "source": "LinkedIn",
+        "description": "Prospección y agenda de reuniones.",
+        "link": "https://www.linkedin.com/jobs/view/2",
+        "tags": ["Remoto"]
+      }
+    ]
+  }
+}

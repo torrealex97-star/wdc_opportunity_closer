@@ -21,6 +21,15 @@ async function call<T>(init?: RequestInit): Promise<T> {
 }
 
 const fmt = (value: string | null) => value ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
+// La fecha se pinta solo si hay evidencia. Sin ella no se inventa una revisión ni se deja un guion
+// indistinguible de «no se pudo leer»: se dice qué pasa con esa vía.
+const reviewLabel = (company: Company) => company.last_review
+  ? fmt(company.last_review)
+  : company.review_unknown
+    ? 'Dato no disponible'
+    : company.kind === 'linkedin'
+      ? 'Sin revisar (solo búsqueda)'
+      : 'Sin revisar';
 
 export default function CompanyPages({ owner, onSessionLost }: { owner: boolean; onSessionLost: () => void }) {
   const [data, setData] = useState<Payload | null>(null);
@@ -76,7 +85,7 @@ export default function CompanyPages({ owner, onSessionLost }: { owner: boolean;
             <td>{COMPANY_KIND_LABEL[company.kind]}</td>
             <td><span className={company.kind === 'linkedin' ? 'status' : company.live ? 'status ok' : 'status'}>{state}</span></td>
             <td className="num">{company.live ?? '—'}</td>
-            <td data-testid={`company-review-${company.code}`} title={company.review_unknown ? 'No se pudo leer todo el historial: no se afirma que nunca se revisó.' : undefined}>{fmt(company.last_review)}</td>
+            <td data-testid={`company-review-${company.code}`} title={company.review_unknown ? 'No se pudo leer todo el historial: no se afirma que nunca se revisó.' : undefined}>{reviewLabel(company)}</td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
               {company.url && <a href={company.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${company.name}`}><ArrowUpRight size={14} /></a>}
               {company.kind === 'linkedin' && <a href={linkedinSearch(company.name)} target="_blank" rel="noopener noreferrer" aria-label={`Buscar ${company.name} en Google Jobs`}><Search size={14} /></a>}
