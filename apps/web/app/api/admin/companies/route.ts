@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
-import { COMPANY_WATCHLIST } from '../../../../lib/companyWatchlist';
+import { COMPANY_WATCHLIST, companySourceCodes } from '../../../../lib/companyWatchlist';
 import { companyReviewHistory, ingest, listOffers, statsBySource } from '../../../../lib/external';
 import { diffDetected, extractJobPostings } from '../../../../lib/jobPosting';
 
@@ -34,12 +34,13 @@ const publicHttps = (value: string) => {
 export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request);
   if (error) return error;
-  const [stats, history] = await Promise.all([statsBySource(), companyReviewHistory()]);
+  const [stats, history] = await Promise.all([statsBySource(), companyReviewHistory(companySourceCodes())]);
   const hostOf = (value: string) => { try { return new URL(value).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
   const companies = COMPANY_WATCHLIST.map(company => {
     const row = stats?.find(item => item.source === company.source);
-    // Un ATS se revisa solo en cada pasada: su fuente es única y `last_seen` sí es una fecha real.
-    const atsReview = company.kind === 'ats' ? row?.last_seen ?? null : null;
+    // Un ATS se revisa solo en cada pasada: su fuente es única. La ejecución de ingesta es la fecha
+    // real aunque la bolsa esté vacía; `last_seen` solo existe si además quedó una oferta viva.
+    const atsReview = company.kind === 'ats' ? history.bySource[company.source] ?? row?.last_seen ?? null : null;
     const last_review = history.byCode[company.code] ?? (company.url ? history.byHost[hostOf(company.url)] : undefined) ?? atsReview;
     return { ...company, live: row?.live ?? null, approved: row?.approved ?? null, last_review, review_unknown: !last_review && history.unknown };
   });

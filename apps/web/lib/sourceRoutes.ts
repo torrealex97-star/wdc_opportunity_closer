@@ -18,6 +18,7 @@
 // la disponibilidad se calcula con las claves que el operador ya guardó, nunca se supone.
 
 import { PORTALS } from './apifyCatalog';
+import { PROVIDER_METERS } from './providerBudget';
 
 export type RouteProvider = 'engine' | 'backend' | 'official' | 'brightdata' | 'jsearch' | 'serpapi' | 'apify' | 'jobspy' | 'unlocker' | 'agent';
 export type RouteCost = 'free' | 'quota' | 'metered' | 'paid' | 'unavailable';
@@ -89,7 +90,6 @@ export const EVIDENCE_LABEL: Record<RouteEvidence, string> = {
 
 const CHECKED = '2026-11-21';
 const DEAD_FEEDS = new Set(['remotejobs', 'remotefirstjobs']);
-const BACKEND_ONLY = new Set(['weremoto']);
 const OFFICIAL_KEYS: Record<string, string> = { infojobs: 'infojobs', adzuna: 'adzuna', jooble: 'jooble' };
 const JOBSPY_SOURCES = new Set(['indeed', 'linkedin', 'glassdoor', 'google']);
 const HTML_EXTRACTOR = new Set(['company', 'custom']);
@@ -132,17 +132,15 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
     });
   } else if (entry.requires === 'none') {
     add({
-      provider: BACKEND_ONLY.has(code) ? 'backend' : 'engine',
-      label: BACKEND_ONLY.has(code) ? 'Conector del backend' : code.startsWith('ats-') ? 'Feed ATS público' : 'API o feed público',
+      provider: 'engine',
+      label: code.startsWith('ats-') ? 'Feed ATS público' : 'API o feed público',
       cost: 'free', costUsd: 0, stage: 0,
       requirement: 'Nada: ya se recoge sin clave.',
-      detail: BACKEND_ONLY.has(code)
-        ? 'Conector propio del backend local (portada + JSON-LD). El motor cloud aún no lo recoge; no hay clave que guardar.'
-        : code.startsWith('ats-')
-          ? 'Bolsa pública del ATS (Greenhouse, Ashby, Teamtailor, Recruitee, Lever o SmartRecruiters). Una petición por empresa y pasada.'
-          : 'Conector del motor o feed público. Se recoge en cada pasada sin clave ni coste por petición.',
-      evidence: BACKEND_ONLY.has(code) ? 'medido' : 'operativo',
-      evidenceNote: BACKEND_ONLY.has(code) ? 'Medido en el backend local, no en el motor cloud.' : 'Conector en producción del motor.',
+      detail: code.startsWith('ats-')
+        ? 'Bolsa pública del ATS (Greenhouse, Ashby, Teamtailor, Recruitee, Lever o SmartRecruiters). Una petición por empresa y pasada.'
+        : 'Conector del motor o feed público. Se recoge en cada pasada sin clave ni coste por petición.',
+      evidence: 'operativo',
+      evidenceNote: 'Conector en producción del motor.',
     });
   }
 
@@ -262,6 +260,30 @@ export type RouteState = {
 
 export type Readiness = { ok: boolean; reason: string };
 
+/**
+ * Orden real de lanzamiento del extractor HTML. No es el mismo que el de presentación
+ * (`requiresAnyKey`): ZenRows y ScrapingBee van antes que Bright Data, así que la disponibilidad y
+ * el tope que se comprueban tienen que ser los DEL PROVEEDOR QUE SE LANZA, no los del primero que
+ * tenga clave. Una sola función manda en el panel y en «Probar ruta».
+ */
+export const UNLOCKER_PROVIDERS = ['zenrows', 'scrapingbee', 'brightdata'] as const;
+export type UnlockerKey = (typeof UNLOCKER_PROVIDERS)[number];
+const UNLOCKER_ATTEMPTS = 2;
+
+/** El primer proveedor con clave, zona (si es Bright Data) y saldo para el peor caso (2 intentos). */
+export function unlockerProviderFor(state: RouteState): UnlockerKey | null {
+  for (const key of UNLOCKER_PROVIDERS) {
+    if (!state.keys.has(key)) continue;
+    if (key === 'brightdata' && state.unlockerReady === false) continue;
+    const left = state.budget[key];
+    // El cliente de HTML reintenta una vez: se exige el peor caso, igual que `canSpend(..., 2)`.
+    // Si no, el panel diría «lista» con 0,001 USD y el POST la rechazaría al reservar los dos intentos.
+    if (left === null || left === undefined || left < PROVIDER_METERS[key].usdPerRequest * UNLOCKER_ATTEMPTS) continue;
+    return key;
+  }
+  return null;
+}
+
 /** ¿Se puede lanzar esta ruta ahora? Sin clave o sin tope, se dice el motivo y no se intenta. */
 export function routeReadiness(route: SourceRoute, state: RouteState): Readiness {
   if (state.paused) return { ok: false, reason: 'La fuente está pausada.' };
@@ -274,20 +296,19 @@ export function routeReadiness(route: SourceRoute, state: RouteState): Readiness
   }
   if (route.cost === 'free') return { ok: true, reason: '' };
   if (route.requiresAnyKey?.length) {
-    // Bright Data sirve para SERP sin zona de Unlocker, pero para leer HTML necesita la segunda zona.
-    const available = route.requiresAnyKey.find(key => state.keys.has(key) && (key !== 'brightdata' || state.unlockerReady !== false));
-    if (!available) {
-      if (state.keys.has('brightdata') && state.unlockerReady === false) {
-        return { ok: false, reason: 'La clave de Bright Data no incluye zona Unlocker: añádela como API key:zona SERP:zona Unlocker.' };
-      }
+    // La elección es la misma que usará el POST: así el panel no dice «lista» para un proveedor y
+    // luego lanza otro con otro saldo. Bright Data solo entra si tiene la segunda zona.
+    if (unlockerProviderFor(state)) return { ok: true, reason: '' };
+    const candidates = route.requiresAnyKey.filter(key => state.keys.has(key));
+    if (!candidates.length) {
       return { ok: false, reason: `Sin clave de ${route.requiresAnyKey.join(' ni ')}: no se intenta.` };
     }
-    if (route.cost === 'metered' || route.cost === 'paid') {
-      const left = state.budget[available];
-      if (left === null || left === undefined) return { ok: false, reason: 'No se pudo leer el gasto del mes: por seguridad no se lanza.' };
-      if (left <= 0) return { ok: false, reason: 'Tope mensual agotado: no se lanza.' };
+    if (candidates.length === 1 && candidates[0] === 'brightdata' && state.unlockerReady === false) {
+      return { ok: false, reason: 'La clave de Bright Data no incluye zona Unlocker: añádela como API key:zona SERP:zona Unlocker.' };
     }
-    return { ok: true, reason: '' };
+    const unknown = candidates.filter(key => state.budget[key] === null || state.budget[key] === undefined);
+    if (unknown.length) return { ok: false, reason: `No se pudo leer el gasto del mes de ${unknown.join(', ')}: por seguridad no se lanza.` };
+    return { ok: false, reason: `Tope mensual agotado para ${candidates.join(', ')}: no se lanza.` };
   }
   if (!route.requiresKey) return { ok: true, reason: '' };
   if (!state.keys.has(route.requiresKey)) {
@@ -357,10 +378,19 @@ export const GROUP_LABEL: Record<SourceGroup, string> = {
   none: 'Sin proveedor verificado',
 };
 
+/**
+ * Una vía gratuita cuenta como operativa solo si no está bloqueada y no es JobSpy: JobSpy no cobra
+ * por petición, pero sin proxies sanos no se lanza. La agrupación y el KPI «Gratis y operativas»
+ * comparten esta condición para que no vuelvan a divergir.
+ */
+export function hasFreeOperationalRoute(routes: SourceRoute[]): boolean {
+  return routes.some(route => route.cost === 'free' && route.evidence !== 'bloqueado' && route.provider !== 'jobspy');
+}
+
 export function groupForSource(routes: SourceRoute[], keys: Set<string>): SourceGroup {
   // JobSpy no cobra por petición, pero sin proxies sanos no está listo: no convierte una fuente en
   // «Directo, gratis» ni la esconde del grupo que sí le toca (Google Jobs, Apify u otros).
-  const free = routes.some(route => route.cost === 'free' && route.evidence !== 'bloqueado' && route.provider !== 'jobspy');
+  const free = hasFreeOperationalRoute(routes);
   const keyed = routes.some(route => ((route.requiresKey && keys.has(route.requiresKey)) || route.requiresAnyKey?.some(key => keys.has(key))) && route.provider !== 'engine' && route.provider !== 'backend');
   if (free && keyed) return 'multi';
   if (free) return 'direct';

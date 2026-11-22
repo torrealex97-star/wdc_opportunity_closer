@@ -5,7 +5,7 @@ import sourceCatalog from '../lib/sourceCatalog.json';
 import { catalogCodeFor, groupByFamily } from '../lib/sourceFamilies';
 import { setupFor, type Setup } from '../lib/sourceSetup';
 import {
-  COST_LABEL, EVIDENCE_LABEL, GROUP_LABEL, groupForSource, orderRoutes, planCascade, routeReadiness,
+  AGENT_GAP_FILL, COST_LABEL, EVIDENCE_LABEL, GROUP_LABEL, groupForSource, hasFreeOperationalRoute, orderRoutes, planCascade, routeReadiness,
   routesForCatalog, type RouteState, type SourceGroup, type SourceRoute,
 } from '../lib/sourceRoutes';
 import SourceSetupGuide from './SourceSetupGuide';
@@ -28,6 +28,15 @@ const CATALOG = sourceCatalog as CatalogEntry[];
 const CONN: Record<string, string> = { ok: 'Conectado', error: 'Con fallo', not_configured: 'Sin configurar' };
 const RUN: Record<string, string> = { completed: 'Completada', failed: 'Fallida', running: 'En curso', queued: 'En cola', skipped: 'Omitida', deferred: 'Aplazada' };
 const statusClass = (s: string | null) => s === 'ok' || s === 'completed' ? 'status ok' : s === 'error' || s === 'failed' ? 'status bad' : 'status';
+
+// La URL del Unlocker se valida en el navegador antes de enviar: si no es HTTPS, no se hace una petición
+// que la API rechazaría con 422. El servidor repite la comprobación como defensa.
+const publicHttpsUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' ? url.href : null;
+  } catch { return null; }
+};
 const PROVIDER_NAMES: Record<string, string> = { brightdata: 'Bright Data', serpapi: 'SerpApi', apify: 'Apify', zenrows: 'ZenRows', scrapingbee: 'ScrapingBee', infojobs: 'InfoJobs', adzuna: 'Adzuna', jooble: 'Jooble' };
 const PAID = new Set(['apify', 'brightdata', 'serpapi', 'zenrows', 'scrapingbee']);
 const GROUP_ORDER: SourceGroup[] = ['multi', 'keyed', 'google', 'apify', 'other', 'none'];
@@ -102,8 +111,8 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
     .filter(group => group.items.length > 0);
 
   // KPIs calculados con datos reales. Un hueco se declara: no se pinta 0 por comodidad.
-  // JobSpy no cobra por petición, pero sin proxies sanos no es «operativa»: no engorda este KPI.
-  const freeSources = rows.filter(row => routesOf(row.code).some(route => route.cost === 'free' && route.evidence !== 'bloqueado' && route.provider !== 'jobspy')).length;
+  // La condición es la misma que usa `groupForSource`: JobSpy sin proxies sanos no engorda el KPI.
+  const freeSources = rows.filter(row => hasFreeOperationalRoute(routesOf(row.code))).length;
   const keyedSources = withInput.filter(row => routesOf(row.code).some(route => ((route.requiresKey && keys.has(route.requiresKey)) || route.requiresAnyKey?.some(key => keys.has(key))) && route.provider !== 'jobspy')).length;
   const paidActive = [...PAID].filter(id => keys.has(id)).length;
   const spendKeys: Array<'brightdata' | 'serpapi' | 'zenrows' | 'scrapingbee'> = ['brightdata', 'serpapi', 'zenrows', 'scrapingbee'];
@@ -165,6 +174,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
       <div className="sources-hub-head">
         <div><span className="eyebrow">CÓMO SE CONECTA CADA UNA</span><h3>La cascada va de lo gratis a lo que se paga.</h3></div>
         <p className="card-meta">Cada tarjeta enseña sus vías en orden. Si la primera falla o vuelve vacía, se prueba la siguiente; JobSpy es la última y solo se lanza con proxies sanos. Sin clave no hay conexión: dice «sin clave».</p>
+        <p className="card-meta" data-testid="agent-gap"><strong>{AGENT_GAP_FILL.label}:</strong> {AGENT_GAP_FILL.requirement} No se pinta como conectado ni se simula su estado.</p>
         {summary?.orders_error && <p className="inline-hint" role="alert">{summary.orders_error}</p>}
       </div>
       {!groups.length && <p className="muted">No hay fuentes pendientes de configurar.</p>}
@@ -211,8 +221,17 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
                 <button type="button" disabled={!firstReady || busy !== null} title={firstReady ? `Prueba: ${firstReady.route.label}` : 'Ninguna vía está lista: falta clave o tope.'} onClick={() => {
                   if (!firstReady) return;
                   if (firstReady.route.provider === 'unlocker') {
-                    const url = window.prompt('URL pública con JobPosting o RSS:', '');
-                    if (url) void testRoute(row, firstReady.route, url);
+                    const url = window.prompt('URL pública con JSON-LD JobPosting o RSS (no la portada):', '')?.trim();
+                    if (!url) {
+                      setTested(old => ({ ...old, [row.code]: 'Sin URL pública no se llama al proveedor: no se usa la portada del catálogo.' }));
+                      return;
+                    }
+                    const pageUrl = publicHttpsUrl(url);
+                    if (!pageUrl) {
+                      setTested(old => ({ ...old, [row.code]: 'La URL debe ser pública y HTTPS para leer JSON-LD o RSS; no se envió ninguna petición.' }));
+                      return;
+                    }
+                    void testRoute(row, firstReady.route, pageUrl);
                     return;
                   }
                   void testRoute(row, firstReady.route);
