@@ -1,3 +1,11 @@
+## Revisión automática más justa: ventana con borradores antiguos y «sin descripción» a la cola humana — 2026-11-23
+
+- **Problema** (*inspected*): la revisión leía los 120 borradores de mayor puntuación. Los que cumplen las reglas pero no caben en el tope de hoy se quedan en borrador y ocupan siempre el frente, así que los de otras fuentes que puntúan menos nunca llegaban a juzgarse (LinkedIn: 46 borradores sin juzgar). Y una oferta sin descripción se retiraba como «idioma dudoso» aunque el problema era la falta de datos.
+- **Cambio** (*tested*): `reviewWindow` reserva un tercio de la ventana a los borradores **más antiguos** (`order=first_seen_at.asc`) y el resto sigue por puntuación; si la lectura de los antiguos falla, se sigue como antes. Una oferta sin descripción (< 40 caracteres) cuyo idioma no se reconoce va a la **cola humana** con el motivo `sin_descripcion` en vez de retirarse; con descripción real en otro idioma se sigue retirando. **No se tocan `MIN_SCORE` (55) ni `DAILY_CAP` (100)** y nada se aprueba sin datos.
+- **Evidencia** (*tested*): `autoreview.mjs` con 3 pasos nuevos (motivo `sin_descripcion`, ventana, y de punta a punta: con 60 borradores buenos delante, uno antiguo y flojo se juzga igual); suite `run.sh` completa, typecheck y build.
+- **No hecho, a propósito:** contar `also_seen` en `approvedBySource`. Esa cifra reparte el gasto por «aprobadas por dólar»: acreditar a una fuente de pago por un duplicado de una oferta que ya trajo una gratuita inflaría su rendimiento. Se queda la atribución a la primera fuente que la vio.
+- **Pendiente:** ofertas freelance (reconocer closer/setter/cold calling en títulos de proyecto y quitar la penalización geográfica) y el enriquecimiento de la descripción con una llamada de detalle: esperan a la muestra real de las pruebas de Apify (≤5 US$) revisada a mano. *No verified* contra la base real: se verá cuántos borradores antiguos se juzgan tras el siguiente cron.
+
 ## Mínimo diario por fuente de pago y tope global del mes — 2026-11-23
 
 - **Problema** (*inspected*): el cron solo lanzaba vías de pago mientras faltara objetivo de ofertas; con Jooble gratis cubriéndolo, una fuente de pago bien conectada podía pasar días sin correr y nunca acumulaba muestra para juzgarla con 1.000 ofertas.

@@ -41,7 +41,8 @@ const server = http.createServer((req, res) => {
     let list = all;
     if (q.editorial_status === 'eq.draft') list = list.filter(r => r.editorial_status === 'draft');
     if (ids) list = list.filter(r => ids.includes(r.id));
-    list.sort((a, b) => b.score - a.score);
+    if (q.order === 'first_seen_at.asc') list.sort((a, b) => String(a.first_seen_at ?? '').localeCompare(String(b.first_seen_at ?? '')));
+    else list.sort((a, b) => b.score - a.score);
     return send(200, list.slice(0, Number(q.limit) || 100));
   });
 });
@@ -51,7 +52,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'anon-key';
 process.env.AI_REVIEW_MODE = 'shadow';
 
-const { judgeOffer, runAutoReview } = await import('../../apps/web/lib/autoReview.ts');
+const { judgeOffer, runAutoReview, reviewWindow, OLDEST_SHARE, MIN_SCORE, DAILY_CAP } = await import('../../apps/web/lib/autoReview.ts');
 
 const uuid = (n) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, '0')}`;
 const offer = (n, extra = {}) => ({
@@ -252,5 +253,38 @@ assert.equal(face(22).auto_review, undefined, 'y no se le anota un motivo que no
 assert.equal(raced.approved, 4, 'tres claras y una con aviso confirmada');
 assert.equal(raced.by_reason.cumple_reglas_con_aviso, 1, 'solo la confirmada, no las dos intentadas');
 console.log('PASS  el recuento de aprobadas con aviso es el que confirma la base');
+
+// 2) Sin descripción no se puede juzgar el idioma: cola humana con su motivo, no retirada por «otro idioma». Con descripción real en otro idioma, sigue retirándose.
+const noText = judgeOffer(offer(40, { title: 'Verkaufsleiter Abschluss', description: '' }));
+assert.equal(noText.decision, 'human'); assert.equal(noText.why, 'sin_descripcion');
+assert.equal(judgeOffer(offer(41, { title: 'Verkaufsleiter Abschluss', description: null })).why, 'sin_descripcion', 'una descripción ausente (null) también');
+assert.equal(judgeOffer(offer(42, { title: 'Senior Sales Closer', description: '' })).why, 'sin_descripcion', 'solo con el título tampoco se reconoce el idioma: antes se retiraba como «otro idioma»; ahora la mira una persona');
+assert.equal(judgeOffer(offer(43, { title: 'Senior Sales Closer', description: 'Wir suchen einen Closer für unser Team in Madrid und bieten ein gutes Gehalt.' })).why, 'idioma_dudoso', 'con descripción real en otro idioma se retira como siempre');
+assert.equal(judgeOffer(offer(44, { title: 'Verkaufsleiter Abschluss', description: '', score: 30 })).why, 'score_bajo', 'el umbral de puntuación no cambia');
+assert.equal(MIN_SCORE, 55); assert.equal(DAILY_CAP, 100);
+console.log('PASS  sin descripción: cola humana con su motivo; nada se aprueba sin datos y los umbrales no se tocan');
+
+// 3) Ventana de revisión: casi todo por puntuación y una parte reservada a los más antiguos, para que ninguna fuente quede sin juzgar.
+const mk = (id, score) => ({ id, score });
+const byScore = Array.from({ length: 12 }, (_, i) => mk(`s${i}`, 90 - i));
+const oldest = [mk('old1', 40), mk('old2', 41), mk('s0', 90)];
+const window = reviewWindow(byScore, oldest, 9);
+assert.equal(window.length, 9);
+assert.ok(window.some(r => r.id === 'old1') && window.some(r => r.id === 'old2'), 'los antiguos entran aunque puntúen poco');
+assert.equal(new Set(window.map(r => r.id)).size, 9, 'sin repetidos');
+assert.ok(window.some(r => r.id === 's0'), 'las mejores por puntuación siguen entrando');
+assert.ok(Math.floor(9 * OLDEST_SHARE) >= 2);
+assert.deepEqual(reviewWindow(byScore, [], 5).map(r => r.id), ['s0', 's1', 's2', 's3', 's4'], 'sin antiguos es lo de siempre');
+assert.equal(reviewWindow(byScore.slice(0, 2), oldest, 9).length, 4, 'con pocas filas devuelve las que hay, sin inventar');
+console.log('PASS  la ventana reserva una parte a los borradores más antiguos');
+
+// 4) De punta a punta: con el frente de la ventana ocupado por borradores buenos que no caben en el tope, un borrador antiguo de poca puntuación se juzga igual.
+rows.clear(); patches.length = 0;
+for (let n = 100; n < 160; n++) rows.set(uuid(n), offer(n, { score: 95, first_seen_at: new Date(Date.now() - 1000 * 60).toISOString() }));
+rows.set(uuid(200), offer(200, { score: 30, source: 'apify-linkedin', first_seen_at: new Date(Date.now() - 6 * 864e5).toISOString() }));
+const fair = await run({ cap: 5 });
+assert.equal(face(200).editorial_status, 'withdrawn', JSON.stringify(fair));
+assert.equal(face(200).auto_review.why, 'score_bajo', 'el borrador antiguo y flojo SÍ llegó a juzgarse (antes se quedaba sin mirar)');
+console.log('PASS  un borrador antiguo y de poca puntuación se juzga aunque el frente de la ventana esté lleno');
 
 server.close();
