@@ -1,3 +1,10 @@
+## «Probar todas las fuentes» — 2026-11-23
+
+- **Petición del dueño:** probar todas las fuentes, no una a una. Desde este entorno no es posible (no alcanza Apify y no tiene la sesión del panel), así que la prueba la lanza el propietario con **un botón** en Fuentes.
+- **Cambio** (*tested*): «Probar todas las fuentes (10 resultados cada una, tope 5 US$)» pide confirmación, recorre las fuentes con vía lista una tras otra con la misma cascada que «Probar ruta», salta las que piden una URL a mano (Unlocker) y **se para al llegar a 5 US$** de la tanda; el resultado de cada una queda en su tarjeta (y Apify se sigue hasta decir cuántas ofertas recogió). Paso nuevo en `ui.mjs` (el botón existe y dice el tope).
+- **Verificado por el propietario** (*verified*, 2026-11-23): Upwork devolvió 10 ofertas de cold caller/setter por 0,00 US$ (p. ej. «Cold Caller for M20 Digital», «Appointment Setter for Documentary Series»).
+- **No ejecutado** contra Apify real desde aquí; el bucle de la tanda se probó solo en la interfaz simulada (existencia del botón), no su recorrido completo.
+
 ## Banco de términos y búsquedas + Tavily como proveedor — 2026-11-23
 
 - **Orden del dueño:** que la app sepa buscar bien con cualquier fuente o scraper (banco de términos, filtros, semántica) e integrar Tavily.

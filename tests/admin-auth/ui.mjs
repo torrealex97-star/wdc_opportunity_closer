@@ -102,6 +102,7 @@ await step('Fuentes: catálogo completo (todas las del backend + las del motor) 
   await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
   // Hermes/Manus es un hueco declarado: se ve la insignia y nunca se pinta como conectado.
   assert.match(await page.getByTestId('agent-gap').innerText(), /Hermes \/ Manus: No disponible/);
+  assert.match(await page.getByTestId('test-all').innerText(), /Probar todas las fuentes.*tope 5 US\$/, 'hay un botón para probar todas las fuentes con tope');
   // El motor recoge por CONECTOR y el panel agrupa por PORTAL: `jobtoday` + `jobtoday-closers` son
   // una sola fila (rotulada «2 conectores»), así que el total es el del catálogo y no crece con cada
   // búsqueda nueva del motor. Antes esta prueba esperaba una fila suelta por conector.
