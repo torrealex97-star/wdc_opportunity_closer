@@ -1,12 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, LoaderCircle, RefreshCcw } from 'lucide-react';
+import CommandCenter from './CommandCenter';
 
 // Resumen: cuánto falta para el objetivo (ofertas de closer en España visibles para las alumnas) y qué hacer ahora.
 export const TARGET_CLOSERS_ES = 20;
 type Overview = { external?: { pending: number; exceptions?: number; counts?: Record<string, number> | null; sources: Array<{ source: string; live: number; approved: number }> }; engine: { catalog_active: number; last_run: { day: string; status: string } | null } | null; engine_reason?: 'allowance' | 'timeout' | 'down' | null; engine_http_status?: number | null; sources: Array<{ code: string; name: string; run_status: string | null }>; pool: { eligible: number | null; by_role: Record<string, number> } };
 type Student = { items: Array<{ id: string }>; total: number };
-type Go = (tab: 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'apis') => void;
+type Go = (tab: 'inbox' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'apis') => void;
 
 // Por qué el motor no da datos. Una pausa de cuota de plataforma NO es una caída: se levanta sola cuando la
 // cuota del mes se reinicia, y decir «no responde» a secas obligaba a adivinar qué hacer.
@@ -147,6 +148,7 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
         <button type="button" onClick={() => go('apis')}>Ver APIs y topes</button></article>
       <article className="source-card"><span className="eyebrow">FUENTES CON FALLO</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{overview ? (engineKnown ? failed.length : '—') : '…'}</strong>{!overview || engineKnown ? `de ${overview?.sources.length ?? '…'} en el motor cloud` : 'sin datos del motor cloud'}</span></div></article>
     </div>
+    <CommandCenter onResolve={() => go('inbox')} onSessionLost={onSessionLost} />
     <h2 className="section-title">Qué hacer ahora</h2>
     <div className="card-grid" style={{ gridTemplateColumns: '1fr' }}>{steps.map((s, i) => <article className="source-card" key={`${s.tab}-${i}`}><div className="card-head"><p style={{ fontSize: 14 }}>{s.text}</p><button className="primary" style={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => go(s.tab)}>{s.action} <ArrowRight size={14} /></button></div></article>)}</div>
   </section>;
