@@ -9,8 +9,20 @@ type Row = {
   source: string; seen: number | null; approved: number | null; cost_usd: number | null;
   state: 'sin_dato' | 'sin_conclusion' | 'medida'; missing: number | null; approved_pct: number | null; approved_per_usd: number | null;
   since: string | null; note: string;
+  drafts: number | null;
+  health: { state: 'conectada' | 'sin_via' | 'sin_clave' | 'mal_conectada' | 'sin_programar' | 'sin_juzgar'; cause: string; next: string } | null;
 };
-type Payload = { target: number; rows: Row[]; basis: string; cost_note: string | null };
+type Payload = { target: number; rows: Row[]; basis: string; cost_note: string | null; health_note: string | null };
+
+// Estado de conexión: texto siempre (el color no es la única señal). «Conectada» no es «buena»: eso solo se sabe con 1.000 ofertas.
+const HEALTH: Record<NonNullable<Row['health']>['state'], { text: string; cls: string }> = {
+  conectada: { text: 'Conectada', cls: 'status ok' },
+  sin_via: { text: 'Sin vía verificada', cls: 'status' },
+  sin_clave: { text: 'Falta clave o saldo', cls: 'status bad' },
+  mal_conectada: { text: 'Mal conectada', cls: 'status bad' },
+  sin_programar: { text: 'Sin programar', cls: 'status bad' },
+  sin_juzgar: { text: 'Ofertas sin juzgar', cls: 'status bad' },
+};
 
 const num = (value: number | null) => value === null ? '—' : fmtInt(value);
 const usd = (value: number | null) => value === null ? '—' : `${new Intl.NumberFormat('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} US$`;
@@ -42,7 +54,7 @@ export default function SourceSample({ onSessionLost }: { onSessionLost: () => v
   useEffect(load, [load]);
 
   return <section aria-label="Muestra por fuente" data-testid="source-sample">
-    <h2 className="section-title">Muestra por fuente</h2>
+    <h2 className="section-title">Salud y muestra por fuente</h2>
     <p className="card-meta" style={{ marginTop: 0, maxWidth: 760 }}>
       Antes de decidir si una fuente de pago rinde, hacen falta al menos {fmtInt(data?.target ?? 1000)} ofertas recogidas con búsquedas de closer bien hechas. Con menos, la lectura es «sin conclusión», no «rinde mal», y no se recorta ni se pausa nada. {data?.basis ? `Se cuenta: ${data.basis}.` : ''}
     </p>
@@ -52,14 +64,16 @@ export default function SourceSample({ onSessionLost }: { onSessionLost: () => v
         ? <p className="empty">Todavía no hay fuentes con ofertas recogidas. Cuando una fuente recoja, aparecerá aquí con su avance hacia las {fmtInt(data.target)}.</p>
         : <>
           {data.cost_note && <p className="inline-hint" role="status">{data.cost_note}</p>}
+          {data.health_note && <p className="inline-hint" role="status">{data.health_note}</p>}
           <div className="scorecard-scroll stack-wrap" style={{ marginBottom: 12 }}>
             <table className="scorecard-table stack-table" data-testid="sample-table">
-              <caption>Ofertas únicas recogidas, aprobadas y coste registrado por fuente</caption>
-              <thead><tr><th scope="col">Fuente</th><th scope="col">Recogidas</th><th scope="col">Aprobadas</th><th scope="col">% aprobadas</th><th scope="col">Coste</th><th scope="col">Aprobadas por US$</th><th scope="col">Lectura</th></tr></thead>
+              <caption>Conexión, ofertas únicas recogidas, aprobadas y coste registrado por fuente</caption>
+              <thead><tr><th scope="col">Fuente</th><th scope="col">Conexión</th><th scope="col">Recogidas</th><th scope="col">Aprobadas</th><th scope="col">% aprobadas</th><th scope="col">Coste</th><th scope="col">Aprobadas por US$</th><th scope="col">Lectura</th></tr></thead>
               <tbody>{data.rows.map(row => {
                 const pct = row.seen === null ? null : Math.min(100, Math.round((row.seen / data.target) * 100));
                 return <tr key={row.source} data-source={row.source}>
                   <th scope="row">{row.source}{row.since ? <span className="card-meta" style={{ display: 'block' }}>Desde {new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(row.since))}</span> : null}</th>
+                  <td data-label="Conexión">{row.health ? <><span className={HEALTH[row.health.state].cls} data-health={row.health.state}>{HEALTH[row.health.state].text}</span><span className="card-meta" style={{ display: 'block' }}>{row.health.cause}{row.health.state === 'conectada' ? '' : ` Siguiente paso: ${row.health.next}`}</span></> : '—'}</td>
                   <td data-label="Recogidas" className="num">
                     {row.seen === null ? '—' : <div>
                       <div role="progressbar" aria-valuemin={0} aria-valuemax={data.target} aria-valuenow={Math.min(row.seen, data.target)} aria-label={`Recogidas de ${row.source}: ${num(row.seen)} de ${num(data.target)}`} style={{ height: 8, borderRadius: 99, background: 'var(--inset)', overflow: 'hidden', minWidth: 80 }}>

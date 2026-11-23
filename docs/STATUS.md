@@ -1,3 +1,12 @@
+## Salud por fuente: cada fuente dice si está bien conectada y por qué no — 2026-11-23
+
+- **Decisión del dueño:** una fuente se juzga con ≥1.000 ofertas; lo que no se admite es perder ofertas buenas por una conexión mal hecha. Las de freelance (Upwork, Workana, Freelancer) cuentan igual si son de closer, setter o cold calling.
+- **Cambio** (*tested*, simulado): `apps/web/lib/sourceHealth.ts` (pura) clasifica cada fuente: `conectada`, `sin_via`, `sin_clave`, `mal_conectada` (≥3 ejecuciones de Apify fallidas sin ninguna buena, o ≥3 correctas siempre con 0 ítems), `sin_programar` y `sin_juzgar` (≥20 borradores y ≥50 %), con su causa y su siguiente paso. La tabla de «Salud y muestra por fuente» (antes «Muestra por fuente») añade la columna **Conexión** y ahora lista todas las fuentes del catálogo, también las que nunca han recogido.
+- **Apify:** una ejecución FAILED guarda el `statusMessage` real en `apify_runs.error` (antes solo «terminó como FAILED»).
+- **Cron:** cada etapa (corrió o saltada, y por qué) queda anotada bajo la fuente interna `cron-waterfall` (sin gasto, sin migración); se excluye de las listas de fuentes y del embudo.
+- **Evidencia:** `tests/admin-auth/sourcehealth.mjs` (11 pasos, con los casos reales de hoy: Indeed 9 FAILED, Upwork 12 OK con 0, borradores sin juzgar), paso nuevo en `flow.mjs`; suite completa `run.sh` 502 pasos OK, `npm run design` OK, typecheck y build OK. Revisión visual a 1280/390 px: *no hecha* a mano; la cubren los flujos interactivos y la prueba de desbordamiento de `ui.mjs`.
+- **Límites:** el estado es *inspected*/*tested*, no *verified* contra la base real hasta el primer cron desplegado. «Conectada» no significa «buena»: eso solo se sabe con 1.000 ofertas. La disponibilidad de la vía mira solo si hay clave (el saldo no es un problema de conexión). LinkedIn pierde sus ofertas por `score_bajo` (retiradas, no en borrador): eso es de la Fase 4, no de esta.
+
 ## El cron ya lee las páginas de empleo de la semilla del motor (arregla el 404 de `/v1/company-targets`) — 2026-11-23
 
 - **Problema** (*verified* por C1): `GET /v1/company-targets` da 404 en el Worker hospedado, así que `engineCareerPages()` devolvía `null` y el cron leía solo las 2 páginas escritas a mano.

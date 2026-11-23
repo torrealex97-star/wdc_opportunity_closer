@@ -103,7 +103,7 @@ try {
       assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, páginas de empresa, respaldo y Apify');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
       const sample = page.getByTestId('source-sample');
-      await sample.getByRole('heading', { name: 'Muestra por fuente' }).waitFor();
+      await sample.getByRole('heading', { name: 'Salud y muestra por fuente' }).waitFor();
       await sample.locator('tr[data-source], .empty').first().waitFor();
       assert.match(await sample.innerText(), /1\.000 ofertas/, 'el panel dice el objetivo de muestra');
       assert.equal(await sample.getByRole('button', { name: /recortar|pausar|desactivar/i }).count(), 0, 'es solo lectura: no ofrece recortar ni pausar ninguna fuente');

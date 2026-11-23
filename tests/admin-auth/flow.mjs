@@ -1075,6 +1075,11 @@ await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000
     assert.equal(row.state, 'sin_conclusion'); assert.equal(row.missing, 1000 - row.seen); assert.match(row.note, /no se recorta/);
   }
   assert.match(ok.json.basis, /únicas/); assert.ok(!JSON.stringify(ok.json).includes('secret'), 'sin secretos');
+  // Salud por fuente: cada fila trae su estado de conexión con causa, y las del catálogo sin ofertas también salen (ahí se esconde una mala conexión).
+  const STATES = ['conectada', 'sin_via', 'sin_clave', 'mal_conectada', 'sin_programar', 'sin_juzgar'];
+  for (const row of ok.json.rows) { assert.ok(row.health === null || STATES.includes(row.health.state), `estado válido (${row.source})`); if (row.health) assert.ok(row.health.cause.length > 5 && row.health.next.length > 5, `causa y siguiente paso (${row.source})`); }
+  assert.ok(ok.json.rows.some(row => row.seen === 0 && row.health), 'una fuente del catálogo sin ofertas aparece con su estado de conexión');
+  assert.ok(!ok.json.rows.some(row => row.source === 'cron-waterfall'), 'el registro del cron no es una fuente');
   state.externalCountsFail = true;
   const down = await call('/api/admin/source-sample');
   state.externalCountsFail = false;
