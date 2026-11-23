@@ -7,7 +7,7 @@ import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { collectRapidApi } from '../../../../lib/rapidapiCollect';
-import { collectCompanyPages, engineCareerPages, mergePages } from '../../../../lib/companyPagesCollect';
+import { collectCompanyPages, enginePagesOrSeed, mergePages } from '../../../../lib/companyPagesCollect';
 import { COMPANY_WATCHLIST } from '../../../../lib/companyWatchlist';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
@@ -107,15 +107,21 @@ export async function GET(request: NextRequest) {
   // corre siempre; un desbloqueador de pago (ZenRows → ScrapingBee → Bright Data) solo si la página bloquea, falta
   // objetivo y queda tope. Una página que responde sin ofertas no se paga.
   const paying = canSpend();
+  let pagesOrigin = 'semilla' as 'motor' | 'semilla'; // se asigna dentro del cierre: el cast evita que TS lo estreche a 'semilla'
   const companyPages = budget.remaining() >= MIN_STEP_MS
     ? await (paying ? sharedMeter().catch(() => null) : Promise.resolve(null))
-      .then(async meter => collectCompanyPages('cron', budget.deadline(8_000), { allowPaid: paying, meter, list: mergePages(COMPANY_WATCHLIST, await engineCareerPages()) }))
+      .then(async meter => {
+        // Lista viva del motor si responde; en el Worker hospedado esa ruta da 404 y se usa su semilla (se declara abajo).
+        const source = await enginePagesOrSeed();
+        pagesOrigin = source.origin;
+        return collectCompanyPages('cron', budget.deadline(8_000), { allowPaid: paying, meter, list: mergePages(COMPANY_WATCHLIST, source.pages) });
+      })
       .catch(failed('company_pages', null))
     : (budget.cut('companyPages'), null);
   if (companyPages?.truncated) budget.cut('companyPages');
   if (companyPages) {
     if (companyPages.accepted > 0) gap = await recount(gap);
-    stages.push({ id: 'unlocker', ran: companyPages.checked > 0, why: companyPages.ok ? `${companyPages.checked} página(s) revisada(s)${paying ? '' : ' (lectura gratuita; sin objetivo pendiente no se paga desbloqueador)'}.` : companyPages.error ?? 'Sin resultado.', accepted: companyPages.accepted, cost_usd: companyPages.cost_usd });
+    stages.push({ id: 'unlocker', ran: companyPages.checked > 0, why: companyPages.ok ? `${companyPages.checked} página(s) revisada(s) (lista: ${pagesOrigin === 'motor' ? 'viva del motor' : 'semilla del motor, su ruta no responde'})${paying ? '' : ' (lectura gratuita; sin objetivo pendiente no se paga desbloqueador)'}.` : companyPages.error ?? 'Sin resultado.', accepted: companyPages.accepted, cost_usd: companyPages.cost_usd });
   }
   // Respaldo de cobertura: los portales que NO tienen API oficial conectada (sin clave, clave rechazada
   // o fallo) se buscan en Google acotados a ese portal con SerpApi. Acotado por

@@ -179,6 +179,26 @@ await step('páginas del motor: solo las que vigila por página propia o ATS, HT
   assert.ok(mergePages(COMPANY_WATCHLIST, null).length >= 2, 'y se sigue con la lista del repo');
 });
 
+await step('semilla del motor: sin lista viva (404 en el Worker) el cron usa la semilla y lo declara; con lista viva, la del motor', async () => {
+  const { enginePagesOrSeed, seedCareerPages } = await import('../../apps/web/lib/companyPagesCollect.ts');
+  const seed = seedCareerPages();
+  assert.ok(seed.length >= 10 && seed.every(page => page.kind === 'careers' && page.url.startsWith('https://')), 'la semilla trae páginas HTTPS de empleo');
+  assert.equal(new Set(seed.map(page => page.url)).size, seed.length, 'sin repetir URL');
+  // El servidor de prueba no tiene `/v1/company-targets` con pocas páginas en este caso: se simula el 404 del Worker.
+  const prev = process.env.CAREER_ENGINE_URL;
+  process.env.CAREER_ENGINE_URL = `http://127.0.0.1:${PORT}/sin-ruta`;
+  const fallback = await enginePagesOrSeed();
+  assert.equal(fallback.origin, 'semilla'); assert.equal(fallback.pages.length, seed.length);
+  delete process.env.CAREER_ENGINE_URL;
+  assert.equal((await enginePagesOrSeed()).origin, 'semilla', 'sin motor configurado también');
+  process.env.CAREER_ENGINE_URL = `http://127.0.0.1:${PORT}`;
+  const live = await enginePagesOrSeed();
+  assert.equal(live.origin, 'motor'); assert.deepEqual(live.pages.map(page => page.code), ['ironhack', 'ph', 'dup']);
+  if (prev === undefined) delete process.env.CAREER_ENGINE_URL; else process.env.CAREER_ENGINE_URL = prev;
+  const merged = mergePages(COMPANY_WATCHLIST, seed);
+  assert.ok(merged.length > COMPANY_WATCHLIST.filter(c => c.kind === 'careers').length, 'la lista del cron crece con la semilla');
+});
+
 server.close();
 console.log(`\n${passed}/${passed + failed} pasos OK`);
 if (failed) process.exit(1);

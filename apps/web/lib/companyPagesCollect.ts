@@ -1,4 +1,5 @@
 import { COMPANY_WATCHLIST, type CompanyWatch } from './companyWatchlist';
+import { COMPANY_PAGES_SEED } from './companyPagesSeed';
 import { engineFetch } from './engineTransport';
 import { callTimeout, timeLeft } from './cronBudget';
 import { ingest, recordSpend } from './external';
@@ -66,6 +67,21 @@ export async function engineCareerPages(env: NodeJS.ProcessEnv = process.env, ti
       .filter(t => WATCHED.has(String(t.monitoring)) && typeof t.careers_url === 'string' && publicHttps(t.careers_url) && typeof t.slug === 'string')
       .map(t => ({ code: String(t.slug).slice(0, 60), name: String(t.name ?? t.slug), kind: 'careers' as const, url: t.careers_url as string, source: 'company', note: `Página de empleo del motor (${t.monitoring}).` }));
   } catch { return null; }
+}
+
+/**
+ * Semilla del motor emitida como módulo (`scripts/export_company_pages.py`): la misma lista que el motor carga al arrancar.
+ * Es el respaldo cuando `/v1/company-targets` no responde, que es lo que pasa en el Worker hospedado (404, medido por C1).
+ * No es la base viva del motor: una empresa dada de alta después no está aquí hasta regenerar el módulo.
+ */
+export const seedCareerPages = (): CompanyWatch[] => COMPANY_PAGES_SEED.map(page => ({
+  code: page.slug, name: page.name, kind: 'careers' as const, url: page.url, source: 'company', note: `Página de empleo de la semilla del motor (${page.monitoring}).`,
+}));
+
+/** Lista viva del motor si responde; si no, su semilla. `origin` dice de dónde salió, para declararlo en el resultado del cron. */
+export async function enginePagesOrSeed(env: NodeJS.ProcessEnv = process.env): Promise<{ pages: CompanyWatch[]; origin: 'motor' | 'semilla' }> {
+  const live = await engineCareerPages(env);
+  return live && live.length ? { pages: live, origin: 'motor' } : { pages: seedCareerPages(), origin: 'semilla' };
 }
 
 /** Lista del repo + las del motor, sin repetir la misma página. */
