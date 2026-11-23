@@ -55,6 +55,8 @@ const server = http.createServer(async (req, res) => {
     saved.push(...rows);
     return send(200, rows.length);
   }
+  // El tope global suma también el gasto de Apify (`apify_runs`): sin ejecuciones es 0, no «ilegible».
+  if (url.pathname === '/rest/v1/apify_runs') return send(200, []);
   if (url.pathname === '/rest/v1/external_ingest_runs') {
     if (req.method === 'POST') { posted.push(JSON.parse(body || '{}')); return send(201, {}); }
     if (runsDown) return send(500, {});

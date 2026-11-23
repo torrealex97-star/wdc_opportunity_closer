@@ -176,6 +176,7 @@ export function startMocks({ authPort, enginePort }) {
       // PostgREST de verdad: `offset`/`limit` (el paginador pide hasta recibir una página vacía) y `created_at=gte.`.
       const q = Object.fromEntries(url.searchParams); let rows = state.ingestRuns;
       if (q.created_at?.startsWith('gte.')) rows = rows.filter(r => r.created_at >= decodeURIComponent(q.created_at.slice(4)));
+      if (q.source?.startsWith('eq.')) rows = rows.filter(r => r.source === decodeURIComponent(q.source.slice(3)));
       const offset = Number(q.offset) || 0, limit = Number(q.limit) || 1000;
       return send(res, 200, rows.slice(offset, offset + limit));
     }

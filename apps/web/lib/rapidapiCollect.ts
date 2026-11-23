@@ -22,9 +22,9 @@ export const rapidApiMaxRequests = (env: NodeJS.ProcessEnv = process.env) => {
 
 export type RapidApiOutcome = { source: 'rapidapi'; ok: boolean; error?: string; requests: number; cost_usd: number; accepted: number; by_api: Record<string, { requests: number; accepted: number; error?: string }>; truncated?: boolean; spend_unrecorded?: boolean };
 
-export async function collectRapidApi(via: string, deadline: number | undefined, meter: Meter, options: { now?: number } = {}): Promise<RapidApiOutcome> {
+export async function collectRapidApi(via: string, deadline: number | undefined, meter: Meter, options: { now?: number; /** Tope de peticiones de esta pasada (el mínimo diario usa 1); nunca más que el del entorno. */ maxRequests?: number } = {}): Promise<RapidApiOutcome> {
   const out: RapidApiOutcome = { source: 'rapidapi', ok: false, requests: 0, cost_usd: 0, accepted: 0, by_api: {} };
-  const max = rapidApiMaxRequests();
+  const max = options.maxRequests === undefined ? rapidApiMaxRequests() : Math.min(rapidApiMaxRequests(), Math.max(0, Math.floor(options.maxRequests)));
   if (max === 0) return { ...out, error: 'RapidAPI desactivado (RAPIDAPI_MAX_REQUESTS=0).' };
   const key = await getSecret('rapidapi').catch(() => null);
   if (!key) return { ...out, error: 'Sin clave de RapidAPI.' };

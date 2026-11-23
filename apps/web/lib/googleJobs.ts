@@ -263,13 +263,13 @@ export async function collectGoogleJobs(
   via: string,
   deadline?: number,
   fetchFor: (secret: string) => Fetcher = serpapiFetcher,
-  deps: { brightFetcher?: (config: BrightDataConfig, onNoPanel?: () => void) => Fetcher; jsearchFetcher?: (secret: string) => Fetcher; meter?: Meter } = {},
+  deps: { brightFetcher?: (config: BrightDataConfig, onNoPanel?: () => void) => Fetcher; jsearchFetcher?: (secret: string) => Fetcher; meter?: Meter; /** Tope de dorks de esta pasada (el mínimo diario usa pocos); nunca más que el del entorno. */ maxDorks?: number } = {},
 ): Promise<GoogleJobsOutcome> {
   try {
     const paused = await pausedSourcesStrict();
     if (!paused) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'No se pudo comprobar si la fuente está pausada; se reintenta en la próxima ejecución.' };
     if (paused.has(GOOGLE_JOBS_SOURCE)) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Fuente pausada' };
-    const limit = maxDorks();
+    const limit = deps.maxDorks === undefined ? maxDorks() : Math.min(maxDorks(), Math.max(0, Math.floor(deps.maxDorks)));
     if (limit === 0) return { source: GOOGLE_JOBS_SOURCE, ok: false, error: 'Recogida de Google Jobs desactivada (SERPAPI_JOBS_MAX_DORKS=0).' };
     const [serpSecret, brightSecret, jsearchSecret] = await Promise.all([getSecret('serpapi'), getSecret('brightdata'), getSecret('jsearch')]);
     // La clave puede venir sola (sin zona): la zona SERP se descubre con la cuenta (llamada gratuita). Sin zona
