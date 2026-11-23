@@ -305,7 +305,16 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
         <td className="primary-cell"><strong>{row.website ? <a href={row.website} target="_blank" rel="noopener noreferrer">{row.name}</a> : row.name}</strong><span>{row.code}</span>
           {row.cloud?.warning && <span style={{ color: 'var(--warning)' }}>{row.cloud.warning}</span>}{!row.cloud && row.note && <span>{row.note}</span>}
           {!row.cloud && !row.ext && row.requires === 'input' && <button type="button" className="source-setup-open"
-            aria-haspopup="dialog" onClick={() => setGuide({ name: row.name, code: row.code, setup: setupFor(row) })}>Cómo conectarla · guía paso a paso</button>}</td>
+            aria-haspopup="dialog" onClick={() => setGuide({ name: row.name, code: row.code, setup: setupFor(row) })}>Cómo conectarla · guía paso a paso</button>}
+          {row.requires !== 'input' && (() => {
+            // Fuentes del motor (sin configuración): «Probar ruta» lee su estado real y, si el motor no tiene ofertas, sigue con la siguiente vía lista (p. ej. Google Jobs).
+            const ready = planCascade(routesOf(row.code), routeState, orderOf(row.code)).filter(step => step.ready).map(step => step.route);
+            return <>
+              {ready.length > 0 && <button type="button" disabled={busy !== null} data-testid={`engine-probe-${row.code}`} onClick={() => void testSource(row, ready)}>
+                {busy?.startsWith(`${row.code}:`) ? <LoaderCircle size={14} className="spin" /> : <PlugZap size={14} />} Probar ruta</button>}
+              {tested[row.code] && <span role="status">{tested[row.code]}</span>}
+            </>;
+          })()}</td>
         <td>{row.category ?? '—'}</td><td>{row.acquisition_method ?? '—'}{row.validation_status && <span className="sub">{row.validation_status}</span>}</td>
         <td>{cell(row)}</td><td className="num">{row.cloud?.fetched ?? '—'}</td><td className="num">{row.cloud?.catalog ?? '—'}</td><td className="num">{row.cloud?.eligible ?? '—'}</td></tr>)}</tbody></table></div>}
     {shown.length > limit && <p className="card-meta" style={{ marginTop: 12 }}><button onClick={() => setLimit(value => value + 25)}>Mostrar {Math.min(25, shown.length - limit)} más</button> <span aria-live="polite">Mostrando {limit} de {shown.length}</span></p>}

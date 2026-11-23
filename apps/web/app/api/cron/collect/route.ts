@@ -7,6 +7,7 @@ import { waterfallState } from '../../../../lib/waterfallStore';
 import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { collectRapidApi } from '../../../../lib/rapidapiCollect';
+import { collectTavily } from '../../../../lib/tavilyCollect';
 import { collectCompanyPages, enginePagesOrSeed, mergePages } from '../../../../lib/companyPagesCollect';
 import { COMPANY_WATCHLIST } from '../../../../lib/companyWatchlist';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
@@ -115,6 +116,19 @@ export async function GET(request: NextRequest) {
     gap = await recount(gap);
     stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: `${rapidFloor ? '[mínimo diario] ' : ''}${rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.'}`, accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
   }
+  // Tavily (buscador con IA): búsquedas semánticas con el banco de términos (`searchBank`), rotando mercado y perfil por día.
+  // Entra solo si aún falta objetivo (o por el mínimo diario) y respeta su tope mensual y el global.
+  const tavilyFloor = floorOf('tavily');
+  const tavily = !canSpend() && !tavilyFloor
+    ? (stages.push({ id: 'tavily', ran: false, why: noSpendWhy() }), null)
+    : budget.remaining() >= MIN_STEP_MS
+      ? await sharedMeter().then(meter => collectTavily('cron', budget.deadline(8_000), meter, tavilyFloor ? { maxSearches: FLOOR_LIMITS.tavilySearches } : {})).catch(failed('tavily', null))
+      : (budget.cut('tavily'), null);
+  if (tavily?.truncated) budget.cut('tavily');
+  if (tavily) {
+    gap = await recount(gap);
+    stages.push({ id: 'tavily', ran: tavily.searches > 0, why: `${tavilyFloor ? '[mínimo diario] ' : ''}${tavily.ok ? `${tavily.searches} búsqueda(s), ${tavily.received} resultado(s).` : tavily.error ?? 'Sin resultado.'}`, accepted: tavily.accepted, cost_usd: tavily.cost_usd });
+  }
   // Páginas de empleo propias de las empresas vigiladas (JSON-LD JobPosting o RSS). La lectura directa es gratis y
   // corre siempre; un desbloqueador de pago (ZenRows → ScrapingBee → Bright Data) solo si la página bloquea, falta
   // objetivo y queda tope. Una página que responde sin ofertas no se paga.
@@ -192,5 +206,5 @@ export async function GET(request: NextRequest) {
   // Una fila por etapa (corrió o se saltó, y por qué) bajo la fuente «cron-waterfall»: así el panel puede decir por qué una
   // fuente de pago no recogió hoy. No es gasto (la nota no lleva «coste_usd=»), solo registro; si falla no tumba el cron.
   await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', stageNote(stage.id, stage.ran, stage.why)).catch(() => false)));
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, detail, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, tavily, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, detail, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

@@ -53,7 +53,10 @@ const CURATED: Portal[] = [
     ],
   },
   {
+    // El esquema de `haketa/infojobs-scraper` no se pudo leer entero en su página pública (2026-11-23): se mantiene la
+    // entrada genérica de la app y se rota el término (una búsqueda al día) para cubrir closer, setter y televenta.
     id: 'infojobs', source: 'apify-infojobs', name: 'InfoJobs', maxItems: 200, testItems: 10, query: 'closer ventas',
+    queries: ['closer ventas', 'setter ventas', 'televenta', 'comercial a distancia', 'cold calling'],
     plain: 'El portal de empleo más usado en España. Si ya tienes la clave oficial de InfoJobs en la pestaña APIs, esa vía es gratuita y preferible.',
     recipes: [{ actor: 'haketa/infojobs-scraper', name: 'Buscador de InfoJobs' }],
   },
@@ -69,8 +72,13 @@ const CURATED: Portal[] = [
     caution: 'LinkedIn limita el uso automático en sus condiciones. Se busca poco volumen y es una decisión tuya (ADR-011). Viene apagado.',
     recipes: [
       { actor: 'curious_coder/linkedin-jobs-scraper', name: 'Buscador de LinkedIn A' },
-      { actor: 'cheap_scraper/linkedin-job-scraper', name: 'Buscador de LinkedIn B' },
-      { actor: 'gopalakrishnan/linkedin-jobs', name: 'Buscador de LinkedIn C' },
+      // Esquemas leídos en la página pública de entrada (2026-11-23). B: `keyword` y `locations` son listas; `publishedAt`
+      // r604800 = última semana; únicos para no pagar duplicados. C: `keywords` obligatorio y `location` por defecto
+      // «United States» (por eso se fija). A y D: su esquema no se pudo leer; usan la entrada genérica de la app.
+      { actor: 'cheap_scraper/linkedin-job-scraper', name: 'Buscador de LinkedIn B',
+        inputTemplate: { keyword: ['{{query}}'], locations: ['España'], publishedAt: 'r604800', saveOnlyUniqueItems: true, maxItems: '{{max_items}}' } },
+      { actor: 'gopalakrishnan/linkedin-jobs', name: 'Buscador de LinkedIn C',
+        inputTemplate: { keywords: '{{query}}', location: 'España', maxResults: '{{max_items}}' } },
       { actor: 'harvestapi/linkedin-job-search', name: 'Buscador de LinkedIn D' },
     ],
   },

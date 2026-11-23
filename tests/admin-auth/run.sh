@@ -96,6 +96,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/workana.mjs
 # Búsquedas de LinkedIn y Workana: rotación diaria de términos canónicos y plantilla por buscador.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/apify-queries.mjs
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/searchbank.mjs
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/tavily.mjs
 # Sonda de páginas de empleo: filtros de URL y lista semilla del motor (la lectura real va aparte).
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/probe-company-pages.mjs
 # Panel: los conectores del motor se cruzan con el catálogo por portal (Himalayas no es «fuera del cloud»).

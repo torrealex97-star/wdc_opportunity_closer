@@ -8,7 +8,7 @@
 //
 // Un hueco no es un cero: sin tope legible o sin notas, el gasto devuelve `null` y el panel lo declara.
 
-export type MeteredProvider = 'brightdata' | 'jsearch' | 'rapidapi' | 'serpapi' | 'zenrows' | 'scrapingbee';
+export type MeteredProvider = 'brightdata' | 'jsearch' | 'rapidapi' | 'serpapi' | 'zenrows' | 'scrapingbee' | 'tavily';
 
 /** Inicio del mes en UTC, que es como se guardan `created_at` y como se compara el gasto. */
 export const monthStart = (now = new Date()): string =>
@@ -45,6 +45,12 @@ export const PROVIDER_METERS: Record<MeteredProvider, ProviderMeter> = {
     defaultUsd: 5,
     usdPerRequest: 0.025,
     note: 'Unas 0,025 USD por búsqueda; el plan gratuito incluye 250 búsquedas al mes',
+  },
+  tavily: {
+    env: 'TAVILY_MONTHLY_USD',
+    defaultUsd: 5,
+    usdPerRequest: 0.008,
+    note: '1 crédito por búsqueda básica (0,008 USD de pago por uso); el plan gratuito incluye 1.000 créditos al mes',
   },
   zenrows: {
     env: 'ZENROWS_MONTHLY_USD',
