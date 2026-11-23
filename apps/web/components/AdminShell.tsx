@@ -157,23 +157,27 @@ function UsersTab({ me, onSessionLost }: { me: Me; onSessionLost: () => void }) 
   </section>;
 }
 
-// Las secciones se agrupan por el momento del trabajo —mirar, trabajar ofertas, sistema, equipo—:
-// diez destinos en una lista plana obligaban a leerlos todos cada vez. El grupo es solo orden, no
-// permisos: las diez siguen a un clic.
-type Group = 'Empezar' | 'Ofertas' | 'Sistema' | 'Equipo';
-const GROUPS: Group[] = ['Empezar', 'Ofertas', 'Sistema', 'Equipo'];
+// Cuatro módulos de trabajo (decisión del dueño, 2026-11-23) en vez de trece destinos sueltos: Centro de mando (mirar cómo va), Bandeja
+// de revisión (resolver dudas), Motor de fuentes (de dónde vienen las ofertas) e Infraestructura (claves y conexiones). Cada módulo agrupa
+// sus pantallas como pestañas; las secciones siguen teniendo su enlace (#quick, #sources…) y «Equipo» queda aparte porque trata de personas.
+type Group = 'Centro de mando' | 'Bandeja de revisión' | 'Motor de fuentes' | 'Reglas e infraestructura' | 'Equipo';
+const GROUPS: Group[] = ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura', 'Equipo'];
+/** Módulos que se muestran como UN botón en la barra lateral y llevan pestañas; «Equipo» lista sus tres secciones directas. */
+const MODULE_ICON: Record<Exclude<Group, 'Equipo'>, React.ReactNode> = {
+  'Centro de mando': <LayoutDashboard size={18} />, 'Bandeja de revisión': <ListChecks size={18} />, 'Motor de fuentes': <Globe2 size={18} />, 'Reglas e infraestructura': <Plug size={18} />,
+};
 
 const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode; eyebrow: string; title: string; lead: string }> = [
-  { id: 'summary', group: 'Empezar', label: 'Resumen', icon: <LayoutDashboard size={18} />, eyebrow: 'TU OBJETIVO', title: 'Cómo vamos.', lead: 'Cuántas ofertas de closer en España ven ya las alumnas y qué toca hacer para llegar a 20.' },
-  { id: 'quick', group: 'Ofertas', label: 'Revisión rápida', icon: <ListChecks size={18} />, eyebrow: 'MUCHAS OFERTAS, POCOS CLICS', title: 'Revisa en bloque.', lead: 'Filtra por perfil, verifica la vigencia y aprueba varias a la vez. Todo se puede deshacer.' },
-  { id: 'external', group: 'Ofertas', label: 'Fuentes externas', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
-  { id: 'apify', group: 'Ofertas', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
-  { id: 'review', group: 'Ofertas', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
-  { id: 'catalog', group: 'Ofertas', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
-  { id: 'sources', group: 'Sistema', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente, sus vías por coste y la guía para conectar la que falte. Sin clave no hay conexión.' },
-  { id: 'companies', group: 'Ofertas', label: 'Empresas', icon: <Building2 size={18} />, eyebrow: 'FEED ATS, PÁGINA PROPIA O LINKEDIN', title: 'Empresas, una a una.', lead: 'Las que tienen ATS público entran solas; las que tienen página propia se revisan con el extractor común; las que solo publican en LinkedIn se buscan en Google Jobs.' },
-  { id: 'scorecard', group: 'Sistema', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
-  { id: 'apis', group: 'Sistema', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
+  { id: 'summary', group: 'Centro de mando', label: 'Resumen', icon: <LayoutDashboard size={18} />, eyebrow: 'TU OBJETIVO', title: 'Cómo vamos.', lead: 'Cuántas ofertas de closer en España ven ya las alumnas y qué toca hacer para llegar a 20.' },
+  { id: 'quick', group: 'Bandeja de revisión', label: 'Revisión rápida', icon: <ListChecks size={18} />, eyebrow: 'MUCHAS OFERTAS, POCOS CLICS', title: 'Revisa en bloque.', lead: 'Filtra por perfil, verifica la vigencia y aprueba varias a la vez. Todo se puede deshacer.' },
+  { id: 'external', group: 'Bandeja de revisión', label: 'Cola de excepciones', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
+  { id: 'apify', group: 'Motor de fuentes', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
+  { id: 'review', group: 'Bandeja de revisión', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
+  { id: 'catalog', group: 'Bandeja de revisión', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
+  { id: 'sources', group: 'Motor de fuentes', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente, sus vías por coste y la guía para conectar la que falte. Sin clave no hay conexión.' },
+  { id: 'companies', group: 'Motor de fuentes', label: 'Empresas', icon: <Building2 size={18} />, eyebrow: 'FEED ATS, PÁGINA PROPIA O LINKEDIN', title: 'Empresas, una a una.', lead: 'Las que tienen ATS público entran solas; las que tienen página propia se revisan con el extractor común; las que solo publican en LinkedIn se buscan en Google Jobs.' },
+  { id: 'scorecard', group: 'Centro de mando', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
+  { id: 'apis', group: 'Reglas e infraestructura', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
   { id: 'students', group: 'Equipo', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
   { id: 'practice', group: 'Equipo', label: 'Criterios de práctica', icon: <SlidersHorizontal size={18} />, eyebrow: 'CÓMO SE PUNTÚA Y QUÉ SE CORRIGE', title: 'Los criterios de las salas.', lead: 'Rúbricas por sala, pesos, la cualificación de la llamada y la única corrección prioritaria. Lo que cambies aquí es lo que aplica el servidor al puntuar la próxima práctica.' },
   { id: 'users', group: 'Equipo', label: 'Usuarios', icon: <Users size={18} />, eyebrow: 'QUIÉN ENTRA', title: 'Equipo con acceso.', lead: 'Solo las personas de esta lista pueden entrar al panel.' },
@@ -183,13 +187,15 @@ export default function AdminShell() {
   const [state, setState] = useState<'checking' | 'out' | 'in' | 'unconfigured'>('checking');
   const [me, setMe] = useState<Me | null>(null);
   const [tab, setTab] = useState<Tab>('summary');
+  // Última pantalla visitada de cada módulo: pulsar el módulo vuelve a donde estabas.
+  const [lastIn, setLastIn] = useState<Partial<Record<Group, Tab>>>({});
   // La sección vive en el hash (#quick, #sources…): recargar, guardar el enlace o volver atrás
   // devuelve al operador al mismo sitio en vez de a Resumen.
   useEffect(() => {
     const read = () => {
       const wanted = window.location.hash.replace('#', '');
       const found = TABS.find(t => t.id === wanted);
-      if (found) setTab(found.id);
+      if (found) { setTab(found.id); setLastIn(old => ({ ...old, [found.group]: found.id })); }
     };
     read();
     window.addEventListener('hashchange', read);
@@ -197,6 +203,8 @@ export default function AdminShell() {
   }, []);
   const go = useCallback((id: Tab) => {
     setTab(id);
+    const group = TABS.find(t => t.id === id)?.group;
+    if (group) setLastIn(old => ({ ...old, [group]: id }));
     if (typeof window !== 'undefined') history.replaceState(null, '', `#${id}`);
   }, []);
   useEffect(() => {
@@ -215,10 +223,21 @@ export default function AdminShell() {
     <aside className="sidebar">
       <Brand />
       <div className="workspace-label">PANEL DE ADMINISTRACIÓN</div>
-      <nav aria-label="Secciones del panel">{GROUPS.map(group => <div className="nav-group" key={group}>
-        <p className="nav-group-label">{group}</p>
-        {TABS.filter(t => t.group === group).map(t => <button key={t.id} className={t.id === tab ? 'nav active' : 'nav'} aria-current={t.id === tab ? 'page' : undefined} title={t.lead} onClick={() => go(t.id)}>{t.icon} {t.label}</button>)}
-      </div>)}</nav>
+      <nav aria-label="Secciones del panel">{GROUPS.map(group => {
+        const tabs = TABS.filter(t => t.group === group);
+        // Un módulo es UN botón: abre su pantalla principal (la última que usaste dentro de él) y sus otras pantallas son pestañas arriba.
+        if (group !== 'Equipo') {
+          const inside = current.group === group;
+          const target = (lastIn[group] && tabs.some(t => t.id === lastIn[group]) ? lastIn[group] : tabs[0].id) as Tab;
+          return <div className="nav-group" key={group}>
+            <button className={inside ? 'nav active' : 'nav'} aria-current={inside ? 'page' : undefined} title={tabs.map(t => t.label).join(' · ')} onClick={() => go(target)}>{MODULE_ICON[group]} {group}</button>
+          </div>;
+        }
+        return <div className="nav-group" key={group}>
+          <p className="nav-group-label">{group}</p>
+          {tabs.map(t => <button key={t.id} className={t.id === tab ? 'nav active' : 'nav'} aria-current={t.id === tab ? 'page' : undefined} title={t.lead} onClick={() => go(t.id)}>{t.icon} {t.label}</button>)}
+        </div>;
+      })}</nav>
       <div className="sidebar-note"><span className="eyebrow">DE LA PREPARACIÓN<br />A LA OPORTUNIDAD</span><p>El siguiente paso profesional empieza con una buena selección.</p></div>
       <div className="local-user"><span className="avatar-sm" aria-hidden="true">{me.email.slice(0, 2).toUpperCase()}</span><div><strong>{me.email}</strong><small>{me.role === 'owner' ? 'Propietario' : 'Administrador'}</small></div>
         <button onClick={logout}><LogOut size={14} /> Salir</button></div>
@@ -228,6 +247,9 @@ export default function AdminShell() {
         <label className="admin-jump">Sección<select value={tab} onChange={e => go(e.target.value as Tab)}>{GROUPS.map(group => <optgroup label={group} key={group}>{TABS.filter(t => t.group === group).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</optgroup>)}</select></label>
         <a className="local-badge" href="/" target="_blank" rel="noopener noreferrer" aria-label="Ver la app de alumnas" title="Ver la app de alumnas"><BriefcaseBusiness size={14} /> Ver la app</a></header>
       <main>
+        {current.group !== 'Equipo' && TABS.filter(t => t.group === current.group).length > 1 && <div className="practice-rooms" role="tablist" aria-label={`Pantallas de ${current.group}`} style={{ marginBottom: 16 }}>
+          {TABS.filter(t => t.group === current.group).map(t => <button key={t.id} type="button" role="tab" aria-selected={t.id === tab} className={`practice-room-tab ${t.id === tab ? 'is-active' : ''}`} onClick={() => go(t.id)}>{t.icon}{t.label}</button>)}
+        </div>}
         <div className="page-heading"><div><span className="eyebrow">{current.eyebrow}</span><h1>{current.title}</h1><p>{current.lead}</p></div></div>
         {/* El aviso del motor vive aquí, no dentro de una pestaña: si el motor se pausa o deja de responder,
             el operador lo ve en cualquiera de ellas sin ir a buscarlo a «Fuentes». */}

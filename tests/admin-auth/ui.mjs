@@ -12,6 +12,8 @@ const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_E
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 page.on('dialog', d => d.accept());
 const results = [];
+// Navegación por sección: el panel tiene cuatro módulos con pestañas y cada sección conserva su enlace (#quick, #sources…).
+const openTab = (page, id) => page.evaluate(h => { if (location.hash !== `#${h}`) location.hash = h; else window.dispatchEvent(new HashChangeEvent('hashchange')); }, id);
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, String(e.message).split('\n').slice(0, 4).join(' | ')]); } };
 
 await step('login y Resumen: contador del objetivo, pendientes y siguiente paso', async () => {
@@ -32,8 +34,24 @@ await step('login y Resumen: contador del objetivo, pendientes y siguiente paso'
   assert.ok(await page.getByText(/1 fuente\(s\) fallan/).isVisible());
   assert.equal(await page.getByText(/sin revisar/).count(), 0, 'el resumen ya no pide revisar borradores a mano');
 });
+await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como pestañas, y «Equipo» aparte', async () => {
+  const nav = page.getByRole('navigation', { name: 'Secciones del panel' });
+  for (const module of ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura']) await nav.getByRole('button', { name: module, exact: true }).waitFor();
+  assert.equal(await nav.getByRole('button').count(), 4 + 3, 'cuatro módulos y las tres secciones de Equipo, no trece destinos sueltos');
+  // Un módulo abre su primera pantalla y enseña las demás como pestañas.
+  await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Pantallas de Bandeja de revisión' });
+  assert.deepEqual((await tabs.getByRole('tab').allInnerTexts()).map(t => t.trim()), ['Revisión rápida', 'Cola de excepciones', 'Revisión una a una', 'Probar ofertas']);
+  await tabs.getByRole('tab', { name: 'Revisión una a una' }).click(); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
+  assert.equal(await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).getAttribute('aria-current'), 'page', 'el módulo queda marcado mientras estás en una de sus pantallas');
+  // Volver al módulo devuelve a la última pantalla que usaste dentro de él.
+  await nav.getByRole('button', { name: 'Motor de fuentes', exact: true }).click(); await page.getByRole('tablist', { name: 'Pantallas de Motor de fuentes' }).waitFor();
+  await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).click(); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  await openTab(page, 'summary');
+});
 await step('Fuentes: catálogo completo (todas las del backend + las del motor) con filtros', async () => {
-  await page.getByRole('button', { name: 'Fuentes', exact: true }).click(); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+  await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
   // Hermes/Manus es un hueco declarado: se ve la insignia y nunca se pinta como conectado.
   assert.match(await page.getByTestId('agent-gap').innerText(), /Hermes \/ Manus: No disponible/);
   // El motor recoge por CONECTOR y el panel agrupa por PORTAL: `jobtoday` + `jobtoday-closers` son
@@ -55,7 +73,7 @@ await step('Fuentes: catálogo completo (todas las del backend + las del motor) 
   await page.getByLabel('Buscar').fill('infojobs'); assert.equal(await page.locator('table').first().locator('tbody tr').count(), 1);
 });
 await step('Revisión rápida: filtra closers, carga ubicación, oculta no-España, verifica y aprueba en bloque', async () => {
-  await page.getByRole('button', { name: 'Revisión rápida' }).click(); await page.getByRole('heading', { name: 'Revisa en bloque.' }).waitFor();
+  await openTab(page, 'quick'); await page.getByRole('heading', { name: 'Revisa en bloque.' }).waitFor();
   await page.getByText('Closer de ventas B2B (remoto)').waitFor();
   assert.equal(await page.locator('tbody tr').count(), 2); // Backend Developer queda fuera por perfil
   await page.getByRole('button', { name: 'Cargar ubicación' }).click(); await page.getByText('Austin, Texas').waitFor();
@@ -74,7 +92,7 @@ await step('Revisión rápida: filtra closers, carga ubicación, oculta no-Espa�
 });
 await step('Revisión una a una: guardar una oferta con payload raw ya no da 422', async () => {
   state.opps[2].editorial_status = 'draft';
-  await page.getByRole('button', { name: 'Revisión una a una' }).click(); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
+  await openTab(page, 'review'); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
   // La cola humana abre por defecto en excepciones; este caso es un borrador que se edita a mano.
   await page.getByLabel('Filtrar por estado editorial').selectOption('draft');
   await page.getByRole('button', { name: /Desarrollador Backend/ }).click(); await page.getByLabel('Título (headline)').waitFor();
@@ -86,7 +104,7 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   // Una excepción de verdad: con ella la pestaña abre en «A revisar» (sin excepciones abriría en borradores).
   mk('x0', { title: 'Closer sin condiciones claras', editorial_status: 'needs_review', score: 55 });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.getByRole('button', { name: 'Fuentes externas' }).click(); await page.getByRole('heading', { name: 'Ofertas de España y del mercado en dólares.' }).waitFor();
+  await openTab(page, 'external'); await page.getByRole('heading', { name: 'Ofertas de España y del mercado en dólares.' }).waitFor();
   // La cola externa abre en las excepciones (needs_review): los borradores los cierra la pasada automática.
   await page.locator('#ex-status').inputValue().then(v => assert.equal(v, 'needs_review', 'con excepciones, abre en A revisar y no en borradores'));
   // La cola entera se ve aunque los filtros de perfil/España dejen menos: si no, «cumplen los filtros» la esconde.
@@ -104,7 +122,7 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   assert.ok(await page.getByTestId('metrics-tiers').isVisible());
   // Error ≠ vacío: si falla la carga se dice y se puede reintentar; después vuelve el panel
   await page.route('**/api/admin/metrics', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudieron calcular las métricas.' }) }));
-  await page.reload(); await page.getByRole('button', { name: 'Fuentes externas' }).click();
+  await page.reload(); await openTab(page, 'external');
   // Tras recargar vuelve a abrir en excepciones; este paso sigue sobre borradores.
   assert.equal(await page.locator('#ex-status').inputValue(), 'needs_review');
   await page.locator('#ex-status').selectOption('draft');
@@ -114,7 +132,7 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   await page.getByTestId('funnel').waitFor(); assert.match(await page.getByTestId('funnel').locator('summary').innerText(), /Embudo por fuente y mercado: \d+ nuevas en 24 h/);
   assert.ok(await page.getByTestId('funnel-table').locator('th[scope="col"]').count() >= 8, 'tabla con cabeceras');
   await page.route('**/api/admin/funnel', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo calcular el embudo.' }) }));
-  await page.reload(); await page.getByRole('button', { name: 'Fuentes externas' }).click();
+  await page.reload(); await openTab(page, 'external');
   await page.getByTestId('funnel-error').waitFor(); assert.match(await page.getByTestId('funnel-error').innerText(), /No se pudo calcular el embudo/);
   await page.unroute('**/api/admin/funnel'); await page.getByTestId('funnel-error').getByRole('button', { name: 'Reintentar' }).click(); await page.getByTestId('funnel').waitFor();
   await page.locator('#ex-status').selectOption('draft'); // tras recargar abre en excepciones; el resto del paso trabaja sobre borradores
@@ -148,12 +166,12 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   assert.match(await page.getByTestId('rule-audit').innerText(), /Solo lectura/);
   assert.equal([...state.external.values()].find(o => o.title === 'Ofertas de trabajo de Closer').editorial_status, 'approved', 'la auditoría no cambia ninguna oferta');
   state.external.delete('old-index'); // fuera del estado para no alterar los recuentos de los pasos siguientes
-  await page.getByRole('button', { name: 'Fuentes', exact: true }).click(); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+  await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
   // 5 activas: las cuatro de siempre más la excepción 'x0' que crea este paso.
   await page.getByLabel('Buscar').fill('indeed'); await page.getByText(/Externa · 5 activas/).waitFor();
 });
 await step('Apify: añadir el actor, guardar la clave, lanzar y recoger resultados con coste y presupuesto', async () => {
-  await page.getByRole('button', { name: 'Búsqueda automática', exact: true }).click(); await page.getByRole('heading', { name: 'Buscar ofertas.' }).waitFor();
+  await openTab(page, 'apify'); await page.getByRole('heading', { name: 'Buscar ofertas.' }).waitFor();
   await page.getByText(/falta conectar tu cuenta de Apify/).waitFor(); await page.getByText('0.00 USD de 5 USD').waitFor();
   await page.getByTestId('apify-advanced').locator('summary').click(); // las opciones avanzadas empiezan cerradas
   await page.getByRole('button', { name: 'Usar este actor' }).click();
@@ -161,9 +179,9 @@ await step('Apify: añadir el actor, guardar la clave, lanzar y recoger resultad
   await page.getByLabel('Máximo de elementos por ejecución').fill('300'); await page.getByRole('button', { name: 'Guardar', exact: true }).click(); await page.getByText('Actor guardado.').waitFor();
   await page.getByText('aakash19/jobspy').first().waitFor();
   await page.getByRole('button', { name: 'Lanzar ahora' }).click(); await page.getByText(/Guarda antes la clave de Apify/).first().waitFor(); // sin clave no se lanza
-  await page.getByRole('button', { name: 'APIs', exact: true }).click(); await page.getByLabel('Clave de Apify').fill('good-key-1234');
+  await openTab(page, 'apis'); await page.getByLabel('Clave de Apify').fill('good-key-1234');
   await page.getByRole('button', { name: 'Guardar', exact: true }).nth(0).click(); await page.getByText('Clave de Apify guardada.').waitFor();
-  await page.getByRole('button', { name: 'Búsqueda automática', exact: true }).click(); await page.getByTestId('apify-advanced').locator('summary').click();
+  await openTab(page, 'apify'); await page.getByTestId('apify-advanced').locator('summary').click();
   await page.getByRole('button', { name: 'Lanzar ahora' }).click(); await page.getByText(/Ejecución lanzada en Apify/).waitFor();
   assert.equal(state.apifyCalls.length, 1); assert.equal(state.apifyCalls[0].query.maxItems, '300');
   await page.getByText('Buscando…').first().waitFor();
@@ -174,7 +192,7 @@ await step('Apify: añadir el actor, guardar la clave, lanzar y recoger resultad
   await page.getByText('1.07 USD de 5 USD').waitFor().catch(() => {}); // 0,07 gastados (+ nada en curso)
 });
 await step('Búsqueda automática (modo sencillo): portales en lenguaje llano, prueba de 10 ofertas y repuesto visible', async () => {
-  await page.getByRole('button', { name: 'Búsqueda automática', exact: true }).click(); await page.getByRole('heading', { name: 'Buscar ofertas.' }).waitFor();
+  await openTab(page, 'apify'); await page.getByRole('heading', { name: 'Buscar ofertas.' }).waitFor();
   const text = await page.getByText('Cómo funciona, en 3 líneas').locator('..').innerText();
   assert.match(text, /prueba otro sola/); assert.ok(!/scraper|actor|proxy/i.test(text), 'la explicación no usa jerga');
   const card = page.getByTestId('portal-indeed'); await card.waitFor();
@@ -286,7 +304,7 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
 });
 await step('móvil: Resumen sin scroll horizontal', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Resumen' }).click(); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
+  await openTab(page, 'summary'); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 });
 await step('móvil: menú en una sola franja desplazable (no ocupa la pantalla) y Fuentes por tandas con «Mostrar más»', async () => {
@@ -294,7 +312,7 @@ await step('móvil: menú en una sola franja desplazable (no ocupa la pantalla) 
   assert.ok(sidebarBottom < 260, `la cabecera del panel mide ${Math.round(sidebarBottom)} px en móvil`);
   const nav = await page.evaluate(() => { const n = document.querySelector('.sidebar nav'); return { scrolls: n.scrollWidth > n.clientWidth, wraps: getComputedStyle(n).flexWrap, overflowX: getComputedStyle(n).overflowX }; });
   assert.deepEqual(nav, { scrolls: true, wraps: 'nowrap', overflowX: 'auto' });
-  await page.getByRole('button', { name: 'Fuentes', exact: true }).click(); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+  await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
   const more = page.getByRole('button', { name: /^Mostrar \d+ más$/ }).first();
   await more.waitFor();
   const rows = () => page.locator('table').first().locator('tbody tr').count();
@@ -311,7 +329,7 @@ await step('Resumen: la cola humana suma el motor y las fuentes externas, y llev
   const engineNeeds = state.opps.filter(o => o.editorial_status === 'needs_review').length;
   const engineDrafts = state.opps.filter(o => o.editorial_status === 'draft').length;
   const extDrafts = [...state.external.values()].filter(r => r.editorial_status === 'draft').length;
-  await page.getByRole('button', { name: 'Resumen', exact: true }).click(); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
+  await openTab(page, 'summary'); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
   const exceptionsCard = page.locator('article.source-card', { hasText: 'EXCEPCIONES PARA TI' });
   await exceptionsCard.locator('strong').waitFor();
   // Mientras carga, la tarjeta dice «…»: el desglose solo se pinta con las dos colas ya leídas.
@@ -332,7 +350,7 @@ await step('motor en pausa por cuota: el Resumen nombra la causa y pone «—» 
   // producción aparecía como «La consulta falló.» con las cifras en «…».
   for (const row of state.external.values()) if (row.editorial_status === 'approved' || row.editorial_status === 'published') row.editorial_status = 'draft';
   state.enginePaused = 'allowance';
-  await page.getByRole('button', { name: 'Resumen', exact: true }).click(); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
+  await openTab(page, 'summary'); await page.getByRole('heading', { name: 'Cómo vamos.' }).waitFor();
   await page.getByRole('button', { name: 'Actualizar' }).click();
   // Se espera al aviso con su causa (solo se pinta con la lectura terminada), no a la primera mención de la
   // pausa: esa sale también en el paso «Ver fuentes» mientras las cifras aún están cargando.

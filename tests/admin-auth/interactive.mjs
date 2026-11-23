@@ -27,6 +27,8 @@ page.on('response', response => {
 });
 
 const results = [];
+// Navegación por sección: el panel tiene cuatro módulos con pestañas y cada sección conserva su enlace (#quick, #sources…).
+const openTab = (page, id) => page.evaluate(h => { if (location.hash !== `#${h}`) location.hash = h; else window.dispatchEvent(new HashChangeEvent('hashchange')); }, id);
 const step = async (name, fn) => {
   try { await fn(); results.push(['PASS', name]); }
   catch (error) { results.push(['FAIL', name, String(error.message).split('\n').slice(0, 5).join(' | ')]); }
@@ -42,7 +44,7 @@ try {
   });
 
   await step('Fuentes: sin clave, «Probar ruta» está desactivado y lo dice', async () => {
-    await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+    await openTab(page, 'sources');
     await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
@@ -82,7 +84,7 @@ try {
   await step('Resumen: la tarjeta de objetivo del día y gasto del mes sale con cifras o con «—» y su causa, nunca con 0 inventado', async () => {
     state.waterfallRow = null;
     await page.reload();
-    await page.getByRole('button', { name: 'Resumen', exact: true }).click();
+    await openTab(page, 'summary');
     const card = page.getByTestId('summary-money');
     await card.waitFor({ timeout: 15000 });
     await card.getByText(/Leyendo el objetivo y el gasto/).waitFor({ state: 'detached', timeout: 15000 });
@@ -96,7 +98,7 @@ try {
     state.waterfallRow = null;
     try {
       await page.reload();
-      await page.getByRole('button', { name: 'APIs', exact: true }).click();
+      await openTab(page, 'apis');
       const panel = page.getByTestId('waterfall');
       await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
@@ -123,7 +125,7 @@ try {
   await step('APIs: el Control de inversión enseña el gasto de TODOS los proveedores y el propietario cambia un tope', async () => {
     try {
     await page.reload();
-    await page.getByRole('button', { name: 'APIs', exact: true }).click();
+    await openTab(page, 'apis');
     const control = page.getByTestId('spend-control');
     await control.getByRole('heading', { name: 'Control de inversión' }).waitFor();
     await control.locator('tbody tr').first().waitFor();
@@ -148,7 +150,7 @@ try {
   await step('Apify: un portal con un solo buscador avisa, propone repuestos validados y el propietario añade, retira y reactiva uno', async () => {
     state.storeActors = { 'store-a~infojobs-pro': { users: 500, title: 'InfoJobs Pro' }, 'store-b~infojobs-old': { deprecated: true, title: 'InfoJobs Old' }, 'store-d~infojobs-nofield': { hideDeprecated: true, title: 'InfoJobs Sin Campo' } };
     await page.reload();
-    await page.getByRole('button', { name: 'Búsqueda automática', exact: true }).click();
+    await openTab(page, 'apify');
     const card = page.getByTestId('portal-infojobs'); await card.waitFor();
     const ensureOpen = async () => { if (!(await card.locator('details').evaluate(el => el.open))) await card.locator('summary').click(); };
     await ensureOpen();
@@ -179,7 +181,7 @@ try {
 
   await step('Fuentes: «Probar ruta» ejecuta Bright Data, muestra ofertas y coste, y actualiza el gasto', async () => {
     await page.reload();
-    await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+    await openTab(page, 'sources');
     await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
@@ -236,7 +238,7 @@ try {
     assert.equal(setOrder, 200);
     try {
       await page.reload();
-      await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+      await openTab(page, 'sources');
       await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
       const group = page.getByRole('button', { name: /Google Jobs/ });
       await group.waitFor();
@@ -288,7 +290,7 @@ try {
     const summary = await page.evaluate(async () => (await fetch('/api/admin/source-routes?summary=1')).json());
     assert.deepEqual(summary.orders.infojobs, custom);
     await page.reload();
-    await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+    await openTab(page, 'sources');
     await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
@@ -333,7 +335,7 @@ try {
   });
 
   await step('Empresas: «Revisar ahora» extrae el JobPosting y enseña el resultado', async () => {
-    await page.getByRole('button', { name: 'Empresas', exact: true }).click();
+    await openTab(page, 'companies');
     await page.getByRole('heading', { name: 'Empresas, una a una.' }).waitFor();
     const row = page.locator('tr', { hasText: 'Bastida Farina' }).first();
     await row.waitFor();
@@ -367,7 +369,7 @@ try {
   await step('Fuentes: «Probar ruta» con 0 resultados en la primera vía no se da por buena: lo dice y no finge que recogió', async () => {
     state.brightEmpty = 'infojobs';
     try {
-      await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+      await openTab(page, 'sources');
       await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
       const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
       await card.waitFor();
