@@ -136,7 +136,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
   }
 
   // «Probar ruta» recoge de verdad: prueba las vías listas por orden de coste y se detiene en la primera que recoge.
-  async function testSource(row: Row, ready: SourceRoute[], firstUrl?: string) {
+  async function testSource(row: Row, ready: SourceRoute[], firstUrl?: string): Promise<number> {
     const plan = planAttempts(ready);
     setBusy(`${row.code}:${plan[0].id}`);
     setTested(old => ({ ...old, [row.code]: '' }));
@@ -155,6 +155,25 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
     } finally { setBusy(null); }
     setTested(old => ({ ...old, [row.code]: summarize(log, collected, tries, plan.length, spent, usd) }));
     if (launchedApify) void follow(row.code, true);
+    return spent;
+  }
+
+  // «Probar todas»: una prueba de 10 resultados por fuente con vía lista, una tras otra, y se para al llegar al tope de la tanda (5 USD, el que autorizó el propietario). Las vías que piden una URL a mano (Unlocker) se saltan.
+  const BATCH_CAP_USD = 5;
+  const [batch, setBatch] = useState<string | null>(null);
+  async function testAll() {
+    const plan = withInput.map(row => ({ row, ready: planCascade(routesOf(row.code), routeState, orderOf(row.code)).filter(step => step.ready).map(step => step.route) }))
+      .filter(item => item.ready.length > 0 && item.ready[0].provider !== 'unlocker');
+    if (!plan.length) { setBatch('Ninguna fuente tiene una vía lista para probar.'); return; }
+    if (!window.confirm(`Se probarán ${plan.length} fuentes con 10 resultados cada una (tope de la tanda: ${BATCH_CAP_USD} US$). ¿Seguir?`)) return;
+    let spent = 0, done = 0;
+    for (const item of plan) {
+      if (spent >= BATCH_CAP_USD) { setBatch(`Tanda parada al llegar a ${BATCH_CAP_USD} US$: ${done} de ${plan.length} fuentes probadas.`); return; }
+      setBatch(`Probando ${item.row.name} (${done + 1} de ${plan.length})…`);
+      spent += await testSource(item.row, item.ready);
+      done += 1;
+    }
+    setBatch(`Tanda terminada: ${done} fuentes probadas, coste ${usd(spent)}. El resultado de cada una está en su tarjeta.`);
   }
 
   async function follow(code: string, auto: boolean) {
@@ -215,6 +234,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
         <div><span className="eyebrow">CÓMO SE CONECTA CADA UNA</span><h3>La cascada va de lo gratis a lo que se paga.</h3></div>
         <p className="card-meta">Cada tarjeta enseña sus vías en orden. Si la primera falla o vuelve vacía, se prueba la siguiente; JobSpy es la última y solo se lanza con proxies sanos. Sin clave no hay conexión: dice «sin clave».</p>
         <p className="card-meta" data-testid="agent-gap"><strong>{AGENT_GAP_FILL.label}:</strong> {AGENT_GAP_FILL.requirement} No se pinta como conectado ni se simula su estado.</p>
+        <p className="card-meta"><button type="button" data-testid="test-all" disabled={busy !== null || (batch?.startsWith('Probando') ?? false)} onClick={() => void testAll()}>Probar todas las fuentes (10 resultados cada una, tope 5 US$)</button>{batch && <span role="status" data-testid="test-all-status"> {batch}</span>}</p>
         {summary?.orders_error && <p className="inline-hint" role="alert">{summary.orders_error}</p>}
       </div>
       {!groups.length && <p className="muted">No hay fuentes pendientes de configurar.</p>}
