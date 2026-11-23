@@ -150,7 +150,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
       // El gasto y el saldo se acaban de mover: se releen para que el KPI no siga enseñando el valor anterior.
       await loadSummary();
     } finally { setBusy(null); }
-    setTested(old => ({ ...old, [row.code]: summarize(log, collected, tries, ready.length, spent, usd) }));
+    setTested(old => ({ ...old, [row.code]: summarize(log, collected, tries, plan.length, spent, usd) }));
   }
 
   async function saveOrder(row: Row, order: string[]) {
