@@ -56,6 +56,9 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryError, setSummaryError] = useState('');
   const [tested, setTested] = useState<Record<string, string>>({});
+  // Seguimiento de la prueba de Apify: la búsqueda es asíncrona, así que tras lanzarla el panel vuelve a mirar hasta saber cómo acabó.
+  type Followed = { state: 'none' | 'running' | 'collected' | 'empty' | 'failed'; text: string; sample: Array<{ title: string; company: string | null; url: string }> | null; checking: boolean };
+  const [followed, setFollowed] = useState<Record<string, Followed>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [openGroup, setOpenGroup] = useState<SourceGroup | null>('keyed');
   useEffect(() => setLimit(25), [filter, category, text]);
@@ -138,19 +141,38 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
     setBusy(`${row.code}:${plan[0].id}`);
     setTested(old => ({ ...old, [row.code]: '' }));
     const log: string[] = [];
-    let spent = 0, collected = false, tries = 0;
+    let spent = 0, collected = false, tries = 0, launchedApify = false;
     try {
       for (const [index, route] of plan.entries()) {
         tries += 1;
         const result = await callRoute(row, route, index === 0 ? firstUrl : undefined);
         spent += result.cost;
         log.push(`${route.label}: ${result.message}`);
-        if (result.done) { collected = true; break; }
+        if (result.done) { collected = true; launchedApify = route.provider === 'apify'; break; }
       }
       // El gasto y el saldo se acaban de mover: se releen para que el KPI no siga enseñando el valor anterior.
       await loadSummary();
     } finally { setBusy(null); }
     setTested(old => ({ ...old, [row.code]: summarize(log, collected, tries, plan.length, spent, usd) }));
+    if (launchedApify) void follow(row.code, true);
+  }
+
+  async function follow(code: string, auto: boolean) {
+    const set = (patch: Partial<Followed>) => setFollowed(old => ({ ...old, [code]: { ...{ state: 'running', text: '', sample: null, checking: true } as Followed, ...old[code], ...patch } }));
+    set(auto ? { checking: true, state: 'running', text: 'Apify está buscando…', sample: null } : { checking: true });
+    for (let attempt = 0; attempt < (auto ? 30 : 1); attempt++) {
+      if (auto && attempt > 0) await new Promise(resolve => setTimeout(resolve, 8000));
+      // Recoge lo que Apify ya terminó (si no, solo lo hacía el cron o el webhook) y luego lee cómo va.
+      await fetch('/api/admin/apify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'harvest' }) }).catch(() => null);
+      try {
+        const response = await fetch(`/api/admin/source-routes?last=${encodeURIComponent(code)}`, { cache: 'no-store' });
+        const body = await response.json().catch(() => ({})) as { outcome?: { state: Followed['state']; text: string }; sample?: Followed['sample']; detail?: string };
+        if (!response.ok || !body.outcome) { set({ state: 'failed', text: body.detail ?? 'No se pudo leer cómo acabó la ejecución.', checking: false }); return; }
+        set({ state: body.outcome.state, text: body.outcome.text, sample: body.sample ?? null, checking: body.outcome.state === 'running' && auto });
+        if (body.outcome.state !== 'running') { await loadSummary(); return; }
+      } catch (error) { set({ state: 'failed', text: (error as Error).message, checking: false }); return; }
+    }
+    set({ checking: false, text: 'Sigue en marcha pasados unos minutos: vuelve a mirar con «Ver resultado de Apify».' });
   }
 
   async function saveOrder(row: Row, order: string[]) {
@@ -235,6 +257,10 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
                 {busy === `order:${row.code}` && <p className="inline-hint"><LoaderCircle size={12} className="spin" /> Guardando el orden…</p>}
               </details>}
               {tested[row.code] && <p className="inline-hint" role="status">{tested[row.code]}</p>}
+              {followed[row.code] && <div className="inline-hint" role="status" data-testid={`follow-${row.code}`} data-state={followed[row.code].state}>
+                {followed[row.code].checking && <LoaderCircle size={12} className="spin" />} <strong>Resultado de Apify:</strong> {followed[row.code].text}
+                {followed[row.code].state === 'collected' && followed[row.code].sample?.length ? <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{followed[row.code].sample!.map(offer => <li key={offer.url}><a href={offer.url} target="_blank" rel="noopener noreferrer">{offer.title}</a>{offer.company ? ` · ${offer.company}` : ''}</li>)}</ul> : null}
+              </div>}
               <div className="card-actions">
                 <button type="button" disabled={!firstReady || busy !== null} title={firstReady ? `Prueba las vías listas por orden de coste hasta que una recoja (máximo 3). Empieza por: ${firstReady.route.label}` : 'Ninguna vía está lista: falta clave o tope.'} onClick={() => {
                   if (!firstReady) return;
@@ -256,6 +282,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
                 }}>
                   {busy === `${row.code}:${firstReady?.route.id}` ? <LoaderCircle size={14} className="spin" /> : <PlugZap size={14} />} Probar ruta
                 </button>
+                {routesOf(row.code).some(route => route.provider === 'apify') && <button type="button" disabled={followed[row.code]?.checking} onClick={() => void follow(row.code, false)}>Ver resultado de Apify</button>}
                 <button type="button" onClick={() => setGuide({ name: row.name, code: row.code, setup: setupFor(row) })}>Cómo conectarla</button>
                 {row.website && <a href={row.website} target="_blank" rel="noopener noreferrer">Ver portal<ArrowUpRight size={12} /></a>}
               </div>

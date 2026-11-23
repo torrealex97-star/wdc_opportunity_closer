@@ -228,6 +228,36 @@ try {
     assert.ok(summary.budget.brightdata > 4.99 && summary.budget.brightdata < 5);
   });
 
+  await step('Fuentes: «Probar ruta» de Upwork lanza SU actor y el panel sigue la ejecución hasta decir cuántas ofertas recogió, con muestra', async () => {
+  try {
+    state.apifyRuns = []; state.apifyActors = []; state.apifyStatus = 'SUCCEEDED';
+    const saved = await page.evaluate(async () => (await fetch('/api/admin/connections', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'apify', secret: 'good-key-1234' }) })).status);
+    assert.equal(saved, 200, 'clave de Apify guardada');
+    state.apifyItems = [{ id: 'u1', title: 'Appointment setter para infoproducto', url: 'https://www.upwork.com/jobs/~u1', company: 'Cliente A', projectid: 'u1' }, { id: 'u2', title: 'Closer high ticket (comisión)', url: 'https://www.upwork.com/jobs/~u2', company: 'Cliente B', projectid: 'u2' }];
+    await page.reload(); await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+    // Las tarjetas viven en grupos plegados: se abre el que contiene Upwork.
+    const card = page.locator('article.source-route-card', { hasText: 'Upwork' }).first();
+    for (const head of await page.locator('button.source-group-head').all()) { if (await card.count()) break; await head.click(); }
+    await card.waitFor();
+    const button = card.getByRole('button', { name: 'Probar ruta' });
+    await page.waitForFunction(element => !element.disabled, await button.elementHandle(), { timeout: 15000 }).catch(() => undefined);
+    assert.equal(await button.isEnabled(), true, 'Upwork tiene su vía de Apify lista');
+    const calls = state.apifyCalls.length; await button.click();
+    const follow = card.getByTestId('follow-upwork'); await follow.waitFor({ timeout: 15000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid="follow-upwork"]')?.getAttribute('data-state') === 'collected', null, { timeout: 40000 });
+    assert.equal(state.apifyCalls.length, calls + 1, 'se lanzó UNA ejecución, la del actor de Upwork');
+    assert.match(state.apifyCalls.at(-1).actor, /upwork/i, 'y es el actor de Upwork, no una búsqueda en Google');
+    const text = await follow.innerText();
+    assert.match(text, /Resultado de Apify:\s+Recogió 2 oferta\(s\)/); assert.match(text, /Appointment setter para infoproducto/); assert.match(text, /Closer high ticket/);
+    // Una prueba que acaba mal enseña el motivo real; una que acaba sin ofertas, el aviso de la plantilla.
+    state.apifyRuns = []; state.apifyItems = []; state.apifyStatus = 'SUCCEEDED';
+    await card.getByRole('button', { name: 'Probar ruta' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="follow-upwork"]')?.getAttribute('data-state') === 'empty', null, { timeout: 120000 });
+    assert.match(await card.getByTestId('follow-upwork').innerText(), /sin ofertas[\s\S]*plantilla de entrada/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin scroll horizontal de página');
+  } finally { state.apifyRuns = []; state.apifyActors = []; state.apifyItems = []; state.connections.delete('apify'); } // el resto de pasos parte sin clave de Apify
+  });
+
   await step('Fuentes: «Probar ruta» del Unlocker pide una URL y la usa en la petición', async () => {
     // El orden por coste pone Google Jobs antes que el Unlocker; para ejercitar el botón del Unlocker
     // se sube esa vía en la propia fuente y se restaura al terminar.

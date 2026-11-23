@@ -11,7 +11,10 @@ import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } 
 import { JSearchError, jsearchJobs } from '../../../../lib/providers/jsearch';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
 import { PORTALS } from '../../../../lib/apifyCatalog';
-import { monthSpent } from '../../../../lib/apify';
+import { listActors, listRuns, monthSpent } from '../../../../lib/apify';
+import { describeRun } from '../../../../lib/runOutcome';
+import { ORG as ORG_ID } from '../../../../lib/external';
+import { serviceRest } from '../../../../lib/supabaseAuth';
 import { searchPortal } from '../../../../lib/apifyAuto';
 import { readBudget } from '../../../../lib/paidBudget';
 import { ENGINE_STATUS_TEXT, engineBase, engineGet } from '../../../../lib/engineHealth';
@@ -94,6 +97,19 @@ async function stateOf(rows: RunNote[] | null, caps: Record<MeteredProvider, Cap
 export async function GET(request: NextRequest) {
   const { auth, error } = await gate(request);
   if (error) return error;
+  // Última ejecución de Apify de una fuente y una muestra de lo que recogió: así quien pulsó «Probar ruta» ve cómo acabó (la prueba es asíncrona).
+  const last = request.nextUrl.searchParams.get('last');
+  if (last) {
+    const portal = PORTALS.find(item => item.id === last || item.source === `apify-${last}`);
+    if (!portal) return Response.json({ detail: 'Esta fuente no tiene un portal de Apify.' }, { status: 404 });
+    const [actors, runs] = await Promise.all([listActors().catch(() => null), listRuns(80).catch(() => null)]);
+    if (!actors || !runs) return Response.json({ detail: 'No se pudo leer el historial de Apify ahora.' }, { status: 503 });
+    const ids = new Set(actors.filter(actor => actor.source === portal.source).map(actor => actor.id));
+    const run = runs.filter(item => ids.has(item.actor_id)).sort((a, b) => b.started_at.localeCompare(a.started_at))[0] ?? null;
+    const sampleResponse = await serviceRest(`external_offers?org_id=eq.${ORG_ID}&source=eq.${encodeURIComponent(portal.source)}&select=title,company,url,first_seen_at&order=first_seen_at.desc&limit=5`).catch(() => null);
+    const sample = sampleResponse?.ok ? await sampleResponse.json().catch(() => null) as Array<{ title: string; company: string | null; url: string }> | null : null;
+    return reply(auth!, { run: run ? { status: run.status, harvested: run.harvested, cost_usd: run.cost_usd, error: run.error, started_at: run.started_at, finished_at: run.finished_at } : null, outcome: describeRun(run), sample: Array.isArray(sample) ? sample : null });
+  }
   // Gasto del mes completo (paginado), no solo las últimas 200 ejecuciones.
   const [rows, orders, caps] = await Promise.all([runsThisMonth(), routeOrders(), readCaps()]);
   const state = await stateOf(rows, caps);
