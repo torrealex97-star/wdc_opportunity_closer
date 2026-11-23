@@ -13,6 +13,7 @@ import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
 import { publicBaseUrl } from '../../../../lib/adminAuth';
 import { weeklyAiReport } from '../../../../lib/aiReview';
 import { runAutoReview } from '../../../../lib/autoReview';
+import { enrichDescriptions } from '../../../../lib/descriptionEnrich';
 import { activateEngine } from '../../../../lib/engineActivate';
 import { loadMetrics } from '../../../../lib/metrics';
 import { skipPaidTier } from '../../../../lib/sourceTiers';
@@ -167,6 +168,10 @@ export async function GET(request: NextRequest) {
   if ('truncated' in apify && apify.truncated) budget.cut('apify');
   const vigencia = budget.remaining() >= MIN_STEP_MS ? await refreshVigencia(20, budget.deadline(5_000)).catch(() => ({ checked: 0, withdrawn: 0 })) : (budget.cut('vigencia'), { checked: 0, withdrawn: 0 });
   if ('truncated' in vigencia && vigencia.truncated) budget.cut('vigencia');
+  // Descripción de las ofertas que entraron solo con título: una lectura gratuita y acotada del anuncio (como la verificación de vigencia). Sin
+  // descripción no se puede juzgar el idioma ni las condiciones. Va antes de la revisión para que lo enriquecido se juzgue en esta misma pasada.
+  const detail = budget.remaining() >= MIN_STEP_MS ? await enrichDescriptions({ deadline: budget.deadline(8_000) }).catch(failed('description_enrich', null)) : (budget.cut('detail'), null);
+  if (detail?.truncated) budget.cut('detail');
   // Cualificación automática al final: primero aprueba por reglas lo que cumple hechos comprobables y,
   // si queda hueco de tope y la IA está en vivo, le pasa solo las dudosas. Un fallo no tumba el resto.
   const auto = budget.remaining() >= MIN_STEP_MS
@@ -187,5 +192,5 @@ export async function GET(request: NextRequest) {
   // Una fila por etapa (corrió o se saltó, y por qué) bajo la fuente «cron-waterfall»: así el panel puede decir por qué una
   // fuente de pago no recogió hoy. No es gasto (la nota no lleva «coste_usd=»), solo registro; si falla no tumba el cron.
   await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', stageNote(stage.id, stage.ran, stage.why)).catch(() => false)));
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, detail, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }
