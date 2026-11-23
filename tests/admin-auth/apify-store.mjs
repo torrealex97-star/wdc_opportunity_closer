@@ -144,7 +144,7 @@ assert.equal(views.find(p => p.id === 'multi').needs_more, false, 'el multi-port
 // ---- `a/b` y `a~b` son el mismo actor; el esquema tiene que encajar con el portal ----
 assert.equal(normalizeActor('Ana~Infojobs-Pro'), 'ana/infojobs-pro');
 assert.equal(normalizeActor(' ana/infojobs-pro '), 'ana/infojobs-pro');
-const tilde = recipesOf(indeed, [row('Boncross~Indeed-Jobs'), ...indeed.recipes.slice(1).map(r => row(r.actor))]);
+const tilde = recipesOf(indeed, [row('Misceres~Indeed-Scraper'), ...indeed.recipes.slice(1).map(r => row(r.actor))]);
 assert.equal(tilde.length, indeed.recipes.length, 'un actor del catálogo guardado con ~ y otras mayúsculas no se duplica como «añadido»');
 const fitOk = compatibilityOf({ schema: { properties: { searchTerm: { type: 'string' }, maxItems: { type: 'integer' } }, required: ['searchTerm'] } }, { maxItems: 100, query: 'closer' });
 assert.equal(fitOk.ok, true, 'pide un campo que la app sabe rellenar (búsqueda)');

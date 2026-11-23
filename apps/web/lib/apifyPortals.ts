@@ -7,36 +7,12 @@ import type { Portal } from './apifyCatalog';
 
 export const GENERATED_PORTALS: Portal[] = [
   {
-    id: 'jooble', source: 'apify-jooble', name: 'Jooble',
-    plain: 'Búsqueda española aportada por WDC. Validar descripción, duplicados y scraper.', maxItems: 100, testItems: 10,
-    recipes: [
-      { actor: 'ahmed_jasarevic/jooble-scraper', name: 'Jooble Scraper [$1/1K] | Jobs & Salaries' },
-      { actor: 'agentx/jooble-jobs-scraper', name: 'Jooble Jobs Scraper: Salary, Remote, 65 Countries', needs: ['max_results', 'keyword', 'country'] },
-    ],
-  },
-  {
-    id: 'simplyhired', source: 'apify-simplyhired', name: 'SimplyHired',
-    plain: 'Búsqueda de closer y ventas aportada por WDC. Validar cobertura del proveedor.', maxItems: 100, testItems: 10,
-    recipes: [
-      { actor: 'shahidirfan/Simplyhired-Job-Scraper', name: 'SimplyHired Job Scraper' },
-      { actor: 'memo23/simplyhired-jobs-scraper', name: 'SimplyHired Jobs Scraper [$0.9/1K 💰] Salaries & Companies' },
-      { actor: 'easyapi/simplyhired-job-scraper', name: 'SimplyHired Job Scraper 🔍', needs: ['searchUrls'] },
-    ],
-  },
-  {
     id: 'computrabajo', source: 'apify-computrabajo', name: 'Computrabajo',
     plain: 'Portales por país. Activar descripción completa y modalidad.', maxItems: 100, testItems: 10,
     recipes: [
       { actor: 'shahidirfan/Computrabajo-Jobs-Scraper', name: 'Computrabajo Jobs Scraper' },
       { actor: 'santamaria-automations/computrabajo-scraper', name: 'Computrabajo Jobs Scraper: Empleos, Salaries, 19 Countries' },
       { actor: 'haketa/computrabajo-scraper', name: 'Computrabajo Scraper — Latin America Jobs, Salary & Companies' },
-    ],
-  },
-  {
-    id: 'infoempleo', source: 'apify-infoempleo', name: 'Infoempleo',
-    plain: 'Páginas públicas: necesita validar extracción y paginación.', maxItems: 100, testItems: 10,
-    recipes: [
-      { actor: 'bibian/infoempleo-jobs-scraper', name: 'Infoempleo Scraper: Spain Job Postings & Salaries' },
     ],
   },
   {
@@ -69,14 +45,6 @@ export const GENERATED_PORTALS: Portal[] = [
       { actor: 'logiover/elempleo-colombia-job-scraper', name: 'elempleo Colombia Job Scraper — Empleos, No Login' },
       { actor: 'corvuslab/elempleo-scraper', name: 'elempleo Job Scraper — Full Descriptions & COP Salaries' },
       { actor: 'scrapers_lat/elempleo-scraper', name: 'elempleo Scraper - Colombia Jobs, Salaries, Vacantes & Empleos' },
-    ],
-  },
-  {
-    id: 'upwork', source: 'apify-upwork', name: 'Upwork',
-    plain: 'Proyectos de closer y setter; filtrar Spanish y requisitos del cliente.', maxItems: 100, testItems: 10,
-    recipes: [
-      { actor: 'neatrat/upwork-job-scraper', name: 'Upwork Job Scraper' },
-      { actor: 'blackfalcondata/upwork-scraper', name: 'Upwork Job Scraper - Job Alerts with Client Intel' },
     ],
   },
   {

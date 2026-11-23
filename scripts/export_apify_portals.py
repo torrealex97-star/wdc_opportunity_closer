@@ -29,7 +29,7 @@ OUT = ROOT / 'apps/web/lib/apifyPortals.ts'
 
 # Códigos que `apps/web/lib/apifyCatalog.ts` ya configura a mano (texto para el operador y plantilla de
 # entrada). Aquí se excluyen para no tener dos tarjetas del mismo portal.
-CURATED = {'indeed', 'infojobs', 'linkedin', 'workana', 'multi'}
+CURATED = {'indeed', 'infojobs', 'linkedin', 'workana', 'multi', 'upwork', 'infoempleo', 'simplyhired', 'jooble'}
 ACTOR_RE = re.compile(r'^[A-Za-z0-9._-]+[/~][A-Za-z0-9._-]+$')
 # Cuatro intentos por portal: más repuestos no caben en una búsqueda diaria con presupuesto acotado.
 MAX_RECIPES = 4
