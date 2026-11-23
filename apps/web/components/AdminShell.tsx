@@ -12,13 +12,14 @@ import StudentsTab from './StudentsTab';
 import SourceScorecard from './SourceScorecard';
 import SummaryTab from './SummaryTab';
 import SourcesCenter from './SourcesCenter';
+import SourcesEngine from './SourcesEngine';
 import CompanyPages from './CompanyPages';
 import PracticeSettings from './PracticeSettings';
 
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
 export type Me = { email: string; role: 'owner' | 'admin' };
-type Tab = 'summary' | 'inbox' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
+type Tab = 'summary' | 'inbox' | 'engine' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -175,6 +176,7 @@ const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode;
   { id: 'apify', group: 'Motor de fuentes', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
   { id: 'review', group: 'Bandeja de revisión', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
   { id: 'catalog', group: 'Bandeja de revisión', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
+  { id: 'engine', group: 'Motor de fuentes', label: 'Panel de fuentes', icon: <Globe2 size={18} />, eyebrow: 'DE DÓNDE VIENEN LAS OFERTAS', title: 'Todas las fuentes, en una tabla.', lead: 'De pago, gratuitas y de empresas: cómo está conectada cada una, qué ha recogido y qué ha costado.' },
   { id: 'sources', group: 'Motor de fuentes', label: 'Fuentes', icon: <Activity size={18} />, eyebrow: 'TU MESA DE TRABAJO', title: 'Fuentes de datos.', lead: 'Estado real de cada fuente, sus vías por coste y la guía para conectar la que falte. Sin clave no hay conexión.' },
   { id: 'companies', group: 'Motor de fuentes', label: 'Empresas', icon: <Building2 size={18} />, eyebrow: 'FEED ATS, PÁGINA PROPIA O LINKEDIN', title: 'Empresas, una a una.', lead: 'Las que tienen ATS público entran solas; las que tienen página propia se revisan con el extractor común; las que solo publican en LinkedIn se buscan en Google Jobs.' },
   { id: 'scorecard', group: 'Centro de mando', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
@@ -262,6 +264,7 @@ export default function AdminShell() {
         {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}
         {tab === 'review' && <CloudAdminPanel onSessionLost={lost} />}
         {tab === 'catalog' && <CatalogTab onSessionLost={lost} />}
+        {tab === 'engine' && <SourcesEngine onSessionLost={lost} go={go} />}
         {tab === 'sources' && <SourcesTab onSessionLost={lost} onOpenApis={() => go('apis')} owner={me.role === 'owner'} />}
         {tab === 'companies' && <CompanyPages owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'apis' && <ApisTab owner={me.role === 'owner'} onSessionLost={lost} />}

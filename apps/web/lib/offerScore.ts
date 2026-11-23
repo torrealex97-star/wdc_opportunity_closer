@@ -1,4 +1,5 @@
 import { spainSignal } from './esPlaces';
+import { freelanceRole } from './freelanceRole';
 import { marketFor, spanishWords, type Currency, type Market, type MarketBasis } from './market';
 export { spanishWords };
 import { fold, roleFromTitle } from './vocabulary';
@@ -22,15 +23,20 @@ export function fingerprintOf(c: Scorable): string | null {
 }
 
 export function enrich(c: Scorable, now = Date.now()): Enrichment {
-  const role = roleFromTitle(c.title);
+  // Un PROYECTO freelance (marcado `kind: freelance_project` al entrar) cuenta igual que un empleo si es de closer, setter o cold calling (decisión
+  // del dueño, 2026-11-23). Se trabaja en remoto para clientes de cualquier país: el país del cliente NO es una señal de «fuera de España».
+  const freelance = c.raw?.kind === 'freelance_project';
+  const role = roleFromTitle(c.title) ?? (freelance ? freelanceRole(c.title) : null);
   const spain = spainSignal(c.title, c.location);
   const text = `${c.title} ${c.description ?? ''}`;
   let score = role ? ROLE_POINTS[role] : 0;
   if (VERTICAL.test(text.slice(0, 800))) score += 5;
   // Mercado antes que el castigo: una oferta de LatAm es mercado objetivo, no «fuera de España».
   // Sin esto un closer LatAm sumaba 33-45 y nunca llegaba al 55 del auto-aprobado (autoReview.ts).
-  const verdict = marketFor(c);
-  score += spain === true ? 20 : spain === null || verdict.market === 'LATAM' ? 5 : -30;
+  const found = marketFor(c);
+  // Sin ubicación ni moneda reconocibles, un proyecto remoto en dólares/inglés se asigna al mercado en dólares con base `sin_senal` (se distingue de un dato real).
+  const verdict = freelance && found.market === null ? { ...found, market: 'US_LATINO' as const } : found;
+  score += freelance ? 15 : spain === true ? 20 : spain === null || verdict.market === 'LATAM' ? 5 : -30;
   if (c.salary) score += 8;
   if (/comisi[oó]n|variable/i.test(c.description ?? '')) score += 4;
   if (c.raw?.is_remote === true) score += 4;
