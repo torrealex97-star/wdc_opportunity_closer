@@ -26,7 +26,7 @@ const reply = (auth: { setCookies: string[] }, body: unknown, status = 200) => w
 
 const num = (v: string | null, d: number) => { const n = Number(v); return Number.isFinite(n) && v !== null && v !== '' ? n : d; };
 function queryOf(p: URLSearchParams): PageQuery {
-  return { status: p.get('status') || undefined, source: p.get('source') || undefined, role: p.get('role') || undefined, spain: p.get('spain') === '1', minScore: num(p.get('min_score'), 0), ai: (['human', 'withdraw', 'approve', 'none'] as const).find(x => x === p.get('ai')), q: p.get('q') || undefined, sort: p.get('sort') === 'recent' ? 'recent' : 'score' };
+  return { status: p.get('status') || undefined, source: p.get('source') || undefined, role: p.get('role') || undefined, spain: p.get('spain') === '1', minScore: num(p.get('min_score'), 0), ai: (['human', 'withdraw', 'approve', 'none'] as const).find(x => x === p.get('ai')), q: p.get('q') || undefined, sort: p.get('sort') === 'recent' ? 'recent' : 'score', autoHours: num(p.get('auto_hours'), 0) || undefined };
 }
 
 export async function GET(request: NextRequest) {

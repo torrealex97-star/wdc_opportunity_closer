@@ -1,15 +1,12 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { WHY_LABEL } from '../lib/reviewReasons';
 import { LoaderCircle, RefreshCcw } from 'lucide-react';
 import type { Funnel, FunnelMarket } from '../lib/funnel';
 
 // Embudo por fuente y mercado. Reglas de `dashboard-design`: sin dato = «—» con su causa, error ≠ vacío (con reintentar),
 // colores solo por tokens y tabla como representación principal (es un listado comparable, no un gráfico decorativo).
 const MARKET_LABEL: Record<FunnelMarket, string> = { ES: 'España', LATAM: 'LATAM', LATAM_DEFECTO: 'LATAM por defecto', US_LATINO: 'EE. UU. / dólares', SIN_MERCADO: 'Sin mercado' };
-const WHY_LABEL: Record<string, string> = {
-  sin_perfil: 'Sin perfil comercial', sin_mercado: 'Sin mercado', mercado_dudoso: 'Mercado dudoso', banderas_rojas: 'Banderas rojas', oferta_peligrosa: 'Oferta peligrosa',
-  oferta_con_avisos: 'Oferta con avisos', score_bajo: 'Puntuación baja', idioma_dudoso: 'Idioma dudoso', sin_descripcion: 'Sin descripción', tope_diario: 'Tope diario', enlace_cerrado: 'Enlace cerrado', no_es_oferta: 'No es oferta',
-};
 const nf = new Intl.NumberFormat('es');
 
 export default function FunnelPanel({ onSessionLost }: { onSessionLost: () => void }) {

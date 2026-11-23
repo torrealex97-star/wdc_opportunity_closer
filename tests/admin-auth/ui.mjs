@@ -41,7 +41,7 @@ await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como 
   // Un módulo abre su primera pantalla y enseña las demás como pestañas.
   await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).click();
   const tabs = page.getByRole('tablist', { name: 'Pantallas de Bandeja de revisión' });
-  assert.deepEqual((await tabs.getByRole('tab').allInnerTexts()).map(t => t.trim()), ['Revisión rápida', 'Cola de excepciones', 'Revisión una a una', 'Probar ofertas']);
+  assert.deepEqual((await tabs.getByRole('tab').allInnerTexts()).map(t => t.trim()), ['Bandeja', 'Revisión rápida', 'Revisión una a una', 'Probar ofertas']);
   await tabs.getByRole('tab', { name: 'Revisión una a una' }).click(); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
   assert.equal(await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).getAttribute('aria-current'), 'page', 'el módulo queda marcado mientras estás en una de sus pantallas');
   // Volver al módulo devuelve a la última pantalla que usaste dentro de él.
@@ -97,6 +97,31 @@ await step('Revisión una a una: guardar una oferta con payload raw ya no da 422
   await page.getByLabel('Filtrar por estado editorial').selectOption('draft');
   await page.getByRole('button', { name: /Desarrollador Backend/ }).click(); await page.getByLabel('Título (headline)').waitFor();
   await page.getByRole('button', { name: 'Guardar borrador' }).click(); await page.getByText(/Guardado: Borrador/).waitFor();
+});
+await step('Bandeja: tres estados, cada duda con su motivo exacto y lo que debe mirar la persona; auto-aprobadas de las últimas 24 h', async () => {
+  const mk = (id, over) => state.external.set(id, { id: crypto.randomUUID(), source: 'indeed', external_id: id, title: 'Closer de ventas', company: 'Acme', location: 'Madrid, España', url: 'http://127.0.0.1:8792/page/ok', salary: null, role: 'closer', score: 70, spain: true, editorial_status: 'draft', first_seen_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), expires_at: new Date(Date.now() + 5 * 864e5).toISOString(), ...over });
+  mk('b-dudas', { title: 'Closer sin descripción en la bandeja', editorial_status: 'needs_review', auto_review: { why: 'sin_descripcion', decision: 'human' } });
+  mk('b-auto', { title: 'Closer aprobada sola reciente', editorial_status: 'approved', reviewed_by: 'auto-reglas', reviewed_at: new Date().toISOString(), auto_review: { why: 'cumple_reglas', decision: 'approve' } });
+  mk('b-vieja', { title: 'Closer aprobada sola hace una semana', editorial_status: 'approved', reviewed_by: 'auto-reglas', reviewed_at: new Date(Date.now() - 7 * 864e5).toISOString(), auto_review: { why: 'cumple_reglas', decision: 'approve' } });
+  mk('b-persona', { title: 'Closer aprobada por una persona', editorial_status: 'approved', reviewed_by: 'ana@test.dev', reviewed_at: new Date().toISOString() });
+  mk('b-fuera', { title: 'Closer descartada por puntuación', editorial_status: 'withdrawn', score: 30, auto_review: { why: 'score_bajo', decision: 'withdraw' } });
+  await openTab(page, 'inbox'); await page.getByRole('heading', { name: 'Resuelve solo las dudas.' }).waitFor();
+  const states = page.getByRole('tablist', { name: 'Estado de las ofertas' });
+  assert.deepEqual((await states.getByRole('tab').allInnerTexts()).map(t => t.replace(/\s+\d[\d.]*$/, '').trim()), ['Requieren atención', 'Auto-aprobadas (24 h)', 'Descartadas']);
+  // Requieren atención: la duda con su motivo y qué mirar.
+  await page.getByText('Closer sin descripción en la bandeja').waitFor();
+  assert.match(await page.locator('[data-why="sin_descripcion"]').first().innerText(), /Sin descripción/);
+  await page.getByText(/No trae descripción: no se puede juzgar el idioma/).first().waitFor();
+  // Sin los bloques de métricas, embudo y tabla de fuentes (viven en otros módulos) ni el filtro de estado.
+  assert.equal(await page.getByTestId('metrics').count(), 0); assert.equal(await page.locator('#ex-status').count(), 0);
+  // Auto-aprobadas: solo lo que aprobó una regla en las últimas 24 h; ni la de hace una semana ni la de una persona.
+  await states.getByRole('tab', { name: /Auto-aprobadas/ }).click(); await page.getByText('Closer aprobada sola reciente').waitFor();
+  assert.equal(await page.getByText('Closer aprobada sola hace una semana').count(), 0, 'fuera de las 24 h'); assert.equal(await page.getByText('Closer aprobada por una persona').count(), 0, 'la aprobó una persona, no una regla');
+  // Descartadas con su motivo.
+  await states.getByRole('tab', { name: /Descartadas/ }).click(); await page.getByText('Closer descartada por puntuación').waitFor();
+  assert.match(await page.locator('[data-why="score_bajo"]').first().innerText(), /Puntuación baja/);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  for (const id of ['b-dudas', 'b-auto', 'b-vieja', 'b-persona', 'b-fuera']) state.external.delete(id);
 });
 await step('Fuentes externas: filtra closers de España, verifica y aprueba; el catálogo marca la fuente como externa', async () => {
   const mk = (id, over) => state.external.set(id, { id: crypto.randomUUID(), source: 'indeed', external_id: id, title: 'Closer de ventas', company: 'Acme', location: 'Madrid, España', url: 'http://127.0.0.1:8792/page/ok', salary: null, description: 'Buscamos closer con experiencia en ventas para el equipo comercial de la empresa', posted_at: new Date().toISOString(), editorial_status: 'draft', role: 'closer', spain: true, score: 80, also_seen: [], verified_result: null, first_seen_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), expires_at: new Date(Date.now() + 5 * 864e5).toISOString(), ...over });
