@@ -12,7 +12,8 @@ import { NICHE_LABELS, PAY_LABELS, type OfferTags } from '../lib/offerTags';
 import AiAgreement from './AiAgreement';
 import RuleAuditList from './RuleAuditList';
 import SourceIdeas from './SourceIdeas';
-type Offer = { id: string; source: string; title: string; company: string | null; location: string | null; url: string; salary: string | null; posted_at: string | null; first_seen_at: string; editorial_status: string; verified_result: string | null; role: string | null; spain: boolean | null; score: number; also_seen: string[]; ai_review?: AiReview | null; risk?: { level: 'WARNING' | 'BLOCKED'; flags: string[] } | null; tags?: OfferTags };
+import { REVIEW_HINT, whyText } from '../lib/reviewReasons';
+type Offer = { id: string; source: string; title: string; company: string | null; location: string | null; url: string; salary: string | null; posted_at: string | null; first_seen_at: string; editorial_status: string; verified_result: string | null; role: string | null; spain: boolean | null; score: number; also_seen: string[]; ai_review?: AiReview | null; auto_review?: { why?: string; decision?: string; rule?: string; at?: string } | null; risk?: { level: 'WARNING' | 'BLOCKED'; flags: string[] } | null; tags?: OfferTags };
 type AiReview = { verdict: string; confidence: number; reasons: string[]; red_flags: string[]; would_decide: string; gate: string; mode: string; applied: boolean; audit_sample?: boolean; link?: { result: string; reason: string }; jev?: { verdict: string | null; score: number | null; note: string | null } };
 const WOULD: Record<string, string> = { approve: 'Aprobaría', withdraw: 'Retiraría', human: 'Cola humana' };
 type Data = { offers: Offer[]; total: number; page: number; page_size: number; counts: Record<string, number> | null; sources: Array<{ source: string; live: number; approved: number; last_seen: string | null }> | null; runs: Array<{ source: string; via: string; received: number; accepted: number; note: string | null; created_at: string }>; paused: string[]; auto?: { used_today: number | null; cap: number } };
@@ -21,6 +22,7 @@ const PLURAL: Record<string, string> = { draft: 'borradores', needs_review: 'a r
 const VERDICT: Record<string, string> = { open: 'Activa', closed: 'Cerrada', unknown: 'No verificable' };
 const KNOWN = [['infojobs', 'InfoJobs', 'API oficial'], ['adzuna', 'Adzuna', 'API oficial'], ['jooble', 'Jooble', 'API oficial'], ['indeed', 'Indeed', 'JobSpy'], ['linkedin', 'LinkedIn', 'JobSpy'], ['glassdoor', 'Glassdoor', 'JobSpy'], ['google', 'Google Jobs', 'JobSpy']] as const;
 const fmt = (v: string | null) => v ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v)) : '—';
+const nf = new Intl.NumberFormat('es');
 const tone = (n: number) => n >= 70 ? 'status ok' : n >= 45 ? 'status' : 'status bad';
 
 async function call<T>(init?: RequestInit, query = ''): Promise<T> {
@@ -30,17 +32,26 @@ async function call<T>(init?: RequestInit, query = ''): Promise<T> {
   return data as T;
 }
 
-export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; onSessionLost: () => void }) {
+// `embedded` = la Bandeja de revisión: solo la cola, con sus tres estados como pestañas y el motivo de cada oferta. Sin las tablas de fuentes,
+// métricas ni embudo, que viven en Motor de fuentes y Centro de mando.
+type InboxView = 'attention' | 'auto' | 'discarded';
+const INBOX: Array<{ id: InboxView; label: string; status: string }> = [
+  { id: 'attention', label: 'Requieren atención', status: 'needs_review' }, { id: 'auto', label: 'Auto-aprobadas (24 h)', status: 'approved' }, { id: 'discarded', label: 'Descartadas', status: 'withdrawn' },
+];
+
+export default function ExternalTab({ owner, onSessionLost, embedded = false }: { owner: boolean; onSessionLost: () => void; embedded?: boolean }) {
+  const [view, setView] = useState<InboxView>('attention');
   const [data, setData] = useState<Data | null>(null);
   // La cola humana abre en las excepciones: los borradores los cierra la pasada automática
   // (reglas + IA) y no hace falta que una persona los mire primero. Si hoy no hay ninguna,
   // se dice cuántos borradores esperan y se ofrece el atajo, en vez de dejar la lista vacía.
-  const [status, setStatus] = useState('needs_review');
-  const [role, setRole] = useState<'' | RoleFamily | 'none'>('closer');
+  const [statusState, setStatus] = useState('needs_review');
+  const status = embedded ? INBOX.find(t => t.id === view)!.status : statusState;
+  const [role, setRole] = useState<'' | RoleFamily | 'none'>(embedded ? '' : 'closer');
   const [source, setSource] = useState('');
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
-  const [onlySpain, setOnlySpain] = useState(true);
+  const [onlySpain, setOnlySpain] = useState(!embedded);
   const [minScore, setMinScore] = useState(0);
   const [ai, setAi] = useState('');
   const [sort, setSort] = useState<'score' | 'recent'>('score');
@@ -57,9 +68,10 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
 
   const filters = useCallback(() => {
     const p = new URLSearchParams({ status, sort });
+    if (embedded && view === 'auto') p.set('auto_hours', '24');
     if (role) p.set('role', role); if (source) p.set('source', source); if (onlySpain) p.set('spain', '1'); if (minScore) p.set('min_score', String(minScore)); if (query) p.set('q', query); if (ai) p.set('ai', ai);
     return p;
-  }, [status, sort, role, source, onlySpain, minScore, query, ai]);
+  }, [status, sort, role, source, onlySpain, minScore, query, ai, embedded, view]);
   const load = useCallback(() => {
     setBusy(true);
     const p = filters(); p.set('page', String(page));
@@ -149,17 +161,24 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
   const counts = data?.counts ?? null;
   const sourcesKnown = !data || data.sources !== null;
   return <section aria-label="Fuentes externas">
-    <p className="card-meta" style={{ marginTop: 0, marginBottom: 20, maxWidth: 760 }}>Cada fuente entra por la vía que le corresponde, y Apify es solo una de ellas: InfoJobs, Adzuna y Jooble con sus claves (pestaña APIs) cada día a las 6:00; los portales con API o feed público por el conector del motor, sin clave; Google Jobs por SerpApi (hasta 7 búsquedas al día, 0,175 USD) y, si un portal no tiene API oficial (sin clave o caída), su búsqueda se hace en Google acotada a ese portal (hasta 4 más, 0,1 USD) para que no falte inventario. También entra lo que trae el workflow de GitHub con JobSpy, y solo los portales sin API ni feed se conectan con un actor de Apify, que se paga por resultado. Abre «Cómo conectarla» en el catálogo para ver el requisito y las alternativas de cada una. Todo entra como borrador, con puntuación para quedarte con las mejores, y enlaza siempre al anuncio original.</p>
+    {!embedded && <p className="card-meta" style={{ marginTop: 0, marginBottom: 20, maxWidth: 760 }}>Cada fuente entra por la vía que le corresponde, y Apify es solo una de ellas: InfoJobs, Adzuna y Jooble con sus claves (pestaña APIs) cada día a las 6:00; los portales con API o feed público por el conector del motor, sin clave; Google Jobs por SerpApi (hasta 7 búsquedas al día, 0,175 USD) y, si un portal no tiene API oficial (sin clave o caída), su búsqueda se hace en Google acotada a ese portal (hasta 4 más, 0,1 USD) para que no falte inventario. También entra lo que trae el workflow de GitHub con JobSpy, y solo los portales sin API ni feed se conectan con un actor de Apify, que se paga por resultado. Abre «Cómo conectarla» en el catálogo para ver el requisito y las alternativas de cada una. Todo entra como borrador, con puntuación para quedarte con las mejores, y enlaza siempre al anuncio original.</p>}
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
     {notice && <div className="auth-note" role="status" style={{ marginBottom: 16 }}>{notice}</div>}
     <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}>
-      <div className="stat-strip" style={{ margin: 0 }}>{Object.entries(PLURAL).map(([k, l]) => <span key={k}><strong>{!data ? '…' : counts === null ? '—' : counts[k] ?? 0}</strong>{l}</span>)}{data && counts === null && <span className="card-meta" role="status">No se pudo leer el recuento por estado.</span>}</div>
+      <div className="stat-strip" style={{ margin: 0, ...(embedded ? { display: 'none' } : {}) }}>{Object.entries(PLURAL).map(([k, l]) => <span key={k}><strong>{!data ? '…' : counts === null ? '—' : counts[k] ?? 0}</strong>{l}</span>)}{data && counts === null && <span className="card-meta" role="status">No se pudo leer el recuento por estado.</span>}</div>
         <div className="admin-toolbar" style={{ gap: 8, margin: 0 }}>
         {owner && <button disabled={working !== ''} onClick={() => void autoReview()} title="Reglas: perfil, mercado, español, puntuación y enlace vivo. Solo lo dudoso va a tu cola.">{working === 'auto' ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />} Aprobar las claras</button>}
-        {owner && <button disabled={working !== ''} onClick={() => void collect()}>{working === 'collect' ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />} Recoger APIs ahora</button>}
+        {owner && !embedded && <button disabled={working !== ''} onClick={() => void collect()}>{working === 'collect' ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />} Recoger APIs ahora</button>}
         <span className="card-meta" style={{ margin: 0 }}>Aprobadas solas hoy: <strong>{data?.auto?.used_today ?? '—'}</strong>/{data?.auto?.cap ?? 100}</span>
       </div>
     </div>
+    {embedded && <div className="practice-rooms" role="tablist" aria-label="Estado de las ofertas" style={{ marginBottom: 16 }}>
+      {INBOX.map(t => {
+        const n = t.id === 'auto' ? null : data?.counts === null ? null : data?.counts?.[t.status] ?? (data ? 0 : null);
+        return <button key={t.id} type="button" role="tab" aria-selected={view === t.id} className={`practice-room-tab ${view === t.id ? 'is-active' : ''}`} onClick={() => { setView(t.id); setPage(1); }}>{t.label}{n !== null && <span className="card-meta" style={{ margin: '0 0 0 6px' }}>{nf.format(n)}</span>}</button>;
+      })}
+    </div>}
+    {!embedded && <>
     <MetricsPanel onSessionLost={onSessionLost} />
     <FunnelPanel onSessionLost={onSessionLost} />
     <AiAgreement onSessionLost={onSessionLost} />
@@ -173,8 +192,9 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
         <td className="num">{!sourcesKnown ? '—' : st?.live ?? 0}</td><td className="num">{!sourcesKnown ? '—' : st?.approved ?? 0}</td><td>{fmt(st?.last_seen ?? null)}</td>
         <td style={{ textAlign: 'right' }}>{owner && <button disabled={working !== ''} onClick={() => void toggle(code, !!off)} aria-label={`${off ? 'Reanudar' : 'Pausar'} ${name}`}>{off ? <Play size={14} /> : <Pause size={14} />} {off ? 'Reanudar' : 'Pausar'}</button>}</td></tr>; })}</tbody></table></div>
     {!!data?.runs.length && <p className="card-meta">Última entrada: {data.runs[0].source} vía {data.runs[0].via}, {data.runs[0].accepted} de {data.runs[0].received} guardadas · {fmt(data.runs[0].created_at)}</p>}
+    </>}
     <div className="search-panel admin-toolbar">
-      <label htmlFor="ex-status">Estado<select id="ex-status" value={status} onChange={e => change(setStatus)(e.target.value)}>{Object.entries(STATUS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      {!embedded && <label htmlFor="ex-status">Estado<select id="ex-status" value={status} onChange={e => change(setStatus)(e.target.value)}>{Object.entries(STATUS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>}
       <label htmlFor="ex-role">Perfil (por el título)<select id="ex-role" value={role} onChange={e => change(setRole)(e.target.value as typeof role)}><option value="">Todos</option>{Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}<option value="none">Sin perfil claro</option></select></label>
       <label htmlFor="ex-source">Fuente<select id="ex-source" value={source} onChange={e => change(setSource)(e.target.value)}><option value="">Todas</option>{(data?.sources ?? []).map(s => <option key={s.source} value={s.source}>{s.source}</option>)}</select></label>
       <label htmlFor="ex-min">Puntuación mínima<select id="ex-min" value={minScore} onChange={e => change(setMinScore)(Number(e.target.value))}><option value={0}>Cualquiera</option><option value={45}>≥ 45 (decente)</option><option value={60}>≥ 60 (buena)</option><option value={75}>≥ 75 (muy buena)</option></select></label>
@@ -183,7 +203,7 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
       <label className="grow" htmlFor="ex-q">Buscar<input id="ex-q" placeholder="Título o empresa" value={text} onChange={e => setText(e.target.value)} /></label>
       <button disabled={busy} onClick={load}>{busy ? <LoaderCircle size={15} className="spin" /> : <RefreshCcw size={15} />} Actualizar</button>
     </div>
-    {status === 'needs_review' && data && data.total === 0 && (data.counts?.draft ?? 0) > 0 && <div className="alert" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+    {!embedded && status === 'needs_review' && data && data.total === 0 && (data.counts?.draft ?? 0) > 0 && <div className="alert" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
       <span>No hay excepciones ahora mismo: las <strong>{data.counts?.draft}</strong> oferta(s) pendientes esperan a la pasada automática (reglas + IA).</span>
       <button onClick={() => change(setStatus)('draft')}>Ver borradores</button>
     </div>}
@@ -208,13 +228,14 @@ export default function ExternalTab({ owner, onSessionLost }: { owner: boolean; 
     </div>
     {busy && !data ? <p className="muted"><LoaderCircle size={14} className="spin" /> Cargando…</p> : !rows.length ? <div className="empty"><h3>No hay ofertas externas con estos filtros.</h3><p className="card-meta">Guarda una clave en APIs, lanza una recogida o relaja los filtros.</p></div> : <>
       <div className="table-wrap"><table className="data-table">
-        <thead><tr><th style={{ width: 36 }}><input type="checkbox" aria-label="Seleccionar todas las visibles" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(rows.map(r => r.id)))} /></th><th className="num">Punt.</th><th>Oferta</th><th>Perfil</th><th>Ubicación</th><th>Fuente</th><th>Revisor IA</th><th>Vigencia</th><th /></tr></thead>
+        <thead><tr><th style={{ width: 36 }}><input type="checkbox" aria-label="Seleccionar todas las visibles" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(rows.map(r => r.id)))} /></th><th className="num">Punt.</th><th>Oferta</th><th>Perfil</th><th>Ubicación</th><th>Fuente</th><th>Motivo</th><th>Revisor IA</th><th>Vigencia</th><th /></tr></thead>
         <tbody>{rows.map(r => <tr key={r.id}>
           <td><input type="checkbox" aria-label={`Seleccionar ${r.title}`} checked={picked.has(r.id)} onChange={() => setPicked(old => { const n = new Set(old); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} /></td>
           <td className="num"><span className={tone(r.score)}>{r.score}</span></td>
           <td className="primary-cell"><strong>{r.title}</strong><span>{r.company ?? 'Empresa no indicada'}{r.salary ? ` · ${r.salary}` : ''}</span>{r.tags && <span className="sub" data-testid="tags">{r.tags.niche ? `${NICHE_LABELS[r.tags.niche]} · ` : ''}{PAY_LABELS[r.tags.pay]}</span>}{r.risk && <span data-testid="risk"><span className={r.risk.level === 'BLOCKED' ? 'status bad' : 'status'}>{r.risk.level === 'BLOCKED' ? 'Oferta peligrosa' : 'Con avisos'}</span> {r.risk.flags.join(' ')}</span>}</td>
           <td>{r.role ? <span className="status ok">{ROLE_LABELS[r.role as RoleFamily] ?? r.role}</span> : <span className="status">Sin perfil claro</span>}</td>
           <td>{r.location ?? 'No indicada'}{r.spain !== null && <span className={r.spain ? 'status ok' : 'status bad'} style={{ marginLeft: 6 }}>{r.spain ? 'España' : 'Fuera'}</span>}</td>
+          <td>{r.auto_review?.why ? <span className={r.editorial_status === 'needs_review' ? 'status bad' : 'status'} title={REVIEW_HINT[r.auto_review.why] ?? ''} data-why={r.auto_review.why}>{whyText(r.auto_review.why)}</span> : <span className="muted">—</span>}{r.editorial_status === 'needs_review' && r.auto_review?.why && REVIEW_HINT[r.auto_review.why] && <span className="card-meta" style={{ display: 'block' }}>{REVIEW_HINT[r.auto_review.why]}</span>}</td>
           <td>{r.source}{r.also_seen?.length ? <span className="sub">también en {r.also_seen.join(', ')}</span> : null}</td>
           <td>{r.ai_review ? <span title={[...(r.ai_review.reasons ?? []), r.ai_review.link ? `Enlace: ${r.ai_review.link.result} (${r.ai_review.link.reason})` : '', r.ai_review.jev ? `Jev: ${r.ai_review.jev.verdict ?? '—'} ${r.ai_review.jev.score ?? ''}` : ''].filter(Boolean).join(' · ')}><span className={r.ai_review.would_decide === 'approve' ? 'status ok' : r.ai_review.would_decide === 'withdraw' ? 'status bad' : 'status'}>{WOULD[r.ai_review.would_decide] ?? r.ai_review.would_decide}</span><span className="sub">{r.ai_review.verdict} {r.ai_review.confidence}% · {r.ai_review.mode === 'shadow' ? 'shadow' : r.ai_review.applied ? 'aplicado' : 'live'}{r.ai_review.audit_sample ? ' · auditoría' : ''}</span></span> : <span className="muted">—</span>}</td>
           <td>{verdicts[r.id] ?? (r.verified_result ? VERDICT[r.verified_result] : <span className="muted">—</span>)}</td>

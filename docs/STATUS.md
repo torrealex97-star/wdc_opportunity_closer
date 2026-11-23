@@ -1,3 +1,11 @@
+## Bandeja de revisión: la cola de excepciones con sus tres estados y el motivo de cada duda — 2026-11-23
+
+- **Petición del dueño:** gestión por excepción: lo claro se publica solo y la persona ve solo las dudas, con el motivo exacto. Pieza 2 del panel en 4 módulos.
+- **Cambio** (*tested*): nueva pestaña **Bandeja** (primera del módulo «Bandeja de revisión») con tres estados: *Requieren atención* (`needs_review`), *Auto-aprobadas (24 h)* (aprobadas por una regla —`reviewed_by = auto-*`— en las últimas 24 h; no cuenta lo aprobado por una persona) y *Descartadas*. Cada oferta enseña su **motivo** (`auto_review.why`) y, en la cola humana, **qué debe mirar la persona** (`lib/reviewReasons.ts`, un solo sitio también para el embudo). La vista reutiliza la lista de `ExternalTab` en modo `embedded`: sin las tablas de fuentes, métricas ni embudo. «Fuentes externas» pasa a **Motor de fuentes → «Recogida y reglas»** (con esas tablas) y sigue con su enlace `#external`.
+- **Servidor:** `GET /api/admin/external` admite `auto_hours` (1-168). Sin migración.
+- **Evidencia** (*tested*): paso nuevo en `ui.mjs` (3 estados, motivo y pista, 24 h frente a una semana y a una persona, sin métricas ni filtro de estado, sin desbordamiento); suite `run.sh` 517 pasos OK, `npm run design`, typecheck y build. **Revisión visual manual a 1280 y 390 px: no hecha.**
+- **No hecho, a propósito:** (1) el conmutador **Vista rápida / Vista 1 a 1** dentro de la bandeja: *Revisión rápida* y *Revisión una a una* trabajan sobre **otro conjunto de datos** (el catálogo del motor, `backend/wdc/opportunities`), no sobre `external_offers`; fusionarlas exige decidir si el motor sigue siendo una cola propia o se vuelca en `external_offers`. Siguen como pestañas del mismo módulo. (2) La **barra de progreso** de «Clasificar solas»: la pasada devuelve su resumen al terminar y no hay avance medible; se mantiene el aviso con lo aprobado, movido a cola y el tope de hoy.
+
 ## Panel de administración en cuatro módulos (menú) — 2026-11-23
 
 - **Petición del dueño:** el panel tenía 13 destinos sueltos, varios casi iguales. Pidió 4 módulos: Centro de mando, Bandeja de revisión, Motor de fuentes y Reglas e infraestructura. Primera pieza acordada: el menú y, después, la bandeja unificada.

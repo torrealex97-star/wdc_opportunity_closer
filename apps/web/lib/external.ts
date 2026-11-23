@@ -461,7 +461,7 @@ export async function refreshVigencia(max = 20, deadline?: number): Promise<{ ch
 }
 
 // ---- Escala: filtros, orden y paginación en el servidor (miles de ofertas) ----
-export type PageQuery = { status?: string; source?: string; role?: string; spain?: boolean; minScore?: number; ai?: 'human' | 'withdraw' | 'approve' | 'none'; q?: string; sort?: 'score' | 'recent'; limit?: number; offset?: number };
+export type PageQuery = { status?: string; source?: string; role?: string; spain?: boolean; minScore?: number; ai?: 'human' | 'withdraw' | 'approve' | 'none'; q?: string; sort?: 'score' | 'recent'; limit?: number; offset?: number; /** Solo lo aprobado por reglas o IA en las últimas N horas (1-168). */ autoHours?: number };
 
 function pageFilters(p: PageQuery): string[] {
   const f = [`org_id=eq.${ORG}`, `expires_at=gt.${encodeURIComponent(new Date().toISOString())}`];
@@ -472,6 +472,7 @@ function pageFilters(p: PageQuery): string[] {
   if (p.minScore && p.minScore > 0) f.push(`score=gte.${Math.min(100, Math.floor(p.minScore))}`);
   // Filtro por lo que decidiría el revisor IA: «human» = cola humana (revisión pendiente de una persona).
   if (p.ai === 'none') f.push('ai_review=is.null'); else if (p.ai) f.push(`ai_review->>would_decide=eq.${p.ai}`);
+  if (p.autoHours && p.autoHours > 0) f.push('reviewed_by=like.auto-*', `reviewed_at=gte.${encodeURIComponent(new Date(Date.now() - Math.min(168, Math.floor(p.autoHours)) * 3600_000).toISOString())}`);
   const q = (p.q ?? '').replace(/[^\p{L}\p{N} .-]/gu, ' ').trim().slice(0, 60);
   if (q) f.push(`or=(title.ilike.*${encodeURIComponent(q)}*,company.ilike.*${encodeURIComponent(q)}*)`);
   return f;

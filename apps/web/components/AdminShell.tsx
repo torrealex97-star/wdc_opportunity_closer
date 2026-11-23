@@ -18,7 +18,7 @@ import PracticeSettings from './PracticeSettings';
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
 export type Me = { email: string; role: 'owner' | 'admin' };
-type Tab = 'summary' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
+type Tab = 'summary' | 'inbox' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -169,8 +169,9 @@ const MODULE_ICON: Record<Exclude<Group, 'Equipo'>, React.ReactNode> = {
 
 const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode; eyebrow: string; title: string; lead: string }> = [
   { id: 'summary', group: 'Centro de mando', label: 'Resumen', icon: <LayoutDashboard size={18} />, eyebrow: 'TU OBJETIVO', title: 'Cómo vamos.', lead: 'Cuántas ofertas de closer en España ven ya las alumnas y qué toca hacer para llegar a 20.' },
+  { id: 'inbox', group: 'Bandeja de revisión', label: 'Bandeja', icon: <ListChecks size={18} />, eyebrow: 'GESTIÓN POR EXCEPCIÓN', title: 'Resuelve solo las dudas.', lead: 'Lo claro se publica solo. Aquí queda lo que una persona debe mirar, con el motivo exacto de cada duda.' },
   { id: 'quick', group: 'Bandeja de revisión', label: 'Revisión rápida', icon: <ListChecks size={18} />, eyebrow: 'MUCHAS OFERTAS, POCOS CLICS', title: 'Revisa en bloque.', lead: 'Filtra por perfil, verifica la vigencia y aprueba varias a la vez. Todo se puede deshacer.' },
-  { id: 'external', group: 'Bandeja de revisión', label: 'Cola de excepciones', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
+  { id: 'external', group: 'Motor de fuentes', label: 'Recogida y reglas', icon: <Globe2 size={18} />, eyebrow: 'APIS OFICIALES, JOBSPY Y GOOGLE JOBS', title: 'Ofertas de España y del mercado en dólares.', lead: 'Lo que cumple las reglas (perfil, mercado, español, puntuación y enlace vivo) se aprueba solo, hasta 100 al día. Lo que no, queda aquí: esta es tu cola de excepciones.' },
   { id: 'apify', group: 'Motor de fuentes', label: 'Búsqueda automática', icon: <CloudCog size={18} />, eyebrow: 'MÁS OFERTAS SIN TRABAJO MANUAL', title: 'Buscar ofertas.', lead: 'Elige en qué portales de empleo buscar. Si un buscador falla, la app prueba otro sola; lo encontrado entra como borrador para que lo apruebes.' },
   { id: 'review', group: 'Bandeja de revisión', label: 'Revisión una a una', icon: <FileCheck2 size={18} />, eyebrow: 'DE LA OFERTA BRUTA A LA OPORTUNIDAD', title: 'Revisar a fondo lo que lo merece.', lead: 'Las ofertas claras ya entran solas por reglas; aquí publicas o retiras las que necesitan criterio, y cada guardado crea una versión nueva e inmutable.' },
   { id: 'catalog', group: 'Bandeja de revisión', label: 'Probar ofertas', icon: <Search size={18} />, eyebrow: 'LO QUE RECOGE EL MOTOR', title: 'Prueba las ofertas.', lead: 'Mira todo el catálogo o lo que vería una alumna ahora mismo con los mismos filtros.' },
@@ -255,6 +256,7 @@ export default function AdminShell() {
             el operador lo ve en cualquiera de ellas sin ir a buscarlo a «Fuentes». */}
         <EngineAlertBanner go={() => go('sources')} />
         {tab === 'summary' && <SummaryTab go={go} onSessionLost={lost} />}
+        {tab === 'inbox' && <ExternalTab embedded owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'quick' && <QuickReview onSessionLost={lost} />}
         {tab === 'external' && <ExternalTab owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}

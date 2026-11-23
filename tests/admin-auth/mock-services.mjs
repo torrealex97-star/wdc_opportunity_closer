@@ -264,6 +264,7 @@ export function startMocks({ authPort, enginePort }) {
       if (q.spain === 'is.true') rows = rows.filter(r => r.spain === true);
       if (q.score?.startsWith('gte.')) rows = rows.filter(r => (r.score ?? 0) >= Number(q.score.slice(4)));
       if (q.reviewed_by?.startsWith('eq.')) rows = rows.filter(r => r.reviewed_by === q.reviewed_by.slice(3));
+      if (q.reviewed_by?.startsWith('like.')) { const prefix = decodeURIComponent(q.reviewed_by.slice(5)).replace(/\*$/, ''); rows = rows.filter(r => (r.reviewed_by ?? '').startsWith(prefix)); }
       if (q.reviewed_at?.startsWith('gte.')) rows = rows.filter(r => r.reviewed_at && r.reviewed_at >= decodeURIComponent(q.reviewed_at.slice(4)));
       if (q.first_seen_at?.startsWith('gte.')) rows = rows.filter(r => r.first_seen_at && r.first_seen_at >= decodeURIComponent(q.first_seen_at.slice(4)));
       if (q.market?.startsWith('eq.')) rows = rows.filter(r => r.market === q.market.slice(3));
