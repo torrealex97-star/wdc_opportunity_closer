@@ -42,12 +42,27 @@ await step('Centro de mando: embudo, mercados, reparto y gasto con su propio est
   await page.getByTestId('cc-markets').waitFor(); await page.getByTestId('cc-split').waitFor(); await page.getByTestId('cc-spend').waitFor();
   assert.match(await page.getByTestId('cc-markets').innerText(), /No hay una meta por mercado fijada/, 'no se inventa una meta');
   assert.match(await page.getByTestId('cc-spend').innerText(), /Gasto del mes: /);
+  // Filtros de fecha, categoría y mercado: cada cambio pide el embudo con sus parámetros y el título dice la ventana.
+  const filters = page.getByTestId('cc-filters');
+  assert.equal(await filters.getByRole('button', { name: '7 días' }).getAttribute('aria-pressed'), 'true', 'abre en 7 días');
+  const asked = []; page.on('request', r => { if (r.url().includes('/api/admin/funnel')) asked.push(new URL(r.url()).searchParams); });
+  await filters.getByRole('button', { name: '30 días' }).click(); await page.waitForFunction(() => /ÚLTIMOS 30 DÍAS/.test(document.querySelector('[data-testid="cc-range"]')?.textContent ?? ''));
+  await page.getByTestId('cc-trend').waitFor(); assert.ok(await page.getByTestId('cc-trend').getByRole('img').getAttribute('aria-label').then(t => /por día/.test(t)), 'gráfico por día con su resumen accesible');
+  await page.getByTestId('cc-trend').getByText('Ver tabla').click(); assert.equal(await page.getByTestId('cc-trend-table').locator('tbody tr').count(), 30);
+  await filters.getByRole('button', { name: 'Año' }).click(); await page.waitForFunction(() => /EL ÚLTIMO AÑO/.test(document.querySelector('[data-testid="cc-range"]')?.textContent ?? ''));
+  await page.waitForFunction(() => /por semana/.test(document.querySelector('[data-testid="cc-trend"] svg')?.getAttribute('aria-label') ?? ''), null, { timeout: 10000 }); // en un año, por semana
+  await filters.getByLabel('Categoría').selectOption('setter'); await filters.getByLabel('Mercado').selectOption('ES');
+  await page.waitForFunction(() => true); await page.waitForTimeout(500);
+  const last = asked.at(-1); assert.equal(last.get('days'), '365'); assert.equal(last.get('role'), 'setter'); assert.equal(last.get('market'), 'ES');
+  await filters.getByRole('button', { name: 'Hoy' }).click(); await page.waitForFunction(() => /LAS ÚLTIMAS 24 HORAS/.test(document.querySelector('[data-testid="cc-range"]')?.textContent ?? ''));
+  await page.getByTestId('cc-trend').waitFor({ state: 'detached', timeout: 10000 }); // hoy no tiene tendencia: es un solo tramo
+  await filters.getByLabel('Categoría').selectOption(''); await filters.getByLabel('Mercado').selectOption(''); await filters.getByRole('button', { name: '7 días' }).click();
   // Un fallo del embudo se dice y se puede reintentar sin tumbar el resto del Centro de mando.
-  await page.route('**/api/admin/funnel', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo leer el embudo ahora.' }) }));
+  await page.route('**/api/admin/funnel*', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo leer el embudo ahora.' }) }));
   await page.reload(); await openTab(page, 'summary');
   await page.getByTestId('command-center').getByRole('alert').first().waitFor(); assert.match(await page.getByTestId('command-center').innerText(), /No se pudo leer el embudo ahora/);
   await page.getByTestId('cc-spend').waitFor();
-  await page.unroute('**/api/admin/funnel'); await page.reload(); await openTab(page, 'summary');
+  await page.unroute('**/api/admin/funnel*'); await page.reload(); await openTab(page, 'summary');
   await page.getByRole('button', { name: /Resolver excepciones ahora/ }).click(); await page.getByRole('heading', { name: 'Resuelve solo las dudas.' }).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
@@ -174,10 +189,10 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   // Embudo por fuente y mercado: panel con datos, error ≠ vacío con reintento, tabla accesible
   await page.getByTestId('funnel').waitFor(); assert.match(await page.getByTestId('funnel').locator('summary').innerText(), /Embudo por fuente y mercado: \d+ nuevas en 24 h/);
   assert.ok(await page.getByTestId('funnel-table').locator('th[scope="col"]').count() >= 8, 'tabla con cabeceras');
-  await page.route('**/api/admin/funnel', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo calcular el embudo.' }) }));
+  await page.route('**/api/admin/funnel*', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo calcular el embudo.' }) }));
   await page.reload(); await openTab(page, 'external');
   await page.getByTestId('funnel-error').waitFor(); assert.match(await page.getByTestId('funnel-error').innerText(), /No se pudo calcular el embudo/);
-  await page.unroute('**/api/admin/funnel'); await page.getByTestId('funnel-error').getByRole('button', { name: 'Reintentar' }).click(); await page.getByTestId('funnel').waitFor();
+  await page.unroute('**/api/admin/funnel*'); await page.getByTestId('funnel-error').getByRole('button', { name: 'Reintentar' }).click(); await page.getByTestId('funnel').waitFor();
   await page.locator('#ex-status').selectOption('draft'); // tras recargar abre en excepciones; el resto del paso trabaja sobre borradores
   await page.setViewportSize({ width: 390, height: 844 }); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'métricas sin scroll horizontal en móvil'); await page.setViewportSize({ width: 1280, height: 900 });
   if (process.env.SHOT) { await page.getByTestId('metrics').getByText('Ver tabla por día').click(); await page.getByTestId('metrics').screenshot({ path: process.env.SHOT }); }

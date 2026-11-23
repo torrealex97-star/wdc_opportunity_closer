@@ -1,3 +1,10 @@
+## Centro de mando con filtros de fecha, categoría y mercado y tendencia — 2026-11-23
+
+- **Petición del dueño:** «tampoco veo los filtros por fecha ni el funnel». El embudo del Centro de mando estaba en la PR #147 (fusionada y desplegada después de ese mensaje); los filtros no existían.
+- **Cambio** (*tested*): filtros globales **Hoy · 7 días · 30 días · Año**, **Categoría** (closer, setter, llamada en frío… o «sin perfil claro») y **Mercado**. El embudo (recogidas, retiradas por reglas, aprobadas, a criterio humano, visibles) y «visibles por mercado» siguen el filtro. **Tendencia** de recogidas y aprobadas: barras con base en 0, **por día** hasta 30 días y **por semana** en un año, con resumen accesible y **tabla alternativa** («Ver tabla»); en «Hoy» no hay tendencia (un solo tramo). `GET /api/admin/funnel?days=&role=&market=` (valores no válidos caen al defecto); `computeRange` (pura) en `lib/funnel.ts`. Sin migración.
+- **Evidencia** (*tested*): 1 paso nuevo en `funnel.mjs` (ventanas, serie, suma por tramo, filtros de categoría y mercado) y la prueba de UI del Centro de mando amplía (filtros, gráfico por día y por semana, tabla de 30 filas, parámetros pedidos); suite `run.sh` 532 pasos OK, `npm run design`, typecheck y build. **Revisión visual manual a 1280 y 390 px: no hecha.**
+- **Límites:** un año lee hasta el tope de filas de la consulta; si se trunca, el aviso «las cifras son parciales» sale arriba. El gasto («este mes») y el coste por aprobada (acumulado) **no** siguen el rango de fechas: se rotulan así. Sigue sin haber metas por categoría o mercado porque el dueño no ha fijado cifras.
+
 ## «Probar ruta» con Apify sigue la ejecución hasta decir cómo acabó — 2026-11-23
 
 - **Problema** (lo contó el dueño: «nunca me sale que recoja nada, no sé si funciona»; *inspected*): la prueba de Apify es asíncrona. El panel decía «lanzada, llegan en unos minutos» y **no volvía a mirar**; los resultados los recogía luego el cron o el webhook y nadie le decía a quien probó si había terminado, cuántas ofertas trajo o por qué falló.
