@@ -1,3 +1,10 @@
+## «Probar ruta» con Apify sigue la ejecución hasta decir cómo acabó — 2026-11-23
+
+- **Problema** (lo contó el dueño: «nunca me sale que recoja nada, no sé si funciona»; *inspected*): la prueba de Apify es asíncrona. El panel decía «lanzada, llegan en unos minutos» y **no volvía a mirar**; los resultados los recogía luego el cron o el webhook y nadie le decía a quien probó si había terminado, cuántas ofertas trajo o por qué falló.
+- **Cambio** (*tested*): tras lanzar la prueba, la tarjeta de la fuente **sigue la ejecución** cada 8 s (hasta 4 min): recoge lo que Apify ya terminó y dice en lenguaje llano «Ejecutándose…», «**Recogió N ofertas** (coste)» con una **muestra de las últimas 5** (título y empresa, con enlace) para juzgar a ojo si son de closer, setter o cold calling, «**Terminó sin ofertas**: revisa la plantilla de entrada» o «**Falló: <motivo real>**». Botón nuevo **«Ver resultado de Apify»** para mirar cuando quieras. `GET /api/admin/source-routes?last=<fuente>` devuelve la última ejecución y la muestra; `lib/runOutcome.ts` (pura) redacta el desenlace.
+- **Evidencia** (*tested*): `runoutcome.mjs` (7 pasos), paso nuevo en `interactive.mjs` (Upwork lanza SU actor, el panel lo sigue hasta «Recogió 2 oferta(s)» con la muestra, y una segunda prueba sin ofertas dice «sin ofertas… plantilla de entrada»); suite `run.sh` 531 pasos OK, `npm run design`, typecheck y build.
+- **Límite:** *no verified* con Apify real. La muestra son las últimas ofertas de esa fuente (no solo las de esta prueba). Si el actor sigue en marcha pasados 4 min, el panel lo dice y se mira con «Ver resultado de Apify».
+
 ## Centro de mando: embudo, mercados, reparto gratuitas/de pago y coste por oferta aprobada — 2026-11-23
 
 - **Petición del dueño:** ver la salud de la selección en pocos segundos y resolver excepciones con un clic (pieza 3 del panel en 4 módulos).
