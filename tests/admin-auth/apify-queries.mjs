@@ -96,6 +96,24 @@ step('«cerrajero» no entra por la puerta de atrás: el clasificador determinis
   assert.equal(roleFromTitle('Closer de ventas high ticket'), 'closer');
 });
 
+step('LinkedIn B/C e InfoJobs: la plantilla de cada actor se rellena con su campo, país España y sin credenciales', () => {
+  const vars = { max_items: 10, query: 'appointment setter' };
+  const [, b, c] = linkedin.recipes;
+  const inB = fillTemplate(b.inputTemplate, vars);
+  assert.deepEqual(inB.keyword, ['appointment setter'], 'B espera `keyword` como lista');
+  assert.deepEqual(inB.locations, ['España']);
+  assert.equal(inB.maxItems, 10);
+  assert.equal(inB.publishedAt, 'r604800');
+  const inC = fillTemplate(c.inputTemplate, vars);
+  assert.equal(inC.keywords, 'appointment setter', 'C exige `keywords` (cadena)');
+  assert.equal(inC.location, 'España', 'C por defecto busca en United States: se fija');
+  assert.equal(inC.maxResults, 10);
+  for (const recipe of linkedin.recipes) assert.ok(!/cookie|session|password|token/i.test(JSON.stringify(recipe.inputTemplate ?? {})), 'sin credenciales (ADR-011)');
+  const infojobs = portalById('infojobs');
+  assert.ok(infojobs.queries.length >= 5 && infojobs.queries[0] === infojobs.query, 'InfoJobs rota términos');
+  for (const term of infojobs.queries) assert.ok(typeof term === 'string' && term.length > 3);
+});
+
 for (const [status, name, message] of results) console.log(`${status}  ${name}${message ? '\n      ' + message : ''}`);
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);

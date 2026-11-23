@@ -1,3 +1,10 @@
+## Auditoría de entradas de Apify por fuente: LinkedIn e InfoJobs — 2026-11-23
+
+- **Petición del dueño:** comprobar que cada fuente tiene bien sus filtros para obtener buenas ofertas, y usar las herramientas/skills de actores y buscadores de empleo.
+- **Cambio** (*tested*): LinkedIn B (`cheap_scraper`) recibe su plantilla real —`keyword` y `locations` como listas, España, última semana (`publishedAt: r604800`), sin duplicados— y LinkedIn C (`gopalakrishnan`) fija `keywords` (obligatorio) y `location: España` (su valor por defecto era «United States», que traía ofertas de EE. UU.). InfoJobs rota ahora cinco términos (closer, setter, televenta, comercial a distancia, cold calling) en vez de uno fijo. Sin cookies ni credenciales (ADR-011).
+- **Evidencia:** esquemas *inspected* en las páginas públicas de entrada; `apify-queries.mjs` 8/8 y `tests/test_apify_portals.py` 11 OK, `npm run design` y typecheck sin errores. `tests/test_apify_trial.py` no se pudo ejecutar aquí (falta una dependencia de Python en este entorno), no se tocó.
+- **Límites (no *verified*):** este entorno no alcanza `api.apify.com` ni la CLI de Apify, así que **ninguna ejecución real se hizo**. LinkedIn A (`curious_coder`), LinkedIn D (`harvestapi`) e InfoJobs (`haketa`) siguen con la entrada genérica porque su esquema no se pudo leer entero en la página pública: no se inventan campos. Pendiente del dueño: «Probar ruta» en LinkedIn e InfoJobs y revisar que las 10 ofertas son de closer/setter/cold calling. Skills: no se instaló ninguna nueva (`apify-ultimate-scraper` ya está en el repo y necesita `APIFY_TOKEN` y red a Apify).
+
 ## Panel de fuentes: una tabla de todas las fuentes, de pago, gratuitas y de empresas — 2026-11-23
 
 - **Petición del dueño:** una vista con pestañas de pago, gratuitas y empresas, sin cosas repetidas y con control claro de resultados y costes (pieza 4 del panel en 4 módulos; es también la «tabla maestra» pedida antes).
