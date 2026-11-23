@@ -181,9 +181,9 @@ await step('Búsqueda automática (modo sencillo): portales en lenguaje llano, p
   assert.match(await card.innerText(), /Indeed \(España\)[\s\S]*Sin probar|Funciona|Esperando/);
   // El porqué del reparto se lee en la tarjeta: aprobadas medidas por dólar, o el hueco declarado.
   assert.match(await page.getByTestId('portal-priority-indeed').innerText(), /Reparto del mes: .*(aprobadas|Sin recuento)/);
-  assert.ok(!/boncross|chuckling|actor/i.test(await card.innerText()), 'los nombres técnicos no se ven hasta abrir «repuesto»');
+  assert.ok(!/misceres|kaix|actor/i.test(await card.innerText()), 'los nombres técnicos no se ven hasta abrir «repuesto»');
   await card.locator('summary').click(); assert.match(await card.innerText(), /Buscador de Indeed A/); assert.match(await card.innerText(), /Se usan por orden/);
-  state.apifyFailActors = new Set(['boncross~indeed-jobs']); const before = state.apifyCalls.length;
+  state.apifyFailActors = new Set(['misceres~indeed-scraper']); const before = state.apifyCalls.length;
   await card.getByRole('button', { name: 'Probar con 10 ofertas' }).click(); await page.getByText(/Prueba lanzada en Indeed \(España\) \(el primer buscador no arrancó; se usó «Buscador de Indeed B»\)/).waitFor();
   assert.equal(state.apifyCalls.length, before + 1); assert.equal(state.apifyCalls.at(-1).query.maxItems, '10');
   await card.locator('.status', { hasText: 'Buscando ahora…' }).waitFor();

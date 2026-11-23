@@ -1,3 +1,11 @@
+## Apify reconectado: Indeed, Upwork, Infoempleo, SimplyHired y Jooble con su plantilla real — 2026-11-23
+
+- **Problema** (*inspected* en la base el 2026-11-23): Indeed 9 FAILED («No se pudo leer el esquema»: recetas no auditadas), Infoempleo 12 FAILED, Upwork 12 ejecuciones correctas con 0 ofertas, SimplyHired y Jooble correctas con 0. Sin plantilla propia se rellenaban campos adivinados.
+- **Cambio** (*tested*): esos cinco portales pasan a `apifyCatalog.ts` con solo actores auditados (`source_audit.json`) y plantilla propia por actor, con los campos exactos leídos en la página pública de entrada de cada uno: Indeed (`misceres` `position/country ES/maxItemsPerSearch`, `kaix` `keyword/maxItems`, `borderline` `query/country es/maxRows`), Upwork (`neatrat` y `blackfalcondata`; **`cookies` y `sessionToken` ausentes**, ADR-011), Infoempleo (`keywords`), SimplyHired (`keyword`) y Jooble (`keyword/country/max_results`). Búsquedas de closer, setter y cold calling rotando un término al día. Se quitan `boncross`, `chuckling_hemp` y `ayeeyee` (no auditadas) y `easyapi/simplyhired` (exige `searchUrls`, que la app no sabe rellenar).
+- **Freelancer** sigue «sin proveedor verificado» (auditoría `not_found`): no se inventa.
+- **Evidencia** (*tested*): `tests/test_apify_portals.py` (11; nuevo: solo actores auditados, plantilla con la búsqueda y sin credenciales), módulo regenerado con `scripts/export_apify_portals.py`.
+- **Límites:** *no verified*: este entorno no llega a `api.apify.com`, así que la prueba real (10 resultados, tope 0,50 US$ por prueba, ≤5 US$ en total, autorizada por el dueño) queda por hacer con «Probar ruta» en el panel de cada portal. Hasta entonces la plantilla es la del esquema público, no una extracción comprobada. No se activa `schedule_daily` en ninguno (Fase 3, tras la muestra revisada a mano). La autopausa por 0 ofertas seguidas ya existía (`apifyAuto.ts`) pero solo actúa con ≥2 buscadores en el portal: las de un solo buscador (Infoempleo, JobSpy) las vigila la columna «Conexión» de la Fase 1.
+
 ## Salud por fuente: cada fuente dice si está bien conectada y por qué no — 2026-11-23
 
 - **Decisión del dueño:** una fuente se juzga con ≥1.000 ofertas; lo que no se admite es perder ofertas buenas por una conexión mal hecha. Las de freelance (Upwork, Workana, Freelancer) cuentan igual si son de closer, setter o cold calling.

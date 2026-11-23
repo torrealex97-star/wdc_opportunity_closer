@@ -28,7 +28,7 @@ from export_apify_portals import ACTOR_RE, CURATED, EXCLUDED, MAX_RECIPES, OUT, 
 
 AUDIT = ROOT / 'apps/api/career/source_audit.json'
 CATALOG = ROOT / 'apps/web/lib/sourceCatalog.json'
-CURATED_IDS = ['indeed', 'infojobs', 'linkedin', 'workana', 'multi']
+CURATED_IDS = ['indeed', 'infojobs', 'linkedin', 'workana', 'upwork', 'infoempleo', 'simplyhired', 'jooble', 'multi']
 SOCIAL = {'facebook', 'telegram', 'reddit', 'skool', 'linkedin-posts'}
 
 
@@ -77,7 +77,7 @@ def test_curated_portals_lead_in_their_order_with_their_own_recipes():
     assert [p['id'] for p in portals[:len(CURATED_IDS)]] == CURATED_IDS
     curated = {p['id']: p for p in portals[:len(CURATED_IDS)]}
     # Los buscadores escritos a mano no cambian por generar el resto de portales.
-    assert [len(curated[i]['recipes']) for i in CURATED_IDS] == [4, 1, 4, 3, 1]
+    assert [len(curated[i]['recipes']) for i in CURATED_IDS] == [3, 1, 4, 3, 2, 1, 2, 2, 1]
     assert curated['indeed']['source'] == 'apify-indeed' and curated['multi']['source'] == 'apify-jobspy'
     assert curated['workana']['query'] == 'closer de ventas' and curated['workana']['inputTemplate']['locale'] == 'es'
     # Búsquedas por término: cubrir sinónimos sin multiplicar ejecuciones (una al día, rotando).
@@ -92,6 +92,24 @@ def test_curated_portals_lead_in_their_order_with_their_own_recipes():
     ids = [p['id'] for p in portals]
     assert len(ids) == len(set(ids)), 'el panel tiene dos portales con el mismo id'
     assert not (set(p['id'] for p in generated()) & CURATED), 'un portal curado se generó también'
+
+
+def test_reconnected_portals_use_only_audited_actors_with_their_own_templates_and_no_credentials():
+    # Fase 2 (2026-11-23): Indeed, Upwork, Infoempleo, SimplyHired y Jooble se reconectan con actores auditados y la plantilla
+    # exacta de cada uno (leída en su página pública de entrada). Nada de cookies ni tokens de sesión (ADR-011).
+    portals = {p['id']: p for p in panel()}
+    audited = audit()
+    for code in ('indeed', 'upwork', 'infoempleo', 'simplyhired', 'jooble'):
+        known = {c['actor'] for c in audited[code]['candidates']}
+        for recipe in portals[code]['recipes']:
+            assert recipe['actor'] in known, f'{code}: {recipe["actor"]} no está auditado'
+            template = recipe.get('inputTemplate')
+            assert template, f'{code}: {recipe["actor"]} sin plantilla propia'
+            assert '{{query}}' in json.dumps(template), f'{code}: {recipe["actor"]} no rellena la búsqueda'
+            assert not {'cookies', 'sessionToken'} & set(template), f'{code}: credenciales de cuentas en la plantilla'
+    assert {r['actor'] for r in portals['indeed']['recipes']} == {'misceres/indeed-scraper', 'kaix/indeed-scraper', 'borderline/indeed-scraper'}
+    # Freelancer sigue sin proveedor verificado: no se inventa.
+    assert audited['freelancer']['candidates'] == [] and 'freelancer' not in portals
 
 
 def test_fallbacks_exist_whenever_the_store_offered_them():

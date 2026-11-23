@@ -37,13 +37,19 @@ export type Portal = {
 
 const CURATED: Portal[] = [
   {
+    // Indeed: las tres recetas están auditadas (`apps/api/career/source_audit.json`) y su esquema se leyó en la página pública de
+    // entrada de cada actor (2026-11-23). Las anteriores (boncross, chuckling_hemp, ayeeyee) no estaban auditadas y fallaban con
+    // «No se pudo leer el esquema». Cada una lleva su plantilla: los campos y el formato del país NO coinciden entre ellas.
     id: 'indeed', source: 'apify-indeed', name: 'Indeed (España)', maxItems: 200, testItems: 10, query: 'closer de ventas',
+    queries: ['closer de ventas', 'setter de ventas', 'cold caller', 'televenta', 'closer high ticket', 'asesor comercial'],
     plain: 'Uno de los portales con más ofertas comerciales en España.',
     recipes: [
-      { actor: 'boncross/indeed-jobs', name: 'Buscador de Indeed A' },
-      { actor: 'chuckling_hemp/indeed-jobs-scraper', name: 'Buscador de Indeed B' },
-      { actor: 'ayeeyee/indeed-job-scraper', name: 'Buscador de Indeed C' },
-      { actor: 'aakash19/jobspy', name: 'Buscador multi-portal (último recurso)' },
+      { actor: 'misceres/indeed-scraper', name: 'Buscador de Indeed A',
+        inputTemplate: { position: '{{query}}', country: 'ES', location: 'España', maxItemsPerSearch: '{{max_items}}' } },
+      { actor: 'kaix/indeed-scraper', name: 'Buscador de Indeed B',
+        inputTemplate: { keyword: '{{query}}', country: 'ES', location: 'España', maxItems: '{{max_items}}' } },
+      { actor: 'borderline/indeed-scraper', name: 'Buscador de Indeed C',
+        inputTemplate: { query: '{{query}}', country: 'es', location: 'España', maxRows: '{{max_items}}' } },
     ],
   },
   {
@@ -86,6 +92,52 @@ const CURATED: Portal[] = [
         inputTemplate: { searchQuery: '{{query}}', maxRequestsPerCrawl: 5 } },
       { actor: 'gio21/workana-scraper', name: 'Buscador de Workana C',
         inputTemplate: { keyword: '{{query}}', language: 'es', maxItems: '{{max_items}}' } },
+    ],
+  },
+  {
+    // Upwork: proyectos freelance de closer/setter/cold calling (cuentan igual que un empleo, decisión del dueño 2026-11-23). Una
+    // ejecución = un término, rotando por día. `cookies` y `sessionToken` se dejan VACÍOS (ADR-011: nunca credenciales de cuentas).
+    // El presupuesto de un proyecto no es un sueldo (P04B). Esquemas leídos en la página pública de entrada (2026-11-23).
+    id: 'upwork', source: 'apify-upwork', name: 'Upwork', maxItems: 50, testItems: 10, query: 'sales closer',
+    queries: ['sales closer', 'appointment setter', 'cold caller', 'high ticket closer', 'cold calling', 'setter'],
+    plain: 'Proyectos freelance de closer, setter y cold calling en Upwork. El presupuesto es por proyecto, no un sueldo.',
+    caution: 'Upwork limita el uso automático en sus condiciones. Se busca poco volumen y nunca con cuentas ni cookies (ADR-011).',
+    recipes: [
+      { actor: 'neatrat/upwork-job-scraper', name: 'Buscador de Upwork A',
+        inputTemplate: { query: '{{query}}', pagesToScrape: 1, perPage: 20, maxJobAge: 7 } },
+      { actor: 'blackfalcondata/upwork-scraper', name: 'Buscador de Upwork B',
+        inputTemplate: { query: '{{query}}', maxResults: '{{max_items}}', compact: true, skipReposts: true } },
+    ],
+  },
+  {
+    id: 'infoempleo', source: 'apify-infoempleo', name: 'Infoempleo', maxItems: 100, testItems: 10, query: 'closer de ventas',
+    queries: ['closer de ventas', 'setter de ventas', 'televenta', 'comercial a distancia'],
+    plain: 'Portal de empleo en España: ofertas comerciales y de televenta.',
+    recipes: [
+      { actor: 'bibian/infoempleo-jobs-scraper', name: 'Buscador de Infoempleo',
+        inputTemplate: { keywords: '{{query}}', location: 'España', maxItems: '{{max_items}}' } },
+    ],
+  },
+  {
+    id: 'simplyhired', source: 'apify-simplyhired', name: 'SimplyHired', maxItems: 100, testItems: 10, query: 'sales closer',
+    queries: ['sales closer', 'appointment setter', 'cold caller', 'high ticket closer'],
+    plain: 'Agregador de ofertas (sobre todo EE. UU., con trabajo remoto). Búsqueda de closer, setter y cold calling.',
+    recipes: [
+      { actor: 'memo23/simplyhired-jobs-scraper', name: 'Buscador de SimplyHired A',
+        inputTemplate: { keyword: '{{query}}', location: 'Remote', maxItems: '{{max_items}}' } },
+      { actor: 'shahidirfan/Simplyhired-Job-Scraper', name: 'Buscador de SimplyHired B',
+        inputTemplate: { keyword: '{{query}}', location: 'Remote', results_wanted: '{{max_items}}', max_pages: 2 } },
+    ],
+  },
+  {
+    id: 'jooble', source: 'apify-jooble', name: 'Jooble', maxItems: 100, testItems: 10, query: 'closer de ventas',
+    queries: ['closer de ventas', 'setter de ventas', 'televenta', 'cold caller'],
+    plain: 'Agregador con cobertura en España y LatAm. Si tienes la clave oficial de Jooble, esa vía es gratuita y preferible.',
+    recipes: [
+      { actor: 'agentx/jooble-jobs-scraper', name: 'Buscador de Jooble A',
+        inputTemplate: { keyword: '{{query}}', country: 'es', max_results: '{{max_items}}' } },
+      { actor: 'ahmed_jasarevic/jooble-scraper', name: 'Buscador de Jooble B',
+        inputTemplate: { searchQueries: ['{{query}}'], country: 'es', maxItems: '{{max_items}}' } },
     ],
   },
   {
