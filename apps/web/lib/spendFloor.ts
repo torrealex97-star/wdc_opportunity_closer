@@ -15,8 +15,8 @@ export const FLOOR_LIMITS = { googleDorks: 3, rapidapiRequests: 1, fallbackSearc
 export const FLOOR_STAGES = ['google-jobs', 'rapidapi', 'respaldo', 'apify'] as const;
 export type FloorStage = (typeof FLOOR_STAGES)[number];
 
-/** Defecto cuando el dueño aún no ha fijado el tope global (a confirmar por él antes de activarlo en serio). */
-export const DEFAULT_GLOBAL_CAP_USD = 50;
+/** Tope global por ahora (decisión del dueño, 2026-11-23: «por ahora 30 US$»); `GLOBAL_PAID_CAP_USD` lo cambia. */
+export const DEFAULT_GLOBAL_CAP_USD = 30;
 
 /** `GLOBAL_PAID_CAP_USD` del entorno; un valor ausente, no numérico o ≤ 0 cae al defecto (nunca «sin tope»). */
 export function globalCapUsd(env: Record<string, string | undefined> = process.env): number {

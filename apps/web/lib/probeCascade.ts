@@ -16,9 +16,23 @@ export const isCollected = (ok: boolean, body: ProbeBody): boolean =>
 /** Vías que solo se prueban si son la elegida (primera): el Unlocker necesita una URL concreta y Apify gasta hasta 0,50 US$ por prueba. */
 const ONLY_IF_FIRST = new Set(['unlocker', 'apify']);
 
-/** Vías a intentar, en el orden recibido y como máximo `MAX_PROBE_ATTEMPTS`; las de `ONLY_IF_FIRST` no entran como respaldo. */
+/**
+ * Vías que recogen DE ESTA FUENTE (su motor, su API oficial, su actor de Apify, su página). Las demás (Google Jobs por Bright
+ * Data, JSearch o SerpApi con `site:`) son una búsqueda en Google y guardan sus ofertas bajo «google-jobs»: no prueban la fuente.
+ * Por eso solo se usan cuando la fuente no tiene ninguna vía propia lista.
+ */
+const OWN_ROUTES = new Set(['engine', 'backend', 'official', 'apify']);
+
+/**
+ * Vías a intentar. Si la fuente tiene alguna vía PROPIA lista, se prueban solo esas (como máximo `MAX_PROBE_ATTEMPTS`): una búsqueda
+ * en Google no prueba la fuente y mezclarla en el mensaje confundía (Upwork → «Google Jobs · JSearch HTTP 401»). Solo si no hay ninguna
+ * vía propia lista (fuentes sin motor, API ni actor) se usan las de Google, que entonces son la única forma de buscarla.
+ * Las de `ONLY_IF_FIRST` no entran como respaldo.
+ */
 export function planAttempts(ready: SourceRoute[]): SourceRoute[] {
-  return ready.filter((route, index) => !(ONLY_IF_FIRST.has(route.provider) && index > 0)).slice(0, MAX_PROBE_ATTEMPTS);
+  const own = ready.filter(route => OWN_ROUTES.has(route.provider));
+  const ordered = own.length ? own : ready;
+  return ordered.filter((route, index) => !(ONLY_IF_FIRST.has(route.provider) && index > 0)).slice(0, MAX_PROBE_ATTEMPTS);
 }
 
 /** Texto de una vía probada: la causa o la nota, y «Sin ofertas nuevas» si respondió bien pero no recogió nada. */

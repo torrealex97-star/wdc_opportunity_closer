@@ -8,10 +8,10 @@ const step = async (name, fn) => { try { await fn(); passed++; console.log(`PASS
 const H = 3600_000, now = Date.parse('2026-11-24T10:00:00Z');
 const row = (id, ran, hoursAgo) => ({ note: stageNote(id, ran, 'x'), created_at: new Date(now - hoursAgo * H).toISOString() });
 
-await step('tope global: defecto 50, el entorno lo cambia y un valor malo nunca deja sin tope', () => {
-  assert.equal(DEFAULT_GLOBAL_CAP_USD, 50);
-  assert.equal(globalCapUsd({}), 50); assert.equal(globalCapUsd({ GLOBAL_PAID_CAP_USD: '80' }), 80);
-  for (const bad of ['0', '-5', 'abc', '']) assert.equal(globalCapUsd({ GLOBAL_PAID_CAP_USD: bad }), 50, `valor ${bad}`);
+await step('tope global: defecto 30, el entorno lo cambia y un valor malo nunca deja sin tope', () => {
+  assert.equal(DEFAULT_GLOBAL_CAP_USD, 30);
+  assert.equal(globalCapUsd({}), 30); assert.equal(globalCapUsd({ GLOBAL_PAID_CAP_USD: '80' }), 80);
+  for (const bad of ['0', '-5', 'abc', '']) assert.equal(globalCapUsd({ GLOBAL_PAID_CAP_USD: bad }), 30, `valor ${bad}`);
 });
 
 await step('tope global suma todos los proveedores incluido Apify y para al llegar', () => {

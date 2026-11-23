@@ -1,5 +1,5 @@
 // «Probar ruta» recoge de verdad: qué cuenta como recogida y cuántas vías se prueban. Lógica pura, sin red.
-// node --experimental-strip-types tests/admin-auth/probecascade.mjs
+// node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/probecascade.mjs
 import assert from 'node:assert/strict';
 const { isCollected, planAttempts, attemptMessage, summarize, MAX_PROBE_ATTEMPTS } = await import('../../apps/web/lib/probeCascade.ts');
 
@@ -18,11 +18,13 @@ await step('recoge = ofertas guardadas, estado real del motor con catálogo o b�
 
 await step('como máximo 3 vías por pulsación y el Unlocker solo si es la primera (necesita una URL concreta)', () => {
   const ready = [route('a', 'brightdata'), route('b', 'jsearch'), route('c', 'serpapi'), route('d', 'apify')];
-  assert.deepEqual(planAttempts(ready).map(r => r.id), ['a', 'b', 'c']); assert.equal(MAX_PROBE_ATTEMPTS, 3);
+  assert.deepEqual(planAttempts(ready).map(r => r.id), ['d'], 'con una vía propia lista (Apify) no se mezclan las de Google');
+  assert.deepEqual(planAttempts(ready.slice(0, 3)).map(r => r.id), ['a', 'b', 'c'], 'sin vía propia, las de Google son la única forma de buscarla'); assert.equal(MAX_PROBE_ATTEMPTS, 3);
   assert.deepEqual(planAttempts([route('u', 'unlocker'), route('b', 'jsearch')]).map(r => r.id), ['u', 'b'], 'primera: entra');
   assert.deepEqual(planAttempts([route('a', 'brightdata'), route('u', 'unlocker'), route('b', 'jsearch')]).map(r => r.id), ['a', 'b'], 'no primera: se salta');
-  assert.deepEqual(planAttempts([route('a', 'brightdata'), route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['a', 'b'], 'Apify (hasta 0,50 US$) no entra como respaldo automático');
-  assert.deepEqual(planAttempts([route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['p', 'b'], 'si es la elegida, sí');
+  assert.deepEqual(planAttempts([route('a', 'brightdata'), route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['p'], 'su actor de Apify es la prueba; Google no se añade');
+  assert.deepEqual(planAttempts([route('o', 'official'), route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['o'], 'con una vía propia gratuita delante, Apify (hasta 0,50 US$) no entra como respaldo automático');
+  assert.deepEqual(planAttempts([route('p', 'apify'), route('b', 'jsearch')]).map(r => r.id), ['p'], 'si es la elegida, sí');
   assert.deepEqual(planAttempts([]), []);
 });
 
@@ -36,6 +38,19 @@ await step('cada intento dice por qué se pasó a la siguiente y el resumen decl
   assert.match(summarize(['A: x'], false, 3, 5, 0, usd), /quedan más en la lista/);
   assert.match(summarize(['A: x'], false, 1, 1, 0, usd), /Ninguna vía lista recogió ofertas ahora/);
   assert.doesNotMatch(summarize(['A: x'], false, 1, 1, 0, usd), /Coste/, 'sin gasto no se escribe coste');
+});
+
+await step('Upwork e Indeed: «Probar ruta» prueba su actor, no una búsqueda en Google; los marketplaces freelance no tienen vía de Google Jobs', async () => {
+  const { routesForSource } = await import('../../apps/web/lib/sourceRoutes.ts');
+  for (const code of ['upwork', 'workana', 'freelancer']) {
+    const routes = routesForSource({ code, name: code, website: `https://www.${code}.com`, requires: 'input' });
+    assert.ok(!routes.some(r => ['brightdata', 'jsearch', 'serpapi'].includes(r.provider)), `${code}: sin vías de Google Jobs`);
+  }
+  const indeed = routesForSource({ code: 'indeed', name: 'Indeed', website: 'https://es.indeed.com', requires: 'input' });
+  assert.ok(indeed.some(r => r.provider === 'brightdata'), 'un portal de empleo SÍ conserva su búsqueda en Google como respaldo');
+  assert.deepEqual(planAttempts(indeed.filter(r => r.provider !== 'jobspy')).map(r => r.provider), ['apify'], 'pero «Probar ruta» prueba solo su actor de Apify');
+  const upwork = routesForSource({ code: 'upwork', name: 'Upwork', website: 'https://www.upwork.com', requires: 'input' });
+  assert.deepEqual(planAttempts(upwork).map(r => r.provider), ['apify'], 'Upwork prueba su actor y nada más');
 });
 
 console.log(`\n${passed}/${passed + failed} pasos OK`);
