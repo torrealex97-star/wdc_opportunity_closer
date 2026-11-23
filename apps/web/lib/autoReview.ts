@@ -14,6 +14,10 @@ import { config as aiConfig, runAiReview, type ReviewSummary } from './aiReview'
 // Tope diario: una regla mal ajustada no puede publicar miles de ofertas de golpe.
 export const DAILY_CAP = 100;
 export const MIN_SCORE = 55;
+/** Caracteres de descripción por debajo de los cuales no se puede juzgar el idioma. */
+export const MIN_DESCRIPTION = 40;
+/** Parte de la ventana de revisión que se reserva a los borradores MÁS ANTIGUOS, para que ninguna fuente quede sin juzgar por puntuar menos. */
+export const OLDEST_SHARE = 1 / 3;
 
 // `flags`: avisos que la oferta lleva y que la alumna verá en un banner. Solo viajan cuando la regla aprueba
 // CON aviso (`cumple_reglas_con_aviso`): lo crítico nunca se publica sola.
@@ -76,9 +80,27 @@ export function judgeOffer(row: Row): RuleVerdict {
   if ((row.score ?? 0) < MIN_SCORE) return verdict('withdraw', 'score_bajo');
   // Español o inglés (2026-11-18). El inglés se publica igual que el castellano; la alumna lo
   // separa con su filtro de idioma. Cualquier otro idioma no se puede ofrecer y se retira.
-  if (!isSpanishOrEnglish(`${row.title ?? ''} ${row.description ?? ''}`)) return verdict('withdraw', 'idioma_dudoso');
+  if (!isSpanishOrEnglish(`${row.title ?? ''} ${row.description ?? ''}`)) {
+    // Sin descripción (o casi) el idioma no se puede juzgar con solo el título: no es «otro idioma», es falta de datos. Una persona la mira
+    // (cola humana) en vez de perderla; nunca se aprueba sin datos. Con descripción real en otro idioma sigue retirándose.
+    return (row.description ?? '').trim().length < MIN_DESCRIPTION ? verdict('human', 'sin_descripcion') : verdict('withdraw', 'idioma_dudoso');
+  }
   if (flags.length) return verdict('approve', 'cumple_reglas_con_aviso', flags);
   return verdict('approve', 'cumple_reglas');
+}
+
+/**
+ * Ventana de borradores a juzgar: casi todo por puntuación (las mejores primero, como siempre) y una parte reservada a los más
+ * antiguos. Solo por puntuación, los borradores que cumplen las reglas pero no caben en el tope de hoy se quedan para siempre
+ * al frente y los de otras fuentes que puntúan menos nunca llegan a juzgarse (medido: LinkedIn, 46 borradores sin juzgar).
+ */
+export function reviewWindow<T extends { id: string }>(byScore: T[], oldest: T[], limit: number): T[] {
+  const reserved = Math.min(oldest.length, Math.floor(limit * OLDEST_SHARE));
+  const out = new Map<string, T>();
+  for (const row of byScore.slice(0, Math.max(0, limit - reserved))) out.set(row.id, row);
+  for (const row of oldest) { if (out.size >= limit) break; out.set(row.id, row); }
+  for (const row of byScore) { if (out.size >= limit) break; if (!out.has(row.id)) out.set(row.id, row); }
+  return [...out.values()];
 }
 
 export type AutoSummary = {
@@ -111,8 +133,15 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
   const now = new Date().toISOString();
   // Solo borradores vivos, por puntuación: si hay más que tope, entran las mejores y el resto espera a mañana.
   const limit = Math.min(remaining + 20, 120);
-  const response = await serviceRest(`external_offers?org_id=eq.${ORG}&editorial_status=eq.draft&expires_at=gt.${encodeURIComponent(now)}&select=id,title,company,description,location,salary,role,score,spain,verified_result,market,market_basis,red_flags,url&order=score.desc&limit=${limit}`);
-  const rows = response.ok ? await response.json().catch(() => null) : null;
+  const base = `external_offers?org_id=eq.${ORG}&editorial_status=eq.draft&expires_at=gt.${encodeURIComponent(now)}&select=id,title,company,description,location,salary,role,score,spain,verified_result,market,market_basis,red_flags,url`;
+  const [response, oldestResponse] = await Promise.all([
+    serviceRest(`${base}&order=score.desc&limit=${limit}`),
+    serviceRest(`${base}&order=first_seen_at.asc&limit=${Math.ceil(limit * OLDEST_SHARE)}`).catch(() => null),
+  ]);
+  const scored = response.ok ? await response.json().catch(() => null) : null;
+  const oldest = oldestResponse?.ok ? await oldestResponse.json().catch(() => null) : null;
+  // Si la lectura de los antiguos falla, se sigue con la de siempre (por puntuación): el reparto es una mejora, no una condición.
+  const rows = Array.isArray(scored) ? reviewWindow(scored as Array<{ id: string }>, Array.isArray(oldest) ? oldest as Array<{ id: string }> : [], limit) : null;
   if (!Array.isArray(rows)) return { ...summary, truncated: true };
 
   // Aprobadas separadas por cómo se aprueban: las limpias y las que llevan aviso (con sus banderas).
