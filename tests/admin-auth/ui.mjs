@@ -83,6 +83,21 @@ await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como 
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
 });
+await step('Panel de fuentes: una tabla separada en de pago, gratuitas y empresas, con la conexión de cada una y las que no han recogido plegadas', async () => {
+  await openTab(page, 'engine'); await page.getByRole('heading', { name: 'Todas las fuentes, en una tabla.' }).waitFor();
+  const tabs = page.getByRole('tablist', { name: 'Tipo de fuente' }); await tabs.waitFor();
+  assert.deepEqual((await tabs.getByRole('tab').allInnerTexts()).map(t => t.replace(/\s*\d+$/, '').trim()), ['De pago', 'Gratuitas', 'Empresas y ATS']);
+  await page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Tipo de fuente"] [role="tab"]')].every(t => /\d\s*$/.test(t.textContent ?? '')), null, { timeout: 15000 }); // los recuentos llegan con los datos
+  const counts = (await tabs.getByRole('tab').allInnerTexts()).map(t => Number(t.replace(/\s+/g, ' ').trim().match(/(\d+)$/)?.[1])); assert.equal(counts.reduce((a, b) => a + b, 0), catalog.length, 'los tres tipos suman todo el catálogo');
+  // De pago: las que no han recogido ni costado se pliegan, y se pueden abrir para ver su causa.
+  const engine = page.getByTestId('sources-engine'); await engine.getByLabel(/Mostrar las \d+ que aún no han recogido/).check();
+  await engine.getByTestId('engine-table').waitFor(); assert.ok(await engine.locator('tbody tr').count() > 0);
+  assert.match(await engine.getByTestId('engine-table').innerText(), /Sin vía verificada|Falta clave|Conectada|Mal conectada|Sin programar/, 'cada fila dice su conexión');
+  await tabs.getByRole('tab', { name: /Gratuitas/ }).click(); await engine.getByTestId('engine-table').waitFor();
+  await tabs.getByRole('tab', { name: /Empresas/ }).click(); await page.getByText(/Bolsas de empleo de empresas/).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  await openTab(page, 'summary');
+});
 await step('Fuentes: catálogo completo (todas las del backend + las del motor) con filtros', async () => {
   await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
   // Hermes/Manus es un hueco declarado: se ve la insignia y nunca se pinta como conectado.

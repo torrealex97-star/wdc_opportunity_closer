@@ -1,3 +1,10 @@
+## Panel de fuentes: una tabla de todas las fuentes, de pago, gratuitas y de empresas — 2026-11-23
+
+- **Petición del dueño:** una vista con pestañas de pago, gratuitas y empresas, sin cosas repetidas y con control claro de resultados y costes (pieza 4 del panel en 4 módulos; es también la «tabla maestra» pedida antes).
+- **Cambio** (*tested*): nueva pestaña **«Panel de fuentes»** (primera del módulo Motor de fuentes) con **una tabla** separada en **De pago**, **Gratuitas** y **Empresas y ATS**. Cada fila: fuente y vía principal, **conexión** con su causa y siguiente paso (la salud por fuente de la Fase 1), **recogidas, aprobadas y coste**. Las fuentes que aún no han recogido ni costado se **pliegan** («Mostrar las N que aún no han recogido…», con su causa). Un hueco es «—», no 0. El tipo lo decide `lib/sourceKinds.ts` (pura, probada: los tres tipos suman el catálogo entero). Las acciones (probar la vía, programar, gestionar) siguen en «Fuentes», «Búsqueda automática» y «Empresas»; el botón de cada pestaña lleva a la que toca.
+- **Evidencia** (*tested*): `sourcekinds.mjs` (4 pasos) y un paso nuevo en `ui.mjs` (tres pestañas con recuentos que suman el catálogo, tabla con la conexión de cada fila, plegadas, sin desbordamiento); suite `run.sh` 548 pasos OK, `npm run design`, typecheck y build. **Revisión visual manual a 1280 y 390 px: no hecha.**
+- **No hecho:** el *slider* de peso/prioridad por fuente de pago, el «Auto-Fix con IA» de una fuente rota y el visualizador gráfico de la cascada. Hoy la prioridad entre vías es el orden por coste editable en «Fuentes» y el reparto por aprobadas por dólar; un slider de peso exigiría un modelo de reparto nuevo (y una migración) que el dueño no ha definido.
+
 ## Proyectos freelance de closer, setter y cold calling + descripción de las ofertas sin cuerpo — 2026-11-23
 
 - **Orden del dueño:** los proyectos de Upwork, Workana y Freelancer cuentan igual que un empleo si son de closer, setter o cold calling; y enriquecer la descripción de las ofertas dentro del tope.

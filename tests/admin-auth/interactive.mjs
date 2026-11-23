@@ -237,6 +237,7 @@ try {
     await page.reload(); await openTab(page, 'sources'); await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     // Las tarjetas viven en grupos plegados: se abre el que contiene Upwork.
     const card = page.locator('article.source-route-card', { hasText: 'Upwork' }).first();
+    await page.locator('button.source-group-head').first().waitFor(); // los grupos llegan con el catálogo
     for (const head of await page.locator('button.source-group-head').all()) { if (await card.count()) break; await head.click(); }
     await card.waitFor();
     const button = card.getByRole('button', { name: 'Probar ruta' });
