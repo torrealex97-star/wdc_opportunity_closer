@@ -102,6 +102,11 @@ try {
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
       assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, páginas de empresa, respaldo y Apify');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
+      const sample = page.getByTestId('source-sample');
+      await sample.getByRole('heading', { name: 'Muestra por fuente' }).waitFor();
+      await sample.locator('tr[data-source], .empty').first().waitFor();
+      assert.match(await sample.innerText(), /1\.000 ofertas/, 'el panel dice el objetivo de muestra');
+      assert.equal(await sample.getByRole('button', { name: /recortar|pausar|desactivar/i }).count(), 0, 'es solo lectura: no ofrece recortar ni pausar ninguna fuente');
       assert.match(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Páginas de empleo de empresas/);
       assert.doesNotMatch(await panel.getByTestId('wf-stages').locator('tr[data-stage="unlocker"]').innerText(), /Manual/, 'ya no es manual');
       await panel.getByLabel('Objetivo de ofertas cualificadas al día').fill('0');
@@ -287,6 +292,13 @@ try {
     await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
     const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
     await card.waitFor();
+    // El orden guardado llega con el resumen, que se pide después de pintar la tarjeta: se espera a verlo en vez de leer a ciegas
+    // (leerlo justo tras `card.waitFor()` era una carrera que solo fallaba con el resumen algo lento).
+    await page.waitForFunction(() => {
+      const found = [...document.querySelectorAll('article.source-route-card')].find(element => element.textContent?.includes('InfoJobs'));
+      const text = found?.querySelector('ol.route-list')?.textContent ?? '';
+      return text.indexOf('SerpApi') >= 0 && text.indexOf('SerpApi') < text.indexOf('API oficial');
+    }, undefined, { timeout: 15000 }).catch(() => undefined);
     const routeList = await card.locator('ol.route-list').first().innerText();
     assert.ok(routeList.indexOf('SerpApi') >= 0 && routeList.indexOf('SerpApi') < routeList.indexOf('API oficial'), 'el panel enseña el orden guardado');
     const reset = await page.evaluate(async () => {
@@ -350,6 +362,25 @@ try {
     assert.match(await row.innerText(), /0 nueva\(s\)/);
     const offers = await page.evaluate(async () => (await fetch('/api/admin/external?source=company&page_size=10')).json());
     assert.equal(offers.total, 1, 'la huella impide duplicar la misma oferta');
+  });
+
+  await step('Fuentes: «Probar ruta» con 0 resultados en la primera vía no se da por buena: lo dice y no finge que recogió', async () => {
+    state.brightEmpty = 'infojobs';
+    try {
+      await page.getByRole('button', { name: 'Fuentes', exact: true }).click();
+      await page.getByRole('heading', { name: 'Fuentes de datos.' }).waitFor();
+      const card = page.locator('article.source-route-card', { hasText: 'InfoJobs' }).first();
+      await card.waitFor();
+      const button = card.getByRole('button', { name: 'Probar ruta' });
+      await page.waitForFunction(element => !element.disabled, await button.elementHandle(), { timeout: 15000 }).catch(() => undefined);
+      assert.equal(await button.isEnabled(), true, 'con Bright Data listo, la prueba debe poder lanzarse');
+      await button.click();
+      await card.getByText(/Ninguna vía lista recogió ofertas ahora/).waitFor({ timeout: 20000 });
+      const text = await card.innerText();
+      assert.match(text, /0 guardada\(s\)/, 'dice cuántas guardó');
+      assert.match(text, /Sin ofertas nuevas/, 'no lo presenta como éxito');
+      assert.match(text, /Coste: 0,0015 USD/, 'y declara lo que costó el intento');
+    } finally { state.brightEmpty = undefined; }
   });
 
   await step('sin errores de consola ni respuestas 4xx/5xx en los dos flujos', async () => {

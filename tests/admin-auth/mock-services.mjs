@@ -102,6 +102,8 @@ export function startMocks({ authPort, enginePort }) {
         { title: 'Closer high ticket', company: 'Acme BD', location: 'Madrid, España', source: 'InfoJobs', description: 'Ventas B2B por teléfono', link: 'https://www.infojobs.net/oferta-bd-1', tags: [{ name: 'Remoto' }], posted_at: 'hace 2 días' },
         { title: 'Setter de ventas', company: 'Beta BD', location: 'Barcelona, España', source: 'LinkedIn', description: 'Agenda de citas cualificadas', link: 'https://www.linkedin.com/jobs/view/bd-2', tags: [], posted_at: 'hace 1 día' },
       ] } };
+      // Consulta sin resultados (state.brightEmpty = texto que debe contener la URL): Google sin panel de empleos ni enlaces.
+      if (state.brightEmpty && String(body.url).includes(state.brightEmpty)) { serpResult.jobs.items = []; }
       if (url.searchParams.get('async') === 'true') {
         const id = `mockresp${(state.brightAsync ??= new Map()).size + 1}`;
         state.brightAsync.set(id, serpResult);
@@ -262,6 +264,7 @@ export function startMocks({ authPort, enginePort }) {
       if (q.score?.startsWith('gte.')) rows = rows.filter(r => (r.score ?? 0) >= Number(q.score.slice(4)));
       if (q.reviewed_by?.startsWith('eq.')) rows = rows.filter(r => r.reviewed_by === q.reviewed_by.slice(3));
       if (q.reviewed_at?.startsWith('gte.')) rows = rows.filter(r => r.reviewed_at && r.reviewed_at >= decodeURIComponent(q.reviewed_at.slice(4)));
+      if (q.first_seen_at?.startsWith('gte.')) rows = rows.filter(r => r.first_seen_at && r.first_seen_at >= decodeURIComponent(q.first_seen_at.slice(4)));
       if (q.market?.startsWith('eq.')) rows = rows.filter(r => r.market === q.market.slice(3));
       if (q.expires_at?.startsWith('gt.')) rows = rows.filter(r => r.expires_at > decodeURIComponent(q.expires_at.slice(3)));
       if (q.or?.includes('verified_at.is.null')) { const lt = q.or.match(/verified_at\.lt\.([^,)]+)/)?.[1]; rows = rows.filter(r => !r.verified_at || (lt && r.verified_at < lt)); }

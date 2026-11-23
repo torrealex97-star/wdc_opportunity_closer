@@ -8,6 +8,7 @@ import {
   AGENT_GAP_FILL, COST_LABEL, EVIDENCE_LABEL, GROUP_LABEL, groupForSource, hasFreeOperationalRoute, orderRoutes, planCascade, routeReadiness,
   routesForCatalog, type RouteState, type SourceGroup, type SourceRoute,
 } from '../lib/sourceRoutes';
+import { attemptMessage, isCollected, planAttempts, summarize, type ProbeBody } from '../lib/probeCascade';
 import SourceSetupGuide from './SourceSetupGuide';
 
 // Hub de Fuentes: estado real, rutas por fuente y la guía de conexión, en un solo sitio.
@@ -120,19 +121,36 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
   const spendTotal = spend.length && spend.every(item => item.spent !== null) ? spend.reduce((sum, item) => sum + (item.spent ?? 0), 0) : null;
   const spendCap = spend.length && spend.every(item => item.cap !== null) ? spend.reduce((sum, item) => sum + (item.cap ?? 0), 0) : null;
 
-  async function testRoute(row: Row, route: SourceRoute, url?: string) {
-    setBusy(`${row.code}:${route.id}`);
-    setTested(old => ({ ...old, [row.code]: '' }));
+  // Una llamada a una vía: la lógica de qué cuenta como «recogió» vive en `lib/probeCascade.ts` (pura y probada).
+  async function callRoute(row: Row, route: SourceRoute, url?: string): Promise<{ done: boolean; message: string; cost: number }> {
     try {
       const response = await fetch('/api/admin/source-routes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'test', source: row.code, route: route.id, ...(url ? { url } : {}) }) });
-      const body = await response.json().catch(() => ({})) as { detail?: string; note?: string; accepted?: number; cost_usd?: number };
-      if (!response.ok) throw new Error(body.detail ?? 'La prueba falló.');
+      const body = await response.json().catch(() => ({})) as ProbeBody;
+      return { done: isCollected(response.ok, body), message: attemptMessage(response.ok, body), cost: response.ok ? body.cost_usd ?? 0 : 0 };
+    } catch (error) {
+      return { done: false, message: (error as Error).message, cost: 0 };
+    }
+  }
+
+  // «Probar ruta» recoge de verdad: prueba las vías listas por orden de coste y se detiene en la primera que recoge.
+  async function testSource(row: Row, ready: SourceRoute[], firstUrl?: string) {
+    const plan = planAttempts(ready);
+    setBusy(`${row.code}:${plan[0].id}`);
+    setTested(old => ({ ...old, [row.code]: '' }));
+    const log: string[] = [];
+    let spent = 0, collected = false, tries = 0;
+    try {
+      for (const [index, route] of plan.entries()) {
+        tries += 1;
+        const result = await callRoute(row, route, index === 0 ? firstUrl : undefined);
+        spent += result.cost;
+        log.push(`${route.label}: ${result.message}`);
+        if (result.done) { collected = true; break; }
+      }
       // El gasto y el saldo se acaban de mover: se releen para que el KPI no siga enseñando el valor anterior.
       await loadSummary();
-      setTested(old => ({ ...old, [row.code]: (body.note ?? (body.accepted !== undefined ? `${body.accepted} oferta(s) guardadas.` : 'Prueba completada.')) + (body.cost_usd ? ` Coste: ${usd(body.cost_usd)}.` : '') }));
-    } catch (error) {
-      setTested(old => ({ ...old, [row.code]: (error as Error).message }));
     } finally { setBusy(null); }
+    setTested(old => ({ ...old, [row.code]: summarize(log, collected, tries, ready.length, spent, usd) }));
   }
 
   async function saveOrder(row: Row, order: string[]) {
@@ -218,7 +236,7 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
               </details>}
               {tested[row.code] && <p className="inline-hint" role="status">{tested[row.code]}</p>}
               <div className="card-actions">
-                <button type="button" disabled={!firstReady || busy !== null} title={firstReady ? `Prueba: ${firstReady.route.label}` : 'Ninguna vía está lista: falta clave o tope.'} onClick={() => {
+                <button type="button" disabled={!firstReady || busy !== null} title={firstReady ? `Prueba las vías listas por orden de coste hasta que una recoja (máximo 3). Empieza por: ${firstReady.route.label}` : 'Ninguna vía está lista: falta clave o tope.'} onClick={() => {
                   if (!firstReady) return;
                   if (firstReady.route.provider === 'unlocker') {
                     const url = window.prompt('URL pública con JSON-LD JobPosting o RSS (no la portada):', '')?.trim();
@@ -231,10 +249,10 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
                       setTested(old => ({ ...old, [row.code]: 'La URL debe ser pública y HTTPS para leer JSON-LD o RSS; no se envió ninguna petición.' }));
                       return;
                     }
-                    void testRoute(row, firstReady.route, pageUrl);
+                    void testSource(row, steps.filter(step => step.ready).map(step => step.route), pageUrl);
                     return;
                   }
-                  void testRoute(row, firstReady.route);
+                  void testSource(row, steps.filter(step => step.ready).map(step => step.route));
                 }}>
                   {busy === `${row.code}:${firstReady?.route.id}` ? <LoaderCircle size={14} className="spin" /> : <PlugZap size={14} />} Probar ruta
                 </button>

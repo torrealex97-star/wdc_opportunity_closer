@@ -204,9 +204,11 @@ await step('pide cada dork a Google Jobs en su país, en español y sin paginar'
   }
   assert.deepEqual(searches.map(s => s.q), dorkWindow().map(d => d.q));
   assert.deepEqual(searches.map(s => s.gl), dorkWindow().map(d => d.gl));
-  // El presupuesto por defecto cubre los dos mercados: 4 dorks de España y 3 de LatAm (dólares).
-  assert.equal(searches.filter(s => s.gl === 'es').length, 4);
-  assert.equal(searches.filter(s => s.gl !== 'es').length, 3);
+  // El presupuesto por defecto cubre los dos mercados, repartido en proporción a cada lista (España y el resto, en dólares).
+  const esTotal = GOOGLE_JOBS_DORKS.filter(d => d.gl === 'es').length;
+  const esExpected = Math.min(esTotal, Math.max(1, Math.round((DEFAULT_MAX_DORKS * esTotal) / GOOGLE_JOBS_DORKS.length)));
+  assert.equal(searches.filter(s => s.gl === 'es').length, esExpected);
+  assert.equal(searches.filter(s => s.gl !== 'es').length, DEFAULT_MAX_DORKS - esExpected);
   // Qué países de LatAm entran cambia con la ventana del día; lo que no puede faltar es la cobertura:
   // España y al menos un mercado en dólares, cada dork en el `gl` que declara su vocabulario.
   assert.ok(searches.some(s => s.gl === 'es'), 'falta España en la ventana');
@@ -219,14 +221,27 @@ await step('rota la ventana de dorks por día: mismo coste y todo el vocabulario
   for (let day = 0; day < GOOGLE_JOBS_DORKS.length; day += 1) {
     const window = dorkWindow(day * DAY_MS);
     assert.equal(window.length, DEFAULT_MAX_DORKS, `ventana de ${window.length} dorks el día ${day}`);
-    assert.equal(new Set(window.map(d => d.q)).size, window.length, 'un dork no se repite en la misma pasada');
-    assert.equal(window.filter(d => d.gl === 'es').length, 4, 'el reparto de España se mantiene');
-    assert.equal(window.filter(d => d.gl !== 'es').length, 3, 'el reparto de LatAm se mantiene');
-    window.forEach(d => seen.add(d.q));
+    assert.equal(new Set(window.map(d => `${d.q}|${d.gl}`)).size, window.length, 'un dork (término + país) no se repite en la misma pasada');
+    const esTotal = GOOGLE_JOBS_DORKS.filter(d => d.gl === 'es').length;
+    const esExpected = Math.min(esTotal, Math.max(1, Math.round((DEFAULT_MAX_DORKS * esTotal) / GOOGLE_JOBS_DORKS.length)));
+    assert.equal(window.filter(d => d.gl === 'es').length, esExpected, 'el reparto de España es proporcional a su lista y no cambia de un día a otro');
+    assert.equal(window.filter(d => d.gl !== 'es').length, DEFAULT_MAX_DORKS - esExpected, 'el resto va a LatAm y EE. UU.');
+    window.forEach(d => seen.add(`${d.q}|${d.gl}`));
   }
   assert.equal(seen.size, GOOGLE_JOBS_DORKS.length, 'en una vuelta completa se ejecutan todos los dorks');
-  assert.notDeepEqual(dorkWindow(0).map(d => d.q), dorkWindow(DAY_MS).map(d => d.q), 'cada día cambia la ventana');
+  assert.notDeepEqual(dorkWindow(0).map(d => `${d.q}|${d.gl}`), dorkWindow(DAY_MS).map(d => `${d.q}|${d.gl}`), 'cada día cambia la ventana');
   assert.deepEqual(dorkWindow(0, GOOGLE_JOBS_DORKS.length).map(d => d.q), GOOGLE_JOBS_DORKS.map(d => d.q), 'con presupuesto para todos, el vocabulario completo');
+});
+
+await step('cobertura por país: Chile, Perú y EE. UU. en español, sin dorks repetidos, y una vuelta completa pasa por todos los países', async () => {
+  const countries = new Set(GOOGLE_JOBS_DORKS.map(d => d.gl));
+  for (const gl of ['es', 'mx', 'co', 'ar', 'cl', 'pe', 'us']) assert.ok(countries.has(gl), `falta el país ${gl}`);
+  assert.equal(new Set(GOOGLE_JOBS_DORKS.map(d => `${d.q}|${d.gl}`)).size, GOOGLE_JOBS_DORKS.length, 'ningún dork (término + país) está repetido');
+  assert.ok(GOOGLE_JOBS_DORKS.every(d => d.hl === 'es'), 'todo se busca en español');
+  assert.ok(GOOGLE_JOBS_DORKS.some(d => /closer/i.test(d.q) && d.gl === 'us'), 'hay búsqueda de closer en EE. UU. hispano');
+  const reached = new Set();
+  for (let day = 0; day < GOOGLE_JOBS_DORKS.length; day += 1) dorkWindow(day * DAY_MS).forEach(d => reached.add(d.gl));
+  assert.deepEqual([...reached].sort(), [...countries].sort(), 'con el presupuesto por defecto, la rotación llega a todos los países');
 });
 
 await step('fechas: relativas sí, desconocidas no se inventan', async () => {

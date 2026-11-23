@@ -27,6 +27,10 @@ BASE="http://127.0.0.1:$PORT" node --experimental-strip-types --import ./tests/a
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/parity.mjs
 node --experimental-strip-types tests/admin-auth/csv.mjs
 node --experimental-strip-types tests/admin-auth/salary.mjs
+# Comisión, OTE y ticket medio por reglas fijas, con la frase literal del anuncio.
+node --experimental-strip-types tests/admin-auth/offerpay.mjs
+# «Probar ruta» recoge de verdad: qué cuenta como recogida y cuántas vías se prueban.
+node --experimental-strip-types tests/admin-auth/probecascade.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/score.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/aireview.mjs
 # Guardián SSRF sin APIs de Node: allowlist medida, IP literales y redirecciones revalidadas salto a salto.
@@ -66,6 +70,8 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/rapidapi.mjs
 # Páginas de empleo de empresas en el cron: cascada directa → navegador propio → de pago, extractor de enlaces y Fetch API.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/companypages.mjs
+# Muestra por fuente: 1.000 ofertas recogidas antes de juzgar una fuente de pago; un hueco no es un cero.
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/sourcesample.mjs
 # Rutas por fuente: orden por coste, contrato de Bright Data, extractor y cascada sin gastar sin clave/tope.
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/source-routes.mjs
 # Cliente de Bright Data: contrato, Unlocker, reintento único en 5xx, errores y tope, sin red ni clave.
