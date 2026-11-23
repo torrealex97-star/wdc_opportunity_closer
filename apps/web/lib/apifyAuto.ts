@@ -3,7 +3,7 @@ import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
 import { approvedBySource, ORG } from './external';
 import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
-import { PORTALS, portalBySource, portalById, type Portal, type Recipe } from './apifyCatalog';
+import { PORTALS, portalBySource, portalById, queryForDay, type Portal, type Recipe } from './apifyCatalog';
 import { normalizeActor } from './apifyStore';
 import { serviceRest } from './supabaseAuth';
 
@@ -72,12 +72,29 @@ export function retirementCandidates(portal: Portal, rows: ActorRow[], runs: Run
   return out;
 }
 
+// Plantilla que le corresponde a un buscador: la suya manda y, si no tiene, la del portal. Los esquemas
+// de los repuestos de un mismo portal no siempre coinciden (Workana tiene tres contratos distintos), y
+// mandarles la plantilla de otro les quita su campo obligatorio o su filtro.
+const templateFor = (portal: Portal, recipe: Recipe) => recipe.inputTemplate ?? portal.inputTemplate ?? null;
+const sameTemplate = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
 async function ensureRows(portal: Portal, by: string): Promise<ActorRow[]> {
   let rows = (await listActors() ?? []).filter(a => a.source === portal.source);
-  for (const r of portal.recipes.filter(x => !rows.some(a => normalizeActor(a.actor) === normalizeActor(x.actor)))) {
-    // La plantilla del portal (si la tiene) viaja a cada fila: los repuestos de un mismo portal comparten
-    // contrato de búsqueda; si alguno no lo acepta, el intento se anota y se pasa al siguiente.
-    await serviceRest('apify_actors', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ org_id: ORG, label: r.name, actor: r.actor, source: portal.source, input_template: portal.inputTemplate ?? null, max_items: portal.maxItems, memory_mb: 1024, timeout_s: 900, schedule_daily: rows.some(a => a.schedule_daily), created_by: by }) }).catch(() => null);
+  for (const r of portal.recipes) {
+    const existing = rows.find(a => normalizeActor(a.actor) === normalizeActor(r.actor));
+    const template = templateFor(portal, r);
+    if (!existing) {
+      await serviceRest('apify_actors', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ org_id: ORG, label: r.name, actor: r.actor, source: portal.source, input_template: template, max_items: portal.maxItems, memory_mb: 1024, timeout_s: 900, schedule_daily: rows.some(a => a.schedule_daily), created_by: by }) }).catch(() => null);
+      continue;
+    }
+    // La plantilla del catálogo es la del portal: se sincroniza la fila si cambió (p. ej. al añadir la
+    // categoría de ventas). Solo se tocan los buscadores del catálogo; los añadidos desde la tienda
+    // conservan la plantilla que les puso el operador. Un PATCH fallido no se cuenta como hecho: la
+    // fila se queda como estaba y el intento lo declara el propio lanzamiento.
+    if (!sameTemplate(existing.input_template, template)) {
+      const patched = await serviceRest(`apify_actors?org_id=eq.${ORG}&id=eq.${existing.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ input_template: template }) }).catch(() => null);
+      if (patched?.ok) existing.input_template = template;
+    }
   }
   rows = (await listActors() ?? []).filter(a => a.source === portal.source);
   return rows;
@@ -101,7 +118,8 @@ export async function searchPortal(portal: Portal, opts: { by: string; publicBas
   for (const recipe of orderRecipes(portal, rows, runs, now).slice(0, opts.maxAttempts ?? MAX_ATTEMPTS)) {
     const row = rows.find(a => normalizeActor(a.actor) === normalizeActor(recipe.actor)); if (!row) continue;
     const usable = opts.test ? { ...row, max_items: portal.testItems } : row;
-    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(portal.query ? { query: portal.query } : {}) } });
+    const query = queryForDay(portal, now);
+    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(query ? { query } : {}) } });
     if (r.ok) return { ok: true, recipe: recipe.name, actor: recipe.actor, fallback: attempts.length > 0, attempts };
     if (GLOBAL_STOP.test(r.error)) return { ok: false, busy: /Ya hay una ejecuci/i.test(r.error), stopped: true, error: r.error, attempts };
     attempts.push({ recipe: recipe.name, error: r.error }); await recordStartFailure(row, r.error, opts.by);

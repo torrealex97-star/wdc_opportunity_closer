@@ -17,9 +17,13 @@ export type FallbackPortal = {
 // Orden = prioridad cuando no hay presupuesto para todas. Primero los portales que no tienen ninguna
 // otra vía (LatAm y agregadores) y después los que dependen de una API o de JobSpy.
 export const FALLBACK_PORTALS: FallbackPortal[] = [
-  { source: 'serpapi-computrabajo', name: 'Computrabajo', site: 'computrabajo.com', query: 'closer de ventas', gl: 'co', url: /computrabajo\.(?:com|es)\/ofertas-de-trabajo\//i },
-  { source: 'serpapi-occ', name: 'OCCMundial', site: 'occ.com.mx', query: 'closer de ventas', gl: 'mx', url: /occ\.com\.mx\/empleo\//i },
-  { source: 'serpapi-bumeran', name: 'Bumerán', site: 'bumeran.com', query: 'closer', gl: 'ar', url: /bumeran\.com\/(?:empleos|avisos)\//i },
+  // Patrones comprobados contra ofertas reales el 2026-11-22: Computrabajo usa subdominio de país o TLD
+  // `.com.mx` en la misma ruta (`/ofertas-de-trabajo/oferta-de-trabajo-de-…`); Bumerán usa `.com.ar`,
+  // `.com.mx` o `.com.pe` y una ficha `.html`; OCC, `/empleo/oferta/<id>-<slug>`. Sin el TLD opcional,
+  // los anuncios de México y de Argentina se descartaban como si no fueran del portal.
+  { source: 'serpapi-computrabajo', name: 'Computrabajo', site: 'computrabajo.com', query: 'closer de ventas', gl: 'co', url: /computrabajo\.(?:com|es)(?:\.[a-z]{2})?\/ofertas-de-trabajo\/[^/?#]+/i },
+  { source: 'serpapi-occ', name: 'OCCMundial', site: 'occ.com.mx', query: 'closer de ventas', gl: 'mx', url: /occ\.com\.mx\/empleo\/oferta\/[^/?#]+/i },
+  { source: 'serpapi-bumeran', name: 'Bumerán', site: 'bumeran.com', query: 'closer', gl: 'ar', url: /bumeran\.com(?:\.(?:ar|mx|pe|co|cl))?\/empleos\/[^/?#]+/i },
   { source: 'serpapi-bebee', name: 'BeBee', site: 'bebee.com', query: 'sales closer', gl: 'es', url: /bebee\.com\/jobs\//i },
   { source: 'serpapi-infojobs', name: 'InfoJobs', site: 'infojobs.net', query: 'closer de ventas', gl: 'es', url: /infojobs\.net\/(?:oferta|empleo|ofertas-trabajo)\//i, replaces: 'infojobs' },
   { source: 'serpapi-indeed', name: 'Indeed España', site: 'es.indeed.com', query: 'closer de ventas', gl: 'es', url: /indeed\.(?:es|com)\/(?:viewjob|rc\/clk|m\/viewjob)/i, replaces: 'indeed' },

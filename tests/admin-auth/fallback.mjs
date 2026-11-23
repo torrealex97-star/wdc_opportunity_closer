@@ -23,7 +23,9 @@ const organic = (name, link) => ({
   snippet: 'Buscamos closer para cerrar ventas por videollamada con leads cualificados.',
 });
 const COMPUTRABAJO_LINK = 'https://co.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-closer-1';
-const OCC_LINK = 'https://www.occ.com.mx/empleo/closer-2';
+// Forma real de una ficha de OCC (comprobada el 2026-11-22): /empleo/oferta/<id>-<slug>/.
+// La anterior (`/empleo/closer-2`) solo pasaba con un patrón laxo que también aceptaba listados.
+const OCC_LINK = 'https://www.occ.com.mx/empleo/oferta/21418222-ejecutivo-de-ventas/';
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -107,6 +109,37 @@ await step('una ficha orgánica solo vale si el enlace es del portal, y el títu
   assert.equal(organicToCandidate({ title: 'Closer', link: 'https://example.com/x' }, computrabajo), null, 'un portal no puede traer ofertas de otra web');
   assert.equal(organicToCandidate({ title: '', link: 'https://co.computrabajo.com/ofertas-de-trabajo/x' }, computrabajo), null, 'sin título no hay oferta');
   assert.equal(organicToCandidate({ title: 'Closer', link: 'javascript:alert(1)' }, computrabajo), null, 'solo enlaces http(s)');
+});
+
+await step('los patrones de LatAm aceptan las URLs reales por país y no los listados', async () => {
+  // URLs copiadas de resultados reales el 2026-11-22 (no inventadas).
+  const reales = {
+    computrabajo: [
+      'https://co.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-closer-de-ventas-bilingue-en-medellin-2A37E0B07D04981E61373E686DCF3405',
+      'https://www.computrabajo.com.mx/ofertas-de-trabajo/oferta-de-trabajo-de-closer-cerrador-de-ventas-en-linea-en-benito-juarez-CA0DAF330BAB271561373E686DCF3405',
+    ],
+    occ: ['https://www.occ.com.mx/empleo/oferta/21418222-ejecutivo-de-ventas/'],
+    bumeran: [
+      'https://www.bumeran.com.ar/empleos/closer-comercial--agencia-de-marketing-digital-part-time-1118370083.html',
+      'https://www.bumeran.com.mx/empleos/ejecutivo-de-ventas-1118430721.html',
+      'https://www.bumeran.com.pe/empleos/asesor-de-ventas-1118514078.html',
+    ],
+  };
+  const bySource = Object.fromEntries(FALLBACK_PORTALS.map(p => [p.source, p]));
+  for (const [code, links] of Object.entries(reales)) {
+    const portal = bySource[`serpapi-${code === 'bumeran' ? 'bumeran' : code}`];
+    assert.ok(portal, `falta el portal ${code}`);
+    for (const link of links) assert.ok(portal.url.test(link), `${code}: no acepta ${link}`);
+  }
+  // Un listado o la portada del portal no es una oferta: si entra, se guardaría un enlace que no lleva a nada.
+  assert.equal(bySource['serpapi-computrabajo'].url.test('https://co.computrabajo.com/trabajo-de-closer'), false);
+  assert.equal(bySource['serpapi-occ'].url.test('https://www.occ.com.mx/empleos/de-ventas'), false);
+  assert.equal(bySource['serpapi-bumeran'].url.test('https://www.bumeran.com.ar/empleos.html'), false);
+  // Y el mapeo real no inventa empresa, sueldo ni ubicación.
+  const hit = organicToCandidate({ title: 'Closer comercial | Bumeran', link: reales.bumeran[0], snippet: 'Cierre de ventas.' }, bySource['serpapi-bumeran']);
+  assert.equal(hit.url, reales.bumeran[0]);
+  assert.equal(hit.salary, null);
+  assert.equal(hit.company, null);
 });
 
 await step('el plan prioriza los portales cuya API oficial falta y no paga dos veces el mismo inventario', async () => {
