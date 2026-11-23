@@ -1,3 +1,12 @@
+## Mínimo diario por fuente de pago y tope global del mes — 2026-11-23
+
+- **Problema** (*inspected*): el cron solo lanzaba vías de pago mientras faltara objetivo de ofertas; con Jooble gratis cubriéndolo, una fuente de pago bien conectada podía pasar días sin correr y nunca acumulaba muestra para juzgarla con 1.000 ofertas.
+- **Cambio** (*tested*): cada etapa de pago (Google Jobs, RapidAPI, respaldo SerpApi, Apify) corre **como mínimo una vez cada 20 h** aunque el objetivo esté cumplido, con su tope pequeño (`FLOOR_LIMITS`: 3 dorks, 1 petición de RapidAPI, 1 búsqueda de respaldo; Apify solo los portales con búsqueda diaria activada) y lo declara con «[mínimo diario]». Solo si se pudo leer el objetivo y el registro de etapas (un hueco no es un cero). No es una cuota de resultados.
+- **Tope global** (*tested*): `GLOBAL_PAID_CAP_USD` (**50 US$/mes por defecto, a confirmar por el dueño**) se comprueba en `meter.check()` sumando todos los proveedores medidos y Apify; si alguna parte del gasto no se puede leer, no se gasta. Los topes individuales siguen igual y mandan primero.
+- **Registro:** el cron anota cada etapa como `etapa=<id> · corrió|saltada · motivo` (fuente interna `cron-waterfall`); de ahí se sabe si ya corrió hoy.
+- **Evidencia** (*tested*): `tests/admin-auth/spendfloor.mjs` (8), pasos nuevos en `googlejobs.mjs` (tope global) y reescrito el del waterfall de `flow.mjs` (con objetivo 0 solo corre el mínimo y lo dice; la segunda pasada no repite); suite `run.sh` 511 pasos OK, typecheck y build OK.
+- **Límites:** *no verified* contra servicios reales; el gasto real del mínimo se verá tras el primer cron desplegado (peor caso diario: 3×0,025 + 1 RapidAPI + 1×0,025 US$, más Apify si hay portales programados). Aún no se activa `schedule_daily` en ningún portal de Apify: espera a la muestra de las pruebas reales de la Fase 2. El tope global es de entorno, no editable en el panel (haría falta DDL, que exige orden expresa). Los topes de capa gratuita no se han cambiado.
+
 ## Apify reconectado: Indeed, Upwork, Infoempleo, SimplyHired y Jooble con su plantilla real — 2026-11-23
 
 - **Problema** (*inspected* en la base el 2026-11-23): Indeed 9 FAILED («No se pudo leer el esquema»: recetas no auditadas), Infoempleo 12 FAILED, Upwork 12 ejecuciones correctas con 0 ofertas, SimplyHired y Jooble correctas con 0. Sin plantilla propia se rellenaban campos adivinados.

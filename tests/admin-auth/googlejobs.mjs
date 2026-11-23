@@ -112,6 +112,8 @@ const server = http.createServer(async (req, res) => {
     if (wanted === 'jsearch') return send(200, jsearchKey ? [{ secret_ciphertext: process.env.TEST_JS_SECRET }] : []);
     return send(200, hasKey ? [{ secret_ciphertext: process.env.TEST_SECRET }] : []);
   }
+  // El tope global suma también el gasto de Apify (`apify_runs`): sin ejecuciones es 0, no «ilegible».
+  if (url.pathname === '/rest/v1/apify_runs') return send(200, []);
   if (url.pathname === '/rest/v1/provider_budget') return send(200, capRow ? [capRow] : []);
   if (url.pathname === '/rest/v1/source_settings') return send(200, paused.map(source => ({ source })));
   if (url.pathname === '/rest/v1/rpc/external_upsert') {
@@ -364,6 +366,15 @@ await step('sin gasto legible no se lanza gasto nuevo (un hueco no es un cero)',
     assert.equal(out.ok, false);
     assert.equal(searches.length, 0);
   } finally { globalThis.fetch = realFetch; }
+});
+
+await step('tope global del mes: con el gasto de todos los proveedores en el tope no se lanza nada aunque el de SerpApi tenga hueco', async () => {
+  const saved = process.env.GLOBAL_PAID_CAP_USD; process.env.GLOBAL_PAID_CAP_USD = '0.001';
+  const before = searches.length;
+  try {
+    const out = await collectGoogleJobs('test');
+    assert.equal(out.ok, false, JSON.stringify(out)); assert.equal(searches.length, before, 'ni una búsqueda de pago');
+  } finally { if (saved === undefined) delete process.env.GLOBAL_PAID_CAP_USD; else process.env.GLOBAL_PAID_CAP_USD = saved; }
 });
 
 await step('cascada: con Bright Data se usa primero (1/16 del precio) y SerpApi no se toca', async () => {

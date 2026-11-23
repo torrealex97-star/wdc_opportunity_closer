@@ -12,6 +12,8 @@ import {
 } from './providerBudget';
 import { METERED_PROVIDERS, readCaps } from './providerBudgetStore';
 import { serviceRest } from './supabaseAuth';
+import { monthSpent } from './apify';
+import { globalCapUsd, globalCheck } from './spendFloor';
 
 export const METERED: readonly MeteredProvider[] = METERED_PROVIDERS;
 export const PROVIDER_NAME: Record<MeteredProvider, string> = {
@@ -89,15 +91,24 @@ export type Meter = {
   /** Cuántas peticiones más caben en el tope (0 si no se sabe). */
   affordable: (provider: MeteredProvider) => number;
   charge: (provider: MeteredProvider, usd: number) => void;
+  /** Tope global del mes entre TODOS los proveedores (los medidos y Apify). `spent` es el total, `null` si alguna parte no se pudo leer. */
+  global: { cap: number; spent: () => number | null; check: (nextUsd?: number) => { ok: boolean; reason?: string } };
 };
 
 export async function loadMeter(): Promise<Meter> {
-  const [caps, runs] = await Promise.all([readCaps(), runsThisMonth()]);
+  const [caps, runs, apifySpent] = await Promise.all([readCaps(), runsThisMonth(), monthSpent().catch(() => null)]);
+  let apify = apifySpent;
   const notes = (runs ?? []).map(run => ({ note: run.note }));
   const spent = Object.fromEntries(METERED.map(provider => [provider, runs === null ? null : (spentFromNotes(notes, provider).usd ?? 0)])) as Record<MeteredProvider, number | null>;
+  const globalCap = globalCapUsd();
+  const parts = () => [...METERED.map(provider => spent[provider]), apify];
+  const globalNow = (nextUsd = 0) => globalCheck(parts(), globalCap, nextUsd);
   const check: Meter['check'] = (provider, requests = 1) => {
     const result = canSpend(provider, spent[provider], process.env, requests, caps[provider].usd);
-    return { ok: result.ok, reason: result.reason };
+    if (!result.ok) return { ok: false, reason: result.reason };
+    // Además del tope del proveedor, el tope global del mes (peor caso de esta llamada).
+    const overall = globalNow(PROVIDER_METERS[provider].usdPerRequest * Math.max(1, requests));
+    return { ok: overall.ok, reason: overall.reason };
   };
   return {
     caps, spent, check,
@@ -108,5 +119,6 @@ export async function loadMeter(): Promise<Meter> {
       return room <= 0 ? 0 : Math.floor((room + 1e-9) / PROVIDER_METERS[provider].usdPerRequest);
     },
     charge: (provider, usd) => { spent[provider] = (spent[provider] ?? 0) + usd; },
+    global: { cap: globalCap, spent: () => globalNow().spent, check: nextUsd => { const r = globalNow(nextUsd); return { ok: r.ok, reason: r.reason }; } },
   };
 }

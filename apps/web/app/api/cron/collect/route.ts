@@ -16,7 +16,9 @@ import { runAutoReview } from '../../../../lib/autoReview';
 import { activateEngine } from '../../../../lib/engineActivate';
 import { loadMetrics } from '../../../../lib/metrics';
 import { skipPaidTier } from '../../../../lib/sourceTiers';
-import { CRON_LOG_SOURCE, recordSpend, refreshVigencia } from '../../../../lib/external';
+import { CRON_LOG_SOURCE, ORG, recordSpend, refreshVigencia } from '../../../../lib/external';
+import { FLOOR_LIMITS, floorDue, lastRanByStage, stageNote, type StageRow } from '../../../../lib/spendFloor';
+import { pagedRest } from '../../../../lib/supabaseAuth';
 import { checkEngine } from '../../../../lib/engineAlert';
 import { createBudget, MIN_STEP_MS, totalFromEnv } from '../../../../lib/cronBudget';
 
@@ -59,6 +61,13 @@ export async function GET(request: NextRequest) {
   let gap: number | null = wf?.gap ?? null;
   const stages: Array<{ id: string; ran: boolean; why: string; accepted?: number; cost_usd?: number }> = [];
   const canSpend = () => gap !== null && gap > 0;
+  // MÍNIMO DIARIO por etapa de pago: con el objetivo cumplido una fuente bien conectada igual corre un poco cada día (con su tope
+  // propio, `FLOOR_LIMITS`) para acumular muestra; no es una cuota de resultados. Solo si se pudo leer el objetivo (`gap` conocido)
+  // y el registro de etapas de las últimas 24 h: un hueco no es un cero. Cada proveedor sigue limitado por su tope y por el global.
+  const stageHistory = wfTime && gap !== null
+    ? await pagedRest<StageRow>(`external_ingest_runs?org_id=eq.${ORG}&source=eq.${CRON_LOG_SOURCE}&created_at=gte.${encodeURIComponent(new Date(Date.now() - 24 * 3600_000).toISOString())}&select=note,created_at`, 'created_at.desc', 500).then(page => (page && !page.truncated ? lastRanByStage(page.rows) : null)).catch(() => null)
+    : null;
+  const floorOf = (id: string) => !canSpend() && floorDue(id, stageHistory);
   // Tras cada etapa se RECUENTA lo cualificado y pendiente (no se estima con `accepted`, que incluye ofertas ya vistas
   // que solo se actualizaron). Sin tiempo para recontar se mantiene el hueco; si el recuento falla, es desconocido y no se gasta.
   const recount = async (current: number | null): Promise<number | null> => {
@@ -80,28 +89,30 @@ export async function GET(request: NextRequest) {
   // Google Jobs (Bright Data primero, JSearch y SerpApi de respaldo): dorks de closer/ES y LatAm. 18 s: Bright Data tarda 10–25 s
   // en devolver el Full JSON; con el tramo antiguo (6,5 s) cada llamada se cortaba y SerpApi ya no tenía tiempo. Entra después de las APIs
   // oficiales porque cuesta por búsqueda; si no hay tiempo se corta y se declara, sin tocar los demás pasos.
-  const googleJobs = !canSpend()
+  const googleFloor = floorOf('google-jobs');
+  const googleJobs = !canSpend() && !googleFloor
     ? (stages.push({ id: 'google-jobs', ran: false, why: noSpendWhy() }), { source: 'google-jobs' as const, ok: false, error: noSpendWhy(), skipped: true })
     : budget.remaining() >= MIN_STEP_MS
-      ? await collectGoogleJobs('cron', budget.deadline(18_000), undefined, { meter: await sharedMeter().catch(() => undefined) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
+      ? await collectGoogleJobs('cron', budget.deadline(18_000), undefined, { meter: await sharedMeter().catch(() => undefined), ...(googleFloor ? { maxDorks: FLOOR_LIMITS.googleDorks } : {}) }).catch(() => ({ source: 'google-jobs' as const, ok: false, error: 'fallo inesperado' }))
       : (budget.cut('googleJobs'), { source: 'google-jobs' as const, ok: false, error: 'sin tiempo en el presupuesto del cron' });
   if ('truncated' in googleJobs && googleJobs.truncated) budget.cut('googleJobs');
   if (!('skipped' in googleJobs)) {
     const accepted = 'accepted' in googleJobs ? googleJobs.accepted ?? 0 : 0;
     gap = await recount(gap);
-    stages.push({ id: 'google-jobs', ran: googleJobs.ok || accepted > 0, why: googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.', accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
+    stages.push({ id: 'google-jobs', ran: googleJobs.ok || accepted > 0, why: `${googleFloor ? '[mínimo diario] ' : ''}${googleJobs.ok ? 'Recogida hecha.' : googleJobs.error ?? 'Sin resultado.'}`, accepted, cost_usd: 'cost_usd' in googleJobs ? googleJobs.cost_usd : undefined });
   }
   // RapidAPI (APIs de empleo verificadas con una sola clave): entra tras Google Jobs solo si aún falta objetivo; cada
   // API respeta el tope mensual de RapidAPI y una sin suscripción se salta sin cobrarse.
-  const rapidapi = !canSpend()
+  const rapidFloor = floorOf('rapidapi');
+  const rapidapi = !canSpend() && !rapidFloor
     ? (stages.push({ id: 'rapidapi', ran: false, why: noSpendWhy() }), null)
     : budget.remaining() >= MIN_STEP_MS
-      ? await sharedMeter().then(meter => collectRapidApi('cron', budget.deadline(8_000), meter)).catch(failed('rapidapi', null))
+      ? await sharedMeter().then(meter => collectRapidApi('cron', budget.deadline(8_000), meter, rapidFloor ? { maxRequests: FLOOR_LIMITS.rapidapiRequests } : {})).catch(failed('rapidapi', null))
       : (budget.cut('rapidapi'), null);
   if (rapidapi?.truncated) budget.cut('rapidapi');
   if (rapidapi) {
     gap = await recount(gap);
-    stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.', accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
+    stages.push({ id: 'rapidapi', ran: rapidapi.requests > 0, why: `${rapidFloor ? '[mínimo diario] ' : ''}${rapidapi.ok ? `${rapidapi.requests} búsqueda(s).` : rapidapi.error ?? 'Sin resultado.'}`, accepted: rapidapi.accepted, cost_usd: rapidapi.cost_usd });
   }
   // Páginas de empleo propias de las empresas vigiladas (JSON-LD JobPosting o RSS). La lectura directa es gratis y
   // corre siempre; un desbloqueador de pago (ZenRows → ScrapingBee → Bright Data) solo si la página bloquea, falta
@@ -129,26 +140,30 @@ export async function GET(request: NextRequest) {
   // fuente pausada a propósito no cuenta como ausente y no se paga su respaldo.
   const missingApis = outcomes.filter(o => !o.ok && o.error !== 'Fuente pausada').map(o => o.provider);
   const fallbackNeed = gap !== null && gap > 0 ? (wf?.approval_rate != null && wf.approval_rate > 0 ? Math.ceil(gap / wf.approval_rate) : gap) : 0;
-  const fallback = !canSpend()
+  const fallbackFloor = floorOf('respaldo');
+  const fallback = !canSpend() && !fallbackFloor
     ? (stages.push({ id: 'respaldo', ran: false, why: noSpendWhy() }), null)
     : budget.remaining() >= MIN_STEP_MS
-      ? await collectFallback('cron', { deadline: budget.deadline(5_000), missing: missingApis, need: fallbackNeed, meter: await sharedMeter().catch(() => undefined) }).catch(() => null)
+      ? await collectFallback('cron', { deadline: budget.deadline(5_000), missing: missingApis, need: fallbackFloor ? 1 : fallbackNeed, ...(fallbackFloor ? { max: FLOOR_LIMITS.fallbackSearches } : {}), meter: await sharedMeter().catch(() => undefined) }).catch(() => null)
       : (budget.cut('fallback'), null);
   if (fallback?.truncated) budget.cut('fallback');
   if (fallback) {
     const accepted = fallback.outcomes.reduce((sum, o) => sum + (o.accepted ?? 0), 0);
     gap = await recount(gap);
-    stages.push({ id: 'respaldo', ran: fallback.ok || accepted > 0, why: fallback.ok ? 'Búsquedas hechas.' : 'Sin resultado.', accepted, cost_usd: fallback.cost_usd });
+    stages.push({ id: 'respaldo', ran: fallback.ok || accepted > 0, why: `${fallbackFloor ? '[mínimo diario] ' : ''}${fallback.ok ? 'Búsquedas hechas.' : 'Sin resultado.'}`, accepted, cost_usd: fallback.cost_usd });
   }
   // Nivel de pago opt-in: con APIFY_SKIP_IF_GOOD_PER_DAY, si las fuentes gratuitas ya cubren el objetivo no se lanza gasto nuevo
   // (lo ya lanzado sí se recoge). Sin esa variable, comportamiento de siempre. El waterfall añade su propio freno:
   // sin hueco de objetivo no se lanza ningún actor nuevo.
   const paid = budget.remaining() >= MIN_STEP_MS ? skipPaidTier(await loadMetrics().catch(() => null)) : { skip: true as const };
-  const apifyStart = !paid.skip && canSpend();
-  if (!apifyStart) stages.push({ id: 'apify', ran: false, why: !canSpend() ? noSpendWhy() : ('reason' in paid && paid.reason ? paid.reason : 'Sin tiempo en el presupuesto del cron.') });
+  const apifyFloor = floorOf('apify');
+  // Apify gasta por ejecución y no pasa por el medidor: antes de lanzar se comprueba el tope global del mes con una ejecución de reserva (1 US$).
+  const globalRoom = apifyFloor || canSpend() ? await sharedMeter().then(meter => meter.global.check(1)).catch(() => ({ ok: false, reason: 'No se pudo leer el gasto del mes.' })) : { ok: true as boolean, reason: undefined as string | undefined };
+  const apifyStart = !paid.skip && (canSpend() || apifyFloor) && globalRoom.ok;
+  if (!apifyStart) stages.push({ id: 'apify', ran: false, why: !canSpend() && !apifyFloor ? noSpendWhy() : !globalRoom.ok ? (globalRoom.reason ?? 'Tope global del mes.') : ('reason' in paid && paid.reason ? paid.reason : 'Sin tiempo en el presupuesto del cron.') });
   let apifyError: string | null = null;
   const apify = await dailyApify(publicBaseUrl(request), { start: apifyStart, deadline: budget.deadline(9_000) }).catch(error => { apifyError = String((error as Error)?.message ?? error); return failed('apify', { started: [], harvested: [], truncated: false } as Awaited<ReturnType<typeof dailyApify>>)(error); });
-  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apify.started.length ? `${apify.started.length} búsqueda(s) lanzada(s); los resultados llegan después.` : 'Ningún portal con búsqueda diaria pendiente.' });
+  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: `${apifyFloor && !canSpend() ? '[mínimo diario] ' : ''}${apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apify.started.length ? `${apify.started.length} búsqueda(s) lanzada(s); los resultados llegan después.` : 'Ningún portal con búsqueda diaria pendiente.'}` });
   if ('truncated' in apify && apify.truncated) budget.cut('apify');
   const vigencia = budget.remaining() >= MIN_STEP_MS ? await refreshVigencia(20, budget.deadline(5_000)).catch(() => ({ checked: 0, withdrawn: 0 })) : (budget.cut('vigencia'), { checked: 0, withdrawn: 0 });
   if ('truncated' in vigencia && vigencia.truncated) budget.cut('vigencia');
@@ -171,6 +186,6 @@ export async function GET(request: NextRequest) {
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
   // Una fila por etapa (corrió o se saltó, y por qué) bajo la fuente «cron-waterfall»: así el panel puede decir por qué una
   // fuente de pago no recogió hoy. No es gasto (la nota no lleva «coste_usd=»), solo registro; si falla no tumba el cron.
-  await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', `etapa=${stage.id} · ${stage.ran ? 'corrió' : 'saltada'} · ${stage.why}`.slice(0, 300)).catch(() => false)));
+  await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', stageNote(stage.id, stage.ran, stage.why)).catch(() => false)));
   return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }
