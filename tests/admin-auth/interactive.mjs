@@ -102,7 +102,7 @@ try {
       const panel = page.getByTestId('waterfall');
       await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
-      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 5, 'Google Jobs, RapidAPI, páginas de empresa, respaldo y Apify');
+      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 6, 'Google Jobs, RapidAPI, Tavily, páginas de empresa, respaldo y Apify');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
       const sample = page.getByTestId('source-sample');
       await sample.getByRole('heading', { name: 'Salud y muestra por fuente' }).waitFor();
@@ -129,7 +129,7 @@ try {
     const control = page.getByTestId('spend-control');
     await control.getByRole('heading', { name: 'Control de inversión' }).waitFor();
     await control.locator('tbody tr').first().waitFor();
-    assert.equal(await control.locator('tbody tr').count(), 7, 'Apify, Bright Data, JSearch, RapidAPI, SerpApi, ZenRows y ScrapingBee en el mismo cuadro');
+    assert.equal(await control.locator('tbody tr').count(), 8, 'Apify, Bright Data, JSearch, RapidAPI, SerpApi, Tavily, ZenRows y ScrapingBee en el mismo cuadro');
     const bright = control.locator('tr[data-provider="brightdata"]');
     assert.match(await bright.innerText(), /0,0015/, 'el gasto de la prueba de clave ya consta');
     assert.equal((await bright.locator('td.num').innerText()).trim(), '1', 'cuenta las peticiones');

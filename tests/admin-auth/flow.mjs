@@ -102,8 +102,8 @@ await step('baja: no puedes quitarte a ti ni al último propietario; quitar cort
 await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en claro; probar válida/ inválida', async () => {
   let r = await call('/api/admin/connections'); assert.equal(r.status, 200);
   // 12 proveedores: los 8 de siempre + Bright Data, ZenRows y ScrapingBee (rutas de pago/HTML) + JSearch.
-  assert.equal(r.json.connections.length, 13); assert.ok(r.json.connections.every(c => !c.configured));
-  for (const provider of ['brightdata', 'jsearch', 'rapidapi', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
+  assert.equal(r.json.connections.length, 14); assert.ok(r.json.connections.every(c => !c.configured));
+  for (const provider of ['brightdata', 'jsearch', 'rapidapi', 'tavily', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'nope', secret: 'good-key-1234' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'corta' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'POST', body: { provider: 'groq' } })).status, 404); // sin clave guardada
@@ -165,7 +165,7 @@ await step('Control de inversión: un solo cuadro con el gasto y el tope de todo
   state.ingestRuns.push({ source: 'google-jobs', via: 'cron', note: 'ruta cascada · proveedor=serpapi · 2 petición(es) · coste_usd=0.050000 · google-jobs', created_at: new Date().toISOString() });
   const r = await call('/api/admin/spend');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'jsearch', 'rapidapi', 'serpapi', 'zenrows', 'scrapingbee']);
+  assert.deepEqual(r.json.providers.map(p => p.provider), ['brightdata', 'jsearch', 'rapidapi', 'serpapi', 'tavily', 'zenrows', 'scrapingbee']);
   const bd = r.json.providers.find(p => p.provider === 'brightdata');
   assert.equal(bd.spent_usd, 0.0045); assert.equal(bd.requests, 3); assert.equal(bd.cap_source, 'defecto');
   const serp = r.json.providers.find(p => p.provider === 'serpapi');
@@ -979,7 +979,7 @@ await step('Waterfall: el propietario fija el objetivo de ofertas cualificadas y
   const first = await call('/api/admin/waterfall');
   assert.equal(first.status, 200);
   assert.equal(first.json.state.target.source, 'defecto'); assert.equal(first.json.state.target.target, 60, 'sin nada guardado, el 60 de siempre y declarado como defecto');
-  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'unlocker', 'respaldo', 'apify'], 'las etapas van en el orden en que las lanza el cron');
+  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'tavily', 'unlocker', 'respaldo', 'apify'], 'las etapas van en el orden en que las lanza el cron');
   const unlocker = first.json.stages.find(s => s.id === 'unlocker');
   assert.equal(unlocker.automatic, true, 'las páginas de empresa ya no se lanzan a mano'); assert.match(unlocker.unit, /Gratis si la página se deja leer/);
   assert.ok(!JSON.stringify(first.json).includes('secret'), 'sin secretos');

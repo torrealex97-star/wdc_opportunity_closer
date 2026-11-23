@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
+import { tavilyMaxSearches } from '../../../../lib/tavilyCollect';
 import { apifyToken, listActors, monthSpent } from '../../../../lib/apify';
 import { listConnections } from '../../../../lib/integrations';
 import { readBudget } from '../../../../lib/paidBudget';
@@ -68,6 +69,12 @@ export async function GET(request: NextRequest) {
       unit: `~${PROVIDER_METERS.rapidapi.usdPerRequest} USD por búsqueda (según el plan de cada API), hasta ${rapidApiMaxRequests()} por pasada`,
       available: keysKnown && keys.has('rapidapi') && room(row('rapidapi')).ok && rapidApiMaxRequests() > 0,
       reason: !keysKnown || !keys.has('rapidapi') ? noKey('RapidAPI') : rapidApiMaxRequests() === 0 ? 'Desactivado (RAPIDAPI_MAX_REQUESTS=0).' : room(row('rapidapi')).why,
+    },
+    {
+      id: 'tavily', label: 'Tavily (búsqueda semántica con IA)', automatic: true,
+      unit: `~${PROVIDER_METERS.tavily.usdPerRequest} USD por búsqueda, hasta ${tavilyMaxSearches()} por pasada`,
+      available: (keysKnown && keys.has('tavily') || Boolean(process.env.TAVILY_API_KEY)) && room(row('tavily')).ok && tavilyMaxSearches() > 0,
+      reason: !(keysKnown && keys.has('tavily')) && !process.env.TAVILY_API_KEY ? noKey('Tavily') : tavilyMaxSearches() === 0 ? 'Desactivado (TAVILY_MAX_SEARCHES=0).' : room(row('tavily')).why,
     },
     {
       // Automática: la lectura directa es gratis y corre en cada pasada; el desbloqueador de pago solo si la página bloquea.

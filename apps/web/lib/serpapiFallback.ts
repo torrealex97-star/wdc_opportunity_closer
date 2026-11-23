@@ -5,6 +5,7 @@ import { getSecret } from './integrations';
 import { ORG } from './external';
 import { callTimeout, timeLeft, MIN_STEP_MS } from './cronBudget';
 import { serviceRest } from './supabaseAuth';
+import { buildQuery } from './searchBank';
 import { FALLBACK_PORTALS, cleanTitle, organicToCandidate, type FallbackPortal } from './jobPortals';
 export { FALLBACK_PORTALS, cleanTitle, organicToCandidate, type FallbackPortal };
 
@@ -61,7 +62,7 @@ type Fetcher = (portal: FallbackPortal, timeoutMs: number) => Promise<Candidate[
 export function serpapiSiteFetcher(secret: string): Fetcher {
   return async (portal, timeoutMs) => {
     const base = process.env.SERPAPI_API_BASE ?? 'https://serpapi.com';
-    const url = `${base}/search.json?engine=google&q=${encodeURIComponent(`site:${portal.site} "${portal.query}"`)}&gl=${portal.gl}&hl=es&num=20&api_key=${encodeURIComponent(secret)}`;
+    const url = `${base}/search.json?engine=google&q=${encodeURIComponent(buildQuery('google', portal.query, { site: portal.site }))}&gl=${portal.gl}&hl=es&num=20&api_key=${encodeURIComponent(secret)}`;
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json() as Record<string, unknown>;
