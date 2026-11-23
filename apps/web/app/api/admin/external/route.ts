@@ -5,6 +5,7 @@ import { API_PROVIDERS, collectAll, type ApiProvider } from '../../../../lib/col
 import { collectGoogleJobs, GOOGLE_JOBS_SOURCE } from '../../../../lib/googleJobs';
 import { collectFallback } from '../../../../lib/serpapiFallback';
 import { runAiReview, undoAiDecisions } from '../../../../lib/aiReview';
+import { envWithAiMode } from '../../../../lib/aiMode';
 import { assessOffer } from '../../../../lib/offerRisk';
 import { offerTags } from '../../../../lib/offerTags';
 import { approvalsToday, approveTop, countsByStatus, listOffersPage, pausedSources, recentRuns, setSourceEnabled, setStatus, statsBySource, verifyOffer, type PageQuery } from '../../../../lib/external';
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       ...((outcomes.some(o => o.truncated) || googleJobs?.truncated || fallback?.truncated) ? { truncated: true } : {}),
     });
   }
-  if (body.action === 'ai_review') return reply(auth!, await runAiReview({ deadline: createBudget(45_000).deadline(42_000) }));
+  if (body.action === 'ai_review') return reply(auth!, await runAiReview({ deadline: createBudget(45_000).deadline(42_000), env: await envWithAiMode() }));
   if (body.action === 'ai_undo') return reply(auth!, { undone: await undoAiDecisions(auth!.admin.email) });
   if (body.action === 'verify') {
     const ids = Array.isArray(body.ids) ? body.ids.filter((i): i is string => typeof i === 'string').slice(0, 25) : [];

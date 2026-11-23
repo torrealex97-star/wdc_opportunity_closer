@@ -1007,6 +1007,32 @@ await step('Waterfall: el propietario fija el objetivo de ofertas cualificadas y
   assert.equal((await call('/api/admin/waterfall', { method: 'POST', body: { qualified_per_day: 10 } })).status, 503);
   state.waterfallMissing = false;
 });
+await step('Modo de la IA: se lee y se cambia desde la app (solo propietario), vuelve a shadow, y sin tabla no activa live ni finge guardar', async () => {
+  state.aiModeRow = null; state.aiModeMissing = false;
+  const first = await call('/api/admin/ai-mode');
+  assert.equal(first.status, 200); assert.equal(first.json.mode, 'shadow'); assert.equal(first.json.source, 'defecto'); assert.equal(first.json.owner, true);
+  for (const bad of ['', 'LIVE', 'turbo', 1, null, true]) assert.equal((await call('/api/admin/ai-mode', { method: 'PUT', body: { mode: bad } })).status, 422, `«${bad}» no es un modo`);
+  assert.equal(state.aiModeRow, null, 'un modo inválido no guarda nada');
+  const live = await call('/api/admin/ai-mode', { method: 'PUT', body: { mode: 'live' } });
+  assert.equal(live.status, 200); assert.equal(live.json.mode, 'live'); assert.equal(live.json.source, 'tabla'); assert.ok(live.json.updated_by); assert.match(live.json.message, /live/);
+  assert.equal(state.aiModeRow.mode, 'live');
+  assert.equal((await call('/api/admin/ai-mode')).json.mode, 'live');
+  // Se apaga igual de fácil.
+  assert.equal((await call('/api/admin/ai-mode', { method: 'PUT', body: { mode: 'shadow' } })).json.mode, 'shadow');
+  // Solo el propietario cambia; un administrador lo ve; sin sesión, 401.
+  const savedJar = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
+  const asAdmin = await call('/api/admin/ai-mode'); assert.equal(asAdmin.status, 200); assert.equal(asAdmin.json.owner, false);
+  assert.equal((await call('/api/admin/ai-mode', { method: 'PUT', body: { mode: 'live' } })).status, 403);
+  jar = {}; assert.equal((await call('/api/admin/ai-mode')).status, 401); jar = savedJar;
+  assert.equal(state.aiModeRow.mode, 'shadow', 'el administrador no cambió nada');
+  // Sin la tabla: cae al entorno (o shadow), lo dice y no finge haber guardado.
+  state.aiModeMissing = true; state.aiModeRow = null; // el servidor corre en otro proceso: sin variable de entorno, el defecto es shadow
+  const missing = (await call('/api/admin/ai-mode')).json;
+  assert.equal(missing.mode, 'shadow'); assert.equal(missing.source, 'defecto'); assert.match(missing.error, /20261123_ai_review_settings/);
+  const refused = await call('/api/admin/ai-mode', { method: 'PUT', body: { mode: 'live' } });
+  assert.equal(refused.status, 503); assert.match(refused.json.detail, /migración/);
+  state.aiModeMissing = true;
+});
 await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hueco recorre las etapas por coste', async () => {
   const cron = () => call('/api/cron/collect', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
   const spendRows = () => state.ingestRuns.filter(r => /proveedor=/.test(r.note ?? '')).length;

@@ -72,11 +72,13 @@ const CURATED: Portal[] = [
     caution: 'LinkedIn limita el uso automático en sus condiciones. Se busca poco volumen y es una decisión tuya (ADR-011). Viene apagado.',
     recipes: [
       { actor: 'curious_coder/linkedin-jobs-scraper', name: 'Buscador de LinkedIn A' },
-      // Esquemas leídos en la página pública de entrada (2026-11-23). B: `keyword` y `locations` son listas; `publishedAt`
-      // r604800 = última semana; únicos para no pagar duplicados. C: `keywords` obligatorio y `location` por defecto
+      // Esquemas leídos en la página pública de entrada (2026-11-23). B: `keyword` y `locations` son listas (una búsqueda por
+      // término y ubicación: España, LatAm y EE. UU., los tres mercados del producto, para que no mande solo EE. UU.);
+      // `publishedAt` r604800 = última semana; sin agencias de reclutamiento ni prácticas/recepción/conductor; únicos para no pagar duplicados. C: `keywords` obligatorio y `location` por defecto
       // «United States» (por eso se fija). A y D: su esquema no se pudo leer; usan la entrada genérica de la app.
       { actor: 'cheap_scraper/linkedin-job-scraper', name: 'Buscador de LinkedIn B',
-        inputTemplate: { keyword: ['{{query}}'], locations: ['España'], publishedAt: 'r604800', saveOnlyUniqueItems: true, maxItems: '{{max_items}}' } },
+        inputTemplate: { keyword: ['{{query}}'], locations: ['España', 'México', 'Colombia', 'Argentina', 'Chile', 'Estados Unidos'], publishedAt: 'r604800', excludeRecruitingAgencies: true,
+          jobTitleExclude: ['intern', 'internship', 'becario', 'prácticas', 'receptionist', 'recepcionista', 'driver', 'conductor'], saveOnlyUniqueItems: true, maxItems: '{{max_items}}' } },
       { actor: 'gopalakrishnan/linkedin-jobs', name: 'Buscador de LinkedIn C',
         inputTemplate: { keywords: '{{query}}', location: 'España', maxResults: '{{max_items}}' } },
       { actor: 'harvestapi/linkedin-job-search', name: 'Buscador de LinkedIn D' },

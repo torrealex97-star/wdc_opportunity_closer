@@ -10,6 +10,7 @@ import MetricsPanel from './MetricsPanel';
 import FunnelPanel from './FunnelPanel';
 import { NICHE_LABELS, PAY_LABELS, type OfferTags } from '../lib/offerTags';
 import AiAgreement from './AiAgreement';
+import AiModeSwitch from './AiModeSwitch';
 import RuleAuditList from './RuleAuditList';
 import SourceIdeas from './SourceIdeas';
 import { REVIEW_HINT, whyText } from '../lib/reviewReasons';
@@ -181,6 +182,7 @@ export default function ExternalTab({ owner, onSessionLost, embedded = false }: 
     {!embedded && <>
     <MetricsPanel onSessionLost={onSessionLost} />
     <FunnelPanel onSessionLost={onSessionLost} />
+    <AiModeSwitch onSessionLost={onSessionLost} />
     <AiAgreement onSessionLost={onSessionLost} />
     <RuleAuditList onSessionLost={onSessionLost} />
     <SourceIdeas />

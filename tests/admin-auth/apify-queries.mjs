@@ -101,7 +101,8 @@ step('LinkedIn B/C e InfoJobs: la plantilla de cada actor se rellena con su camp
   const [, b, c] = linkedin.recipes;
   const inB = fillTemplate(b.inputTemplate, vars);
   assert.deepEqual(inB.keyword, ['appointment setter'], 'B espera `keyword` como lista');
-  assert.deepEqual(inB.locations, ['España']);
+  assert.deepEqual(inB.locations, ['España', 'México', 'Colombia', 'Argentina', 'Chile', 'Estados Unidos'], 'España, LatAm y EE. UU.: los tres mercados');
+  assert.equal(inB.excludeRecruitingAgencies, true); assert.ok(inB.jobTitleExclude.includes('intern') && inB.jobTitleExclude.includes('receptionist'));
   assert.equal(inB.maxItems, 10);
   assert.equal(inB.publishedAt, 'r604800');
   const inC = fillTemplate(c.inputTemplate, vars);

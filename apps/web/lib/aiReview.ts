@@ -5,6 +5,7 @@ import { pagedRest, serviceRest } from './supabaseAuth';
 import { jevAnnotate } from './jev';
 import { callTimeout, timeLeft } from './cronBudget';
 import { guardedGet, hostAllowed, privateAddress } from './urlGuard';
+import { readAiMode } from './aiMode';
 
 // Revisor IA de ofertas (incremento 1.1). La IA PROPONE; las reglas deterministas DECIDEN.
 // Toda salida del modelo es no confiable: se sanea y valida antes de tocar la base de datos.
@@ -214,7 +215,7 @@ export async function weeklyAiReport(now = new Date()): Promise<boolean> {
   const list = page.rows;
   const count = (f: (r: AiReviewNote) => boolean) => list.filter(r => r.ai_review && f(r.ai_review)).length;
   const monday = new Date(now); monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
-  const payload = { ai_review: { reviewed: list.length, would_approve: count(r => r.would_decide === 'approve'), would_withdraw: count(r => r.would_decide === 'withdraw'), human: count(r => r.would_decide === 'human'), applied: count(r => r.applied === true), audit_sample: count(r => r.audit_sample === true), links_closed: count(r => r.link?.result === 'closed'), mode: config().mode, truncated: page.truncated } };
+  const payload = { ai_review: { reviewed: list.length, would_approve: count(r => r.would_decide === 'approve'), would_withdraw: count(r => r.would_decide === 'withdraw'), human: count(r => r.would_decide === 'human'), applied: count(r => r.applied === true), audit_sample: count(r => r.audit_sample === true), links_closed: count(r => r.link?.result === 'closed'), mode: (await readAiMode()).mode, truncated: page.truncated } };
   const saved = await serviceRest('weekly_reports?on_conflict=org_id,week_start', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ org_id: ORG, week_start: monday.toISOString().slice(0, 10), payload }) });
   return saved.ok;
 }
