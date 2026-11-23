@@ -1,3 +1,11 @@
+## «Probar ruta» prueba la vía propia de la fuente (no una búsqueda en Google) y el tope global baja a 30 US$ — 2026-11-23
+
+- **Problema** (lo vio el dueño al probar Upwork e Indeed): el resultado decía «Google Jobs · Bright Data … → Google Jobs · JSearch: HTTP 401». Causa (*inspected*): toda fuente con web recibía las vías de Google Jobs con `site:<web>` y la cascada las probaba primero por coste; esas vías guardan lo que recogen bajo la fuente `google-jobs` o `brightdata-<fuente>`, así que **no probaban la fuente**, y el actor de Apify (que sí es de la fuente) solo entraba si iba el primero.
+- **Cambio** (*tested*): `planAttempts` prueba primero las vías propias (motor, API oficial, actor de Apify) y deja las de Google como respaldo; los marketplaces freelance (`upwork`, `workana`, `freelancer`) ya no tienen vías de Google Jobs, porque Google Jobs no indexa sus proyectos. Un portal de empleo (Indeed) conserva su búsqueda en Google como respaldo. El Unlocker sigue entrando solo si es la primera.
+- **Tope global:** el defecto pasa a **30 US$/mes** (decisión del dueño, «por ahora»); `GLOBAL_PAID_CAP_USD` lo cambia. Los topes individuales no cambian.
+- **Evidencia** (*tested*): `probecascade.mjs` (4 pasos, uno nuevo con Upwork, Workana, Freelancer e Indeed) y `spendfloor.mjs`; suite `run.sh` completa en la PR.
+- **Sigue abierto (del dueño):** `JSearch respondió HTTP 401` es la clave directa de JSearch rechazada (defecto ya conocido): hay que revisarla o quitarla en Panel → APIs. No afecta a Upwork ni a Indeed tras este cambio.
+
 ## Revisión automática más justa: ventana con borradores antiguos y «sin descripción» a la cola humana — 2026-11-23
 
 - **Problema** (*inspected*): la revisión leía los 120 borradores de mayor puntuación. Los que cumplen las reglas pero no caben en el tope de hoy se quedan en borrador y ocupan siempre el frente, así que los de otras fuentes que puntúan menos nunca llegaban a juzgarse (LinkedIn: 46 borradores sin juzgar). Y una oferta sin descripción se retiraba como «idioma dudoso» aunque el problema era la falta de datos.

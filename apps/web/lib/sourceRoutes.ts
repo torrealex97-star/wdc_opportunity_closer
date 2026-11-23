@@ -93,6 +93,8 @@ const DEAD_FEEDS = new Set(['remotejobs', 'remotefirstjobs']);
 const OFFICIAL_KEYS: Record<string, string> = { infojobs: 'infojobs', adzuna: 'adzuna', jooble: 'jooble' };
 const JOBSPY_SOURCES = new Set(['indeed', 'linkedin', 'glassdoor', 'google']);
 const HTML_EXTRACTOR = new Set(['company', 'custom']);
+/** Marketplaces de proyectos freelance: Google Jobs no indexa sus proyectos, así que una búsqueda `site:` en Google no es una vía suya. */
+const FREELANCE_SOURCES = new Set(['upwork', 'workana', 'freelancer']);
 
 /** Los 9 portales con respaldo ya escrito en `serpapiFallback.ts`; el resto solo va por Bright Data. */
 const SERPAPI_SOURCES = new Set(['google', 'infojobs', 'indeed', 'linkedin', 'computrabajo', 'occ-mundial', 'laborum', 'bumeran', 'bebee', 'jooble', 'adzuna']);
@@ -156,7 +158,7 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
   }
 
   const host = hostOf(entry.website);
-  const googleQuery = code === 'google' ? 'closer de ventas España' : host ? `site:${host} closer de ventas` : null;
+  const googleQuery = code === 'google' ? 'closer de ventas España' : host && !FREELANCE_SOURCES.has(code) ? `site:${host} closer de ventas` : null;
   if (googleQuery) {
     add({
       provider: 'brightdata', label: 'Google Jobs · Bright Data', cost: 'metered', costUsd: 0.0015, stage: 2,
