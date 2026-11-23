@@ -16,7 +16,7 @@ import { runAutoReview } from '../../../../lib/autoReview';
 import { activateEngine } from '../../../../lib/engineActivate';
 import { loadMetrics } from '../../../../lib/metrics';
 import { skipPaidTier } from '../../../../lib/sourceTiers';
-import { refreshVigencia } from '../../../../lib/external';
+import { CRON_LOG_SOURCE, recordSpend, refreshVigencia } from '../../../../lib/external';
 import { checkEngine } from '../../../../lib/engineAlert';
 import { createBudget, MIN_STEP_MS, totalFromEnv } from '../../../../lib/cronBudget';
 
@@ -169,5 +169,8 @@ export async function GET(request: NextRequest) {
     : (budget.cut('motor'), null);
   if (motor?.truncated) budget.cut('motor');
   const report = new Date().getUTCDay() === 1 && budget.remaining() >= MIN_STEP_MS ? await weeklyAiReport().catch(() => false) : null;
+  // Una fila por etapa (corrió o se saltó, y por qué) bajo la fuente «cron-waterfall»: así el panel puede decir por qué una
+  // fuente de pago no recogió hoy. No es gasto (la nota no lleva «coste_usd=»), solo registro; si falla no tumba el cron.
+  await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', `etapa=${stage.id} · ${stage.ran ? 'corrió' : 'saltada'} · ${stage.why}`.slice(0, 300)).catch(() => false)));
   return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

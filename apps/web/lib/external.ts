@@ -14,6 +14,8 @@ export type Contact = { emails: string[]; phones: string[] };
 export type Candidate = { external_id: string; title: string; company?: string | null; location?: string | null; url: string; salary?: string | null; description?: string | null; posted_at?: string | null; raw?: Record<string, unknown>; apply_url?: string | null; company_url?: string | null; contact?: Contact | null };
 export type ExternalOffer = { role?: string | null; spain?: boolean | null; score?: number; market?: string | null; market_basis?: string | null; currency?: string | null; apply_url?: string | null; company_url?: string | null; contact?: Contact | null; auto_review?: Record<string, unknown> | null; also_seen?: string[]; raw?: Record<string, unknown>; id: string; source: string; external_id: string; title: string; company: string | null; location: string | null; url: string; salary: string | null; description: string | null; posted_at: string | null; first_seen_at: string; last_seen_at: string; expires_at: string; editorial_status: string; verified_at: string | null; verified_result: string | null; ai_review?: Record<string, unknown> | null };
 export const SOURCE_RE = /^[a-z0-9-]{2,40}$/;
+/** Fuente interna donde el cron anota sus etapas: no es un portal y no aparece como fuente de ofertas. */
+export const CRON_LOG_SOURCE = 'cron-waterfall';
 export const MAX_CANDIDATES = 300;
 // Revisores que NO son personas. Sus decisiones se cuentan aparte: si se confunden con las humanas, el panel
 // infla «decisiones humanas» y el acuerdo IA-persona compara a la IA consigo misma.
@@ -283,7 +285,7 @@ async function sourceNames(): Promise<string[] | null> {
   const names = new Set<string>(paused);
   for (const row of [...runs, ...recent]) {
     const source = (row as { source?: unknown } | null)?.source;
-    if (typeof source === 'string' && SOURCE_RE.test(source)) names.add(source);
+    if (typeof source === 'string' && SOURCE_RE.test(source) && source !== CRON_LOG_SOURCE) names.add(source);
   }
   return [...names].sort();
 }

@@ -1,4 +1,4 @@
-import { ORG } from './external';
+import { CRON_LOG_SOURCE, ORG } from './external';
 import { pagedRest } from './supabaseAuth';
 
 // Embudo por fuente y mercado (ofertas externas). Todo sale de columnas que ya existen en `external_offers` y
@@ -57,7 +57,7 @@ export function computeFunnel(offers: FunnelOffer[], live: Array<Pick<FunnelOffe
   }
   const ing = new Map<string, { source: string; received24: number; accepted24: number; received7: number; accepted7: number }>();
   for (const x of runs ?? []) {
-    if (!in7(x.created_at)) continue;
+    if (!in7(x.created_at) || x.source === CRON_LOG_SOURCE) continue;
     const e = ing.get(x.source) ?? { source: x.source, received24: 0, accepted24: 0, received7: 0, accepted7: 0 };
     e.received7 += x.received ?? 0; e.accepted7 += x.accepted ?? 0;
     if (in24(x.created_at)) { e.received24 += x.received ?? 0; e.accepted24 += x.accepted ?? 0; }

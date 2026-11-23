@@ -160,9 +160,9 @@ const DONE = new Set(['SUCCEEDED']); const FAILED = new Set(['FAILED', 'TIMED-OU
 export async function harvestRun(run: RunRow, actor: ActorRow, budgetMs = 40000): Promise<{ status: string; harvested: number; done: boolean; error?: string }> {
   const token = await apifyToken(); if (!token) return { status: run.status, harvested: run.harvested, done: false, error: 'Sin clave de Apify.' };
   const info = await api(`/v2/actor-runs/${run.run_id}`, token); if (!info.ok) return { status: run.status, harvested: run.harvested, done: false, error: `HTTP ${info.status}` };
-  const data = (await info.json().catch(() => ({}))).data as { status?: string; defaultDatasetId?: string; usageTotalUsd?: number } | undefined; const status = data?.status ?? run.status;
+  const data = (await info.json().catch(() => ({}))).data as { status?: string; statusMessage?: string; defaultDatasetId?: string; usageTotalUsd?: number } | undefined; const status = data?.status ?? run.status;
   const patch = async (body: Record<string, unknown>) => (await serviceRest(`apify_runs?run_id=eq.${encodeURIComponent(run.run_id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }).catch(() => null))?.ok === true;
-  if (FAILED.has(status)) { await patch({ status, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: `La ejecución terminó como ${status}.` }); return { status, harvested: run.harvested, done: true, error: status }; }
+  if (FAILED.has(status)) { await patch({ status, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: failureText(status, data?.statusMessage) }); return { status, harvested: run.harvested, done: true, error: status }; }
   if (!DONE.has(status)) return { status, harvested: run.harvested, done: false };
   const dataset = run.dataset_id ?? data?.defaultDatasetId; if (!dataset) { await patch({ status, error: 'Sin dataset.' }); return { status, harvested: run.harvested, done: true, error: 'Sin dataset' }; }
   const started = Date.now(); let offset = run.harvested, harvested = run.harvested, finished = false;
@@ -180,6 +180,12 @@ export async function harvestRun(run: RunRow, actor: ActorRow, budgetMs = 40000)
   if (finished && !await patch({ status, harvested, items_total: harvested, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: null })) return { status, harvested, done: false, error: 'No se pudo guardar el cierre y el coste de la ejecución; se reintentará.' };
   return { status, harvested, done: finished };
 }
+
+/** Motivo guardado de una ejecución fallida: el mensaje de estado de Apify (por qué falló) en vez de solo «FAILED». */
+export const failureText = (status: string, message?: string | null) => {
+  const why = (message ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  return why ? `La ejecución terminó como ${status}: ${why}` : `La ejecución terminó como ${status}.`;
+};
 
 export type HarvestResult = { status: string; harvested: number; done: boolean; error?: string };
 export type AfterHarvest = (run: RunRow, actor: ActorRow, result: HarvestResult) => Promise<unknown>;
