@@ -10,8 +10,9 @@ from scripts.apify_trial import adapt_input, events, launch_card, portals  # noq
 
 def test_catalogo_real_se_lee_entero():
     rows = portals()
-    assert len(rows) == 22, 'el módulo generado tiene 22 portales; si cambia, actualizar este recuento'
-    assert sum(len(p['recipes']) for p in rows) == 57
+    # 18: Indeed, Upwork, Infoempleo, SimplyHired y Jooble pasaron a `apifyCatalog.ts` (curados, con plantilla propia por actor).
+    assert len(rows) == 18, 'el módulo generado tiene 18 portales; si cambia, actualizar este recuento'
+    assert sum(len(p['recipes']) for p in rows) == 49
     ids = [p['id'] for p in rows]
     assert len(ids) == len(set(ids)), 'un portal repetido rompería el reparto'
     assert all(r['actor'].count('/') == 1 for p in rows for r in p['recipes'])
