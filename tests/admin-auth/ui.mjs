@@ -34,6 +34,24 @@ await step('login y Resumen: contador del objetivo, pendientes y siguiente paso'
   assert.ok(await page.getByText(/1 fuente\(s\) fallan/).isVisible());
   assert.equal(await page.getByText(/sin revisar/).count(), 0, 'el resumen ya no pide revisar borradores a mano');
 });
+await step('Centro de mando: embudo, mercados, reparto y gasto con su propio estado, y «Resolver excepciones ahora» lleva a la bandeja', async () => {
+  await openTab(page, 'summary'); await page.getByTestId('command-center').waitFor();
+  const funnel = page.getByTestId('cc-funnel'); await funnel.waitFor();
+  assert.equal(await funnel.locator('li').count(), 5, 'cinco pasos del embudo');
+  assert.match(await funnel.innerText(), /recogidas nuevas[\s\S]*retiradas por reglas[\s\S]*aprobadas[\s\S]*a criterio humano[\s\S]*visibles ahora/);
+  await page.getByTestId('cc-markets').waitFor(); await page.getByTestId('cc-split').waitFor(); await page.getByTestId('cc-spend').waitFor();
+  assert.match(await page.getByTestId('cc-markets').innerText(), /No hay una meta por mercado fijada/, 'no se inventa una meta');
+  assert.match(await page.getByTestId('cc-spend').innerText(), /Gasto del mes: /);
+  // Un fallo del embudo se dice y se puede reintentar sin tumbar el resto del Centro de mando.
+  await page.route('**/api/admin/funnel', r => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'No se pudo leer el embudo ahora.' }) }));
+  await page.reload(); await openTab(page, 'summary');
+  await page.getByTestId('command-center').getByRole('alert').first().waitFor(); assert.match(await page.getByTestId('command-center').innerText(), /No se pudo leer el embudo ahora/);
+  await page.getByTestId('cc-spend').waitFor();
+  await page.unroute('**/api/admin/funnel'); await page.reload(); await openTab(page, 'summary');
+  await page.getByRole('button', { name: /Resolver excepciones ahora/ }).click(); await page.getByRole('heading', { name: 'Resuelve solo las dudas.' }).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  await openTab(page, 'summary');
+});
 await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como pestañas, y «Equipo» aparte', async () => {
   const nav = page.getByRole('navigation', { name: 'Secciones del panel' });
   for (const module of ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura']) await nav.getByRole('button', { name: module, exact: true }).waitFor();

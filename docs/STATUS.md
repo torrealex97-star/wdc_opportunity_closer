@@ -1,3 +1,12 @@
+## Centro de mando: embudo, mercados, reparto gratuitas/de pago y coste por oferta aprobada — 2026-11-23
+
+- **Petición del dueño:** ver la salud de la selección en pocos segundos y resolver excepciones con un clic (pieza 3 del panel en 4 módulos).
+- **Cambio** (*tested*): el Resumen abre con el bloque **«Cómo va la selección»** (`CommandCenter.tsx`): (1) **embudo de 7 días** —recogidas nuevas, retiradas por reglas, aprobadas, a criterio humano, visibles ahora— con el botón **«Resolver excepciones ahora»** que abre la Bandeja; (2) **visibles ahora por mercado** (España, LATAM, EE. UU., sin mercado); (3) **gratuitas frente a de pago** (% de las aprobadas que vienen de fuentes con coste registrado); (4) **gasto del mes** entre todos los proveedores y, por fuente de pago, **coste por oferta aprobada**. Cada bloque tiene su propio estado de carga y error con «Reintentar»: si uno falla, los demás siguen y el hueco es «—» con su causa.
+- **Cálculos** (`lib/commandCenter.ts`, puros): sin aprobadas, sin coste o sin dato el coste por aprobada es `null` («—»), nunca 0 ni una división por cero; si el coste registrado no se puede leer, el reparto gratuitas/de pago **no se calcula**.
+- **No se inventa:** no hay meta por mercado fijada (solo existe el objetivo de 20 closers de España y el del waterfall), así que se enseña lo que hay, sin barras contra una meta inventada. No hay desglose por categoría (closer/setter): el embudo por fuente no lleva el perfil.
+- **Evidencia** (*tested*): `commandcenter.mjs` (5 pasos) y un paso nuevo en `ui.mjs` (5 pasos del embudo, mercados, reparto, gasto, fallo del embudo sin tumbar el resto, botón a la Bandeja, sin desbordamiento); suite `run.sh` 523 pasos OK, `npm run design`, typecheck y build. **Revisión visual manual a 1280 y 390 px: no hecha.**
+- **Pendiente:** tendencia de 7/30 días con filtro de fechas global, y metas por categoría cuando el dueño fije las cifras.
+
 ## Bandeja de revisión: la cola de excepciones con sus tres estados y el motivo de cada duda — 2026-11-23
 
 - **Petición del dueño:** gestión por excepción: lo claro se publica solo y la persona ve solo las dudas, con el motivo exacto. Pieza 2 del panel en 4 módulos.
