@@ -102,7 +102,7 @@ await step('baja: no puedes quitarte a ti ni al último propietario; quitar cort
 await step('APIs: sin clave al principio; guardar cifrada; nunca se devuelve en claro; probar válida/ inválida', async () => {
   let r = await call('/api/admin/connections'); assert.equal(r.status, 200);
   // 12 proveedores: los 8 de siempre + Bright Data, ZenRows y ScrapingBee (rutas de pago/HTML) + JSearch.
-  assert.equal(r.json.connections.length, 14); assert.ok(r.json.connections.every(c => !c.configured));
+  assert.equal(r.json.connections.length, 16); assert.ok(r.json.connections.every(c => !c.configured));
   for (const provider of ['brightdata', 'jsearch', 'rapidapi', 'tavily', 'zenrows', 'scrapingbee']) assert.ok(r.json.connections.some(c => c.provider === provider), `falta ${provider}`);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'nope', secret: 'good-key-1234' } })).status, 422);
   assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'groq', secret: 'corta' } })).status, 422);
@@ -894,8 +894,12 @@ await step('voz: cookies (borrador, sin banner), términos y privacidad con el l
   assert.equal((await fetch(BASE + '/api/admin/voice-limits')).status, 401, 'sin sesión no se ven los topes');
   const limits = await call('/api/admin/voice-limits'); assert.equal(limits.status, 200);
   assert.equal(limits.json.daily_minutes_per_student, 10); assert.equal(limits.json.monthly_cap_usd, 10); assert.equal(limits.json.switch_on, false);
-  assert.equal(limits.json.spent_usd_month, null, 'sin sesiones el gasto es «sin medir», no 0'); assert.equal(limits.json.minutes_today, null);
+  assert.equal(limits.json.spent_usd_month, 0, 'tabla vacía y legible: 0 de verdad'); assert.equal(limits.json.minutes_today, 0);
   assert.equal(limits.json.providers.length, 4); assert.ok(limits.json.providers.every(p => p.usdPerMinute.low > 0 && p.source.startsWith('https://')));
+  assert.equal(limits.json.cascade_readable, true); assert.equal(limits.json.chosen, null, 'sin claves guardadas no hay proveedor elegido');
+  assert.ok(limits.json.providers.every(p => p.state === 'sin_clave' && p.spent_usd === 0), 'cada proveedor dice por qué no está activo');
+  assert.deepEqual(limits.json.providers.map(p => p.id), ['openai_realtime_mini', 'deepgram_agent', 'openai_realtime', 'elevenlabs_agents'], 'ordenados del más barato al más caro');
+  assert.equal(limits.json.worker_configured, false); assert.deepEqual(limits.json.events, []);
 });
 await step('pausar una fuente: se rechaza su ingesta, se salta su recogida y desaparece de la vista de alumna', async () => {
   const tok = { authorization: 'Bearer ingest-token-0123456789abcdef0123' };

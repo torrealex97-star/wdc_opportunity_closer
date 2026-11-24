@@ -1,10 +1,11 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, BriefcaseBusiness, Building2, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Plug, RefreshCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
+import { Activity, BriefcaseBusiness, Building2, CloudCog, Globe2, ChevronRight, FileCheck2, LayoutDashboard, ListChecks, KeyRound, LoaderCircle, LogOut, Mic, Plug, RefreshCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, GraduationCap, Target } from 'lucide-react';
 import CloudAdminPanel from './CloudAdminPanel';
 import EngineAlertBanner from './EngineAlertBanner';
 import ApifyTab from './ApifyTab';
 import ApisTab from './ApisTab';
+import VoicePanel from './VoicePanel';
 import CatalogTab from './CatalogTab';
 import ExternalTab from './ExternalTab';
 import QuickReview from './QuickReview';
@@ -19,7 +20,7 @@ import PracticeSettings from './PracticeSettings';
 // Panel hospedado: mismo marco que el panel local (barra lateral, cabecera, título en serif), con acceso por
 // email + contraseña de Supabase Auth (solo usuarios invitados) y las secciones de gestión de la app.
 export type Me = { email: string; role: 'owner' | 'admin' };
-type Tab = 'summary' | 'inbox' | 'engine' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'students' | 'practice' | 'users';
+type Tab = 'summary' | 'inbox' | 'engine' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'companies' | 'scorecard' | 'apis' | 'voice' | 'students' | 'practice' | 'users';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { headers: { 'Content-Type': 'application/json' }, ...init });
@@ -161,11 +162,11 @@ function UsersTab({ me, onSessionLost }: { me: Me; onSessionLost: () => void }) 
 // Cuatro módulos de trabajo (decisión del dueño, 2026-11-23) en vez de trece destinos sueltos: Centro de mando (mirar cómo va), Bandeja
 // de revisión (resolver dudas), Motor de fuentes (de dónde vienen las ofertas) e Infraestructura (claves y conexiones). Cada módulo agrupa
 // sus pantallas como pestañas; las secciones siguen teniendo su enlace (#quick, #sources…) y «Equipo» queda aparte porque trata de personas.
-type Group = 'Centro de mando' | 'Bandeja de revisión' | 'Motor de fuentes' | 'Reglas e infraestructura' | 'Equipo';
-const GROUPS: Group[] = ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura', 'Equipo'];
+type Group = 'Centro de mando' | 'Bandeja de revisión' | 'Motor de fuentes' | 'Reglas e infraestructura' | 'Voz' | 'Equipo';
+const GROUPS: Group[] = ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura', 'Voz', 'Equipo'];
 /** Módulos que se muestran como UN botón en la barra lateral y llevan pestañas; «Equipo» lista sus tres secciones directas. */
 const MODULE_ICON: Record<Exclude<Group, 'Equipo'>, React.ReactNode> = {
-  'Centro de mando': <LayoutDashboard size={18} />, 'Bandeja de revisión': <ListChecks size={18} />, 'Motor de fuentes': <Globe2 size={18} />, 'Reglas e infraestructura': <Plug size={18} />,
+  'Centro de mando': <LayoutDashboard size={18} />, 'Bandeja de revisión': <ListChecks size={18} />, 'Motor de fuentes': <Globe2 size={18} />, 'Reglas e infraestructura': <Plug size={18} />, 'Voz': <Mic size={18} />,
 };
 
 const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode; eyebrow: string; title: string; lead: string }> = [
@@ -181,6 +182,7 @@ const TABS: Array<{ id: Tab; label: string; group: Group; icon: React.ReactNode;
   { id: 'companies', group: 'Motor de fuentes', label: 'Empresas', icon: <Building2 size={18} />, eyebrow: 'FEED ATS, PÁGINA PROPIA O LINKEDIN', title: 'Empresas, una a una.', lead: 'Las que tienen ATS público entran solas; las que tienen página propia se revisan con el extractor común; las que solo publican en LinkedIn se buscan en Google Jobs.' },
   { id: 'scorecard', group: 'Centro de mando', label: 'Resultados por fuente', icon: <Target size={18} />, eyebrow: 'LO QUE PASA DESPUÉS DE PUBLICAR', title: 'Qué fuente trae entrevistas.', lead: 'Candidaturas del tablero de las alumnas cruzadas con la fuente del anuncio: enviadas, respuestas, entrevistas y ofertas por cada 1.000 anuncios vivos. Solo mide; no retira fuentes.' },
   { id: 'apis', group: 'Reglas e infraestructura', label: 'APIs', icon: <Plug size={18} />, eyebrow: 'CLAVES Y PROVEEDORES', title: 'APIs y conexiones.', lead: 'Guarda las claves de los proveedores y comprueba que funcionan.' },
+  { id: 'voice', group: 'Voz', label: 'Panel de voz', icon: <Mic size={18} />, eyebrow: 'PROVEEDORES, USO Y GASTO', title: 'Voz: proveedores, uso y gasto.', lead: 'Qué proveedor de voz se usaría ahora (el más barato con clave y sano), cuánto se ha gastado y qué ha fallado. Para conectar uno basta con guardar su clave en APIs.' },
   { id: 'students', group: 'Equipo', label: 'Alumnas', icon: <GraduationCap size={18} />, eyebrow: 'QUIÉN ENTRA A SU ESPACIO', title: 'Alumnas con acceso.', lead: 'Invita, pausa o da de baja a las alumnas. Solo ellas ven su propio perfil.' },
   { id: 'practice', group: 'Equipo', label: 'Criterios de práctica', icon: <SlidersHorizontal size={18} />, eyebrow: 'CÓMO SE PUNTÚA Y QUÉ SE CORRIGE', title: 'Los criterios de las salas.', lead: 'Rúbricas por sala, pesos, la cualificación de la llamada y la única corrección prioritaria. Lo que cambies aquí es lo que aplica el servidor al puntuar la próxima práctica.' },
   { id: 'users', group: 'Equipo', label: 'Usuarios', icon: <Users size={18} />, eyebrow: 'QUIÉN ENTRA', title: 'Equipo con acceso.', lead: 'Solo las personas de esta lista pueden entrar al panel.' },
@@ -267,6 +269,7 @@ export default function AdminShell() {
         {tab === 'engine' && <SourcesEngine onSessionLost={lost} go={go} />}
         {tab === 'sources' && <SourcesTab onSessionLost={lost} onOpenApis={() => go('apis')} owner={me.role === 'owner'} />}
         {tab === 'companies' && <CompanyPages owner={me.role === 'owner'} onSessionLost={lost} />}
+        {tab === 'voice' && <VoicePanel onSessionLost={lost} goApis={() => go('apis')} />}
         {tab === 'apis' && <ApisTab owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'scorecard' && <SourceScorecard onSessionLost={lost} />}
         {tab === 'students' && <StudentsTab owner={me.role === 'owner'} onSessionLost={lost} />}
