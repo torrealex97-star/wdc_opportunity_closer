@@ -164,8 +164,14 @@ export default function SourcesCenter({ sources, external = [], paused = [], eng
   async function testAll() {
     const plan = withInput.map(row => ({ row, ready: planCascade(routesOf(row.code), routeState, orderOf(row.code)).filter(step => step.ready).map(step => step.route) }))
       .filter(item => item.ready.length > 0 && item.ready[0].provider !== 'unlocker');
-    if (!plan.length) { setBatch('Ninguna fuente tiene una vía lista para probar.'); return; }
-    if (!window.confirm(`Se probarán ${plan.length} fuentes con 10 resultados cada una (tope de la tanda: ${BATCH_CAP_USD} US$). ¿Seguir?`)) return;
+    // Las fuentes cuya única vía real es una búsqueda de Google (Bright Data, JSearch, SerpApi) se dejan fuera de la tanda: en las
+    // pruebas del 2026-11-23/24 devolvieron «0 en bruto» o error en todas y cada una cuesta dinero. Siguen en su botón «Probar ruta».
+    const GOOGLE = new Set(['brightdata', 'jsearch', 'serpapi']);
+    const runnable = plan.filter(item => !GOOGLE.has(planAttempts(item.ready)[0]?.provider ?? ''));
+    const skipped = plan.length - runnable.length;
+    plan.splice(0, plan.length, ...runnable);
+    if (!plan.length) { setBatch('Ninguna fuente tiene una vía propia lista para probar en tanda.'); return; }
+    if (!window.confirm(`Se probarán ${plan.length} fuentes con 10 resultados cada una (tope de la tanda: ${BATCH_CAP_USD} US$)${skipped ? `; se omiten ${skipped} cuya única vía es una búsqueda de Google (sin resultados en las pruebas)` : ''}. ¿Seguir?`)) return;
     let spent = 0, done = 0;
     for (const item of plan) {
       if (spent >= BATCH_CAP_USD) { setBatch(`Tanda parada al llegar a ${BATCH_CAP_USD} US$: ${done} de ${plan.length} fuentes probadas.`); return; }
