@@ -5,6 +5,14 @@
 - **Evidencia:** *tested* con XML de muestra (`tests/test_workable_collect.py` 9/9; el primer intento falló por `comerciales` y se corrigió). **No *verified***: `workable.com` está bloqueado desde este entorno, no se ha descargado el feed real. Un segundo intento en una hora devuelve 429.
 - **NO está hecho:** cuenta como fuente cuando tras la primera ejecución en Actions haya ≥1 oferta cualificada en 7 días, o se marque bloqueada con causa. Necesita `INGEST_URL` e `INGEST_TOKEN` en los secretos (ya existen si JobSpy los usa).
 
+## Paso de interfaz «control de fuentes»: intermitencia de CI localizada y corregida (2026-11-24)
+
+- **Medido:** `web-admin` falló en 3 de 5 intentos sobre los mismos commits (PR #176, que no toca `apps/web`), siempre en «Resumen: control de fuentes» con `Timeout 30000ms` en `source-control`.
+- **Causa localizada (log de #177):** era la ÚLTIMA espera del paso, tras «Ver todas en el panel de fuentes»: volvía a Resumen forzando `#summary` por hash, vía que el propio comentario del paso ya marcaba como poco fiable.
+- **Cambio (*tested*, suite local 631 PASS, `exit=0`; CI de #177 verde en los dos runs):** auxiliar `toSummary` que vuelve a Resumen pulsando el módulo, y error con hash/título/sesión/pestañas si no aparece. Dos pasadas verdes no prueban que la intermitencia haya desaparecido: se vigila.
+- También en #177: el claim cerrado de #175 dejaba dos trabajos `in_progress` del mismo agente y rompía `npm run handoff`.
+
+
 ## Fuentes de Apify: empresas y Elempleo con actor que busca y trae descripción (2026-11-24)
 
 - **Medido antes (base real, 7 días):** `apify-company` 100 vistas / 0 aprobadas (90 puestos «Personal Trainer» de una sola empresa, sin descripción); Elempleo: el primer actor no devuelve descripción por diseño.
