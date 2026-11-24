@@ -1,0 +1,38 @@
+name: Workable collect
+# Feed público XML de Workable (todas sus empresas) -> borradores en el panel. Sin lista de empresas ni proxies; gratuito.
+# Se descarga UNA vez (un segundo intento dentro de la hora devuelve 429). Secretos: INGEST_URL (https://<dominio>/api/ingest) e INGEST_TOKEN.
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Solo buscar y mostrar, sin enviar (1 = sí)'
+        default: '0'
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Recoger y enviar borradores
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+        run: |
+          set -o pipefail
+          if [ "$DRY_RUN" = "1" ]; then ARGS=--dry-run; else ARGS=; fi
+          python scripts/workable_collect.py $ARGS 2>&1 | tee workable.log
+      - name: Resumen (qué se recogió y qué falló)
+        if: always()
+        run: |
+          echo '### Workable' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -20 workable.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'sin salida' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

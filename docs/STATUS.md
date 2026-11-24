@@ -1,3 +1,10 @@
+## Feed XML de Workable: recolector gratuito de todas sus empresas (2026-11-24)
+
+- **Qué:** `scripts/workable_collect.py` + `.github/workflows/workable-collect.yml` (diario 05:41 UTC) envían borradores a `/api/ingest` con `source=workable`. Filtra puestos closer/setter/cold caller/SDR con `career.vocabulary` (palabra completa: «Bed Setter» no entra) en ES/LatAm o con título en español; un registro por URL, URL intacta, sin correos ni teléfonos.
+- **Límite importante:** el feed NO trae descripción (formato *inspected* en el código del agregador de referencia). Sin descripción el panel descarta por `sin_descripcion`, así que cada candidato (tope 60) se enriquece con la API pública de la ficha `apply.workable.com/api/v2/accounts/<cuenta>/jobs/<código>`. **Ese contrato no está verificado**: si falla, se envía sin descripción y se dice en la nota; nunca se inventa.
+- **Evidencia:** *tested* con XML de muestra (`tests/test_workable_collect.py` 9/9; el primer intento falló por `comerciales` y se corrigió). **No *verified***: `workable.com` está bloqueado desde este entorno, no se ha descargado el feed real. Un segundo intento en una hora devuelve 429.
+- **NO está hecho:** cuenta como fuente cuando tras la primera ejecución en Actions haya ≥1 oferta cualificada en 7 días, o se marque bloqueada con causa. Necesita `INGEST_URL` e `INGEST_TOKEN` en los secretos (ya existen si JobSpy los usa).
+
 ## Fuentes de Apify: empresas y Elempleo con actor que busca y trae descripción (2026-11-24)
 
 - **Medido antes (base real, 7 días):** `apify-company` 100 vistas / 0 aprobadas (90 puestos «Personal Trainer» de una sola empresa, sin descripción); Elempleo: el primer actor no devuelve descripción por diseño.
