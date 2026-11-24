@@ -73,6 +73,22 @@ step('diagnóstico: llegaron elementos pero ninguno guardable se dice con los ca
   assert.equal(noKeptText(10, 3, 'foo'), null); assert.equal(noKeptText(0, 0, ''), null);
 });
 
+step('actores base (2026-11-24): Computrabajo abotapi/reventadata, red Bumeran, OCC y LinkedIn Fantastic.jobs van delante con su entrada', () => {
+  const find = (id, actor) => portalById(id).recipes.find(r => r.actor === actor);
+  assert.equal(portalById('computrabajo').recipes[0].actor, 'abotapi/computrabajo-jobs-scraper');
+  const day = Date.parse('2026-11-24T10:00:00Z');
+  const abot = fillTemplate(find('computrabajo', 'abotapi/computrabajo-jobs-scraper').inputTemplate, vars({ query: 'closer', country: 'CO' }));
+  assert.deepEqual(abot, { mode: 'search', searchQueries: ['closer'], countries: ['co'], fetchReviews: false, maxReviews: 0, maxItems: 10 }, 'sin opiniones de empresas');
+  assert.deepEqual(fillTemplate(find('computrabajo', 'reventadata/computrabajo-scraper').inputTemplate, vars({ query: 'setter', country: 'MX' })), { country: 'mx', searchQueries: ['setter'], maxItems: 10 });
+  assert.deepEqual(fillTemplate(find('laborum', 'bibian/latam-jobs-bumeran-scraper').inputTemplate, vars({ query: 'closer', country: 'AR' })), { countries: ['argentina'], keywords: 'closer' });
+  assert.ok(portalById('occ-mundial').recipes.some(r => r.actor === 'unfenced-group/occ-com-mx-scraper'));
+  const li = fillTemplate(find('linkedin', 'fantastic-jobs/advanced-linkedin-job-search-api').inputTemplate, vars({ query: 'closer de ventas', country: 'US' }));
+  assert.deepEqual(li.locationSearch, ['United States']); assert.deepEqual(li.aiLanguageFilter, ['Spanish']); assert.equal(li.limit, 10); assert.deepEqual(li.titleSearch, ['closer de ventas']);
+  assert.equal(portalById('linkedin').recipes[0].actor, 'fantastic-jobs/advanced-linkedin-job-search-api');
+  assert.ok(countryForDay(portalById('linkedin'), day));
+  for (const id of ['computrabajo', 'laborum', 'occ-mundial', 'linkedin']) assert.equal(new Set(portalById(id).recipes.map(r => r.actor)).size, portalById(id).recipes.length, `${id}: sin actores repetidos`);
+});
+
 for (const [status, name, message] of results) console.log(`${status}  ${name}${message ? '\n      ' + message : ''}`);
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);

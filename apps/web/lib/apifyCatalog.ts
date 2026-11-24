@@ -74,7 +74,13 @@ const CURATED: Portal[] = [
     queries: ['closer de ventas', 'high ticket closer', 'sales closer', 'setter de ventas', 'appointment setter', 'cold caller', 'closer remoto'],
     plain: 'Ofertas públicas de LinkedIn (sin cuentas personales ni datos de contacto).',
     caution: 'LinkedIn limita el uso automático en sus condiciones. Se busca poco volumen y es una decisión tuya (ADR-011). Viene apagado.',
+    countries: ['ES', 'MX', 'CO', 'AR', 'CL', 'PE', 'US'],
     recipes: [
+      // Base de datos de ofertas de LinkedIn ya indexadas (sin raspar la web en vivo): desde 1,50 US$ por 1.000, `limit` mínimo 10.
+      // Esquema leído el 2026-11-24: `titleSearch[]`, `locationSearch[]` (nombre de país en inglés), `timeRange` 7d, `removeAgency`,
+      // `aiLanguageFilter[]` («Spanish»: así EE. UU. solo trae ofertas en español).
+      { actor: 'fantastic-jobs/advanced-linkedin-job-search-api', name: 'Base LinkedIn (Fantastic.jobs)',
+        inputTemplate: { titleSearch: ['{{query}}'], locationSearch: ['{{country_name}}'], timeRange: '7d', limit: '{{max_items}}', removeAgency: true, descriptionType: 'text', aiLanguageFilter: ['Spanish'] } },
       { actor: 'curious_coder/linkedin-jobs-scraper', name: 'Buscador de LinkedIn A' },
       // Esquemas leídos en la página pública de entrada (2026-11-23). B: `keyword` y `locations` son listas (una búsqueda por
       // término y ubicación: España, LatAm y EE. UU., los tres mercados del producto, para que no mande solo EE. UU.);
@@ -176,20 +182,33 @@ const GENERATED: Portal[] = GENERATED_PORTALS
 // Plantillas propias de buscadores generados, leídas de su página pública de entrada (2026-11-24; *inspected*). Antes recibían la
 // entrada genérica con «Spain» y «España» y fallaban con HTTP 400 (país fuera de su lista cerrada) o devolvían 0 (provincia «España»
 // en un portal argentino). Los buscadores sin plantilla aquí siguen con la entrada adaptada a su esquema, que ahora respeta sus listas.
-const OVERRIDES: Record<string, { countries?: string[]; recipes: Record<string, Record<string, unknown>> }> = {
-  computrabajo: { countries: ['MX', 'CO', 'AR', 'CL', 'PE'], recipes: {
+const OVERRIDES: Record<string, { countries?: string[]; add?: Recipe[]; recipes: Record<string, Record<string, unknown>> }> = {
+  computrabajo: { countries: ['MX', 'CO', 'AR', 'CL', 'PE'],
+    // Buscadores añadidos delante tras la propuesta del propietario (2026-11-24); contrato leído de su página pública de entrada.
+    // abotapi: `mode` obligatorio, `searchQueries[]`, `countries[]` en minúsculas; las opiniones de empresas (`fetchReviews`) se apagan: cuestan y no son ofertas.
+    // reventadata: `country` (minúsculas, una sola) y `searchQueries[]`.
+    add: [
+      { actor: 'abotapi/computrabajo-jobs-scraper', name: 'Computrabajo · varios países', inputTemplate: { mode: 'search', searchQueries: ['{{query}}'], countries: ['{{country_lc}}'], fetchReviews: false, maxReviews: 0, maxItems: '{{max_items}}' } },
+      { actor: 'reventadata/computrabajo-scraper', name: 'Computrabajo · reventadata', inputTemplate: { country: '{{country_lc}}', searchQueries: ['{{query}}'], maxItems: '{{max_items}}' } },
+    ], recipes: {
     'shahidirfan/computrabajo-jobs-scraper': { keyword: '{{query}}', countryCode: '{{country_lc}}', maxJobs: '{{max_items}}' },
   } },
-  laborum: { countries: ['AR', 'MX', 'PE', 'CL'], recipes: {
+  laborum: { countries: ['AR', 'MX', 'PE', 'CL'],
+    // bibian: los 7 países de la red Bumeran (Bumeran, Zonajobs, Laborum, Multitrabajos, Konzerta); `countries[]` con el nombre en minúsculas y `keywords` en texto.
+    add: [{ actor: 'bibian/latam-jobs-bumeran-scraper', name: 'Red Bumeran · 7 países', inputTemplate: { countries: ['{{country_slug}}'], keywords: '{{query}}' } }],
+    recipes: {
     'blackfalcondata/bumeran-scraper': { query: '{{query}}', country: '{{country_iso}}', postedWithin: '7days', maxResults: '{{max_items}}' },
     'memo23/bumeran-job-scraper': { searchQueries: ['{{query}}'] },
     'shahidirfan/bumeran-jobs-scraper': { keyword: '{{query}}' },
   } },
+  'occ-mundial': { countries: ['MX'],
+    // unfenced-group: `keyword` y `maxResults` (nombres que la entrada adaptada ya reconoce); desde 0,79 US$ por 1.000 ofertas.
+    add: [{ actor: 'unfenced-group/occ-com-mx-scraper', name: 'OCC Mundial · unfenced' }], recipes: {} },
   eures: { recipes: { 'dadhalfdev/eures-jobs-scraper': { keywords: '{{query}}', country: 'es' } } },
 };
 const withOverrides = (p: Portal): Portal => {
   const o = OVERRIDES[p.id]; if (!o) return p;
-  return { ...p, ...(o.countries ? { countries: o.countries } : {}), recipes: p.recipes.map(r => { const t = o.recipes[r.actor.toLowerCase()]; return t ? { ...r, inputTemplate: t } : r; }) };
+  return { ...p, ...(o.countries ? { countries: o.countries } : {}), recipes: [...(o.add ?? []).filter(a => !p.recipes.some(r => r.actor.toLowerCase() === a.actor.toLowerCase())), ...p.recipes].map(r => { const t = o.recipes[r.actor.toLowerCase()]; return t ? { ...r, inputTemplate: t } : r; }) };
 };
 
 export const PORTALS: Portal[] = [...CURATED, ...GENERATED.map(withOverrides)];
