@@ -51,7 +51,7 @@ await step('sin poder leer el registro no toca el mínimo (sin saber si ya corri
 });
 
 await step('los mínimos son pequeños: 3 dorks, 1 petición de RapidAPI, 1 de Tavily, 1 búsqueda de respaldo', () => {
-  assert.deepEqual({ ...FLOOR_LIMITS }, { googleDorks: 3, rapidapiRequests: 1, tavilySearches: 1, fallbackSearches: 1 });
+  assert.deepEqual({ ...FLOOR_LIMITS }, { googleDorks: 3, rapidapiRequests: 1, tavilySearches: 1, feedSearches: 1, fallbackSearches: 1 });
 });
 
 console.log(`\n${passed}/${passed + failed} pasos OK`);

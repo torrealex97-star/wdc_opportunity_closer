@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { authenticate, originBlocked, withCookies } from '../../../../lib/adminAuth';
 import { tavilyMaxSearches } from '../../../../lib/tavilyCollect';
+import { feedLimit, feedMaxSearches } from '../../../../lib/brightdataFeedRun';
 import { apifyToken, listActors, monthSpent } from '../../../../lib/apify';
 import { listConnections } from '../../../../lib/integrations';
 import { readBudget } from '../../../../lib/paidBudget';
@@ -75,6 +76,12 @@ export async function GET(request: NextRequest) {
       unit: `~${PROVIDER_METERS.tavily.usdPerRequest} USD por búsqueda, hasta ${tavilyMaxSearches()} por pasada`,
       available: (keysKnown && keys.has('tavily') || Boolean(process.env.TAVILY_API_KEY)) && room(row('tavily')).ok && tavilyMaxSearches() > 0,
       reason: !(keysKnown && keys.has('tavily')) && !process.env.TAVILY_API_KEY ? noKey('Tavily') : tavilyMaxSearches() === 0 ? 'Desactivado (TAVILY_MAX_SEARCHES=0).' : room(row('tavily')).why,
+    },
+    {
+      id: 'brightdata-feed', label: 'LinkedIn Jobs por Bright Data (feed estructurado)', automatic: true,
+      unit: `~${PROVIDER_METERS.brightdata.usdPerRequest} USD por registro entregado, hasta ${feedLimit()} por búsqueda y ${feedMaxSearches()} búsqueda(s) por pasada`,
+      available: keysKnown && keys.has('brightdata') && room(row('brightdata')).ok && feedMaxSearches() > 0,
+      reason: !keysKnown || !keys.has('brightdata') ? noKey('Bright Data') : feedMaxSearches() === 0 ? 'Desactivado (BRIGHTDATA_FEED_MAX_SEARCHES=0).' : room(row('brightdata')).why,
     },
     {
       // Automática: la lectura directa es gratis y corre en cada pasada; el desbloqueador de pago solo si la página bloquea.

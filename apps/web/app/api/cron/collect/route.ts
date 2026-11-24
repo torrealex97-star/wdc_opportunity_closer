@@ -8,6 +8,7 @@ import { collectGoogleJobs } from '../../../../lib/googleJobs';
 import { collectBrightAsync } from '../../../../lib/brightdataAsync';
 import { collectRapidApi } from '../../../../lib/rapidapiCollect';
 import { collectTavily } from '../../../../lib/tavilyCollect';
+import { runFeedStage } from '../../../../lib/brightdataFeedRun';
 import { collectCompanyPages, enginePagesOrSeed, mergePages } from '../../../../lib/companyPagesCollect';
 import { COMPANY_WATCHLIST } from '../../../../lib/companyWatchlist';
 import { dailyAuto as dailyApify } from '../../../../lib/apifyAuto';
@@ -129,6 +130,18 @@ export async function GET(request: NextRequest) {
     gap = await recount(gap);
     stages.push({ id: 'tavily', ran: tavily.searches > 0, why: `${tavilyFloor ? '[mínimo diario] ' : ''}${tavily.ok ? `${tavily.searches} búsqueda(s), ${tavily.received} resultado(s).` : tavily.error ?? 'Sin resultado.'}`, accepted: tavily.accepted, cost_usd: tavily.cost_usd });
   }
+  // Feeds estructurados de Bright Data (LinkedIn Jobs): recoger lo ya pedido es gratis y corre siempre; pedir una búsqueda
+  // nueva solo si falta objetivo (o por el mínimo diario) y quedan los topes propio y global. Un encargo en marcha no se duplica.
+  const feedFloor = floorOf('brightdata-feed');
+  const feedMayOrder = canSpend() || feedFloor;
+  const feed = budget.remaining() >= MIN_STEP_MS
+    ? await sharedMeter().then(meter => runFeedStage('cron', budget.deadline(8_000), meter, feedMayOrder ? (feedFloor && !canSpend() ? { maxSearches: FLOOR_LIMITS.feedSearches } : {}) : { maxSearches: 0 })).catch(failed('brightdata-feed', null))
+    : (budget.cut('brightdata-feed'), null);
+  if (feed?.truncated) budget.cut('brightdata-feed');
+  if (feed) {
+    if (feed.accepted) gap = await recount(gap);
+    stages.push({ id: 'brightdata-feed', ran: feed.searches > 0 || (feed.collected?.collected ?? 0) > 0, why: `${feedFloor && !canSpend() ? '[mínimo diario] ' : ''}${feed.ok ? `${feed.searches} búsqueda(s) pedida(s), ${feed.collected?.collected ?? 0} recogida(s) (${feed.accepted} guardada(s)).` : feed.error ?? 'Sin resultado.'}`, accepted: feed.accepted, cost_usd: feed.cost_usd });
+  }
   // Páginas de empleo propias de las empresas vigiladas (JSON-LD JobPosting o RSS). La lectura directa es gratis y
   // corre siempre; un desbloqueador de pago (ZenRows → ScrapingBee → Bright Data) solo si la página bloquea, falta
   // objetivo y queda tope. Una página que responde sin ofertas no se paga.
@@ -206,5 +219,5 @@ export async function GET(request: NextRequest) {
   // Una fila por etapa (corrió o se saltó, y por qué) bajo la fuente «cron-waterfall»: así el panel puede decir por qué una
   // fuente de pago no recogió hoy. No es gasto (la nota no lleva «coste_usd=»), solo registro; si falla no tumba el cron.
   await Promise.all(stages.map(stage => recordSpend(CRON_LOG_SOURCE, 'cron', stageNote(stage.id, stage.ran, stage.why)).catch(() => false)));
-  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, tavily, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, detail, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
+  return Response.json({ waterfall: wf ? { target: wf.target.target, source: wf.target.source, qualified_today: wf.qualified_today, pending_today: wf.pending_today, approval_rate: wf.approval_rate, gap_before: wf.gap, gap_after: gap, basis: wf.basis, stages } : { stages, error: 'No se pudo leer el estado del waterfall.' }, outcomes, fallback, googleJobs, rapidapi, tavily, feed, companyPages, brightAsync, vigencia, apify, auto, aiReview: auto.ai, detail, motor, engineAlert, weeklyReport: report, paidTierSkipped: paid.skip ? ('reason' in paid ? paid.reason : 'sin tiempo') : null, truncated: budget.truncated, spent_ms: budget.spent() });
 }

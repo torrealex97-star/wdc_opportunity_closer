@@ -14,14 +14,14 @@ export const isCollected = (ok: boolean, body: ProbeBody): boolean =>
   ok && (body.engine !== undefined || body.async === true || (body.accepted ?? 0) > 0);
 
 /** Vías que solo se prueban si son la elegida (primera): el Unlocker necesita una URL concreta y Apify gasta hasta 0,50 US$ por prueba. */
-const ONLY_IF_FIRST = new Set(['unlocker', 'apify']);
+const ONLY_IF_FIRST = new Set(['unlocker', 'apify', 'brightdata_feed']);
 
 /**
  * Vías que recogen DE ESTA FUENTE (su motor, su API oficial, su actor de Apify, su página). Las demás (Google Jobs por Bright
  * Data, JSearch o SerpApi con `site:`) son una búsqueda en Google y guardan sus ofertas bajo «google-jobs»: no prueban la fuente.
  * Por eso solo se usan cuando la fuente no tiene ninguna vía propia lista.
  */
-const OWN_ROUTES = new Set(['engine', 'backend', 'official', 'apify']);
+const OWN_ROUTES = new Set(['engine', 'backend', 'official', 'brightdata_feed', 'apify']);
 
 /**
  * Vías a intentar. Si la fuente tiene alguna vía PROPIA lista, se prueban solo esas (como máximo `MAX_PROBE_ATTEMPTS`): una búsqueda

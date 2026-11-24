@@ -9,7 +9,7 @@
 export const FLOOR_HOURS = 20;
 
 /** Lo que una etapa puede gastar cuando corre solo por su mínimo (no por falta de objetivo). */
-export const FLOOR_LIMITS = { googleDorks: 3, rapidapiRequests: 1, tavilySearches: 1, fallbackSearches: 1 } as const;
+export const FLOOR_LIMITS = { googleDorks: 3, rapidapiRequests: 1, tavilySearches: 1, feedSearches: 1, fallbackSearches: 1 } as const;
 
 /** Etapas del cron con vía de pago a las que se aplica el mínimo (los ids son los de `stages` del cron). */
 export const FLOOR_STAGES = ['google-jobs', 'rapidapi', 'respaldo', 'apify'] as const;

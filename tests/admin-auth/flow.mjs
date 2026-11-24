@@ -979,7 +979,7 @@ await step('Waterfall: el propietario fija el objetivo de ofertas cualificadas y
   const first = await call('/api/admin/waterfall');
   assert.equal(first.status, 200);
   assert.equal(first.json.state.target.source, 'defecto'); assert.equal(first.json.state.target.target, 60, 'sin nada guardado, el 60 de siempre y declarado como defecto');
-  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'tavily', 'unlocker', 'respaldo', 'apify'], 'las etapas van en el orden en que las lanza el cron');
+  assert.deepEqual(first.json.stages.map(s => s.id), ['google-jobs', 'rapidapi', 'tavily', 'brightdata-feed', 'unlocker', 'respaldo', 'apify'], 'las etapas van en el orden en que las lanza el cron');
   const unlocker = first.json.stages.find(s => s.id === 'unlocker');
   assert.equal(unlocker.automatic, true, 'las páginas de empresa ya no se lanzan a mano'); assert.match(unlocker.unit, /Gratis si la página se deja leer/);
   assert.ok(!JSON.stringify(first.json).includes('secret'), 'sin secretos');
