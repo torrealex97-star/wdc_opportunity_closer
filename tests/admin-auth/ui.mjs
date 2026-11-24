@@ -191,6 +191,7 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   const chart = page.getByTestId('metrics').getByRole('img'); assert.match(await chart.getAttribute('aria-label'), /Ofertas buenas por día del .* al .*: \d+ en total/);
   assert.equal(await page.getByTestId('metrics').locator('svg rect').first().evaluate(el => getComputedStyle(el).fill), 'rgb(141, 70, 61)', 'barras con el token --accent');
   await page.getByTestId('ai-agreement').waitFor(); await page.getByTestId('ai-agreement').locator('summary').click(); assert.match(await page.getByTestId('agreement-verdict').innerText(), /Aún no hay base: 0 de 30 pares/);
+  await page.getByTestId('ai-mode').waitFor(); assert.match(await page.getByTestId('ai-mode').innerText(), /Revisor IA: (SHADOW — solo anota|LIVE — aprueba y retira sola)/); assert.ok(await page.getByTestId('ai-mode-toggle').isVisible(), 'el propietario ve el interruptor del modo de la IA');
   assert.equal(await page.getByTestId('agreement-table').locator('tbody tr').count(), 5);
   await page.getByTestId('metrics').getByText('Ver tabla por día').click(); assert.equal(await page.getByTestId('metrics-days').locator('tbody tr').count(), 14);
   assert.ok(await page.getByTestId('metrics-tiers').isVisible());

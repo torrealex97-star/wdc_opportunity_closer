@@ -1,3 +1,12 @@
+## Modo de la IA activable desde la app, LinkedIn en tres mercados y diagnóstico de Google Jobs — 2026-11-23
+
+- **Orden del dueño:** que la revisión por IA se pueda activar y desactivar desde la app; investigar Google; afinar LinkedIn.
+- **Interruptor** (*tested*): `lib/aiMode.ts` + `/api/admin/ai-mode` (leer: cualquier operador; cambiar: solo propietario) + `AiModeSwitch` sobre el acuerdo IA/humano en la bandeja. Orden de modo: tabla `ai_review_settings` → `AI_REVIEW_MODE` → `shadow`. Se resuelve en cada pasada (cron y «Clasificar») y viaja como entorno explícito. Un fallo de lectura **nunca activa `live`**; sin la tabla el modo sigue como estaba y lo dice, y guardar responde 503 con el nombre de la migración. Activar pide confirmación; volver a `shadow` es inmediato.
+- **Migración `20261123_ai_review_settings.sql` + `tests/db/ai_review_settings.sql`: escritas, NO aplicadas ni ejecutadas** (DDL en la base real: orden expresa del propietario). Hasta aplicarla, el interruptor se ve pero no puede guardar; `AI_REVIEW_MODE=live` en el Worker sigue valiendo.
+- **LinkedIn** (*tested* solo la plantilla): el buscador B pide España, México, Colombia, Argentina, Chile y EE. UU. (antes solo España), última semana, sin agencias de reclutamiento ni prácticas/recepción/conductor. Esperado: menos ofertas de servicios locales de EE. UU. que dominaban la muestra (161 recogidas, 1 aprobada). **No *verified***: falta una prueba real.
+- **Google Jobs** (*inspected* en la base real): no está roto. Su última recogida fue el 2026-11-20 06:42 y desde el 21 el cron solo lanzó Jooble (≈195 aceptadas/día): con el objetivo de 60 cualificadas ya cubierto, las etapas de pago se saltan por diseño. El mínimo diario (#142) se desplegó hoy, después del cron de las 06:00, así que **el primer cron que lo aplica es el de mañana 06:00 UTC**; ahí debe aparecer la fila `cron-waterfall` de `google-jobs`. Hasta verlo, queda *inspected*, no *verified*.
+- **Mapa de las 69 fuentes del catálogo** (primera vía): 28 del motor gratuito, 37 por Bright Data (búsqueda `site:`, ya con muchas devoluciones «0 en bruto»), 2 oficiales (Jooble, InfoJobs) y 2 de Apify (Workana, Upwork); muchas de las de Bright Data tienen además actores de Apify como vía posterior.
+
 ## «Probar todas las fuentes» — 2026-11-23
 
 - **Petición del dueño:** probar todas las fuentes, no una a una. Desde este entorno no es posible (no alcanza Apify y no tiene la sesión del panel), así que la prueba la lanza el propietario con **un botón** en Fuentes.

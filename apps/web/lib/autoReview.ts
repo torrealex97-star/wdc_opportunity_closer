@@ -4,6 +4,7 @@ import { assessOffer } from './offerRisk';
 import { serviceRest } from './supabaseAuth';
 import { timeLeft } from './cronBudget';
 import { config as aiConfig, runAiReview, type ReviewSummary } from './aiReview';
+import { envWithAiMode } from './aiMode';
 
 // Cualificación automática: las REGLAS deciden lo claro y la IA solo desempata lo dudoso.
 // Antes, cada oferta esperaba a una persona; con el volumen actual eso dejaba la cola sin vaciar y
@@ -230,13 +231,15 @@ export async function runAutoReview(deps: AutoDeps = {}): Promise<AutoSummary> {
   // diario —`remaining` ya cuenta sus aprobaciones de hoy, no solo las de las reglas— y viaja como ENTORNO
   // EXPLÍCITO de esta llamada: antes se escribía en `process.env` y se restauraba, así que dos pasadas
   // simultáneas se pisaban el límite entre sí (y el proceso quedaba con el valor de la otra).
-  const cfg = aiConfig();
+  // Modo efectivo: lo elegido en el panel (tabla) → entorno → shadow. Va como entorno EXPLÍCITO de esta pasada.
+  const modeEnv = await envWithAiMode();
+  const cfg = aiConfig(modeEnv);
   const left = remaining - summary.approved;
   if (cfg.mode === 'live' && left > 0 && timeLeft(deps.deadline) > 25_000) {
-    const env = { ...process.env, AI_REVIEW_MAX_APPROVALS: String(Math.min(left, cfg.maxApprovals)) };
+    const env = { ...modeEnv, AI_REVIEW_MAX_APPROVALS: String(Math.min(left, cfg.maxApprovals)) };
     summary.ai = await (deps.ai ?? runAiReview)({ deadline: deps.deadline, env }).catch(() => null);
   } else if (cfg.mode === 'shadow') {
-    summary.ai = { mode: 'shadow', reviewed: 0, would_approve: 0, would_withdraw: 0, human: summary.exceptions, applied: 0, skipped: 'reglas en vivo; la IA solo anota (AI_REVIEW_MODE=shadow)' };
+    summary.ai = { mode: 'shadow', reviewed: 0, would_approve: 0, would_withdraw: 0, human: summary.exceptions, applied: 0, skipped: 'reglas en vivo; la IA solo anota (modo shadow)' };
   }
   return summary;
 }

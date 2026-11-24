@@ -6,7 +6,7 @@ export function startMocks({ authPort, enginePort }) {
   const state = {
     users: new Map([['owner@test.dev', { id: 'u1', password: 'Correcta-12345' }]]),
     admins: [{ email: 'owner@test.dev', role: 'owner', invited_by: 'bootstrap', created_at: '2026-10-16T00:00:00Z' }],
-    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], storeCalls: [], providerBudget: [], providerBudgetMissing: false, waterfallRow: null, waterfallMissing: false, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
+    connections: new Map(), external: new Map(), sourceSettings: new Map(), apifyActors: [], apifyRuns: [], apifyCalls: [], apifyItems: [], apifyStatus: 'SUCCEEDED', ingestRuns: [], storeCalls: [], providerBudget: [], providerBudgetMissing: false, waterfallRow: null, waterfallMissing: false, aiModeRow: null, aiModeMissing: true, tokens: new Map(), recoverCalls: [], recoverTokens: new Map(),
     engineDown: false, // simula la pausa de cuota del motor (Sites devuelve 503)
     // Pausa REAL de la plataforma, medida en producción: el sitio está publicado pero la cuota del mes se
     // agotó, y TODAS sus rutas responden 429 con texto plano. `error` imita una caída de verdad (500 HTML).
@@ -160,6 +160,12 @@ export function startMocks({ authPort, enginePort }) {
       if (state.waterfallMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.waterfall_settings' in the schema cache" });
       if (req.method === 'POST') { state.waterfallRow = { org_id: body.org_id, qualified_per_day: body.qualified_per_day, updated_by: body.updated_by, updated_at: body.updated_at }; return send(res, 201, null); }
       return send(res, 200, state.waterfallRow ? [state.waterfallRow] : []);
+    }
+    // Modo del revisor IA (tabla `ai_review_settings`): una fila por organización.
+    if (url.pathname === '/rest/v1/ai_review_settings') {
+      if (state.aiModeMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.ai_review_settings' in the schema cache" });
+      if (req.method === 'POST') { state.aiModeRow = { org_id: body.org_id, mode: body.mode, updated_by: body.updated_by, updated_at: body.updated_at }; return send(res, 201, null); }
+      return send(res, 200, state.aiModeRow ? [state.aiModeRow] : []);
     }
     // Topes por proveedor (tabla `provider_budget`): upsert por (org_id, provider), como PostgREST con on_conflict.
     if (url.pathname === '/rest/v1/provider_budget') {
