@@ -1,6 +1,7 @@
 // STUDENT_LOGIN_REQUIRED=true: `/` y la búsqueda hospedada exigen sesión de alumna. Arranca su propia app (puerto 3198) y sus mocks.
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import { startMocks } from './mock-services.mjs';
 
 const PORT = 3198, BASE = `http://127.0.0.1:${PORT}`;
@@ -14,7 +15,14 @@ const search = (cookie) => fetch(BASE + '/api/backend/opportunities/search', { m
 
 const results = []; let child;
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message]); } };
-const stop = async () => { try { process.kill(-child.pid); } catch {} await new Promise(r => setTimeout(r, 800)); };
+// Esperar a que el puerto quede LIBRE de verdad: con 800 ms fijos, bajo carga el servidor anterior seguía vivo cuando arrancaba el siguiente, este no podía abrir el
+// puerto y `up()` daba por bueno al viejo (con la bandera activa): «307 !== 200» intermitente (2 de 4 ejecuciones el 2026-11-24).
+const busy = () => new Promise(resolve => { const socket = net.connect(PORT, '127.0.0.1'); socket.once('connect', () => { socket.destroy(); resolve(true); }); socket.once('error', () => resolve(false)); });
+const stop = async () => {
+  try { process.kill(-child.pid); } catch {}
+  for (let i = 0; i < 60 && await busy(); i++) await new Promise(r => setTimeout(r, 250));
+  if (await busy()) throw new Error('el servidor anterior no liberó el puerto en 15 s');
+};
 
 try {
   child = run('true'); await up();
