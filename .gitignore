@@ -25,3 +25,6 @@ sites/cron/wrangler.toml
 
 # Servidores Next aislados de las pruebas E2E (distDir propio).
 .next-e2e*/
+
+# Cubre también un enlace simbólico (un `git add -A` en un worktree lo colaba)
+node_modules
