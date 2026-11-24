@@ -92,7 +92,8 @@ export async function readSamples(since: Record<string, string | null> = SAMPLE_
   // Un tope de paginación alcanzado deja el coste incompleto: se declara como hueco en vez de sumar de menos.
   const cost = runs?.truncated || notes?.truncated || !Array.isArray(actors) || !runs || !notes ? null : recordedCosts(actors as ActorLite[], runs.rows, notes.rows);
   // Todas las fuentes del catálogo, también las que nunca han recogido: ahí es donde se esconde una mala conexión.
-  const names = [...new Set([...stats.map(stat => stat.source), ...CATALOG.map(entry => entry.code), ...engineViews.keys()])];
+  const names = [...new Set([...stats.map(stat => stat.source), ...CATALOG.map(entry => entry.code)])];
+  // Los conectores del motor que no son una fuente del catálogo (p. ej. variantes de un portal) no añaden filas: el panel lista el catálogo.
   const rows: HealthRow[] = await Promise.all(names.map(async source => {
     const from = since[source] ?? null;
     const filters = [`org_id=eq.${ORG}`, `source=eq.${encodeURIComponent(source)}`, ...(from ? [`first_seen_at=gte.${encodeURIComponent(from)}`] : [])];
