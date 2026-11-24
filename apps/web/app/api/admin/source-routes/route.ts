@@ -209,7 +209,11 @@ export async function POST(request: NextRequest) {
     const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, 1, caps.brightdata.usd);
     if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
     const outcome = await runFeedStage('panel-ruta', Date.now() + 40_000, null, { maxSearches: 1, limit: 10, route: 'prueba', feed: isFeedSource(entry.code) ? entry.code : 'linkedin' });
-    if (!outcome.ok) return Response.json({ detail: outcome.error ?? 'Bright Data no hizo ninguna búsqueda.' }, { status: 502 });
+    if (!outcome.ok) {
+      // El fallo de una prueba se anota (sin coste) para poder revisarlo después: antes solo lo veía quien tenía el panel abierto.
+      await recordSpend('brightdata-feed', 'feed-error', `${entry.code} · ${outcome.error ?? 'sin búsqueda'}`.slice(0, 300)).catch(() => false);
+      return Response.json({ detail: outcome.error ?? 'Bright Data no hizo ninguna búsqueda.' }, { status: 502 });
+    }
     const got = outcome.collected;
     const parts = [
       got?.collected ? `Recogidas ${got.collected} búsqueda(s) anteriores: ${got.accepted} oferta(s) guardada(s).` : '',

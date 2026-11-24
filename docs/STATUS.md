@@ -1,3 +1,18 @@
+## Revisión de «Probar todas las fuentes» (2026-11-24) y arreglos de entrada de Apify
+
+- **Qué se revisó** (*inspected*, base real, solo lectura): `apify_runs`, `external_ingest_runs` y `external_offers` de las pruebas de las 11:28–11:35 UTC. Gasto de la tanda ≈ 0,8 US$ (tope 5).
+- **Funcionaron** (ofertas con título y enlace): InfoJobs, Infoempleo, SimplyHired, Jooble (2.º buscador), Elempleo, Eures (easyapi), Chiletrabajos, Upwork y las páginas de empresa (Greenhouse). Ninguna de las nuevas está aprobada: la IA sigue en `shadow`.
+- **Causas reales de los fallos** y arreglo (*tested* con simulación, `apify-inputs.mjs` 6/6; **no *verified***):
+  - **Trabajos.com** (13 ejecuciones FAILED): la búsqueda unía los siete términos con OR y pasaba de 100 caracteres. Ahora cada portal sin lista propia busca UN término del banco por día y, si el esquema declara `maxLength`, se conservan términos completos (nunca una comilla abierta).
+  - **HTTP 400 en Computrabajo, Bumeran (blackfalcondata), Jooble (agentx) y Eures (dadhalfdev):** se mandaba «Spain» a campos con lista cerrada de países (`countryCode` admite `ar, mx, co…`; agentx pide el nombre; Bumeran admite `AR, PE, MX…`). Ahora la entrada respeta el `enum` del esquema (omite el campo si ningún valor vale) y esos cuatro buscadores llevan plantilla propia leída de su página pública de entrada, con **rotación diaria de país** (Computrabajo MX/CO/AR/CL/PE; Bumeran AR/MX/PE/CL; Jooble ES/MX/CO/AR/CL/PE).
+  - **0 elementos en Bumeran (memo23, shahidirfan):** recibían el campo de búsqueda con otro nombre (`searchQueries`) y la provincia «España» (portal argentino). Plantillas propias.
+  - **Indeed (misceres): 10 elementos y 0 guardados:** el actor devuelve `positionName`, que el mapeo no conocía. Añadido (campos leídos del ejemplo público del actor).
+  - **Diagnóstico nuevo:** si llegan elementos pero ninguno es guardable, el error de la ejecución lo dice y enseña los campos del primero (antes: «éxito» mudo).
+  - **Reintentos que cobraban sin resultado** (Milanuncios 12, LinkedIn Posts 12, Telegram 11, Laborum 12): una búsqueda automática ya no repite un buscador que falló dos veces hoy y el portal para tras 4 intentos sin ofertas; una prueba manual se salta esos topes para poder reintentar tras un arreglo. No se recorta ninguna fuente por rendimiento.
+  - **«Probar todas»** omite las fuentes cuya única vía real es una búsqueda de Google (Bright Data/JSearch/SerpApi `site:`): en la tanda dieron «0 en bruto» o error en todas; siguen en su botón «Probar ruta».
+  - **Feed de LinkedIn por Bright Data:** no dejó ninguna fila en la base durante la tanda. Ahora cada fallo de su prueba se anota (`brightdata-feed`, vía `feed-error`, coste 0). Pendiente: el mensaje que mostró el panel.
+- **Sin arreglar (necesitan algo del propietario):** Facebook, Skool y Telegram exigen URLs/canales; Reddit no trae empleos (esperado); JobSpy no expone su esquema; Computrabajo (santamaria, haketa) y Bumeran (shahidirfan: nombre exacto de sus campos) siguen con entrada adaptada porque su página pública no mostró los campos.
+
 ## Migraciones aplicadas a la base real y lote de dependencias — 2026-11-24
 
 - **Orden del dueño** («haz todo lo que puedas hacer tú»), en respuesta a mi pregunta sobre las dos migraciones pendientes. Aplicadas con `apply_migration` tras una prueba de comportamiento en transacción con `ROLLBACK` (insertar, rechazar un modo y un proveedor inventados, rechazar una segunda fila por organización, sin acceso de `anon`/`authenticated`):

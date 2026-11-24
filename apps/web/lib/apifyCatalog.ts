@@ -15,6 +15,7 @@
 // Es un módulo TypeScript normal, sin atributo de importación: Next lo empaqueta y las pruebas también lo
 // ejecutan en Node (`tests/apify-portals.mjs`), así que lo que se prueba es lo que ve el panel.
 import { GENERATED_PORTALS } from './apifyPortals';
+import { rotationTermsForSource } from './searchBank';
 
 export type Recipe = {
   actor: string; name: string; needs?: string[];
@@ -29,6 +30,9 @@ export type Portal = {
   // Términos por los que rota la búsqueda, uno por día UTC: una ejecución sigue siendo UNA búsqueda,
   // así que cubrir varios sinónimos no multiplica el gasto. `query` es el primero de la lista.
   queries?: string[];
+  // Países (ISO) por los que rota la búsqueda, uno por día: los portales de varios países (Computrabajo, Bumeran, Jooble) se buscan
+  // país a país. Sin lista, se usa el país por defecto de la app. Los buscadores con lista cerrada de países reciben el valor en la forma que admiten.
+  countries?: string[];
   // Plantilla de entrada para los actores cuyo contrato no encaja con los sinónimos genéricos
   // (p. ej. Workana espera `country` como código ISO de 2 letras, no «España»). Se guarda en la
   // fila del actor y solo se rellenan los huecos {{query}}, {{max_items}}, etc.
@@ -142,10 +146,11 @@ const CURATED: Portal[] = [
   {
     id: 'jooble', source: 'apify-jooble', name: 'Jooble', maxItems: 100, testItems: 10, query: 'closer de ventas',
     queries: ['closer de ventas', 'setter de ventas', 'televenta', 'cold caller'],
+    countries: ['ES', 'MX', 'CO', 'AR', 'CL', 'PE'],
     plain: 'Agregador con cobertura en España y LatAm. Si tienes la clave oficial de Jooble, esa vía es gratuita y preferible.',
     recipes: [
       { actor: 'agentx/jooble-jobs-scraper', name: 'Buscador de Jooble A',
-        inputTemplate: { keyword: '{{query}}', country: 'es', max_results: '{{max_items}}' } },
+        inputTemplate: { keyword: '{{query}}', country: '{{country_name}}', max_results: '{{max_items}}' } },
       { actor: 'ahmed_jasarevic/jooble-scraper', name: 'Buscador de Jooble B',
         inputTemplate: { searchQueries: ['{{query}}'], country: 'es', maxItems: '{{max_items}}' } },
     ],
@@ -168,7 +173,26 @@ const GENERATED: Portal[] = GENERATED_PORTALS
   .filter(p => !CURATED_CODES.has(p.id))
   .map(p => (SOCIAL.has(p.id) ? { ...p, caution: SOCIAL_CAUTION } : p));
 
-export const PORTALS: Portal[] = [...CURATED, ...GENERATED];
+// Plantillas propias de buscadores generados, leídas de su página pública de entrada (2026-11-24; *inspected*). Antes recibían la
+// entrada genérica con «Spain» y «España» y fallaban con HTTP 400 (país fuera de su lista cerrada) o devolvían 0 (provincia «España»
+// en un portal argentino). Los buscadores sin plantilla aquí siguen con la entrada adaptada a su esquema, que ahora respeta sus listas.
+const OVERRIDES: Record<string, { countries?: string[]; recipes: Record<string, Record<string, unknown>> }> = {
+  computrabajo: { countries: ['MX', 'CO', 'AR', 'CL', 'PE'], recipes: {
+    'shahidirfan/computrabajo-jobs-scraper': { keyword: '{{query}}', countryCode: '{{country_lc}}', maxJobs: '{{max_items}}' },
+  } },
+  laborum: { countries: ['AR', 'MX', 'PE', 'CL'], recipes: {
+    'blackfalcondata/bumeran-scraper': { query: '{{query}}', country: '{{country_iso}}', postedWithin: '7days', maxResults: '{{max_items}}' },
+    'memo23/bumeran-job-scraper': { searchQueries: ['{{query}}'] },
+    'shahidirfan/bumeran-jobs-scraper': { keyword: '{{query}}' },
+  } },
+  eures: { recipes: { 'dadhalfdev/eures-jobs-scraper': { keywords: '{{query}}', country: 'es' } } },
+};
+const withOverrides = (p: Portal): Portal => {
+  const o = OVERRIDES[p.id]; if (!o) return p;
+  return { ...p, ...(o.countries ? { countries: o.countries } : {}), recipes: p.recipes.map(r => { const t = o.recipes[r.actor.toLowerCase()]; return t ? { ...r, inputTemplate: t } : r; }) };
+};
+
+export const PORTALS: Portal[] = [...CURATED, ...GENERATED.map(withOverrides)];
 
 export const portalBySource = (source: string) => PORTALS.find(p => p.source === source);
 export const portalById = (id: string) => PORTALS.find(p => p.id === id);
@@ -181,7 +205,14 @@ export const dayIndex = (now = Date.now()): number => Math.floor(now / 86_400_00
  * solo si el portal no declara ninguna búsqueda. Una ejecución = un término, así que el coste diario
  * no cambia y el resto de sinónimos se cubren a lo largo de la semana.
  */
-export function queryForDay(portal: Pick<Portal, 'query' | 'queries'>, now = Date.now()): string | undefined {
-  const list = portal.queries?.length ? portal.queries : portal.query ? [portal.query] : [];
+export function queryForDay(portal: Pick<Portal, 'query' | 'queries'> & { source?: string }, now = Date.now()): string | undefined {
+  // Un portal sin lista propia rota por el banco de términos de su idioma y canal: nunca la búsqueda combinada de TODOS los
+  // términos con OR, que algunos actores rechazan (Trabajos.com: máximo 100 caracteres) y que mezcla perfiles en una sola búsqueda.
+  const list = portal.queries?.length ? portal.queries : portal.query ? [portal.query] : portal.source ? rotationTermsForSource(portal.source) : [];
   return list.length ? list[dayIndex(now) % list.length] : undefined;
+}
+
+/** País (ISO) de la búsqueda de hoy en un portal de varios países; `undefined` si el portal no rota por países. */
+export function countryForDay(portal: Pick<Portal, 'countries'>, now = Date.now()): string | undefined {
+  return portal.countries?.length ? portal.countries[dayIndex(now) % portal.countries.length] : undefined;
 }

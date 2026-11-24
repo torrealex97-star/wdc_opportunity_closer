@@ -35,7 +35,7 @@ const norm = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
 const first = (obj: Record<string, unknown>, names: string[]): unknown => { const idx = new Map(Object.keys(obj).map(k => [norm(k), k])); for (const n of names) { const k = idx.get(n); if (k && obj[k] != null && obj[k] !== '') return obj[k]; } return undefined; };
 
 // ---- entrada del actor: se adapta a su esquema real o a una plantilla del propietario ----
-type Prop = { type?: string; default?: unknown; items?: { type?: string } };
+type Prop = { type?: string; default?: unknown; items?: { type?: string }; enum?: unknown[]; maxLength?: number };
 export async function fetchSchema(actor: string, token: string): Promise<{ properties: Record<string, Prop>; required: string[] } | null> {
   const response = await api(`/v2/acts/${actorPath(actor)}/builds/default`, token);
   if (!response.ok) return null;
@@ -53,12 +53,46 @@ const SYNONYMS: Record<keyof Vars, string[]> = {
   hours_old: ['hoursold', 'maxhoursold', 'hoursago'],
   sites: ['sitename', 'sitenames', 'sites', 'jobboards', 'boards', 'platforms'],
 };
-const coerce = (v: string | number | string[], p: Prop) => p.type === 'array' ? (Array.isArray(v) ? v : [String(v)]) : p.type === 'integer' || p.type === 'number' ? Number(Array.isArray(v) ? v[0] : v) : Array.isArray(v) ? v.join(' OR ') : String(v);
+/** ISO de dos letras → nombre en inglés (los buscadores con lista cerrada de países piden uno u otro). */
+export const COUNTRY_NAMES: Record<string, string> = { ES: 'Spain', MX: 'Mexico', CO: 'Colombia', AR: 'Argentina', CL: 'Chile', PE: 'Peru', US: 'United States', VE: 'Venezuela', EC: 'Ecuador', PA: 'Panama' };
+const NAME_TO_ISO = Object.fromEntries(Object.entries(COUNTRY_NAMES).map(([iso, name]) => [name.toLowerCase(), iso]));
+/** Código ISO en mayúsculas de un valor que puede ser «Spain» o «es». */
+export const isoOf = (value: string): string => (value.length === 2 ? value.toUpperCase() : NAME_TO_ISO[value.toLowerCase()] ?? value.slice(0, 2).toUpperCase());
+/**
+ * Valor que el esquema acepta para un campo de lista cerrada (`enum`): el mismo texto sin importar mayúsculas, el nombre o el
+ * código ISO del país. `undefined` si ninguno vale: es mejor omitir el campo y dejar el valor por defecto del actor que mandar
+ * «Spain» a un `countryCode` que solo admite «ar, mx, co…» (Apify responde HTTP 400 y la ejecución ni arranca).
+ */
+export function enumValue(options: unknown[], value: string): string | undefined {
+  const list = options.filter((o): o is string => typeof o === 'string');
+  const wanted = [value, isoOf(value), COUNTRY_NAMES[isoOf(value)] ?? ''].filter(Boolean).map(v => v.toLowerCase());
+  return list.find(o => wanted.includes(o.toLowerCase()));
+}
+const coerce = (v: string | number | string[], p: Prop): unknown => {
+  if (p.type === 'array') return Array.isArray(v) ? v : [String(v)];
+  if (p.type === 'integer' || p.type === 'number') return Number(Array.isArray(v) ? v[0] : v);
+  const text = Array.isArray(v) ? v.join(' OR ') : String(v);
+  if (Array.isArray(p.enum) && p.enum.length) return enumValue(p.enum, text);
+  return typeof p.maxLength === 'number' && p.maxLength > 0 ? fitText(text, p.maxLength) : text;
+};
+/**
+ * Ajusta un texto al `maxLength` del esquema sin romperlo: una búsqueda con varios términos unidos por OR conserva los términos
+ * COMPLETOS que caben (nunca queda una comilla abierta a medias); un texto sin OR se recorta en el último espacio.
+ */
+export function fitText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  if (text.includes(' OR ')) {
+    let out = '';
+    for (const term of text.split(' OR ')) { const next = out ? `${out} OR ${term}` : term; if (next.length > max) break; out = next; }
+    if (out) return out;
+  }
+  return text.slice(0, max).replace(/\s+\S*$/, '').trim() || text.slice(0, max);
+}
 
 export function adaptInput(schema: { properties: Record<string, Prop>; required: string[] }, vars: Vars): { input: Record<string, unknown>; missing: string[] } {
   const input: Record<string, unknown> = {}; const byNorm = new Map(Object.keys(schema.properties).map(k => [norm(k), k]));
   for (const [name, synonyms] of Object.entries(SYNONYMS) as Array<[keyof Vars, string[]]>) {
-    const key = synonyms.map(s => byNorm.get(s)).find(Boolean); if (key) input[key] = coerce(vars[name], schema.properties[key]);
+    const key = synonyms.map(s => byNorm.get(s)).find(Boolean); if (key) { const value = coerce(vars[name], schema.properties[key]); if (value !== undefined) input[key] = value; }
   }
   const proxy = byNorm.get('proxyconfiguration'); if (proxy && schema.properties[proxy].type === 'object') input[proxy] = { useApifyProxy: true };
   const missing = schema.required.filter(k => input[k] === undefined && schema.properties[k]?.default === undefined);
@@ -67,9 +101,13 @@ export function adaptInput(schema: { properties: Record<string, Prop>; required:
 
 export function fillTemplate(template: unknown, vars: Vars): unknown {
   if (typeof template === 'string') {
-    const whole = /^\{\{(query|location|country|max_items|hours_old|sites)\}\}$/.exec(template);
-    if (whole) return vars[whole[1] as keyof Vars];
-    return template.replace(/\{\{(query|location|country|max_items|hours_old)\}\}/g, (_, k: keyof Vars) => String(vars[k]));
+    const derived = (k: string): string | number | string[] | undefined => {
+      const iso = isoOf(vars.country ?? 'Spain');
+      return k === 'country_lc' ? iso.toLowerCase() : k === 'country_iso' ? iso : k === 'country_name' ? COUNTRY_NAMES[iso] ?? String(vars.country) : vars[k as keyof Vars];
+    };
+    const whole = /^\{\{(query|location|country|country_lc|country_iso|country_name|max_items|hours_old|sites)\}\}$/.exec(template);
+    if (whole) return derived(whole[1]);
+    return template.replace(/\{\{(query|location|country|country_lc|country_iso|country_name|max_items|hours_old)\}\}/g, (_, k: string) => String(derived(k)));
   }
   if (Array.isArray(template)) return template.map(t => fillTemplate(t, vars));
   if (template && typeof template === 'object') return Object.fromEntries(Object.entries(template).map(([k, v]) => [k, fillTemplate(v, vars)]));
@@ -134,7 +172,7 @@ export async function startRun(actor: ActorRow, by: string, publicBase: string, 
 // ---- elementos del dataset -> candidatos ----
 const text = (v: unknown): string | null => typeof v === 'string' ? v : typeof v === 'number' ? String(v) : v && typeof v === 'object' ? Object.values(v as Record<string, unknown>).filter(x => typeof x === 'string' && x).join(', ') || null : null;
 export function mapItem(item: Record<string, unknown>): Candidate | null {
-  const title = text(first(item, ['title', 'jobtitle', 'positiontitle', 'position', 'name']));
+  const title = text(first(item, ['title', 'jobtitle', 'positiontitle', 'positionname', 'position', 'jobname', 'name']));
   const url = text(first(item, ['joburldirect', 'jobdirecturl', 'applyurl', 'joburl', 'jobpostingurl', 'url', 'link']));
   if (!title || !url) return null;
   // Proyecto de marketplace (Workana, Freelancer…): el importe es un PRESUPUESTO por proyecto, no un
@@ -165,21 +203,27 @@ export async function harvestRun(run: RunRow, actor: ActorRow, budgetMs = 40000)
   if (FAILED.has(status)) { await patch({ status, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: failureText(status, data?.statusMessage) }); return { status, harvested: run.harvested, done: true, error: status }; }
   if (!DONE.has(status)) return { status, harvested: run.harvested, done: false };
   const dataset = run.dataset_id ?? data?.defaultDatasetId; if (!dataset) { await patch({ status, error: 'Sin dataset.' }); return { status, harvested: run.harvested, done: true, error: 'Sin dataset' }; }
-  const started = Date.now(); let offset = run.harvested, harvested = run.harvested, finished = false;
+  const started = Date.now(); let offset = run.harvested, harvested = run.harvested, finished = false, kept = 0, sampleKeys = '';
   while (Date.now() - started < budgetMs) {
     const page = await api(`/v2/datasets/${dataset}/items?clean=true&format=json&offset=${offset}&limit=${MAX_CANDIDATES}`, token);
     if (!page.ok) return { status, harvested, done: false, error: `Dataset HTTP ${page.status}` };
     const items = await page.json().catch(() => []) as Array<Record<string, unknown>>;
     if (!Array.isArray(items) || !items.length) { finished = true; break; }
-    await ingest(actor.source, 'apify', items.map(mapItem).filter((c): c is Candidate => c !== null), `Apify ${actor.actor} · ${run.run_id}`);
+    const mapped = items.map(mapItem).filter((c): c is Candidate => c !== null);
+    kept += mapped.length; if (!sampleKeys && items[0] && typeof items[0] === 'object') sampleKeys = Object.keys(items[0]).slice(0, 14).join(', ');
+    await ingest(actor.source, 'apify', mapped, `Apify ${actor.actor} · ${run.run_id}`);
     offset += items.length; harvested += items.length;
     if (!await patch({ harvested, items_total: harvested })) return { status, harvested, done: false, error: 'No se pudo guardar el avance; se reanuda desde el último punto guardado (la entrada es idempotente).' };
     if (items.length < MAX_CANDIDATES) { finished = true; break; }
   }
   // Cerrar la ejecución guarda su coste real (alimenta el tope mensual): si no se pudo guardar, NO se da por terminada y se reintenta.
-  if (finished && !await patch({ status, harvested, items_total: harvested, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: null })) return { status, harvested, done: false, error: 'No se pudo guardar el cierre y el coste de la ejecución; se reintentará.' };
+  if (finished && !await patch({ status, harvested, items_total: harvested, finished_at: new Date().toISOString(), cost_usd: data?.usageTotalUsd ?? null, error: noKeptText(harvested - run.harvested, kept, sampleKeys) })) return { status, harvested, done: false, error: 'No se pudo guardar el cierre y el coste de la ejecución; se reintentará.' };
   return { status, harvested, done: finished };
 }
+
+/** Llegaron elementos pero ninguno tenía título y enlace: se dice y se enseñan los campos del primero (la entrada está bien, el mapeo no). */
+export const noKeptText = (items: number, kept: number, keys: string): string | null =>
+  items > 0 && kept === 0 ? `Llegaron ${items} elemento(s) pero ninguno tenía título y enlace reconocibles${keys ? `. Campos del primero: ${keys}` : ''}.` : null;
 
 /** Motivo guardado de una ejecución fallida: el mensaje de estado de Apify (por qué falló) en vez de solo «FAILED». */
 export const failureText = (status: string, message?: string | null) => {

@@ -3,14 +3,14 @@ import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
 import { approvedBySource, ORG } from './external';
 import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
-import { PORTALS, portalBySource, portalById, queryForDay, type Portal, type Recipe } from './apifyCatalog';
+import { PORTALS, portalBySource, portalById, queryForDay, countryForDay, type Portal, type Recipe } from './apifyCatalog';
 import { normalizeActor } from './apifyStore';
 import { serviceRest } from './supabaseAuth';
 
 // Búsqueda automática con buscadores de repuesto. Si el primero no arranca, falla o termina sin ofertas, se prueba el
 // siguiente hasta que uno funcione (con tope de intentos y respetando el presupuesto). Todo queda anotado en el historial.
 const DAY = 24 * 3600 * 1000, FAIL = new Set(['FAILED', 'TIMED-OUT', 'TIMED_OUT', 'ABORTED']);
-export const MAX_ATTEMPTS = 3, MAX_PER_DAY = 6;
+export const MAX_ATTEMPTS = 3, MAX_PER_DAY = 6, MAX_FAILED_PER_DAY = 4, RECIPE_COOLDOWN_FAILS = 2;
 const isActive = (r: RunRow) => r.status === 'RUNNING' || (r.status === 'SUCCEEDED' && !r.finished_at);
 const isFailed = (r: RunRow) => FAIL.has(r.status) || (r.status === 'SUCCEEDED' && Boolean(r.finished_at) && r.harvested === 0);
 const isGood = (r: RunRow) => r.status === 'SUCCEEDED' && Boolean(r.finished_at) && r.harvested > 0;
@@ -113,13 +113,20 @@ export type SearchResult = { ok: true; recipe: string; actor: string; fallback: 
 export async function searchPortal(portal: Portal, opts: { by: string; publicBase: string; test?: boolean; maxAttempts?: number; now?: number; maxChargeUsd?: number }): Promise<SearchResult> {
   const now = opts.now ?? Date.now(), attempts: Array<{ recipe: string; error: string }> = [];
   const [rows, runs] = [await ensureRows(portal, opts.by), await listRuns(80) ?? []];
-  const todays = runs.filter(r => rows.some(a => a.id === r.actor_id) && age(r, now) < DAY).length;
-  if (todays >= MAX_PER_DAY * 2) return { ok: false, stopped: true, error: 'Ya se han hecho muchos intentos hoy en este portal; se vuelve a intentar mañana.', attempts };
+  const mine = runs.filter(r => rows.some(a => a.id === r.actor_id) && age(r, now) < DAY);
+  // Los topes son de las búsquedas AUTOMÁTICAS (cron y recuperación). Una pulsación del propietario (con su correo) o una prueba los salta.
+  const manual = Boolean(opts.test) || opts.by.includes('@');
+  // Tope de intentos del día: cuentan los que NO dieron ofertas (una búsqueda sana no consume el cupo). Una prueba manual del
+  // propietario se salta los topes por buscador, para poder reintentar justo después de arreglar una entrada.
+  if (!manual && mine.filter(isFailed).length >= MAX_FAILED_PER_DAY) return { ok: false, stopped: true, error: 'Ya hay varios intentos sin resultado hoy en este portal; se vuelve a intentar mañana o desde «Probar ruta».', attempts };
+  if (mine.length >= MAX_PER_DAY * 2 && !manual) return { ok: false, stopped: true, error: 'Ya se han hecho muchos intentos hoy en este portal; se vuelve a intentar mañana.', attempts };
   for (const recipe of orderRecipes(portal, rows, runs, now).slice(0, opts.maxAttempts ?? MAX_ATTEMPTS)) {
     const row = rows.find(a => normalizeActor(a.actor) === normalizeActor(recipe.actor)); if (!row) continue;
+    // Entrada que ya falló dos veces hoy (HTTP 4xx, 0 elementos…): no se repite en una búsqueda automática; mañana, o desde «Probar ruta».
+    if (!manual && runs.filter(r => r.actor_id === row.id && age(r, now) < DAY && isFailed(r)).length >= RECIPE_COOLDOWN_FAILS) { attempts.push({ recipe: recipe.name, error: 'Falló dos veces hoy: en pausa hasta mañana (revisar su entrada).' }); continue; }
     const usable = opts.test ? { ...row, max_items: portal.testItems } : row;
-    const query = queryForDay(portal, now);
-    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(query ? { query } : {}) } });
+    const query = queryForDay(portal, now), country = countryForDay(portal, now);
+    const r = await startRun(usable, opts.by, opts.publicBase, { maxChargeUsd: opts.test ? TEST_CAP_USD : (opts.maxChargeUsd ?? RUN_CAP_USD), vars: { max_items: usable.max_items, ...(query ? { query } : {}), ...(country ? { country } : {}) } });
     if (r.ok) return { ok: true, recipe: recipe.name, actor: recipe.actor, fallback: attempts.length > 0, attempts };
     if (GLOBAL_STOP.test(r.error)) return { ok: false, busy: /Ya hay una ejecuci/i.test(r.error), stopped: true, error: r.error, attempts };
     attempts.push({ recipe: recipe.name, error: r.error }); await recordStartFailure(row, r.error, opts.by);
