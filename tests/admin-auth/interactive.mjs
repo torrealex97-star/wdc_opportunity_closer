@@ -102,7 +102,7 @@ try {
       const panel = page.getByTestId('waterfall');
       await panel.getByRole('heading', { name: 'Objetivo diario y waterfall' }).waitFor();
       await panel.getByTestId('wf-stages').locator('tbody tr').first().waitFor();
-      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 6, 'Google Jobs, RapidAPI, Tavily, páginas de empresa, respaldo y Apify');
+      assert.equal(await panel.getByTestId('wf-stages').locator('tbody tr').count(), 7, 'Google Jobs, RapidAPI, Tavily, feed de Bright Data, páginas de empresa, respaldo y Apify');
       assert.match(await panel.getByTestId('wf-origin').innerText(), /valor por defecto/, 'sin nada guardado se dice que es el defecto');
       const sample = page.getByTestId('source-sample');
       await sample.getByRole('heading', { name: 'Salud y muestra por fuente' }).waitFor();

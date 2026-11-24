@@ -10,6 +10,8 @@ import { readCaps } from '../../../../lib/providerBudgetStore';
 import { BrightDataError, brightDataSource, resolveBrightDataConfig, serpJobs } from '../../../../lib/providers/brightdata';
 import { JSearchError, jsearchJobs } from '../../../../lib/providers/jsearch';
 import { fetchHtml } from '../../../../lib/providers/unlocker';
+import { runFeedStage } from '../../../../lib/brightdataFeedRun';
+import { isFeedSource } from '../../../../lib/providers/brightdataFeeds';
 import { PORTALS } from '../../../../lib/apifyCatalog';
 import { listActors, listRuns, monthSpent } from '../../../../lib/apify';
 import { describeRun } from '../../../../lib/runOutcome';
@@ -199,6 +201,21 @@ export async function POST(request: NextRequest) {
     const result = await searchPortal(portal, { by: auth!.admin.email, publicBase: publicBaseUrl(request), test: true });
     if (!result.ok) return Response.json({ detail: result.error }, { status: result.busy ? 409 : 502 });
     return reply(auth!, { ok: true, accepted: 0, async: true, note: `Búsqueda de prueba lanzada en Apify con «${result.recipe}»${result.fallback ? ' (el primer buscador falló y entró un repuesto)' : ''}: 10 ofertas como máximo y tope de 0,50 US$. Los resultados llegan en unos minutos y se guardan solos; el coste real aparece al terminar.` });
+  }
+
+  // Feed estructurado de Bright Data: primero recoge lo ya pedido (gratis) y pide UNA búsqueda de prueba de 10 registros como
+  // máximo (≈ 0,015 USD). Los resultados llegan después y se recogen solos (o al volver a pulsar).
+  if (route.provider === 'brightdata_feed') {
+    const check = canSpend('brightdata', spentOf(rows, 'brightdata'), process.env, 1, caps.brightdata.usd);
+    if (!check.ok) return Response.json({ detail: check.reason }, { status: 409 });
+    const outcome = await runFeedStage('panel-ruta', Date.now() + 40_000, null, { maxSearches: 1, limit: 10, route: 'prueba', feed: isFeedSource(entry.code) ? entry.code : 'linkedin' });
+    if (!outcome.ok) return Response.json({ detail: outcome.error ?? 'Bright Data no hizo ninguna búsqueda.' }, { status: 502 });
+    const got = outcome.collected;
+    const parts = [
+      got?.collected ? `Recogidas ${got.collected} búsqueda(s) anteriores: ${got.accepted} oferta(s) guardada(s).` : '',
+      outcome.searches ? `Pedida una búsqueda de prueba (${outcome.queries.join(', ')}; 10 registros como máximo, ≈ ${outcome.cost_usd} USD). Los resultados llegan en unos minutos y se guardan solos; vuelve a pulsar «Probar ruta» para recogerlos ya.` : 'Ya hay un encargo en marcha; no se pidió otro.',
+    ].filter(Boolean);
+    return reply(auth!, { ok: true, accepted: outcome.accepted, cost_usd: outcome.cost_usd, async: outcome.searches > 0 || (got?.pending ?? 0) > 0, note: parts.join(' ') });
   }
 
   // Gratis: no hay llamada que probar; se declara en vez de gastar una petición inútil.

@@ -19,8 +19,9 @@
 
 import { PORTALS } from './apifyCatalog';
 import { PROVIDER_METERS } from './providerBudget';
+import { FEEDS, isFeedSource } from './providers/brightdataFeeds';
 
-export type RouteProvider = 'engine' | 'backend' | 'official' | 'brightdata' | 'jsearch' | 'serpapi' | 'apify' | 'jobspy' | 'unlocker' | 'agent';
+export type RouteProvider = 'engine' | 'backend' | 'official' | 'brightdata_feed' | 'brightdata' | 'jsearch' | 'serpapi' | 'apify' | 'jobspy' | 'unlocker' | 'agent';
 export type RouteCost = 'free' | 'quota' | 'metered' | 'paid' | 'unavailable';
 export type RouteEvidence = 'operativo' | 'medido' | 'documentado' | 'bloqueado' | 'no_disponible';
 
@@ -62,6 +63,7 @@ export const ROUTE_STAGE: Record<RouteProvider, number> = {
   engine: 0,
   backend: 0,
   official: 1,
+  brightdata_feed: 1.5,
   brightdata: 2,
   // JSearch es la misma búsqueda de Google Jobs que SerpApi, diez veces más barata: ese es su escalón.
   jsearch: 3,
@@ -157,6 +159,16 @@ export function routesForSource(entry: CatalogLite): SourceRoute[] {
     });
   }
 
+  if (isFeedSource(code)) {
+    const feed = FEEDS[code];
+    add({
+      provider: 'brightdata_feed', label: feed.label, cost: 'metered', costUsd: feed.usdPerRecord, stage: 1.5,
+      requirement: 'API key de Bright Data (Panel → APIs). No necesita zona SERP.',
+      detail: 'Scraper estructurado de Bright Data (Web Scraper API): pide una búsqueda por palabra clave y mercado y devuelve registros con título, empresa, ubicación, fecha y descripción, sin depender del panel de empleos de Google. Los resultados llegan después y se recogen solos en la siguiente pasada. Se cobra por registro entregado.',
+      evidence: 'documentado', evidenceNote: 'Identificador y campos leídos en la documentación pública de Bright Data (2026-11-24); sin clave aquí, se prueba con servidor simulado. La primera llamada real la validas tú.',
+      requiresKey: 'brightdata', async: true,
+    });
+  }
   const host = hostOf(entry.website);
   const googleQuery = code === 'google' ? 'closer de ventas España' : host && !FREELANCE_SOURCES.has(code) ? `site:${host} closer de ventas` : null;
   if (googleQuery) {
