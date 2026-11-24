@@ -1,7 +1,17 @@
-## Paso de interfaz «control de fuentes»: fallo intermitente de CI, endurecido con diagnóstico (2026-11-24)
+## Feed XML de Workable: recolector gratuito de todas sus empresas (2026-11-24)
 
-- **Medido:** sobre el mismo commit `3ede801` (PR #176, que no toca `apps/web`) `web-admin` falló dos veces en «Resumen: control de fuentes» (`source-control` no visible en 30 s) y pasó en el otro run. En #175 pasó dos veces.
-- **Cambio (*tested* en local, suite completa: ver abajo):** espera 10 s, un reintento de navegación por hash y, si aun así falla, el error nombra hash, título, sesión y pestañas. **No es una causa raíz demostrada**: no se reprodujo en local. Si vuelve a fallar, el mensaje dice la pantalla real y se corrige esa causa.
+- **Qué:** `scripts/workable_collect.py` + `.github/workflows/workable-collect.yml` (diario 05:41 UTC) envían borradores a `/api/ingest` con `source=workable`. Filtra puestos closer/setter/cold caller/SDR con `career.vocabulary` (palabra completa: «Bed Setter» no entra) en ES/LatAm o con título en español; un registro por URL, URL intacta, sin correos ni teléfonos.
+- **Límite importante:** el feed NO trae descripción (formato *inspected* en el código del agregador de referencia). Sin descripción el panel descarta por `sin_descripcion`, así que cada candidato (tope 60) se enriquece con la API pública de la ficha `apply.workable.com/api/v2/accounts/<cuenta>/jobs/<código>`. **Ese contrato no está verificado**: si falla, se envía sin descripción y se dice en la nota; nunca se inventa.
+- **Evidencia:** *tested* con XML de muestra (`tests/test_workable_collect.py` 9/9; el primer intento falló por `comerciales` y se corrigió). **No *verified***: `workable.com` está bloqueado desde este entorno, no se ha descargado el feed real. Un segundo intento en una hora devuelve 429.
+- **NO está hecho:** cuenta como fuente cuando tras la primera ejecución en Actions haya ≥1 oferta cualificada en 7 días, o se marque bloqueada con causa. Necesita `INGEST_URL` e `INGEST_TOKEN` en los secretos (ya existen si JobSpy los usa).
+
+## Paso de interfaz «control de fuentes»: intermitencia de CI localizada y corregida (2026-11-24)
+
+- **Medido:** `web-admin` falló en 3 de 5 intentos sobre los mismos commits (PR #176, que no toca `apps/web`), siempre en «Resumen: control de fuentes» con `Timeout 30000ms` en `source-control`.
+- **Causa localizada (log de #177):** era la ÚLTIMA espera del paso, tras «Ver todas en el panel de fuentes»: volvía a Resumen forzando `#summary` por hash, vía que el propio comentario del paso ya marcaba como poco fiable.
+- **Cambio (*tested*, suite local 631 PASS, `exit=0`; CI de #177 verde en los dos runs):** auxiliar `toSummary` que vuelve a Resumen pulsando el módulo, y error con hash/título/sesión/pestañas si no aparece. Dos pasadas verdes no prueban que la intermitencia haya desaparecido: se vigila.
+- También en #177: el claim cerrado de #175 dejaba dos trabajos `in_progress` del mismo agente y rompía `npm run handoff`.
+
 
 ## Fuentes de Apify: empresas y Elempleo con actor que busca y trae descripción (2026-11-24)
 
