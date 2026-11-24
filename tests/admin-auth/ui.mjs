@@ -67,6 +67,20 @@ await step('Centro de mando: embudo, mercados, reparto y gasto con su propio est
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
 });
+await step('Resumen: control de fuentes con titular «X de N», estados medidos y la lista «A trabajar» con causa, siguiente paso y dueño', async () => {
+  // Navegar como una persona (el módulo «Centro de mando»): forzar el mismo #summary tras salir a la bandeja no siempre cambia de pestaña.
+  await page.getByRole('navigation', { name: 'Secciones del panel' }).getByRole('button', { name: 'Centro de mando', exact: true }).click();
+  const control = page.getByTestId('source-control'); await control.waitFor();
+  await page.getByTestId('source-control-headline').filter({ hasText: /\d+ de \d+ fuentes dan ofertas cualificadas\./ }).waitFor();
+  const text = await control.innerText();
+  for (const label of ['Dan ofertas cualificadas', 'Recogen y no cualifican', 'Conectadas sin recoger', 'Rotas', 'Necesitan un dato tuyo', 'Sin vía verificada']) assert.ok(text.includes(label), label);
+  assert.match(text, /Una fuente solo está hecha si en los últimos 7 días dio al menos una oferta cualificada/);
+  const todo = page.getByTestId('source-control-todo'); await todo.waitFor(); assert.ok(await todo.locator('tbody tr').count() > 0, 'hay fuentes a trabajar');
+  assert.match(await todo.innerText(), /Siguiente paso:/); assert.match(await todo.innerText(), /Lo trabajo yo|Te toca a ti/);
+  await control.getByRole('button', { name: 'Ver todas en el panel de fuentes' }).click(); await page.getByRole('heading', { name: 'Todas las fuentes, en una tabla.' }).waitFor();
+  await openTab(page, 'summary'); await page.getByTestId('source-control').waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+});
 await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como pestañas, y «Equipo» aparte', async () => {
   const nav = page.getByRole('navigation', { name: 'Secciones del panel' });
   for (const module of ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura', 'Voz']) await nav.getByRole('button', { name: module, exact: true }).waitFor();

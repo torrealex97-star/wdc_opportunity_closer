@@ -1,6 +1,10 @@
 // STUDENT_LOGIN_REQUIRED=true: `/` y la búsqueda hospedada exigen sesión de alumna. Arranca su propia app (puerto 3198) y sus mocks.
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import net from 'node:net';
+import http from 'node:http';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { startMocks } from './mock-services.mjs';
 
 const PORT = 3198, BASE = `http://127.0.0.1:${PORT}`;
@@ -14,7 +18,29 @@ const search = (cookie) => fetch(BASE + '/api/backend/opportunities/search', { m
 
 const results = []; let child;
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message]); } };
-const stop = async () => { try { process.kill(-child.pid); } catch {} await new Promise(r => setTimeout(r, 800)); };
+// Esperar a que el puerto quede LIBRE de verdad: con 800 ms fijos, bajo carga el servidor anterior seguía vivo cuando arrancaba el siguiente, este no podía abrir el
+// puerto y `up()` daba por bueno al viejo (con la bandera activa): «307 !== 200» intermitente (2 de 4 ejecuciones el 2026-11-24).
+// Diagnóstico para un fallo intermitente: qué procesos `next` hay vivos y con qué STUDENT_LOGIN_REQUIRED sirven (lee /proc/<pid>/environ).
+const procs = () => {
+  try {
+    return execSync("pgrep -f 'next-server|next start'").toString().trim().split('\n').map(pid => {
+      let flag = '?'; try { flag = readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').find(x => x.startsWith('STUDENT_LOGIN_REQUIRED=')) ?? 'sin variable'; } catch {}
+      return `${pid}:${flag}`;
+    }).join(' ');
+  } catch { return 'sin procesos next'; }
+};
+// Petición con una conexión NUEVA (`agent: false`): `fetch` reutiliza sockets keep-alive y el servidor anterior, ya sin escuchar pero todavía vivo,
+// seguía contestando por el socket viejo (con la bandera activa): 307 en vez de 200. Causa hallada con el diagnóstico de `procs()` (2026-11-24).
+const fresh = (method, path, { headers = {}, body } = {}) => new Promise((resolve, reject) => {
+  const req = http.request({ host: '127.0.0.1', port: PORT, path, method, headers: { connection: 'close', ...headers }, agent: false }, res => { res.resume(); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers })); });
+  req.on('error', reject); if (body) req.write(body); req.end();
+});
+const busy = () => new Promise(resolve => { const socket = net.connect(PORT, '127.0.0.1'); socket.once('connect', () => { socket.destroy(); resolve(true); }); socket.once('error', () => resolve(false)); });
+const stop = async () => {
+  try { process.kill(-child.pid); } catch {}
+  for (let i = 0; i < 60 && await busy(); i++) await new Promise(r => setTimeout(r, 250));
+  if (await busy()) throw new Error('el servidor anterior no liberó el puerto en 15 s');
+};
 
 try {
   child = run('true'); await up();
@@ -41,8 +67,10 @@ try {
   await stop();
   child = run(''); await up();
   await step('flag apagado (por defecto): `/` y la búsqueda siguen abiertas', async () => {
-    assert.equal((await fetch(BASE + '/', { redirect: 'manual' })).status, 200);
-    assert.notEqual((await search()).status, 401);
+    const r = await fresh('GET', '/', { headers: { host: `127.0.0.1:${PORT}` } });
+    assert.equal(r.status, 200, `status ${r.status}, location ${r.headers.location}, procesos next: ${procs()}`);
+    const found = await fresh('POST', '/api/backend/opportunities/search', { headers: { 'content-type': 'application/json', origin: BASE, host: `127.0.0.1:${PORT}` }, body: JSON.stringify({ market: 'any', days: 10 }) });
+    assert.notEqual(found.status, 401, `la búsqueda respondió ${found.status}; procesos next: ${procs()}`);
   });
 } finally { await stop(); close(); }
 for (const [s, n, m] of results) console.log(`${s}  ${n}${m ? '\n      ' + m : ''}`);

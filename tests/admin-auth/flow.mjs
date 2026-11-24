@@ -1154,6 +1154,24 @@ await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000
   state.externalCountsFail = false;
   assert.equal(down.status, 503, 'con el recuento caído no se pintan ceros'); assert.match(down.json.detail, /fuentes/);
 });
+await step('Control de fuentes: exige sesión; cada fuente cae en un estado medido, el titular dice «X de N» y lo que no cualifica sale «a trabajar» con causa y siguiente paso', async () => {
+  const savedJar = jar; jar = {};
+  assert.equal((await call('/api/admin/source-control')).status, 401);
+  jar = savedJar;
+  const r = await call('/api/admin/source-control'); assert.equal(r.status, 200);
+  const d = r.json; assert.match(d.headline, /^\d+ de \d+ fuentes dan ofertas cualificadas\.$/); assert.equal(d.window_days, 7);
+  const STATES = ['cualificadas', 'recoge_sin_cualificar', 'sin_recoger', 'rota', 'necesita_dato', 'sin_via'];
+  assert.deepEqual(Object.keys(d.counts).sort(), [...STATES].sort()); assert.equal(Object.values(d.counts).reduce((a, b) => a + b, 0), d.total, 'los estados suman todas las fuentes');
+  assert.equal(d.qualified, d.counts.cualificadas); assert.equal(d.todo.length, d.total - d.counts.cualificadas, 'a trabajar = todo lo que no cualifica');
+  for (const item of d.todo) { assert.ok(STATES.includes(item.state) && item.state !== 'cualificadas'); assert.ok(item.cause.length > 10 && item.next.length > 10, `causa y siguiente paso (${item.source})`); assert.ok(['claude', 'propietario'].includes(item.owner), `dueño (${item.source})`); }
+  const jt = d.items.find(i => i.source === 'jobtoday'); assert.equal(jt.state, 'cualificadas'); assert.equal(jt.qualified, 4); assert.equal(jt.done, true);
+  const pen = d.items.find(i => i.source === 'ats-ashby-pennylane'); assert.equal(pen.state, 'rota'); assert.match(pen.cause, /HTTP 401/);
+  const rank = ['rota', 'recoge_sin_cualificar', 'sin_recoger', 'necesita_dato', 'sin_via'];
+  const order = d.todo.map(i => rank.indexOf(i.state)); assert.deepEqual(order, [...order].sort((a, b) => a - b), 'las rotas primero, después las que recogen sin cualificar');
+  assert.ok(!JSON.stringify(d).includes('secret'), 'sin secretos');
+  state.externalCountsFail = true; const down = await call('/api/admin/source-control'); state.externalCountsFail = false;
+  assert.equal(down.status, 503, 'con las cuentas caídas no se pinta un control inventado');
+});
 await step('logout limpia cookies y la sesión deja de valer', async () => {
   await call('/api/admin/session', { method: 'DELETE' });
   assert.deepEqual(jar, {}); assert.equal((await call('/api/admin/opportunities')).status, 401);
