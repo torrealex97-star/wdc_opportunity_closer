@@ -2,6 +2,8 @@
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { startMocks } from './mock-services.mjs';
 
 const PORT = 3198, BASE = `http://127.0.0.1:${PORT}`;
@@ -17,6 +19,15 @@ const results = []; let child;
 const step = async (name, fn) => { try { await fn(); results.push(['PASS', name]); } catch (e) { results.push(['FAIL', name, e.message]); } };
 // Esperar a que el puerto quede LIBRE de verdad: con 800 ms fijos, bajo carga el servidor anterior seguía vivo cuando arrancaba el siguiente, este no podía abrir el
 // puerto y `up()` daba por bueno al viejo (con la bandera activa): «307 !== 200» intermitente (2 de 4 ejecuciones el 2026-11-24).
+// Diagnóstico para un fallo intermitente: qué procesos `next` hay vivos y con qué STUDENT_LOGIN_REQUIRED sirven (lee /proc/<pid>/environ).
+const procs = () => {
+  try {
+    return execSync("pgrep -f 'next-server|next start'").toString().trim().split('\n').map(pid => {
+      let flag = '?'; try { flag = readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').find(x => x.startsWith('STUDENT_LOGIN_REQUIRED=')) ?? 'sin variable'; } catch {}
+      return `${pid}:${flag}`;
+    }).join(' ');
+  } catch { return 'sin procesos next'; }
+};
 const busy = () => new Promise(resolve => { const socket = net.connect(PORT, '127.0.0.1'); socket.once('connect', () => { socket.destroy(); resolve(true); }); socket.once('error', () => resolve(false)); });
 const stop = async () => {
   try { process.kill(-child.pid); } catch {}
@@ -49,7 +60,8 @@ try {
   await stop();
   child = run(''); await up();
   await step('flag apagado (por defecto): `/` y la búsqueda siguen abiertas', async () => {
-    assert.equal((await fetch(BASE + '/', { redirect: 'manual' })).status, 200);
+    const r = await fetch(BASE + '/', { redirect: 'manual' });
+    assert.equal(r.status, 200, `status ${r.status}, location ${r.headers.get('location')}, procesos next: ${procs()}`);
     assert.notEqual((await search()).status, 401);
   });
 } finally { await stop(); close(); }
