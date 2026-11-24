@@ -1,3 +1,11 @@
+## Migraciones aplicadas a la base real y lote de dependencias — 2026-11-24
+
+- **Orden del dueño** («haz todo lo que puedas hacer tú»), en respuesta a mi pregunta sobre las dos migraciones pendientes. Aplicadas con `apply_migration` tras una prueba de comportamiento en transacción con `ROLLBACK` (insertar, rechazar un modo y un proveedor inventados, rechazar una segunda fila por organización, sin acceso de `anon`/`authenticated`):
+  - `ai_review_settings` (interruptor del modo de la IA desde la app): tabla vacía, con RLS y sin acceso del navegador. **Sin fila no cambia nada**: el modo sigue siendo `AI_REVIEW_MODE` o `shadow`; la IA **no se ha activado en `live`**, eso lo hace el propietario con el interruptor.
+  - `tavily_provider`: amplía los CHECK de `integration_connections` y `provider_budget` con `tavily` (aditiva). Con ella se puede guardar la clave de Tavily desde Panel → APIs.
+  - Asesores de seguridad de Supabase tras aplicarlas (*tested* contra la base real): sin avisos nuevos; la tabla nueva entra en el mismo aviso informativo «RLS sin política» que las otras 25 tablas de solo servicio (por diseño: solo el service role).
+- **Lote de dependencias** (#167): nueve de las diez PR de Dependabot, probadas juntas (suite web completa, `pytest` 218 OK en un entorno limpio, `next build` y `opennextjs-cloudflare build`). La de pydantic dejaba `pydantic_core==2.41.5` en el lock, incompatible: corregido a 2.50.5. **Sin integrar:** `read-excel-file` 5→9 (#157), salto de versión mayor con `web-admin` en rojo.
+
 ## Feed estructurado de LinkedIn Jobs por Bright Data — 2026-11-24
 
 - **Por qué:** la búsqueda `site:` de Google por Bright Data devuelve «sin panel de empleos» (5 de 7 búsquedas del cron de hoy; 3 ofertas guardadas). Bright Data tiene scrapers de empleo ya hechos que devuelven registros estructurados sin depender de ese panel.
