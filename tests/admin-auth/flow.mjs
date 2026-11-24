@@ -288,7 +288,7 @@ await step('alumnas: invitación, recuperación, login, perfil con consentimient
   const studentHeaders = { cookies: false, headers: { cookie: studentCookie() } };
   assert.equal((await call('/api/student/voice', { cookies: false })).status, 401);
   const voice = await call('/api/student/voice', studentHeaders); assert.equal(voice.status, 200);
-  assert.deepEqual(voice.json, { enabled: false, reason: 'switch_off', consent: null }, 'la voz sigue apagada sin VOICE_ROLEPLAY');
+  assert.deepEqual(voice.json, { enabled: false, reason: 'switch_off', consent: null, limits: { daily_minutes: 10 } }, 'la voz sigue apagada sin VOICE_ROLEPLAY y dice su tope: 10 minutos al día');
   const before = await call('/api/student/progress', studentHeaders);
   assert.equal(before.status, 200); assert.equal(before.json.progress.sessions, 1, 'el login cuenta como entrada');
   assert.equal(before.json.progress.practice.count, 0); assert.equal(before.json.progress.training.examBest, null, 'sin examen es null, no 0');
@@ -882,6 +882,20 @@ await step('términos y condiciones: página pública, borrador visible y sin pr
   assert.ok(!/undefined|null/.test(html.replace(/<script[\s\S]*?<\/script>/g, '')), 'sin valores vacíos visibles');
   assert.equal(res.headers.get('x-frame-options'), 'DENY');
   assert.ok((await (await fetch(BASE + '/privacidad')).text()).includes('href="/terminos"'), 'la privacidad enlaza los términos');
+});
+await step('voz: cookies (borrador, sin banner), términos y privacidad con el límite de 10 minutos, y topes de voz en el panel', async () => {
+  const cookies = await fetch(BASE + '/cookies'); assert.equal(cookies.status, 200);
+  const html = await cookies.text();
+  for (const t of ['Borrador pendiente de revisión legal', 'wdc_student_at', 'wdc_admin_at', 'no usa cookies de publicidad', 'v1-borrador']) assert.ok(html.includes(t), t);
+  assert.ok(!/undefined|null/.test(html.replace(/<script[\s\S]*?<\/script>/g, '')), 'sin valores vacíos visibles');
+  assert.equal(cookies.headers.get('x-frame-options'), 'DENY');
+  for (const page of ['/terminos', '/privacidad']) { const text = await (await fetch(BASE + page)).text(); assert.ok(text.includes('10 minutos'), `${page}: dice el límite de voz`); assert.ok(text.includes('href="/cookies"'), `${page}: enlaza cookies`); }
+  assert.ok((await (await fetch(BASE + '/privacidad')).text()).includes('ElevenLabs, OpenAI y Deepgram'), 'la privacidad nombra los candidatos sin darlos por elegidos');
+  assert.equal((await fetch(BASE + '/api/admin/voice-limits')).status, 401, 'sin sesión no se ven los topes');
+  const limits = await call('/api/admin/voice-limits'); assert.equal(limits.status, 200);
+  assert.equal(limits.json.daily_minutes_per_student, 10); assert.equal(limits.json.monthly_cap_usd, 10); assert.equal(limits.json.switch_on, false);
+  assert.equal(limits.json.spent_usd_month, null, 'sin sesiones el gasto es «sin medir», no 0'); assert.equal(limits.json.minutes_today, null);
+  assert.equal(limits.json.providers.length, 4); assert.ok(limits.json.providers.every(p => p.usdPerMinute.low > 0 && p.source.startsWith('https://')));
 });
 await step('pausar una fuente: se rechaza su ingesta, se salta su recogida y desaparece de la vista de alumna', async () => {
   const tok = { authorization: 'Bearer ingest-token-0123456789abcdef0123' };

@@ -1,3 +1,12 @@
+## Voz continua, fase B: cimientos sin audio (2026-11-24)
+
+- **Decisiones del propietario (2026-11-24):** candidatos ElevenLabs, OpenAI y «la más barata y de mejor calidad»; el consentimiento de voz se acepta dentro del alta de la alumna (términos y privacidad) y hay que redactar términos, uso y cookies; **máximo 10 minutos por día** y control de todo el gasto de API/voz en el admin.
+- **Precios leídos de páginas públicas** (*inspected*, 2026-11-24; son estimaciones por minuto, no una factura): OpenAI Realtime mini ≈ 0,02–0,05 US$/min (la más barata), Deepgram Voice Agent 0,050–0,075, ElevenLabs Agents 0,08 de plataforma más el modelo a coste (0,16 si se supera la concurrencia; la mejor voz), OpenAI Realtime completo ≈ 0,06–0,11. A 10 min/día, el peor caso por alumna y día es ≈ 0,5 US$ (mini) a 1,6 US$ (ElevenLabs).
+- **Retención cero NO verificada con ninguno:** ElevenLabs documenta un modo por agente cuya disponibilidad por plan no está confirmada; OpenAI y Deepgram, por confirmar por escrito. Sin ese acuerdo no se trata audio de alumnas (ADR-013): la voz sigue apagada (`VOICE_ROLEPLAY`).
+- **Construido** (*tested*, simulación): `lib/voiceProvider.ts` (catálogo y estimación en el peor caso), `lib/voiceQuota.ts` (10 min/día, `VOICE_DAILY_MINUTES` solo puede bajarlo; tope global mensual `VOICE_MONTHLY_USD`, 10 US$ por defecto; un consumo o gasto ilegible no abre la voz), `GET /api/admin/voice-limits` y el panel «Voz continua: topes y coste estimado» en APIs (consumo y gasto «—» porque aún no se miden), `GET /api/student/voice` con `limits`. Textos nuevos: página `/cookies`, voz en términos §5 y privacidad §7, `VOICE_CONSENT_TEXT`.
+- **Todo el texto legal es BORRADOR** pendiente de revisión por un profesional; los datos del responsable siguen «pendiente de completar». La tabla `student_voice_consent` ya estaba aplicada (2026-10-26).
+- **Sin construir (necesita al propietario):** elegir proveedor y firmar la retención cero; clave de API; registrar el consumo real (tabla de uso, requiere migración y orden expresa); el canal en tiempo real (worker aparte, no cabe en Vercel) y su prueba de latencia en español.
+
 ## Revisión de «Probar todas las fuentes» (2026-11-24) y arreglos de entrada de Apify
 
 - **Qué se revisó** (*inspected*, base real, solo lectura): `apify_runs`, `external_ingest_runs` y `external_offers` de las pruebas de las 11:28–11:35 UTC. Gasto de la tanda ≈ 0,8 US$ (tope 5).

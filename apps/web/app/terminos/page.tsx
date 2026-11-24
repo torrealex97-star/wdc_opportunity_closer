@@ -38,7 +38,11 @@ export default function Page() {
     </ul>
 
     <h2>5. Práctica por voz</h2>
-    <p>Cuando la práctica por voz esté activa, necesitarás un consentimiento propio y retirable para usar el micrófono. No grabes ni compartas conversaciones de otras personas sin su permiso. <strong>Hoy esa función no está activa.</strong></p>
+    <ul>
+      <li><strong>Dictado y lectura en voz alta:</strong> los ofrece tu navegador; ver la política de privacidad.</li>
+      <li><strong>Voz continua con inteligencia artificial</strong> (cuando se active): necesitas un consentimiento propio y retirable, separado de estos términos. Hay un <strong>límite de 10 minutos al día</strong> por persona; al llegar la sesión se corta y se te avisa.</li>
+      <li>No grabes ni compartas conversaciones de otras personas sin su permiso. Una voz de IA puede equivocarse o sonar distinta de un cliente real. <strong>Hoy la voz continua no está activa.</strong></li>
+    </ul>
 
     <h2>6. Candidaturas</h2>
     <p>El portal te prepara un borrador y los datos para copiar. <strong>Eres tú quien revisa, completa y envía</strong> cada candidatura en la web de la empresa, y quien responde de que lo que envías es veraz. El portal no envía mensajes ni formularios por ti.</p>
@@ -65,6 +69,6 @@ export default function Page() {
     <h2>12. Cambios</h2>
     <p>Si cambiamos estos términos de forma relevante, te lo diremos y, si hace falta, te pediremos que los aceptes de nuevo.</p>
 
-    <p className="legal-meta">Versión {TERMS_VERSION} · {TERMS_DATE} · <a href="/privacidad">Privacidad</a> · <a href="/alumna">Volver a tu espacio</a></p>
+    <p className="legal-meta">Versión {TERMS_VERSION} · {TERMS_DATE} · <a href="/privacidad">Privacidad</a> · <a href="/cookies">Cookies</a> · <a href="/alumna">Volver a tu espacio</a></p>
   </main>;
 }
