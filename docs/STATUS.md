@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ## Panel de fuentes gratuitas: el «0» era un error de qué dato se leía (2026-11-24)
 
 - **Queja del propietario:** 23 de las 24 gratuitas figuraban «Conectada» con 0 recogidas y 0 aprobadas, y decía que todas deberían recoger cada día.
@@ -6,13 +5,11 @@
 - **Causa del 0** (*inspected*): `readSamples` contaba `external_offers` en Supabase; las gratuitas del motor viven en la base D1 del Worker y no pasan por ahí (solo Jooble y las vías de pago). Mostrar 0 era falso.
 - **Cambio** (*tested* con el mock del motor): `lib/engineSources.ts` (pura) traduce el informe del motor: «Recogidas» = catálogo, «Aprobadas» = elegibles, conexión según el último intento (fallo declarado con su causa; respondió pero catálogo vacío = «mal conectada»), y con el motor ilegible las cifras salen en «—» y la causa lo dice (nunca 0). `enginesources.mjs` 5/5; pasos nuevos en `flow.mjs` y `ui.mjs`.
 - **No cambia la recogida**, solo lo que enseña el panel. **Pendiente real** (no es del panel): el volumen de closer es bajo (271 elegibles, 20 seleccionadas, casi todo FreeHire); retirar o corregir `jobtoday-closer-remoto` (410) y dar tiempo/espacio a `himalayas-closer` (429) es trabajo del motor (`sites/engine`).
-=======
 ## read-excel-file 5.8 → 9.3.20 (2026-11-24; sustituye a la PR #157 de Dependabot)
 
 - **Por qué no se fusionó la PR de Dependabot tal cual** (*tested*): en v9 `read-excel-file/node` ya no exporta `readSheetNames` y su export por defecto devuelve todas las hojas como `[{ sheet, data }]`; `scripts/training-import.mjs` (`readXlsx`) fallaba con «readSheetNames is not a function» y la prueba `training-curriculum.mjs` lo detecta en rojo.
 - **Cambio:** `readXlsx` lee el libro una vez y busca cada hoja (`modules`, `lessons`, `resources`, `questions`) por nombre sin distinguir mayúsculas ni espacios; un libro ilegible se declara con su archivo. Sobre `tests/fixtures/training-template.xlsx` da los mismos datos que v5 (5/13/15/25 filas). La subida elimina 104 paquetes transitivos del lock (v9 ya no usa `unzipper`).
 - **Evidencia:** `training-curriculum.mjs` 50/50 con v9; comprobado en rojo con el script antiguo. La suite completa la ejecuta la CI de esta PR.
->>>>>>> origin/main
 
 ## Voz: sección propia y cascada por coste (2026-11-24)
 
