@@ -70,7 +70,16 @@ await step('Centro de mando: embudo, mercados, reparto y gasto con su propio est
 await step('Resumen: control de fuentes con titular «X de N», estados medidos y la lista «A trabajar» con causa, siguiente paso y dueño', async () => {
   // Navegar como una persona (el módulo «Centro de mando»): forzar el mismo #summary tras salir a la bandeja no siempre cambia de pestaña.
   await page.getByRole('navigation', { name: 'Secciones del panel' }).getByRole('button', { name: 'Centro de mando', exact: true }).click();
-  const control = page.getByTestId('source-control'); await control.waitFor();
+  const control = page.getByTestId('source-control');
+  // Fallo intermitente en CI (2026-11-24, PR #176: 2 de 3 intentos sobre el mismo commit): la tarjeta no aparecía en 30 s sin decir en qué pantalla estaba la página.
+  // Se espera 10 s; si no sale se vuelve a Resumen por el hash UNA vez y, si aun así no sale, el error dice la pantalla real (hash, título, sesión) en vez de un tiempo agotado mudo.
+  if (!await control.waitFor({ timeout: 10000 }).then(() => true, () => false)) {
+    await openTab(page, 'summary');
+    await control.waitFor({ timeout: 15000 }).catch(async () => {
+      const where = await page.evaluate(() => ({ hash: location.hash, h1: document.querySelector('h1')?.textContent ?? null, login: !!document.querySelector('.auth-card'), tabs: [...document.querySelectorAll('[role=tab]')].map(t => `${t.textContent}:${t.getAttribute('aria-selected')}`).join('|') }));
+      throw new Error(`source-control no apareció; pantalla: ${JSON.stringify(where)}`);
+    });
+  }
   await page.getByTestId('source-control-headline').filter({ hasText: /\d+ de \d+ fuentes dan ofertas cualificadas\./ }).waitFor();
   const text = await control.innerText();
   for (const label of ['Dan ofertas cualificadas', 'Recogen y no cualifican', 'Conectadas sin recoger', 'Rotas', 'Necesitan un dato tuyo', 'Sin vía verificada']) assert.ok(text.includes(label), label);
