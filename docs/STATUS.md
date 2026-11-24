@@ -1,3 +1,10 @@
+## Fuentes de Apify: empresas y Elempleo con actor que busca y trae descripción (2026-11-24)
+
+- **Medido antes (base real, 7 días):** `apify-company` 100 vistas / 0 aprobadas (90 puestos «Personal Trainer» de una sola empresa, sin descripción); Elempleo: el primer actor no devuelve descripción por diseño.
+- **Cambio (*tested* con prueba en rojo y verde, `apify-inputs.mjs` 9/9, `apify-queries.mjs` 8/8, pytest 11 OK):** `OVERRIDES.first` reordena recetas; `fantastic-jobs/greenhouse-jobs-api` (búsqueda por título, texto completo, `limit` 200) primero en empresas; `scrapers_lat/elempleo-scraper` (`withDetails`) primero en Elempleo; `raw.item_keys` guarda las claves de cada item para diagnosticar desde la base.
+- **Esquemas:** el de `scrapers_lat` se leyó entero (*inspected*); el de `corvuslab` no se pudo leer (la página no lo devolvió), así que no se toca. Ninguna entrada está *verified* contra el actor real.
+- **NO está hecho:** hasta re-medir tras el cron de las 06:00 UTC (aprobadas de `apify-company` y Elempleo) y usar «Probar ruta», no se afirma mejora. Si siguen en 0, la causa se anota en «Control de fuentes».
+
 ## Control total de fuentes y criterio de hecho (2026-11-24)
 
 - **Criterio del propietario (obligatorio):** la app debe controlar todas las fuentes —conectadas, dando ofertas, dando ofertas CUALIFICADAS— y no se da nada por hecho mientras no sea así. **Una fuente solo está hecha si en los últimos 7 días dio al menos una oferta cualificada, o si está bloqueada con una causa escrita y un dueño.** Si no, se marca para trabajar y se busca por qué no cualifica (búsqueda, comunicación, extracción, filtrado) hasta que funcione. Varios code reviews de código no bastaron: lo que cuenta es el resultado medido, visible en el Resumen.

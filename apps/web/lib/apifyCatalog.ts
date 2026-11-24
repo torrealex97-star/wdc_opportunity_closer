@@ -182,7 +182,7 @@ const GENERATED: Portal[] = GENERATED_PORTALS
 // Plantillas propias de buscadores generados, leídas de su página pública de entrada (2026-11-24; *inspected*). Antes recibían la
 // entrada genérica con «Spain» y «España» y fallaban con HTTP 400 (país fuera de su lista cerrada) o devolvían 0 (provincia «España»
 // en un portal argentino). Los buscadores sin plantilla aquí siguen con la entrada adaptada a su esquema, que ahora respeta sus listas.
-const OVERRIDES: Record<string, { countries?: string[]; add?: Recipe[]; recipes: Record<string, Record<string, unknown>> }> = {
+const OVERRIDES: Record<string, { countries?: string[]; add?: Recipe[]; first?: string[]; recipes: Record<string, Record<string, unknown>> }> = {
   computrabajo: { countries: ['MX', 'CO', 'AR', 'CL', 'PE'],
     // Buscadores añadidos delante tras la propuesta del propietario (2026-11-24); contrato leído de su página pública de entrada.
     // abotapi: `mode` obligatorio, `searchQueries[]`, `countries[]` en minúsculas; las opiniones de empresas (`fetchReviews`) se apagan: cuestan y no son ofertas.
@@ -204,11 +204,22 @@ const OVERRIDES: Record<string, { countries?: string[]; add?: Recipe[]; recipes:
   'occ-mundial': { countries: ['MX'],
     // unfenced-group: `keyword` y `maxResults` (nombres que la entrada adaptada ya reconoce); desde 0,79 US$ por 1.000 ofertas.
     add: [{ actor: 'unfenced-group/occ-com-mx-scraper', name: 'OCC Mundial · unfenced' }], recipes: {} },
+  // Empresas: el actor de Fantastic.jobs busca por título (`titleSearch[]`) y devuelve la descripción en texto; los otros tres listan
+  // tableros enteros de UNA empresa (90 «Personal Trainer» sin descripción el 2026-11-24). Esquema leído (*inspected*): `limit` mínimo 200 (1,20 US$/1.000).
+  company: { first: ['fantastic-jobs/greenhouse-jobs-api'], recipes: {
+    'fantastic-jobs/greenhouse-jobs-api': { titleSearch: ['{{query}}'], locationSearch: ['{{country_name}}'], descriptionType: 'text', limit: 200 },
+  } },
+  // Elempleo: el primer actor (logiover) no devuelve descripción por diseño y todo se descartaba por `sin_descripcion`. `scrapers_lat` la trae con
+  // `withDetails` (esquema leído, *inspected* 2026-11-24: `keywords[]`, `maxJobs`, `withDetails`, `sort`). Sin probar contra el actor real: «Probar ruta».
+  elempleo: { first: ['scrapers_lat/elempleo-scraper'], recipes: {
+    'scrapers_lat/elempleo-scraper': { keywords: ['{{query}}'], maxJobs: '{{max_items}}', withDetails: true, sort: 'date' },
+  } },
   eures: { recipes: { 'dadhalfdev/eures-jobs-scraper': { keywords: '{{query}}', country: 'es' } } },
 };
 const withOverrides = (p: Portal): Portal => {
   const o = OVERRIDES[p.id]; if (!o) return p;
-  return { ...p, ...(o.countries ? { countries: o.countries } : {}), recipes: [...(o.add ?? []).filter(a => !p.recipes.some(r => r.actor.toLowerCase() === a.actor.toLowerCase())), ...p.recipes].map(r => { const t = o.recipes[r.actor.toLowerCase()]; return t ? { ...r, inputTemplate: t } : r; }) };
+  return { ...p, ...(o.countries ? { countries: o.countries } : {}), recipes: [...(o.add ?? []).filter(a => !p.recipes.some(r => r.actor.toLowerCase() === a.actor.toLowerCase())), ...p.recipes].map(r => { const t = o.recipes[r.actor.toLowerCase()]; return t ? { ...r, inputTemplate: t } : r; })
+    .sort((a, b) => { const i = (r: Recipe) => { const k = (o.first ?? []).indexOf(r.actor.toLowerCase()); return k < 0 ? 99 : k; }; return i(a) - i(b); }) };
 };
 
 export const PORTALS: Portal[] = [...CURATED, ...GENERATED.map(withOverrides)];
