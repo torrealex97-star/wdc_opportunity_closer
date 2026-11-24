@@ -2,12 +2,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, LoaderCircle, RefreshCcw } from 'lucide-react';
 import CommandCenter from './CommandCenter';
+import SourceControl from './SourceControl';
 
 // Resumen: cuánto falta para el objetivo (ofertas de closer en España visibles para las alumnas) y qué hacer ahora.
 export const TARGET_CLOSERS_ES = 20;
 type Overview = { external?: { pending: number; exceptions?: number; counts?: Record<string, number> | null; sources: Array<{ source: string; live: number; approved: number }> }; engine: { catalog_active: number; last_run: { day: string; status: string } | null } | null; engine_reason?: 'allowance' | 'timeout' | 'down' | null; engine_http_status?: number | null; sources: Array<{ code: string; name: string; run_status: string | null }>; pool: { eligible: number | null; by_role: Record<string, number> } };
 type Student = { items: Array<{ id: string }>; total: number };
-type Go = (tab: 'inbox' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'apis') => void;
+type Go = (tab: 'inbox' | 'quick' | 'external' | 'apify' | 'review' | 'catalog' | 'sources' | 'apis' | 'engine') => void;
 
 // Por qué el motor no da datos. Una pausa de cuota de plataforma NO es una caída: se levanta sola cuando la
 // cuota del mes se reinicia, y decir «no responde» a secas obligaba a adivinar qué hacer.
@@ -135,6 +136,7 @@ export default function SummaryTab({ go, onSessionLost }: { go: Go; onSessionLos
         : <p className="card-meta" style={{ marginTop: 16 }}>{busy ? 'Leyendo el catálogo…' : 'Sin datos del motor: el progreso no se puede medir ahora mismo.'}</p>}
       <p className="card-meta">Cuenta lo que una alumna ve hoy con perfil Closer, mercado España y publicadas en los últimos 10 días: solo ofertas aprobadas o publicadas que además cumplen las reglas del motor.</p>
     </article>
+    <SourceControl onSessionLost={onSessionLost} goEngine={() => go('engine')} />
     <div className="card-grid" style={{ marginBottom: 20 }}>
       <article className="source-card"><span className="eyebrow">VISIBLES EN ESPAÑA (TODOS LOS PERFILES)</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{allEs ?? '…'}</strong>ofertas</span></div></article>
       <article className="source-card"><span className="eyebrow">EXCEPCIONES PARA TI</span><div className="stat-strip" style={{ margin: '8px 0 0' }}><span><strong style={{ fontSize: 28 }}>{show(exceptions)}</strong>necesitan criterio humano</span></div>

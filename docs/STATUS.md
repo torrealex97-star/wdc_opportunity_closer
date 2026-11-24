@@ -1,3 +1,10 @@
+## Control total de fuentes y criterio de hecho (2026-11-24)
+
+- **Criterio del propietario (obligatorio):** la app debe controlar todas las fuentes —conectadas, dando ofertas, dando ofertas CUALIFICADAS— y no se da nada por hecho mientras no sea así. **Una fuente solo está hecha si en los últimos 7 días dio al menos una oferta cualificada, o si está bloqueada con una causa escrita y un dueño.** Si no, se marca para trabajar y se busca por qué no cualifica (búsqueda, comunicación, extracción, filtrado) hasta que funcione. Varios code reviews de código no bastaron: lo que cuenta es el resultado medido, visible en el Resumen.
+- **Qué mide el Resumen** (*tested* con el mock; `sourcecontrol.mjs` 8/8, pasos nuevos en `flow.mjs` y `ui.mjs`): tarjeta «Control de fuentes» con el titular «X de N fuentes dan ofertas cualificadas», el recuento por estado (dan cualificadas · recogen y no cualifican · conectadas sin recoger · rotas · necesitan un dato tuyo · sin vía verificada) y la lista «A trabajar» ordenada (rotas, luego las que más recogen) con causa, siguiente paso y de quién es (Lo trabajo yo / Te toca a ti). Fuentes del motor: cualificadas = elegibles del motor; el resto, aprobadas o publicadas entre lo que entró en los últimos 7 días. Un dato sin leer sale «—» y se declara; nunca se pinta 0 ni «bien».
+- **Bloqueadas conocidas** (con su motivo y dueño en `lib/sourceControl.ts`): Facebook, Skool y Telegram necesitan las direcciones de los grupos/canales (te toca a ti); Reddit devuelve publicaciones, no ofertas (decidir su retirada).
+- **Pendiente real** (no se da por hecho): el panel ya dice qué fuentes no cualifican; falta el desglose de POR QUÉ se descarta cada una (rol, mercado, idioma, enlace, puntuación) y corregir sus búsquedas, filtros y extracción, empezando por las que más recogen.
+
 ## Panel de fuentes gratuitas: el «0» era un error de qué dato se leía (2026-11-24)
 
 - **Queja del propietario:** 23 de las 24 gratuitas figuraban «Conectada» con 0 recogidas y 0 aprobadas, y decía que todas deberían recoger cada día.

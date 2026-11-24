@@ -1,0 +1,62 @@
+import { ORG } from './external';
+import { pagedRest } from './supabaseAuth';
+import { readSamples } from './sourceSample';
+import { routesForCatalog } from './sourceRoutes';
+import { kindOf, type SourceKind } from './sourceKinds';
+import { summarize, type ControlInput, type ControlSummary } from './sourceControl';
+
+// Datos del control total: la muestra por fuente (con el informe del motor) más lo que entró y se aprobó en la ventana de 7 días.
+export const WINDOW_DAYS = 7;
+type Recent = { source: string; editorial_status: string };
+const QUALIFIED = new Set(['approved', 'published']);
+
+type CatalogEntry = { code: string; name: string; category?: string | null };
+/** `seen`/`approved` por fuente de lo visto por primera vez en la ventana; `null` si no se pudo leer. */
+export async function recentBySource(now = Date.now(), days = WINDOW_DAYS): Promise<Map<string, { seen: number; approved: number; drafts: number }> | null> {
+  const since = new Date(now - days * 86_400_000).toISOString();
+  const rows = await pagedRest<Recent>(`external_offers?org_id=eq.${ORG}&first_seen_at=gte.${encodeURIComponent(since)}&select=source,editorial_status`, 'id.asc').catch(() => null);
+  if (!rows || rows.truncated) return null; // un tope alcanzado deja cuentas incompletas: hueco, no cifras de menos
+  const out = new Map<string, { seen: number; approved: number; drafts: number }>();
+  for (const row of rows.rows) {
+    const entry = out.get(row.source) ?? { seen: 0, approved: 0, drafts: 0 };
+    entry.seen += 1; if (QUALIFIED.has(row.editorial_status)) entry.approved += 1; if (row.editorial_status === 'draft') entry.drafts += 1;
+    out.set(row.source, entry);
+  }
+  return out;
+}
+
+type Judged = { source: string; editorial_status: string; auto_review: { why?: unknown } | null };
+/** Motivos de descarte por fuente de lo revisado en la ventana (retiradas y excepciones). `null` = no se pudo leer. */
+export async function reasonsBySource(now = Date.now(), days = WINDOW_DAYS): Promise<Map<string, Array<{ why: string; n: number }>> | null> {
+  const since = new Date(now - days * 86_400_000).toISOString();
+  const rows = await pagedRest<Judged>(`external_offers?org_id=eq.${ORG}&first_seen_at=gte.${encodeURIComponent(since)}&editorial_status=in.(withdrawn,needs_review)&select=source,editorial_status,auto_review`, 'id.asc').catch(() => null);
+  if (!rows || rows.truncated) return null;
+  const counts = new Map<string, Map<string, number>>();
+  for (const row of rows.rows) {
+    const why = typeof row.auto_review?.why === 'string' ? row.auto_review.why : null;
+    if (!why) continue;
+    const inner = counts.get(row.source) ?? new Map<string, number>(); inner.set(why, (inner.get(why) ?? 0) + 1); counts.set(row.source, inner);
+  }
+  return new Map([...counts].map(([source, inner]) => [source, [...inner].map(([why, n]) => ({ why, n }))]));
+}
+
+export type SourceControlPayload = ControlSummary & { window_days: number; generated_at: string; recent_note: string | null };
+
+export async function loadSourceControl(): Promise<SourceControlPayload | null> {
+  const [samples, recent, reasons] = await Promise.all([readSamples(), recentBySource(), reasonsBySource()]);
+  if (!samples) return null;
+  const catalog = (await import('./sourceCatalog.json')).default as CatalogEntry[];
+  const routes = routesForCatalog(catalog as never);
+  const byCode = new Map(catalog.map(entry => [entry.code, entry]));
+  const inputs: ControlInput[] = samples.rows.filter(row => byCode.has(row.source)).map(row => {
+    const entry = byCode.get(row.source)!;
+    const kind: SourceKind = kindOf({ code: entry.code, category: entry.category ?? null }, routes.get(row.source) ?? []);
+    const window = recent ? recent.get(row.source) ?? { seen: 0, approved: 0, drafts: 0 } : null;
+    return { source: row.source, name: entry.name, kind, health: row.health, seen7: window ? window.seen : null, approved7: window ? window.approved : null, engine: row.engine,
+      reasons: reasons ? reasons.get(row.source) ?? [] : null, drafts7: window ? window.drafts : null };
+  });
+  return {
+    ...summarize(inputs), window_days: WINDOW_DAYS, generated_at: new Date().toISOString(),
+    recent_note: recent ? null : `No se pudo leer lo que entró en los últimos ${WINDOW_DAYS} días: las fuentes que no son del motor salen sin medir («—»), no en cero.`,
+  };
+}
