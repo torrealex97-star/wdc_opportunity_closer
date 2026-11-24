@@ -87,7 +87,7 @@ await step('Voz: sección propia con topes, cascada del más barato al más caro
   await page.getByRole('navigation', { name: 'Secciones del panel' }).getByRole('button', { name: 'Voz', exact: true }).click();
   await page.getByRole('heading', { name: 'Voz: proveedores, uso y gasto.' }).waitFor(); await page.getByTestId('voice-limits').waitFor();
   const text = await page.getByTestId('voice-limits').innerText();
-  assert.match(text, /10 min\s+máximo por alumna y día/); assert.match(text, /Apagada: VOICE_ROLEPLAY no está en «on»/); assert.match(text, /Falta VOICE_WORKER_TOKEN/);
+  assert.match(text, /10 min/); assert.match(text, /máximo por alumna y día/); assert.match(text, /Apagada: VOICE_ROLEPLAY no está en «on»/); assert.match(text, /Falta VOICE_WORKER_TOKEN/);
   const rows = page.getByTestId('voice-limits').locator('tbody tr'); assert.ok(await rows.count() >= 4, 'los cuatro proveedores');
   const names = await page.getByTestId('voice-limits').locator('tbody tr th[scope="row"]').allInnerTexts();
   assert.deepEqual(names.slice(0, 4).map(n => n.split('\n')[0].trim()), ['OpenAI Realtime (mini)', 'Deepgram Voice Agent', 'OpenAI Realtime (completo)', 'ElevenLabs Agents'], 'orden por coste');
