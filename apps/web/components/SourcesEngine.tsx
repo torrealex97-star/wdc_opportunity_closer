@@ -10,7 +10,7 @@ import { fmtInt } from '../lib/formatInt';
 // ha recogido y aprobado, y cuánto ha costado. Un hueco es «—» con su causa, nunca 0. Las acciones (probar la vía, conectarla) están en «Fuentes».
 type Health = { state: 'conectada' | 'sin_via' | 'sin_clave' | 'mal_conectada' | 'sin_programar' | 'sin_juzgar'; cause: string; next: string };
 type Row = { source: string; seen: number | null; approved: number | null; cost_usd: number | null; health: Health | null; state: 'sin_dato' | 'sin_conclusion' | 'medida' };
-type Payload = { target: number; rows: Row[]; cost_note: string | null; health_note: string | null };
+type Payload = { target: number; rows: Row[]; cost_note: string | null; health_note: string | null; engine_note: string | null; engine_run: { day: string | null; status: string | null } | null };
 const CATALOG = sourceCatalog as unknown as CatalogLite[];
 const BY_SOURCE = routesForCatalog(CATALOG);
 const NAME = new Map(CATALOG.map(entry => [entry.code, entry.name]));
@@ -55,6 +55,7 @@ export default function SourcesEngine({ onSessionLost, go }: { onSessionLost: ()
     {error && <div className="alert error" role="alert"><span>{error}</span> <button onClick={load} disabled={busy}><RefreshCcw size={14} /> Reintentar</button></div>}
     {data?.cost_note && <p className="inline-hint" role="status">{data.cost_note}</p>}
     {data?.health_note && <p className="inline-hint" role="status">{data.health_note}</p>}
+    {kind === 'gratuitas' && data?.engine_note && <p className="inline-hint" role="status" data-testid="engine-note">{data.engine_note}{data.engine_run ? ` Último run del motor: ${data.engine_run.day ?? '—'} (${data.engine_run.status ?? 'sin estado'}).` : ''}</p>}
     {busy && !data ? <p className="muted" role="status"><LoaderCircle size={14} className="spin" /> Leyendo el estado de las fuentes…</p> : data && <>
       <div className="admin-toolbar" style={{ justifyContent: 'space-between' }}>
         <p className="card-meta" style={{ margin: 0 }}>{kind === 'pago' ? 'Fuentes que solo se consiguen pagando. El coste es el registrado hasta hoy; con menos de 1.000 recogidas no se concluye si rinden.' : kind === 'gratuitas' ? 'Feeds y APIs sin coste por petición. Sin coste no es «sin importancia»: son las que más aportan al objetivo del día.' : 'Bolsas de empleo de empresas (ATS) y páginas propias.'}</p>

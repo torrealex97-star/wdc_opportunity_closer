@@ -1136,6 +1136,19 @@ await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000
   for (const row of ok.json.rows) { assert.ok(row.health === null || STATES.includes(row.health.state), `estado válido (${row.source})`); if (row.health) assert.ok(row.health.cause.length > 5 && row.health.next.length > 5, `causa y siguiente paso (${row.source})`); }
   assert.ok(ok.json.rows.some(row => row.seen === 0 && row.health), 'una fuente del catálogo sin ofertas aparece con su estado de conexión');
   assert.ok(!ok.json.rows.some(row => row.source === 'cron-waterfall'), 'el registro del cron no es una fuente');
+  // Fuentes gratuitas del motor: sus cifras vienen del informe del motor (catálogo y elegibles), no del 0 de Supabase; un fallo se dice con su causa.
+  const jt = ok.json.rows.find(row => row.source === 'jobtoday');
+  assert.equal(jt.seen, 10, 'recogidas = catálogo del motor'); assert.equal(jt.approved, 4, 'aprobadas = elegibles'); assert.equal(jt.engine.selected, 1);
+  assert.equal(jt.health.state, 'conectada'); assert.match(jt.health.cause, /Recoge cada día: 16 revisadas, 4 elegibles y 1 seleccionadas hoy/);
+  const pen = ok.json.rows.find(row => row.source === 'ats-ashby-pennylane');
+  assert.equal(pen.health.state, 'mal_conectada'); assert.match(pen.health.cause, /falló: HTTP 401/);
+  assert.match(ok.json.engine_note, /Recogidas» es su catálogo/); assert.equal(typeof ok.json.engine_run, 'object');
+  // Motor caído: sus fuentes salen en «—» (null), no en 0, y la causa lo dice.
+  state.engineFunnelFail = true;
+  const lost = await call('/api/admin/source-sample'); state.engineFunnelFail = false;
+  assert.equal(lost.status, 200); const jtLost = lost.json.rows.find(row => row.source === 'jobtoday');
+  assert.equal(jtLost.seen, null, 'sin lectura del motor no se pinta 0'); assert.equal(jtLost.approved, null); assert.equal(jtLost.health.state, 'mal_conectada'); assert.match(jtLost.health.cause, /No se pudo leer el estado del motor/);
+  assert.match(lost.json.engine_note, /salen en «—», no en 0/);
   state.externalCountsFail = true;
   const down = await call('/api/admin/source-sample');
   state.externalCountsFail = false;

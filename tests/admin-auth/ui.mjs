@@ -109,7 +109,15 @@ await step('Panel de fuentes: una tabla separada en de pago, gratuitas y empresa
   await engine.getByTestId('engine-table').waitFor(); assert.ok(await engine.locator('tbody tr').count() > 0);
   assert.match(await engine.getByTestId('engine-table').innerText(), /Sin vía verificada|Falta clave|Conectada|Mal conectada|Sin programar/, 'cada fila dice su conexión');
   await tabs.getByRole('tab', { name: /Gratuitas/ }).click(); await engine.getByTestId('engine-table').waitFor();
+  // Las gratuitas del motor enseñan lo que el motor informa (catálogo y elegibles), con su nota, y un fallo del motor se ve con su causa.
+  assert.match(await engine.getByTestId('engine-note').innerText(), /«Recogidas» es su catálogo.*Último run del motor/);
+  const jobtoday = engine.locator('tr[data-source="jobtoday"]'); await jobtoday.waitFor();
+  const cells = (await jobtoday.locator('td').allInnerTexts()).map(t => t.replace(/\s+/g, ' ').trim());
+  assert.equal(cells[1], '10'); assert.equal(cells[2], '4'); assert.match(cells[0], /Conectada.*Recoge cada día: 16 revisadas, 4 elegibles/);
   await tabs.getByRole('tab', { name: /Empresas/ }).click(); await page.getByText(/Bolsas de empleo de empresas/).waitFor();
+  // Un fallo del motor se ve con su causa (HTTP 401 de Pennylane en el mock), no como «Conectada» con 0.
+  await engine.getByLabel(/Mostrar las \d+ que aún no han recogido/).check();
+  assert.match(await engine.locator('tr[data-source="ats-ashby-pennylane"]').innerText(), /Mal conectada.*falló: HTTP 401/s);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
 });
