@@ -33,7 +33,8 @@ export function planCascade(input: { configured: ReadonlySet<string> | null; key
     const saved = input.keyUpdatedAt?.[key] ?? null;
     // Pago o clave: vale la incidencia más reciente de CUALQUIER proveedor que comparta la clave, si no hay un «ok» posterior ni una clave nueva.
     const sameKey = events.filter(e => KEY_OF[e.provider as VoiceProviderId] === key);
-    const last = sameKey[0];
+    // Un `error` suelto (de otro modelo de la misma clave) no levanta una pausa por pago o clave: manda la última incidencia que NO sea un error.
+    const last = sameKey.find(e => e.kind !== 'error');
     if (last && (last.kind === 'payment' || last.kind === 'auth') && !(saved && saved > last.created_at)) {
       const until = Date.parse(last.created_at) + KEY_PAUSE_MS;
       if (until > now) return entry(last.kind === 'payment' ? 'pausado_pago' : 'pausado_clave', until);

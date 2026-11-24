@@ -14,6 +14,8 @@ const MIGRATIONS: Partial<Record<string, string>> = {
   scrapingbee: '20261121_integration_connections_providers.sql',
   jsearch: '20261121_integration_connections_jsearch.sql',
   tavily: '20261123_tavily_provider.sql',
+  elevenlabs: '20261124_voice_providers.sql',
+  deepgram: '20261124_voice_providers.sql',
 };
 
 // Claves de APIs de proveedores. El navegador nunca recibe una clave: solo los últimos 4 caracteres.

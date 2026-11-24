@@ -45,6 +45,13 @@ step('dos errores seguidos apartan 15 min SOLO a ese modelo; uno solo, o con un 
   assert.equal(plan({ events: [e('error', 1000), e('ok', 2000), e('error', 3000)] }).chosen, 'openai_realtime_mini');
   assert.equal(plan({ events: [e('error', ERROR_PAUSE_MS + 5000), e('error', ERROR_PAUSE_MS + 6000)] }).chosen, 'openai_realtime_mini', 'pasados 15 min se reintenta');
 });
+step('un error posterior de otro modelo con la misma clave NO levanta la pausa por pago; un «ok» posterior sí', () => {
+  const pay = { provider: 'openai_realtime_mini', kind: 'payment', created_at: ago(60_000) };
+  const laterError = { provider: 'openai_realtime', kind: 'error', created_at: ago(1000) };
+  const p = plan({ events: [laterError, pay] });
+  assert.equal(p.order.find(e => e.id === 'openai_realtime').state, 'pausado_pago'); assert.equal(p.chosen, 'deepgram_agent');
+  assert.equal(plan({ events: [{ provider: 'openai_realtime', kind: 'ok', created_at: ago(1000) }, pay] }).chosen, 'openai_realtime_mini');
+});
 step('todos pausados: no hay elegido (503 para el servicio); claves ilegibles: «sin_leer», no se elige a ciegas', () => {
   const ev = [{ provider: 'openai_realtime_mini', kind: 'payment', created_at: ago(1) }, { provider: 'deepgram_agent', kind: 'payment', created_at: ago(1) }, { provider: 'elevenlabs_agents', kind: 'auth', created_at: ago(1) }];
   assert.equal(plan({ events: ev }).chosen, null);
