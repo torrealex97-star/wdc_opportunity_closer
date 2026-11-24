@@ -3,7 +3,6 @@ agent: claude
 status: in_progress
 branch: claude/actores-base
 pr: 0
-depends_on: claude-fix-pruebas-fuentes
 touches: apps/web/lib/apify.ts, apps/web/lib/apifyCatalog.ts, tests/admin-auth/apify-inputs.mjs, tests/admin-auth/apify-queries.mjs, tests/test_apify_portals.py, docs/STATUS.md
 date: 2026-11-24
 ---
