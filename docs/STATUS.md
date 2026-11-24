@@ -1,3 +1,8 @@
+## Paso de interfaz «control de fuentes»: fallo intermitente de CI, endurecido con diagnóstico (2026-11-24)
+
+- **Medido:** sobre el mismo commit `3ede801` (PR #176, que no toca `apps/web`) `web-admin` falló dos veces en «Resumen: control de fuentes» (`source-control` no visible en 30 s) y pasó en el otro run. En #175 pasó dos veces.
+- **Cambio (*tested* en local, suite completa: ver abajo):** espera 10 s, un reintento de navegación por hash y, si aun así falla, el error nombra hash, título, sesión y pestañas. **No es una causa raíz demostrada**: no se reprodujo en local. Si vuelve a fallar, el mensaje dice la pantalla real y se corrige esa causa.
+
 ## Fuentes de Apify: empresas y Elempleo con actor que busca y trae descripción (2026-11-24)
 
 - **Medido antes (base real, 7 días):** `apify-company` 100 vistas / 0 aprobadas (90 puestos «Personal Trainer» de una sola empresa, sin descripción); Elempleo: el primer actor no devuelve descripción por diseño.

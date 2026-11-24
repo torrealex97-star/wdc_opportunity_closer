@@ -67,10 +67,19 @@ await step('Centro de mando: embudo, mercados, reparto y gasto con su propio est
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
 });
-await step('Resumen: control de fuentes con titular «X de N», estados medidos y la lista «A trabajar» con causa, siguiente paso y dueño', async () => {
-  // Navegar como una persona (el módulo «Centro de mando»): forzar el mismo #summary tras salir a la bandeja no siempre cambia de pestaña.
+// Vuelve a Resumen como una persona: pulsa el módulo «Centro de mando». Forzar #summary por hash no siempre cambia de pestaña (lo hizo fallar en CI
+// el 2026-11-24, PR #176/#177: la última espera de `source-control` agotaba 30 s). Si la tarjeta no sale, el error dice la pantalla real, no un tiempo agotado mudo.
+const toSummary = async page => {
   await page.getByRole('navigation', { name: 'Secciones del panel' }).getByRole('button', { name: 'Centro de mando', exact: true }).click();
-  const control = page.getByTestId('source-control'); await control.waitFor();
+  const control = page.getByTestId('source-control');
+  await control.waitFor({ timeout: 15000 }).catch(async () => {
+    const where = await page.evaluate(() => ({ hash: location.hash, h1: document.querySelector('h1')?.textContent ?? null, login: !!document.querySelector('.auth-card'), tabs: [...document.querySelectorAll('[role=tab]')].map(t => `${t.textContent}:${t.getAttribute('aria-selected')}`).join('|') }));
+    throw new Error(`source-control no apareció; pantalla: ${JSON.stringify(where)}`);
+  });
+  return control;
+};
+await step('Resumen: control de fuentes con titular «X de N», estados medidos y la lista «A trabajar» con causa, siguiente paso y dueño', async () => {
+  const control = await toSummary(page);
   await page.getByTestId('source-control-headline').filter({ hasText: /\d+ de \d+ fuentes dan ofertas cualificadas\./ }).waitFor();
   const text = await control.innerText();
   for (const label of ['Dan ofertas cualificadas', 'Recogen y no cualifican', 'Conectadas sin recoger', 'Rotas', 'Necesitan un dato tuyo', 'Sin vía verificada']) assert.ok(text.includes(label), label);
@@ -78,7 +87,7 @@ await step('Resumen: control de fuentes con titular «X de N», estados medidos 
   const todo = page.getByTestId('source-control-todo'); await todo.waitFor(); assert.ok(await todo.locator('tbody tr').count() > 0, 'hay fuentes a trabajar');
   assert.match(await todo.innerText(), /Siguiente paso:/); assert.match(await todo.innerText(), /Lo trabajo yo|Te toca a ti/);
   await control.getByRole('button', { name: 'Ver todas en el panel de fuentes' }).click(); await page.getByRole('heading', { name: 'Todas las fuentes, en una tabla.' }).waitFor();
-  await openTab(page, 'summary'); await page.getByTestId('source-control').waitFor();
+  await toSummary(page);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
 });
 await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como pestañas, y «Equipo» aparte', async () => {
