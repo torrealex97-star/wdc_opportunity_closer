@@ -103,11 +103,11 @@ export function fillTemplate(template: unknown, vars: Vars): unknown {
   if (typeof template === 'string') {
     const derived = (k: string): string | number | string[] | undefined => {
       const iso = isoOf(vars.country ?? 'Spain');
-      return k === 'country_lc' ? iso.toLowerCase() : k === 'country_iso' ? iso : k === 'country_name' ? COUNTRY_NAMES[iso] ?? String(vars.country) : vars[k as keyof Vars];
+      return k === 'country_slug' ? (COUNTRY_NAMES[iso] ?? String(vars.country)).toLowerCase() : k === 'country_lc' ? iso.toLowerCase() : k === 'country_iso' ? iso : k === 'country_name' ? COUNTRY_NAMES[iso] ?? String(vars.country) : vars[k as keyof Vars];
     };
-    const whole = /^\{\{(query|location|country|country_lc|country_iso|country_name|max_items|hours_old|sites)\}\}$/.exec(template);
+    const whole = /^\{\{(query|location|country|country_lc|country_iso|country_name|country_slug|max_items|hours_old|sites)\}\}$/.exec(template);
     if (whole) return derived(whole[1]);
-    return template.replace(/\{\{(query|location|country|country_lc|country_iso|country_name|max_items|hours_old)\}\}/g, (_, k: string) => String(derived(k)));
+    return template.replace(/\{\{(query|location|country|country_lc|country_iso|country_name|country_slug|max_items|hours_old)\}\}/g, (_, k: string) => String(derived(k)));
   }
   if (Array.isArray(template)) return template.map(t => fillTemplate(t, vars));
   if (template && typeof template === 'object') return Object.fromEntries(Object.entries(template).map(([k, v]) => [k, fillTemplate(v, vars)]));
