@@ -1,3 +1,11 @@
+## Voz: sección propia y cascada por coste (2026-11-24)
+
+- **Pedido del propietario:** sección de Voz separada en el admin para analizar gasto, proveedores y uso de API; el sistema usa el más barato y, si hay problema (pago, errores, clave), sigue con el siguiente; para conectar uno basta añadir su API.
+- **Construido** (*tested* con servidores simulados; `voicecascade.mjs` 8/8, `voiceworker.mjs` 7/7, `voiceusage.mjs` 6/6): módulo «Voz» en el menú con `VoicePanel` (topes, cascada, gasto y minutos por proveedor, incidencias); claves de **ElevenLabs** y **Deepgram** en APIs (OpenAI ya existía); `lib/voiceCascade.ts` (orden por coste estimado: OpenAI mini, Deepgram, OpenAI completo, ElevenLabs; pago o clave rechazados pausan 24 h la clave —o hasta guardar una nueva—, dos errores seguidos apartan 15 min al modelo; claves o incidencias ilegibles = «sin leer», no se elige a ciegas); `GET /api/voice/provider` (con `VOICE_WORKER_TOKEN`: proveedor elegido, su clave y las reservas) y `POST /api/voice/provider-event` (el servicio avisa de `ok`/`error`/`payment`/`auth`).
+- **Decisión a conocer:** `GET /api/voice/provider` entrega al servicio de voz la clave del proveedor elegido (solo con el token, `Cache-Control: no-store`, nunca al navegador) para que baste con guardarla en APIs.
+- **Migración `20261124_voice_providers.sql` (claves de voz + `voice_provider_events`): escrita, SIN aplicar** hasta su prueba con `ROLLBACK` y la orden expresa del propietario. Sin ella el panel muestra la cascada como «Sin leer» y guardar la clave de ElevenLabs/Deepgram falla por el CHECK.
+- **Sin verificar:** las pruebas de clave de Deepgram (`GET /v1/auth/token`) y ElevenLabs (`GET /v1/user/subscription`) salen de su documentación pública; ningún proveedor real se ha llamado. Los precios son estimaciones de páginas públicas.
+
 ## Consumo real de la voz (2026-11-24)
 
 - **Migración `20261124_voice_usage.sql` APLICADA** en la base real (2026-11-24, tras la orden del propietario de seguir con ese punto): prueba de comportamiento con `ROLLBACK` primero (`tests/db/voice_usage.sql`: RLS sin acceso para anon/authenticated, 1–600 segundos, coste ≥ 0, borrado en cascada con la alumna) y avisos de seguridad después (solo el INFO `rls_enabled_no_policy`, igual que el resto de tablas de servicio).

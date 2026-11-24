@@ -69,8 +69,8 @@ await step('Centro de mando: embudo, mercados, reparto y gasto con su propio est
 });
 await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como pestañas, y «Equipo» aparte', async () => {
   const nav = page.getByRole('navigation', { name: 'Secciones del panel' });
-  for (const module of ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura']) await nav.getByRole('button', { name: module, exact: true }).waitFor();
-  assert.equal(await nav.getByRole('button').count(), 4 + 3, 'cuatro módulos y las tres secciones de Equipo, no trece destinos sueltos');
+  for (const module of ['Centro de mando', 'Bandeja de revisión', 'Motor de fuentes', 'Reglas e infraestructura', 'Voz']) await nav.getByRole('button', { name: module, exact: true }).waitFor();
+  assert.equal(await nav.getByRole('button').count(), 5 + 3, 'cinco módulos (Voz aparte) y las tres secciones de Equipo, no trece destinos sueltos');
   // Un módulo abre su primera pantalla y enseña las demás como pestañas.
   await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).click();
   const tabs = page.getByRole('tablist', { name: 'Pantallas de Bandeja de revisión' });
@@ -80,6 +80,21 @@ await step('Menú en cuatro módulos: un botón por módulo, sus pantallas como 
   // Volver al módulo devuelve a la última pantalla que usaste dentro de él.
   await nav.getByRole('button', { name: 'Motor de fuentes', exact: true }).click(); await page.getByRole('tablist', { name: 'Pantallas de Motor de fuentes' }).waitFor();
   await nav.getByRole('button', { name: 'Bandeja de revisión', exact: true }).click(); await page.getByRole('heading', { name: 'Revisar a fondo lo que lo merece.' }).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  await openTab(page, 'summary');
+});
+await step('Voz: sección propia con topes, cascada del más barato al más caro, estado de cada proveedor y sin cifras inventadas', async () => {
+  await page.getByRole('navigation', { name: 'Secciones del panel' }).getByRole('button', { name: 'Voz', exact: true }).click();
+  await page.getByRole('heading', { name: 'Voz: proveedores, uso y gasto.' }).waitFor(); await page.getByTestId('voice-limits').waitFor();
+  const text = await page.getByTestId('voice-limits').innerText();
+  assert.match(text, /10 min\s+máximo por alumna y día/); assert.match(text, /Apagada: VOICE_ROLEPLAY no está en «on»/); assert.match(text, /Falta VOICE_WORKER_TOKEN/);
+  const rows = page.getByTestId('voice-limits').locator('tbody tr'); assert.ok(await rows.count() >= 4, 'los cuatro proveedores');
+  const names = await page.getByTestId('voice-limits').locator('tbody tr th[scope="row"]').allInnerTexts();
+  assert.deepEqual(names.slice(0, 4).map(n => n.split('\n')[0].trim()), ['OpenAI Realtime (mini)', 'Deepgram Voice Agent', 'OpenAI Realtime (completo)', 'ElevenLabs Agents'], 'orden por coste');
+  assert.equal((await page.getByTestId('voice-limits').getByText('Sin clave').count()), 4, 'sin claves, cada proveedor dice «Sin clave», no «0»');
+  assert.match(await page.getByTestId('voice-chosen').innerText(), /Ningún proveedor disponible: guarda una clave en APIs/);
+  await page.getByTestId('voice-limits').getByRole('button', { name: 'APIs', exact: true }).click(); await page.getByRole('heading', { name: 'APIs y conexiones.' }).waitFor();
+  await page.getByLabel('Clave de ElevenLabs (voz)').waitFor(); await page.getByLabel('Clave de Deepgram (voz)').waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
   await openTab(page, 'summary');
 });

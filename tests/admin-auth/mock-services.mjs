@@ -161,6 +161,9 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'POST') { state.waterfallRow = { org_id: body.org_id, qualified_per_day: body.qualified_per_day, updated_by: body.updated_by, updated_at: body.updated_at }; return send(res, 201, null); }
       return send(res, 200, state.waterfallRow ? [state.waterfallRow] : []);
     }
+    // Voz: consumo y incidencias de proveedor (tablas `voice_usage` y `voice_provider_events`); vacías, como la base recién migrada.
+    if (url.pathname === '/rest/v1/voice_usage') return send(res, 200, req.method === 'GET' ? (state.voiceUsage ?? []) : null);
+    if (url.pathname === '/rest/v1/voice_provider_events') return send(res, req.method === 'GET' ? 200 : 201, req.method === 'GET' ? (state.voiceEvents ?? []) : null);
     // Modo del revisor IA (tabla `ai_review_settings`): una fila por organización.
     if (url.pathname === '/rest/v1/ai_review_settings') {
       if (state.aiModeMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.ai_review_settings' in the schema cache" });

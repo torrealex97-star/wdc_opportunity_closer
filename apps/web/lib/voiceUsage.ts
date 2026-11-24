@@ -22,11 +22,14 @@ export async function usedSecondsToday(studentId: string, now = new Date()): Pro
   return data ? sum(data, 'seconds') : null;
 }
 /** Gasto estimado y minutos del mes y de hoy, de TODAS las alumnas. */
-export async function monthSummary(now = new Date()): Promise<{ spentUsd: number; minutesToday: number } | null> {
-  const data = await serviceRest(`voice_usage?org_id=eq.${ORG}&day=gte.${monthStartUtc(now)}&select=day,seconds,cost_usd&limit=10000`).catch(() => null);
-  const list = data?.ok ? await data.json().catch(() => null) as Array<Row & { day?: string }> | null : null;
+export type ProviderUse = { provider: string; seconds: number; costUsd: number };
+export async function monthSummary(now = new Date()): Promise<{ spentUsd: number; minutesToday: number; byProvider: ProviderUse[] } | null> {
+  const data = await serviceRest(`voice_usage?org_id=eq.${ORG}&day=gte.${monthStartUtc(now)}&select=day,provider,seconds,cost_usd&limit=10000`).catch(() => null);
+  const list = data?.ok ? await data.json().catch(() => null) as Array<Row & { day?: string; provider?: string }> | null : null;
   if (!Array.isArray(list)) return null;
-  return { spentUsd: Math.round(sum(list, 'cost_usd') * 10_000) / 10_000, minutesToday: Math.round(sum(list.filter(r => r.day === todayUtc(now)), 'seconds') / 6) / 10 };
+  const by = new Map<string, ProviderUse>();
+  for (const r of list) { const k = String(r.provider ?? '?'); const u = by.get(k) ?? { provider: k, seconds: 0, costUsd: 0 }; u.seconds += Number(r.seconds) || 0; u.costUsd += Number(r.cost_usd) || 0; by.set(k, u); }
+  return { spentUsd: Math.round(sum(list, 'cost_usd') * 10_000) / 10_000, minutesToday: Math.round(sum(list.filter(r => r.day === todayUtc(now)), 'seconds') / 6) / 10, byProvider: [...by.values()].map(u => ({ ...u, costUsd: Math.round(u.costUsd * 10_000) / 10_000 })).sort((a, b) => b.costUsd - a.costUsd) };
 }
 
 export type RecordResult = { ok: true; seconds: number; costUsd: number; remainingSeconds: number } | { ok: false; kind: 'invalid' | 'cap' | 'store'; error: string };

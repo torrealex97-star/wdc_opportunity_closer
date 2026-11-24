@@ -33,7 +33,7 @@ const NOW = new Date('2026-11-24T10:00:00Z');
 const req = (body, token = 'worker-token-0123456789abcdef') => new Request('http://x/api/voice/usage', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 await step('sin filas, el consumo es 0 de verdad; con la tabla ausente es «no se pudo leer» (null), no 0', async () => {
-  assert.equal(await usedSecondsToday(S1, NOW), 0); assert.deepEqual(await monthSummary(NOW), { spentUsd: 0, minutesToday: 0 });
+  assert.equal(await usedSecondsToday(S1, NOW), 0); assert.deepEqual(await monthSummary(NOW), { spentUsd: 0, minutesToday: 0, byProvider: [] });
   mode = 'missing'; assert.equal(await usedSecondsToday(S1, NOW), null); assert.equal(await monthSummary(NOW), null); mode = 'ok';
 });
 await step('anotar: guarda segundos y coste en el peor caso del proveedor, y la lectura lo suma', async () => {
@@ -41,7 +41,7 @@ await step('anotar: guarda segundos y coste en el peor caso del proveedor, y la 
   assert.deepEqual(r, { ok: true, seconds: 240, costUsd: 0.2, remainingSeconds: 360 });
   assert.equal(rows[0].day, '2026-11-24'); assert.equal(rows[0].org_id.length > 0, true);
   assert.equal(await usedSecondsToday(S1, NOW), 240); assert.equal(await usedSecondsToday(S2, NOW), 0, 'cada alumna lo suyo');
-  assert.deepEqual(await monthSummary(NOW), { spentUsd: 0.2, minutesToday: 4 });
+  assert.deepEqual(await monthSummary(NOW), { spentUsd: 0.2, minutesToday: 4, byProvider: [{ provider: 'openai_realtime_mini', seconds: 240, costUsd: 0.2 }] });
 });
 await step('el tope de 10 minutos acota la sesión y al llegar no se anota más', async () => {
   const r = await recordVoiceUsage({ studentId: S1, provider: 'openai_realtime_mini', seconds: 900 }, {}, NOW);

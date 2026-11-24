@@ -1,6 +1,6 @@
 ---
 agent: claude
-status: in_progress
+status: validated
 branch: claude/voz-consumo
 pr: 0
 depends_on: claude-voz-fase-b

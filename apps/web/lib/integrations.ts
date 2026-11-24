@@ -26,6 +26,9 @@ export const PROVIDERS = {
   infojobs: { name: 'InfoJobs', hint: 'client_id:client_secret (separados por dos puntos)', probe: (k: string) => { const p = pair(k); return p ? get(`${process.env.INFOJOBS_API_BASE ?? 'https://api.infojobs.net'}/api/9/offer?maxResults=1`, basic(p[0], p[1])) : Promise.resolve(new Response(null, { status: 400 })); } },
   // Tavily: buscador con IA. `GET /usage` no gasta crédito, así que «Probar» es gratuito; la búsqueda real la hace el cron.
   tavily: { name: 'Tavily', hint: 'API key (empieza por tvly-)', probe: (k: string) => get(`${process.env.TAVILY_API_BASE ?? 'https://api.tavily.com'}/usage`, bearer(k)) },
+  // Voz continua (cascada por coste, ver lib/voiceCascade.ts). Sus pruebas son lecturas de cuenta sin coste; ElevenLabs en `xi-api-key`, Deepgram en `Token`.
+  elevenlabs: { name: 'ElevenLabs (voz)', hint: 'API key de ElevenLabs', probe: (k: string) => get(`${process.env.ELEVENLABS_API_BASE ?? 'https://api.elevenlabs.io'}/v1/user/subscription`, { 'xi-api-key': k }) },
+  deepgram: { name: 'Deepgram (voz)', hint: 'API key de Deepgram', probe: (k: string) => get(`${process.env.DEEPGRAM_API_BASE ?? 'https://api.deepgram.com'}/v1/auth/token`, { Authorization: `Token ${k}` }) },
   resend: { name: 'Resend', hint: 'API key (empieza por re_)', probe: (k: string) => get(`${process.env.RESEND_API_BASE ?? 'https://api.resend.com'}/domains`, bearer(k)) },
   // Bright Data: se pega solo la API key (Cuenta → API keys); las zonas se descubren con
   // `GET /zone/get_active_zones`, que es gratis, y también se acepta `API key:zona SERP[:zona Unlocker]`
