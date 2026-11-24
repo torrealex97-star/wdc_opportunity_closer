@@ -3,7 +3,7 @@
 // «llegaron elementos pero ninguno guardable». Sin red.
 // node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/apify-inputs.mjs
 import assert from 'node:assert/strict';
-import { adaptInput, fillTemplate, fitText, enumValue, isoOf, mapItem, noKeptText, varsFor, QUERIES } from '../../apps/web/lib/apify.ts';
+import { adaptInput, fillTemplate, fitText, enumValue, isoOf, mapItem, noKeptText, varsFor, QUERIES, targetFields, NO_TARGETS_MESSAGE } from '../../apps/web/lib/apify.ts';
 import { PORTALS, portalById, queryForDay, countryForDay, dayIndex } from '../../apps/web/lib/apifyCatalog.ts';
 
 const results = [];
@@ -103,6 +103,23 @@ step('empresas y Elempleo: el actor con búsqueda por título y descripción com
 step('mapItem guarda las claves del item en raw para diagnosticar la extracción desde la base', () => {
   const c = mapItem({ title: 'Closer', url: 'https://x.test/1', foo: 1, bar: 2 });
   assert.deepEqual(c.raw.item_keys, ['title', 'url', 'foo', 'bar']);
+});
+
+step('direcciones a vigilar: {{start_urls}} y {{target_names}} en plantillas, y el esquema del actor decide la forma (objetos, textos o nombres)', () => {
+  const withTargets = { ...vars(), start_urls: ['https://www.facebook.com/groups/closers', 'https://www.facebook.com/groups/setters'], target_names: ['closers', 'setters'] };
+  assert.deepEqual(fillTemplate({ startUrls: '{{start_urls}}', max: '{{max_items}}' }, withTargets), { startUrls: [{ url: 'https://www.facebook.com/groups/closers' }, { url: 'https://www.facebook.com/groups/setters' }], max: 10 });
+  assert.deepEqual(fillTemplate({ urls: '{{start_urls_text}}', profiles: '{{target_names}}' }, withTargets), { urls: ['https://www.facebook.com/groups/closers', 'https://www.facebook.com/groups/setters'], profiles: ['closers', 'setters'] });
+  assert.deepEqual(fillTemplate({ startUrls: '{{start_urls}}' }, vars()), { startUrls: [] }, 'sin direcciones: lista vacía, nunca una cadena sin rellenar');
+  const objects = adaptInput({ required: ['startUrls'], properties: { startUrls: { type: 'array', items: { type: 'object' } } } }, withTargets);
+  assert.deepEqual(objects.input.startUrls, [{ url: 'https://www.facebook.com/groups/closers' }, { url: 'https://www.facebook.com/groups/setters' }]); assert.deepEqual(objects.missing, []);
+  const strings = adaptInput({ required: [], properties: { urls: { type: 'array', items: { type: 'string' } } } }, withTargets);
+  assert.deepEqual(strings.input.urls, ['https://www.facebook.com/groups/closers', 'https://www.facebook.com/groups/setters']);
+  const names = adaptInput({ required: ['profiles'], properties: { profiles: { type: 'array', items: { type: 'string' } } } }, withTargets);
+  assert.deepEqual(names.input.profiles, ['closers', 'setters']);
+  const none = adaptInput({ required: ['startUrls'], properties: { startUrls: { type: 'array', items: { type: 'object' } } } }, vars());
+  assert.deepEqual(none.missing, ['startUrls']); assert.deepEqual(targetFields(none.missing), ['startUrls']);
+  assert.deepEqual(targetFields(['startUrls', 'cookies']), ['startUrls'], 'solo los campos de direcciones; las cookies siguen siendo otra cosa');
+  assert.match(NO_TARGETS_MESSAGE, /Direcciones a vigilar/);
 });
 
 for (const [status, name, message] of results) console.log(`${status}  ${name}${message ? '\n      ' + message : ''}`);
