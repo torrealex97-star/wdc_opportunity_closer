@@ -36,7 +36,7 @@ export default function SourceControl({ onSessionLost, goEngine }: { onSessionLo
   const shown = all ? todo : todo.slice(0, SHOWN);
   return <article className="source-card" style={{ marginBottom: 20 }} data-testid="source-control">
     <div className="card-head"><div><span className="eyebrow">CONTROL DE FUENTES</span><h3 style={{ fontSize: 18, marginTop: 4 }} data-testid="source-control-headline">{data ? data.headline : busy ? 'Midiendo todas las fuentes…' : 'Sin datos'}</h3></div>
-      <button type="button" onClick={load} disabled={busy} aria-label="Actualizar el control de fuentes">{busy ? <LoaderCircle size={15} className="spin" /> : <RefreshCcw size={15} />} Actualizar</button></div>
+      <button type="button" onClick={load} disabled={busy} aria-label="Medir de nuevo el control de fuentes">{busy ? <LoaderCircle size={15} className="spin" /> : <RefreshCcw size={15} />} Medir de nuevo</button></div>
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
     {data && <>
       <p className="card-meta" style={{ marginTop: 4 }}>Una fuente solo está hecha si en los últimos {data.window_days} días dio al menos una oferta cualificada (o está bloqueada con una causa y un dueño). Lo demás sigue abierto hasta que funcione.</p>
