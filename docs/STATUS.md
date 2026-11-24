@@ -1,3 +1,11 @@
+## Panel de fuentes gratuitas: el «0» era un error de qué dato se leía (2026-11-24)
+
+- **Queja del propietario:** 23 de las 24 gratuitas figuraban «Conectada» con 0 recogidas y 0 aprobadas, y decía que todas deberían recoger cada día.
+- **Lo que hay de verdad** (*verified*, lectura en vivo de `GET /api/funnel` del motor el 2026-11-24 a las 14:26 UTC): el motor **sí recoge cada día**; último run `completed` el 2026-11-24, **3.147 revisadas, 16.513 en catálogo, 271 elegibles y 20 seleccionadas**. Las elegibles se concentran en la familia FreeHire (124 + 32 + 35 + 74 = 265 de 271; seleccionadas hoy: FreeHire España 3 y FreeHire España · closer 17); el resto suma 6 (JobToday asesor de ventas 1, JobToday ventas ciudades 1, Jobicy 2, Workable España 1, Arbeitnow 1). Dos fuentes **fallan** y estaban escondidas tras «Conectada»: `jobtoday-closer-remoto` (HTTP 410: la dirección ya no existe) y `himalayas-closer` (HTTP 429: límite de peticiones); `workingnomads` responde pero no tiene nada en catálogo.
+- **Causa del 0** (*inspected*): `readSamples` contaba `external_offers` en Supabase; las gratuitas del motor viven en la base D1 del Worker y no pasan por ahí (solo Jooble y las vías de pago). Mostrar 0 era falso.
+- **Cambio** (*tested* con el mock del motor): `lib/engineSources.ts` (pura) traduce el informe del motor: «Recogidas» = catálogo, «Aprobadas» = elegibles, conexión según el último intento (fallo declarado con su causa; respondió pero catálogo vacío = «mal conectada»), y con el motor ilegible las cifras salen en «—» y la causa lo dice (nunca 0). `enginesources.mjs` 5/5; pasos nuevos en `flow.mjs` y `ui.mjs`.
+- **No cambia la recogida**, solo lo que enseña el panel. **Pendiente real** (no es del panel): el volumen de closer es bajo (271 elegibles, 20 seleccionadas, casi todo FreeHire); retirar o corregir `jobtoday-closer-remoto` (410) y dar tiempo/espacio a `himalayas-closer` (429) es trabajo del motor (`sites/engine`).
+
 ## Voz: sección propia y cascada por coste (2026-11-24)
 
 - **Pedido del propietario:** sección de Voz separada en el admin para analizar gasto, proveedores y uso de API; el sistema usa el más barato y, si hay problema (pago, errores, clave), sigue con el siguiente; para conectar uno basta añadir su API.

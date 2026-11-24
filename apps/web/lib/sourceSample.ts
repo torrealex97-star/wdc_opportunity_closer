@@ -5,6 +5,8 @@ import { recordedCosts, type ActorLite, type NoteLite, type RunLite } from './so
 import { listConnections } from './integrations';
 import { classifySource, type ApifyActorLite, type ApifyRunLite, type SourceHealth } from './sourceHealth';
 import { planCascade, routesForCatalog, type RouteState } from './sourceRoutes';
+import { engineBase, engineGet } from './engineHealth';
+import { engineBySource, engineHealth, type EngineFunnel, type EngineView } from './engineSources';
 
 // Muestra por fuente: cuántas ofertas ÚNICAS (sin repetir) ha recogido cada fuente y cuántas se aprobaron, para saber
 // cuándo hay datos suficientes para juzgarla. Decisión del dueño (2026-11-22): ninguna fuente de pago se recorta por
@@ -47,8 +49,8 @@ export function sampleRow(input: SampleInput, since: string | null = null, targe
   return { ...base, state: 'medida', missing: 0, approved_pct, approved_per_usd, note: 'Muestra suficiente: ya se puede comparar con otras fuentes.' };
 }
 
-export type HealthRow = SampleRow & { health: SourceHealth | null; drafts: number | null };
-export type SamplePayload = { target: number; rows: HealthRow[]; basis: string; cost_note: string | null; health_note: string | null };
+export type HealthRow = SampleRow & { health: SourceHealth | null; drafts: number | null; engine: EngineView | null };
+export type SamplePayload = { target: number; rows: HealthRow[]; basis: string; cost_note: string | null; health_note: string | null; engine_note: string | null; engine_run: { day: string | null; status: string | null } | null };
 
 type CatalogEntry = { code: string; name: string; website?: string | null; requires?: string | null; acquisition_method?: string | null; category?: string | null };
 // Carga perezosa: las pruebas puras importan este módulo y el JSON exige un atributo de importación que Node no admite aquí.
@@ -69,6 +71,11 @@ const keyState = (keys: Set<string>): RouteState => ({
 export async function readSamples(since: Record<string, string | null> = SAMPLE_SINCE): Promise<SamplePayload | null> {
   const stats = await statsBySource().catch(() => null);
   if (!stats) return null;
+  // Las fuentes gratuitas del motor viven en su propia base: su estado sale del informe del motor, no de contar `external_offers`.
+  const engineUrl = engineBase();
+  const engineRead = engineUrl ? await engineGet<EngineFunnel>(`${engineUrl}/api/funnel`) : null;
+  const engineFunnel = engineRead?.ok ? engineRead.data : null;
+  const engineViews = engineBySource(engineFunnel);
   const { catalog: CATALOG, routes: ROUTES } = await loadCatalog();
   const windowStart = new Date(Date.now() - RUN_WINDOW_DAYS * 86400_000).toISOString();
   const [actorsResponse, runs, notes, connections, recentRunsResponse] = await Promise.all([
@@ -85,14 +92,19 @@ export async function readSamples(since: Record<string, string | null> = SAMPLE_
   // Un tope de paginación alcanzado deja el coste incompleto: se declara como hueco en vez de sumar de menos.
   const cost = runs?.truncated || notes?.truncated || !Array.isArray(actors) || !runs || !notes ? null : recordedCosts(actors as ActorLite[], runs.rows, notes.rows);
   // Todas las fuentes del catálogo, también las que nunca han recogido: ahí es donde se esconde una mala conexión.
-  const names = [...new Set([...stats.map(stat => stat.source), ...CATALOG.map(entry => entry.code)])];
+  const names = [...new Set([...stats.map(stat => stat.source), ...CATALOG.map(entry => entry.code), ...engineViews.keys()])];
   const rows: HealthRow[] = await Promise.all(names.map(async source => {
     const from = since[source] ?? null;
     const filters = [`org_id=eq.${ORG}`, `source=eq.${encodeURIComponent(source)}`, ...(from ? [`first_seen_at=gte.${encodeURIComponent(from)}`] : [])];
     const [seen, approved] = await Promise.all([countExact(filters), countExact([...filters, 'editorial_status=in.(approved,published)'])]);
     const drafts = seen === null || seen === 0 ? (seen === 0 ? 0 : null) : await countExact([...filters, 'editorial_status=eq.draft']);
     const usd = cost?.usdBySource.get(source);
-    const sample = sampleRow({ source, seen, approved, cost_usd: windowedCost(from, cost === null ? null : usd === undefined ? null : usd) }, from);
+    // Fuente del motor: «recogidas» = su catálogo y «aprobadas» = elegibles. Sin lectura del motor, un hueco («—»), no el 0 de Supabase.
+    const engine = engineViews.get(source) ?? null;
+    const engineOnly = (ROUTES.get(source) ?? [])[0]?.provider === 'engine';
+    const engineLost = engineOnly && engine === null && !engineFunnel;
+    const shownSeen = engine ? engine.catalog : engineLost ? null : seen, shownApproved = engine ? engine.eligible : engineLost ? null : approved;
+    const sample = sampleRow({ source, seen: shownSeen, approved: shownApproved, cost_usd: windowedCost(from, cost === null ? null : usd === undefined ? null : usd) }, from);
     let health: SourceHealth | null = null;
     const routes = ROUTES.get(source);
     if (routes && state) {
@@ -103,7 +115,9 @@ export async function readSamples(since: Record<string, string | null> = SAMPLE_
       const sourceRuns: ApifyRunLite[] = (recentRuns ?? []).filter(run => ids.has(run.actor_id)).map(run => ({ actor_id: run.actor_id, status: run.status, items: run.harvested, error: run.error, started_at: run.started_at }));
       health = classifySource({ source, routes, ready: steps.some(step => step.ready), notReadyReason: firstBlocked?.reason ?? '', actors: sourceActors, runs: recentRuns === null ? [] : sourceRuns, seen, drafts });
     }
-    return { ...sample, health, drafts };
+    if (engine) health = engineHealth(source, engine);
+    else if (engineLost) health = { source, state: 'mal_conectada', cause: engineUrl ? 'No se pudo leer el estado del motor: no se sabe si recoge.' : 'Falta CAREER_ENGINE_URL en el servidor: no se puede medir.', next: engineUrl ? 'Mirar si el motor responde (Resumen) y reintentar.' : 'Configurar CAREER_ENGINE_URL (la dirección del motor).' };
+    return { ...sample, health, drafts, engine };
   }));
   rows.sort((a, b) => (b.seen ?? -1) - (a.seen ?? -1) || a.source.localeCompare(b.source));
   return {
@@ -112,6 +126,8 @@ export async function readSamples(since: Record<string, string | null> = SAMPLE_
     cost_note: cost === null
       ? 'No se pudo leer el coste registrado: la columna de coste y de aprobadas por dólar sale en «—».'
       : Object.values(since).some(Boolean) ? 'Las fuentes con fecha de corte muestran el coste en «—»: el coste registrado es acumulado y no se mezcla con lo recogido desde esa fecha.' : null,
+    engine_note: engineUrl ? (engineFunnel ? 'Las gratuitas del motor muestran lo que el propio motor informa: «Recogidas» es su catálogo y «Aprobadas» son las elegibles (cumplen perfil, mercado, idioma y enlace).' : 'No se pudo leer el estado del motor: sus fuentes gratuitas salen en «—», no en 0.') : 'Falta CAREER_ENGINE_URL en el servidor: las fuentes gratuitas del motor no se pueden medir.',
+    engine_run: engineFunnel?.last_run ? { day: typeof engineFunnel.last_run.day === 'string' ? engineFunnel.last_run.day : null, status: typeof engineFunnel.last_run.status === 'string' ? engineFunnel.last_run.status : null } : null,
     health_note: !state ? 'No se pudieron leer las claves guardadas: la columna «Conexión» sale en «—».' : recentRuns === null ? 'No se pudieron leer las ejecuciones de Apify: «Conexión» no puede detectar fallos de Apify.' : null,
   };
 }
