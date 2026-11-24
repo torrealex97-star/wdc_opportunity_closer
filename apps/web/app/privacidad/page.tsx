@@ -53,7 +53,14 @@ export default function Page() {
     <p>Puedes pedir acceso, rectificación, supresión, limitación, oposición y portabilidad, y retirar tu consentimiento en cualquier momento (sin que afecte a lo anterior), escribiendo a {e.email}. Parte de esto lo haces tú misma desde tu espacio (editar y borrar). Si crees que no tratamos bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
 
     <h2>7. Práctica por voz (cuando se active)</h2>
-    <p>La práctica por voz con conversación continua <strong>todavía no está activa</strong>. Antes de usarla te pediremos un <strong>consentimiento propio, separado y retirable</strong>, y te explicaremos qué audio o transcripción se trata, dónde y durante cuánto tiempo. Hasta que ese texto esté revisado, no se tratará audio de alumnas con esta función. <em>Pendiente de revisión legal.</em></p>
+    <p>La voz continua con inteligencia artificial <strong>todavía no está activa</strong>. Cuando lo esté, antes de la primera sesión te pediremos un <strong>consentimiento propio, separado y retirable</strong> que explica lo siguiente:</p>
+    <ul>
+      <li><strong>Qué se trata:</strong> tu voz, en directo, y el texto de la conversación. <strong>No guardamos el audio.</strong> Se conserva el texto y la nota para que los repases; puedes borrarlos desde tu perfil.</li>
+      <li><strong>Quién lo recibe:</strong> un proveedor de voz como encargado del tratamiento. Está en estudio entre ElevenLabs, OpenAI y Deepgram; <em>pendiente de decidir por el responsable, con contrato de encargado y retención cero firmada antes de tratar audio de alumnas</em>. Se indicará aquí cuál es y dónde trata los datos.</li>
+      <li><strong>Límite:</strong> 10 minutos al día por persona, y un tope global de gasto.</li>
+      <li><strong>Base y retirada:</strong> tu consentimiento; puedes retirarlo en cualquier momento y seguir practicando por escrito.</li>
+    </ul>
+    <p><em>Pendiente de revisión legal.</em></p>
 
     <h2>8. Menores</h2>
     <p>El servicio está pensado para personas mayores de edad.</p>
@@ -61,6 +68,6 @@ export default function Page() {
     <h2>9. Cambios</h2>
     <p>Si cambiamos esta política de forma relevante, te lo diremos y, si hace falta, te pediremos de nuevo tu consentimiento.</p>
 
-    <p className="legal-meta">Versión {POLICY_VERSION} · {POLICY_DATE} · <a href="/terminos">Términos y condiciones</a> · <a href="/alumna">Volver a tu espacio</a></p>
+    <p className="legal-meta">Versión {POLICY_VERSION} · {POLICY_DATE} · <a href="/terminos">Términos y condiciones</a> · <a href="/cookies">Cookies</a> · <a href="/alumna">Volver a tu espacio</a></p>
   </main>;
 }
