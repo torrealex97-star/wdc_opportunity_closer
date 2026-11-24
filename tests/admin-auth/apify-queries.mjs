@@ -45,9 +45,10 @@ step('la rotación es determinista por día UTC y vuelve a empezar', () => {
   assert.equal(queryForDay({}, day), undefined);
 });
 
-step('LinkedIn ya no ofrece el buscador que devolvía 404 y conserva cuatro', () => {
+step('LinkedIn ya no ofrece el buscador que devolvía 404 y conserva cinco (la base de Fantastic.jobs va delante)', () => {
   const actors = linkedin.recipes.map(r => r.actor);
-  assert.equal(actors.length, 4);
+  assert.equal(actors.length, 5);
+  assert.equal(actors[0], 'fantastic-jobs/advanced-linkedin-job-search-api');
   assert.ok(!actors.includes('crawlworks/linkedin-job-scraper'), 'crawlworks daba 404 en la API pública (2026-11-22)');
   assert.ok(actors.includes('cheap_scraper/linkedin-job-scraper'), 'entra el candidato auditado');
 });
@@ -60,11 +61,13 @@ step('cada buscador de LinkedIn recibe su campo real de búsqueda', () => {
     'cheap_scraper/linkedin-job-scraper': { properties: { keyword: { type: 'array' }, locations: { type: 'array' }, maxItems: { type: 'integer' } }, required: [] },
     'gopalakrishnan/linkedin-jobs': { properties: { keywords: { type: 'string' }, location: { type: 'string' }, maxResults: { type: 'integer' } }, required: ['keywords'] },
     'harvestapi/linkedin-job-search': { properties: { jobTitles: { type: 'array' }, locations: { type: 'array' }, maxItems: { type: 'integer' } }, required: [] },
+    // Esquema leído el 2026-11-24 (página pública de entrada): `limit` mínimo 10, sin campos obligatorios.
+    'fantastic-jobs/advanced-linkedin-job-search-api': { properties: { titleSearch: { type: 'array' }, locationSearch: { type: 'array' }, limit: { type: 'integer' } }, required: [] },
   };
   for (const recipe of linkedin.recipes) {
     const schema = schemas[recipe.actor];
     assert.ok(schema, `sin esquema leído para ${recipe.actor}`);
-    const { input, missing } = adaptInput(schema, vars);
+    const { input, missing } = recipe.inputTemplate ? { input: fillTemplate(recipe.inputTemplate, vars), missing: [] } : adaptInput(schema, vars);
     assert.deepEqual(missing, [], `${recipe.actor}: la app no puede rellenar ${missing.join(', ')}`);
     const sent = JSON.stringify(input);
     assert.ok(sent.includes('high ticket closer'), `${recipe.actor}: no recibe la búsqueda del día`);
@@ -98,7 +101,7 @@ step('«cerrajero» no entra por la puerta de atrás: el clasificador determinis
 
 step('LinkedIn B/C e InfoJobs: la plantilla de cada actor se rellena con su campo, país España y sin credenciales', () => {
   const vars = { max_items: 10, query: 'appointment setter' };
-  const [, b, c] = linkedin.recipes;
+  const [, , b, c] = linkedin.recipes; // delante van la base de Fantastic.jobs y curious_coder
   const inB = fillTemplate(b.inputTemplate, vars);
   assert.deepEqual(inB.keyword, ['appointment setter'], 'B espera `keyword` como lista');
   assert.deepEqual(inB.locations, ['España', 'México', 'Colombia', 'Argentina', 'Chile', 'Estados Unidos'], 'España, LatAm y EE. UU.: los tres mercados');
