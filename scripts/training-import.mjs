@@ -133,20 +133,20 @@ export function readCsvDirectory(directory) {
 }
 
 export async function readXlsx(file) {
-  const { default: readXlsxFile, readSheetNames } = await import('read-excel-file/node');
-  let names;
-  try { names = await readSheetNames(file); } catch (error) { return { ok: false, errors: [`No se pudo abrir ${file}: ${error.message}`] }; }
+  // read-excel-file 9: el export por defecto lee TODAS las hojas -> [{ sheet, data }] (ya no existe `readSheetNames`).
+  const { default: readXlsxFile } = await import('read-excel-file/node');
+  let workbook;
+  try { workbook = await readXlsxFile(file); } catch (error) {
+    // Un libro dañado o una celda con una estructura que el lector no entiende se declara con su archivo;
+    // no se convierte en un fallo sin contexto ni deja una importación a medias.
+    return { ok: false, errors: [`No se pudo abrir ${file}: ${error.message}`] };
+  }
+  const names = workbook.map(item => item.sheet);
   const sheets = {};
   for (const name of SHEETS) {
-    const actual = names.find(item => item.trim().toLowerCase() === name);
+    const actual = workbook.find(item => item.sheet.trim().toLowerCase() === name);
     if (!actual) return { ok: false, errors: [`El libro no tiene la hoja «${name}». Hojas: ${names.join(', ')}`] };
-    try {
-      sheets[name] = await readXlsxFile(file, { sheet: actual });
-    } catch (error) {
-      // Un libro dañado o una celda con una estructura que el lector no entiende se declara con su hoja;
-      // no se convierte en un fallo sin contexto ni deja una importación a medias.
-      return { ok: false, errors: [`No se pudo leer la hoja «${name}» de ${file}: ${error.message}`] };
-    }
+    sheets[name] = actual.data;
   }
   return { ok: true, sheets };
 }
