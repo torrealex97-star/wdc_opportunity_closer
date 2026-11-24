@@ -23,7 +23,7 @@ jobs:
         run: |
           node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs \
             scripts/probe_company_pages.mjs --out "docs/evidence/company-pages-$(date -u +%F).md"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: company-pages-probe
           path: docs/evidence/company-pages-*.md
