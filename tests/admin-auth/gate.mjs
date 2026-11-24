@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import http from 'node:http';
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { startMocks } from './mock-services.mjs';
@@ -28,6 +29,12 @@ const procs = () => {
     }).join(' ');
   } catch { return 'sin procesos next'; }
 };
+// Petición con una conexión NUEVA (`agent: false`): `fetch` reutiliza sockets keep-alive y el servidor anterior, ya sin escuchar pero todavía vivo,
+// seguía contestando por el socket viejo (con la bandera activa): 307 en vez de 200. Causa hallada con el diagnóstico de `procs()` (2026-11-24).
+const fresh = (method, path, { headers = {}, body } = {}) => new Promise((resolve, reject) => {
+  const req = http.request({ host: '127.0.0.1', port: PORT, path, method, headers: { connection: 'close', ...headers }, agent: false }, res => { res.resume(); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers })); });
+  req.on('error', reject); if (body) req.write(body); req.end();
+});
 const busy = () => new Promise(resolve => { const socket = net.connect(PORT, '127.0.0.1'); socket.once('connect', () => { socket.destroy(); resolve(true); }); socket.once('error', () => resolve(false)); });
 const stop = async () => {
   try { process.kill(-child.pid); } catch {}
@@ -60,9 +67,10 @@ try {
   await stop();
   child = run(''); await up();
   await step('flag apagado (por defecto): `/` y la búsqueda siguen abiertas', async () => {
-    const r = await fetch(BASE + '/', { redirect: 'manual' });
-    assert.equal(r.status, 200, `status ${r.status}, location ${r.headers.get('location')}, procesos next: ${procs()}`);
-    assert.notEqual((await search()).status, 401);
+    const r = await fresh('GET', '/', { headers: { host: `127.0.0.1:${PORT}` } });
+    assert.equal(r.status, 200, `status ${r.status}, location ${r.headers.location}, procesos next: ${procs()}`);
+    const found = await fresh('POST', '/api/backend/opportunities/search', { headers: { 'content-type': 'application/json', origin: BASE, host: `127.0.0.1:${PORT}` }, body: JSON.stringify({ market: 'any', days: 10 }) });
+    assert.notEqual(found.status, 401, `la búsqueda respondió ${found.status}; procesos next: ${procs()}`);
   });
 } finally { await stop(); close(); }
 for (const [s, n, m] of results) console.log(`${s}  ${n}${m ? '\n      ' + m : ''}`);
