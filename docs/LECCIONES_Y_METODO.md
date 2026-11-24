@@ -62,7 +62,51 @@ El objetivo del producto es que **todas las fuentes estén conectadas, recojan o
 - [ ] Lo que depende del propietario está escrito con la acción exacta.
 - [ ] Si el Resumen sigue mostrando fuentes sin cualificar sin causa ni dueño, **no está hecho**.
 
-## 4. Datos de contexto que ahorran errores
+## 4. Skills y herramientas que se usan, y cuándo (obligatorio donde se dice «antes de»)
+
+Las skills no sustituyen a la medida: sirven para **no cometer los errores de la sección 1** y para cerrar el bucle de la sección 2. Se invocan con la herramienta de skills; si una aplica, se usa **antes** de actuar.
+
+| Momento del bucle | Skill / herramienta | Para qué en este proyecto |
+|---|---|---|
+| **Antes de decir «hecho», commitear o abrir PR** | `superpowers:verification-before-completion` | Evidencia antes que afirmaciones: ejecutar el comando completo, leer la salida y el código de salida; sin «debería funcionar». Es la barrera contra E1, E8 y E14 |
+| **Una fuente no cualifica o algo falla** | `superpowers:systematic-debugging` | Causa raíz antes de tocar nada: reproducir, mirar el motivo de descarte dominante y la muestra cruda, una hipótesis cada vez. Prohíbe «probar cosas» |
+| **Escribir o arreglar código** | `superpowers:test-driven-development` | Rojo sin el arreglo, verde con él (ya exigido). Cubrir siempre el caso «no se pudo leer» |
+| **Antes de construir algo nuevo** | `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:executing-plans` | Aclarar el resultado esperado y dividir en incrementos acotados; comprobar primero que no existe ya (E12) |
+| **Antes de fusionar** | `code-review` (con el nivel que toque), `superpowers:requesting-code-review`, `superpowers:receiving-code-review` | Revisar el diff completo buscando fallos de comportamiento, no solo estilo; tratar cada hallazgo con criterio y verificarlo antes de aplicarlo |
+| **Tras el review** | `simplify`, `security-review` | Quitar duplicación y revisar rutas con secretos, tokens y datos de alumnas |
+| **Cerrar una rama** | `superpowers:finishing-a-development-branch` | Checklist de cierre: tests, PR, fusión, limpieza |
+| **Separar trabajo en otra rama** | `superpowers:using-git-worktrees` | **Con cuidado (E7):** nunca enlazar `node_modules` ni `git add -A` dentro; si no es imprescindible, cambia de rama en el árbol principal |
+| **Tocar un panel, KPI, gráfico o tabla** | `dashboard-design` (+ `data-visualization-pro`; alumnas: `design-taste-frontend`) | **Antes de** cambiarlo, como pide AGENTS.md: un hueco no es un cero, el color no es la única señal, tabla alternativa |
+| **Integrar un actor de Apify** | `apify-ultimate-scraper` (+ `apify:apify-actor-development` si hay que crear uno) | Leer el esquema de entrada y salida y los fallos conocidos antes de escribir la plantilla (E4) |
+| **Bright Data** | `brightdata-plugin:data-feeds`, `search`, `scrape`, `discover-api`, `scraper-builder`, `bright-data-best-practices` | Feeds estructurados, parámetros correctos de SERP, contratos y buenas prácticas |
+| **Tocar la base** | `supabase`, `supabase-postgres-best-practices` y las herramientas de Supabase | Migración con `BEGIN … ROLLBACK`, avisos de seguridad después y orden expresa del propietario; lecturas con `execute_sql` solo de lectura |
+| **Analizar números de fuentes** | `data:explore-data`, `data:analyze`, `data:validate-data`, `data:write-query`, `data:statistical-analysis` | Medir por fuente, validar que la cifra tiene sentido antes de actuar y no concluir con muestras pequeñas (umbral de 1.000 en las de pago) |
+| **App web** | `nextjs-app-router-patterns`, `vercel:nextjs`, `vercel:verification`, `vercel:deployments-cicd` | Patrones del App Router, verificación y despliegue |
+| **Comprobar la app en el navegador** | `run`, `browser-testing-with-devtools`, `integration-testing` | Ver el cambio funcionando en la app real, no solo en tests; pruebas de integración entre componentes |
+| **Buscar una capacidad que falta** | `find-skills`, `anthropic-skills:deep-research` | Descubrir skills e investigar con fuentes antes de inventar |
+| **Estado y riesgos** | `operations:status-report`, `operations:risk-assessment`, `operations:runbook`, `operations:process-optimization`, `project-review:review` | Informes de estado honestos, registro de riesgos y runbooks de lo que se repite |
+| **Seguir algo en el tiempo** | `loop` y tareas programadas | Repetir la medida a diario; comprobar antes qué herramientas tendrá la sesión (E11) |
+
+Herramientas de datos (no son skills): consulta a la base de solo lectura (Supabase), lectura de páginas públicas con la extracción de Tavily (el proxy bloquea muchos hosts), GitHub para PR y CI, registros de ejecución de Vercel y, si se activa, Sentry para errores en producción.
+
+**No usar en este repositorio:** las skills y herramientas de Scalix (`scalix-ventas`, `anthropic-skills:scalix-*` y el MCP de Scalix): es otro sistema (AGENTS.md: este repositorio es independiente). `metodo-wdc` y `analisis-llamadas-ventas` son material de formación y de revisión de llamadas, no el sistema de ventas del producto. No lances subagentes salvo que el propietario lo pida.
+
+## 5. Revisar y corregir mi propio trabajo hasta lograr el resultado
+
+El resultado esperado es el de la sección 0. Mientras no se mida, el trabajo sigue abierto. El bucle de autocorrección:
+
+1. **Definir el resultado antes de empezar**, en una frase medible («la fuente X pasa de 0 a ≥ 1 cualificada en 7 días»), y la forma exacta de medirlo.
+2. **Hacer el cambio mínimo** que ataca la causa medida, con su test en rojo y luego en verde (`superpowers:test-driven-development`).
+3. **Intentar romper mi propia afirmación.** Antes de decir que funciona, busca el caso que la desmiente: ¿y si el dato no se pudo leer?, ¿y si la fuente devuelve 0?, ¿y si el motor está caído?, ¿y si el contrato real difiere del que supuse?
+4. **Revisar el diff completo como lo haría otra persona** (`code-review`): comportamiento, contratos, casos límite, secretos, y que el test comprueba lo que dice (un test que pasa con y sin el arreglo no prueba nada).
+5. **Verificar con evidencia fresca** (`superpowers:verification-before-completion`): comandos completos, salida leída, `exit=0` y recuento íntegro; no se reutiliza una ejecución anterior.
+6. **Medir el resultado real** (sección 2, paso 1) y compararlo con el definido en el paso 1. Si no coincide, **el trabajo no está terminado**: volver al paso 2 con una hipótesis nueva sacada de la medida, no de la intuición.
+7. **Registrar** en `docs/STATUS.md`: qué se midió, qué cambió, nivel de evidencia y qué le toca al propietario; y, si hubo un error nuevo, una fila nueva en la sección 1.
+8. **Dejar la medición recurrente** (Resumen del admin y tarea diaria) para que la siguiente sesión empiece por la realidad.
+
+Señales de alarma para parar y repensar: tres intentos seguidos sin mover la medida; un arreglo que necesita bajar la barra de calidad (`MIN_SCORE`, cupo diario) para «subir números»; una cifra que mejora solo en el panel pero no en la base; una explicación que cambia cada vez que se mide.
+
+## 6. Datos de contexto que ahorran errores
 
 - Las gratuitas del motor viven en la base D1 del Worker `closer-engine`; las vías de pago y Jooble entran por Supabase (`external_offers`). Son dos medidas distintas.
 - Las ofertas nuevas esperan en borrador hasta la pasada automática del cron (06:00 UTC) o «Clasificar ahora»; la IA de revisión en `shadow` solo anota. Cambiarla a `live` es decisión del propietario.
