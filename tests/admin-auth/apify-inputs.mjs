@@ -89,6 +89,22 @@ step('actores base (2026-11-24): Computrabajo abotapi/reventadata, red Bumeran, 
   for (const id of ['computrabajo', 'laborum', 'occ-mundial', 'linkedin']) assert.equal(new Set(portalById(id).recipes.map(r => r.actor)).size, portalById(id).recipes.length, `${id}: sin actores repetidos`);
 });
 
+step('empresas y Elempleo: el actor con búsqueda por título y descripción completa va primero, con su entrada leída del esquema', () => {
+  const find = (id, actor) => portalById(id).recipes.find(r => r.actor === actor);
+  assert.equal(portalById('company').recipes[0].actor, 'fantastic-jobs/greenhouse-jobs-api');
+  const gh = fillTemplate(find('company', 'fantastic-jobs/greenhouse-jobs-api').inputTemplate, vars({ query: 'closer de ventas', country: 'ES' }));
+  assert.deepEqual(gh.titleSearch, ['closer de ventas']); assert.equal(gh.descriptionType, 'text'); assert.ok(gh.limit >= 200, 'el esquema exige límite mínimo 200');
+  assert.equal(portalById('elempleo').recipes[0].actor, 'scrapers_lat/elempleo-scraper');
+  const el = fillTemplate(find('elempleo', 'scrapers_lat/elempleo-scraper').inputTemplate, vars({ query: 'asesor comercial' }));
+  assert.deepEqual(el.keywords, ['asesor comercial']); assert.equal(el.withDetails, true, 'sin detalle no hay descripción y se descarta');
+  for (const id of ['company', 'elempleo']) assert.equal(new Set(portalById(id).recipes.map(r => r.actor)).size, portalById(id).recipes.length, `${id}: sin actores repetidos`);
+});
+
+step('mapItem guarda las claves del item en raw para diagnosticar la extracción desde la base', () => {
+  const c = mapItem({ title: 'Closer', url: 'https://x.test/1', foo: 1, bar: 2 });
+  assert.deepEqual(c.raw.item_keys, ['title', 'url', 'foo', 'bar']);
+});
+
 for (const [status, name, message] of results) console.log(`${status}  ${name}${message ? '\n      ' + message : ''}`);
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);
