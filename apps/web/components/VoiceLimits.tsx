@@ -25,8 +25,8 @@ export default function VoiceLimits({ onSessionLost }: { onSessionLost: () => vo
     <div className="stat-strip">
       <div><strong>{data.daily_minutes_per_student} min</strong><span>máximo por alumna y día</span></div>
       <div><strong>{usd(data.monthly_cap_usd)}</strong><span>tope global al mes (voz)</span></div>
-      <div><strong>{data.spent_usd_month === null ? '—' : usd(data.spent_usd_month)}</strong><span>gastado este mes (sin medir)</span></div>
-      <div><strong>{data.minutes_today === null ? '—' : data.minutes_today}</strong><span>minutos hoy (sin medir)</span></div>
+      <div><strong>{data.spent_usd_month === null ? '—' : usd(data.spent_usd_month)}</strong><span>gastado este mes (estimado)</span></div>
+      <div><strong>{data.minutes_today === null ? '—' : data.minutes_today}</strong><span>minutos de voz hoy</span></div>
     </div>
     <div className="table-wrap"><table className="data-table">
       <caption className="card-meta">Estimación en US$ por minuto de conversación, de las páginas públicas de cada proveedor (24 nov 2026). No es una factura.</caption>

@@ -1,3 +1,10 @@
+## Consumo real de la voz (2026-11-24)
+
+- **Migración `20261124_voice_usage.sql` APLICADA** en la base real (2026-11-24, tras la orden del propietario de seguir con ese punto): prueba de comportamiento con `ROLLBACK` primero (`tests/db/voice_usage.sql`: RLS sin acceso para anon/authenticated, 1–600 segundos, coste ≥ 0, borrado en cascada con la alumna) y avisos de seguridad después (solo el INFO `rls_enabled_no_policy`, igual que el resto de tablas de servicio).
+- **Construido** (*tested*, `voiceusage.mjs` 6/6 con base simulada): `lib/voiceUsage.ts` (lectura que distingue 0 de «no se pudo leer»; anotación acotada a los 10 minutos del día; una escritura fallida no cuenta), `POST /api/voice/usage` para el **servicio de voz** (token `VOICE_WORKER_TOKEN` ≥ 24 caracteres; 503 sin él; solo con interruptor encendido y consentimiento vigente), panel de topes con gasto y minutos reales, y `GET /api/student/voice` con los segundos que quedan cuando la voz está encendida. El navegador NO puede anotar su consumo.
+- **Sigue sin hacerse (necesita al propietario):** proveedor con retención cero firmada, su clave y el canal en tiempo real (worker aparte, no cabe en Vercel; no se puede probar desde este entorno). La voz continúa apagada (`VOICE_ROLEPLAY`).
+- Referencias de scrapers que aportó el propietario: [REFERENCIAS_SCRAPERS.md](REFERENCIAS_SCRAPERS.md) (sin verificar licencias).
+
 ## Voz continua, fase B: cimientos sin audio (2026-11-24)
 
 - **Decisiones del propietario (2026-11-24):** candidatos ElevenLabs, OpenAI y «la más barata y de mejor calidad»; el consentimiento de voz se acepta dentro del alta de la alumna (términos y privacidad) y hay que redactar términos, uso y cookies; **máximo 10 minutos por día** y control de todo el gasto de API/voz en el admin.
