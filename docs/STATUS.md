@@ -1,3 +1,11 @@
+## Pruebas manuales de fuentes de Apify (propietario, 22:20–22:26 UTC): medido y un fallo mío de #175 (2026-11-24)
+
+- **Medido en la base real (*inspected*; `apify_runs`, `external_offers`; ventana de 3 h):** Tecnoempleo 100 vistas, Trabajos 10, Indeed 10, Infoempleo 10, Elempleo 10, Talent 9; **0 aprobadas en todas** y todas pendientes de la clasificación (no hay revisión posterior a las pruebas). Elempleo (`scrapers_lat`) y Talent llegaron **sin descripción en el 100 %** (10/10 y 9/9).
+- **Fallo mío:** `raw.item_keys` de #175 salía vacío en producción: `classify` solo deja pasar valores simples y yo lo mandaba como lista. Pasó el test de `mapItem` pero no la prueba de punta a punta. Corregido en esta rama (texto de ≤400 caracteres, test que pasa por `classify`). Hasta la próxima prueba manual de Elempleo no sabemos qué campo trae la descripción ni si `withDetails` se aplicó.
+- **`fantastic-jobs/greenhouse-jobs-api` (empresas): 0 elementos, 0,00 US$.** Mi plantilla (`titleSearch` + `locationSearch`) no devuelve nada; un cero no se concluye sin comprobarlo contra la fuente. **Sin resolver.**
+- **Skool y los dos actores de grupos de Facebook fallan por `startUrls`** («el actor exige campos que no sé rellenar»): confirma que hacen falta las direcciones editables (rama siguiente). Reddit trae publicaciones (50 elementos, la URL viene en `contentUrl`, no en un campo reconocido): no son ofertas, decisión de retirada pendiente. Telegram y los dos de LinkedIn Posts: 0 elementos.
+- **NO está hecho:** ninguna de estas fuentes tiene aún una oferta cualificada en 7 días.
+
 ## Feed XML de Workable: recolector gratuito de todas sus empresas (2026-11-24)
 
 - **Qué:** `scripts/workable_collect.py` + `.github/workflows/workable-collect.yml` (diario 05:41 UTC) envían borradores a `/api/ingest` con `source=workable`. Filtra puestos closer/setter/cold caller/SDR con `career.vocabulary` (palabra completa: «Bed Setter» no entra) en ES/LatAm o con título en español; un registro por URL, URL intacta, sin correos ni teléfonos.
