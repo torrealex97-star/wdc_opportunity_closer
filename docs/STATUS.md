@@ -1,3 +1,9 @@
+## read-excel-file 5.8 → 9.3.20 (2026-11-24; sustituye a la PR #157 de Dependabot)
+
+- **Por qué no se fusionó la PR de Dependabot tal cual** (*tested*): en v9 `read-excel-file/node` ya no exporta `readSheetNames` y su export por defecto devuelve todas las hojas como `[{ sheet, data }]`; `scripts/training-import.mjs` (`readXlsx`) fallaba con «readSheetNames is not a function» y la prueba `training-curriculum.mjs` lo detecta en rojo.
+- **Cambio:** `readXlsx` lee el libro una vez y busca cada hoja (`modules`, `lessons`, `resources`, `questions`) por nombre sin distinguir mayúsculas ni espacios; un libro ilegible se declara con su archivo. Sobre `tests/fixtures/training-template.xlsx` da los mismos datos que v5 (5/13/15/25 filas). La subida elimina 104 paquetes transitivos del lock (v9 ya no usa `unzipper`).
+- **Evidencia:** `training-curriculum.mjs` 50/50 con v9; comprobado en rojo con el script antiguo. La suite completa la ejecuta la CI de esta PR.
+
 ## Voz: sección propia y cascada por coste (2026-11-24)
 
 - **Pedido del propietario:** sección de Voz separada en el admin para analizar gasto, proveedores y uso de API; el sistema usa el más barato y, si hay problema (pago, errores, clave), sigue con el siguiente; para conectar uno basta añadir su API.
