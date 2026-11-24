@@ -7,6 +7,16 @@ const step = async (name, fn) => { try { await fn(); passed++; console.log(`PASS
 const base = (over = {}) => ({ source: 's', name: 'S', kind: 'pago', health: { source: 's', state: 'conectada', cause: 'ok', next: 'nada' }, seen7: 0, approved7: 0, engine: null, ...over });
 const eng = (over = {}) => ({ catalog: 10, reviewed: 5, eligible: 0, selected: 0, run_status: 'completed', cause: null, ...over });
 
+await step('direcciones a vigilar: con ≥1 activa Facebook/Skool/Telegram dejan de ser «necesita dato»; sin ellas o sin poder leerlas se dice y se señala la pantalla', () => {
+  for (const code of ['apify-facebook', 'apify-skool', 'apify-telegram']) {
+    const none = classify(base({ source: code, targets: 0 })); assert.equal(none.state, 'necesita_dato'); assert.equal(none.owner, 'propietario'); assert.match(none.next, /Direcciones a vigilar/);
+    const unread = classify(base({ source: code, targets: null })); assert.equal(unread.state, 'necesita_dato'); assert.match(unread.cause, /no se pudieron leer/i, 'sin poder leer no se afirma que falten');
+    const some = classify(base({ source: code, targets: 2 })); assert.equal(some.state, 'sin_recoger', 'con direcciones y sin ofertas: conectada sin recoger'); assert.equal(some.owner, 'claude'); assert.match(some.cause, /2 direcciones/);
+    const seen = classify(base({ source: code, targets: 2, seen7: 5, approved7: 0 })); assert.equal(seen.state, 'recoge_sin_cualificar', 'recoge y no cualifica: sigue el camino normal');
+  }
+  assert.equal(classify(base({ source: 'apify-reddit', targets: 3 })).state, 'sin_via', 'las direcciones no desbloquean fuentes que no las usan');
+});
+
 await step('con ofertas cualificadas en la ventana, la fuente está hecha', () => {
   const r = classify(base({ seen7: 40, approved7: 3 })); assert.equal(r.state, 'cualificadas'); assert.equal(r.done, true); assert.equal(r.owner, null);
 });

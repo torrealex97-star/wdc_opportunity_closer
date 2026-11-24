@@ -4,6 +4,8 @@ import { readSamples } from './sourceSample';
 import { routesForCatalog } from './sourceRoutes';
 import { kindOf, type SourceKind } from './sourceKinds';
 import { summarize, type ControlInput, type ControlSummary } from './sourceControl';
+import { activeCounts } from './sourceTargetsStore';
+import { TARGET_SOURCES } from './sourceTargets';
 
 // Datos del control total: la muestra por fuente (con el informe del motor) más lo que entró y se aprobó en la ventana de 7 días.
 export const WINDOW_DAYS = 7;
@@ -43,7 +45,7 @@ export async function reasonsBySource(now = Date.now(), days = WINDOW_DAYS): Pro
 export type SourceControlPayload = ControlSummary & { window_days: number; generated_at: string; recent_note: string | null };
 
 export async function loadSourceControl(): Promise<SourceControlPayload | null> {
-  const [samples, recent, reasons] = await Promise.all([readSamples(), recentBySource(), reasonsBySource()]);
+  const [samples, recent, reasons, targets] = await Promise.all([readSamples(), recentBySource(), reasonsBySource(), activeCounts()]);
   if (!samples) return null;
   const catalog = (await import('./sourceCatalog.json')).default as CatalogEntry[];
   const routes = routesForCatalog(catalog as never);
@@ -53,7 +55,8 @@ export async function loadSourceControl(): Promise<SourceControlPayload | null> 
     const kind: SourceKind = kindOf({ code: entry.code, category: entry.category ?? null }, routes.get(row.source) ?? []);
     const window = recent ? recent.get(row.source) ?? { seen: 0, approved: 0, drafts: 0 } : null;
     return { source: row.source, name: entry.name, kind, health: row.health, seen7: window ? window.seen : null, approved7: window ? window.approved : null, engine: row.engine,
-      reasons: reasons ? reasons.get(row.source) ?? [] : null, drafts7: window ? window.drafts : null };
+      reasons: reasons ? reasons.get(row.source) ?? [] : null, drafts7: window ? window.drafts : null,
+      targets: TARGET_SOURCES[row.source] ? (targets ? targets.get(row.source) ?? 0 : null) : undefined };
   });
   return {
     ...summarize(inputs), window_days: WINDOW_DAYS, generated_at: new Date().toISOString(),

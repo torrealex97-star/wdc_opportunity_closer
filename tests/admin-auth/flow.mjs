@@ -1154,6 +1154,48 @@ await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000
   state.externalCountsFail = false;
   assert.equal(down.status, 503, 'con el recuento caído no se pintan ceros'); assert.match(down.json.detail, /fuentes/);
 });
+await step('Direcciones a vigilar: exige sesión, valida por fuente, no duplica, pausa y quita; solo el propietario escribe; el Control de fuentes lo refleja', async () => {
+  state.targets = []; state.targetsMissing = false;
+  const saved = jar; jar = {}; assert.equal((await call('/api/admin/source-targets')).status, 401); jar = saved;
+  const empty = await call('/api/admin/source-targets'); assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.sources.map(s => s.source).sort(), ['apify-facebook', 'apify-skool', 'apify-telegram']); assert.deepEqual(empty.json.targets, []); assert.equal(empty.json.pending, false);
+  const post = (source, url, label) => call('/api/admin/source-targets', { method: 'POST', body: { source, url, label } });
+  for (const [source, url] of [['apify-facebook', 'http://facebook.com/groups/x'], ['apify-facebook', 'https://evil.com/groups/x'], ['apify-telegram', 'https://t.me/+privado'], ['apify-reddit', 'r/forhire'], ['apify-skool', ''], ['apify-skool', 'https://user:pw@www.skool.com/x']]) {
+    const r = await post(source, url); assert.equal(r.status, 422, `${source} ${url}`); assert.ok(typeof r.json.detail === 'string' && r.json.detail.length > 5, 'el error dice qué corregir');
+  }
+  assert.equal((await call('/api/admin/source-targets', { method: 'POST', body: { source: 5 } })).status, 422); assert.deepEqual(state.targets, [], 'lo inválido no guarda nada');
+  // Sin direcciones el Control de fuentes dice qué falta y a quién le toca.
+  const before = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-facebook');
+  assert.equal(before.state, 'necesita_dato'); assert.match(before.next, /Direcciones a vigilar/);
+  const fb = await post('apify-facebook', 'm.facebook.com/groups/closers.espana/?fbclid=zz', '  Closers España  ');
+  assert.equal(fb.status, 201); assert.equal(state.targets[0].url, 'https://www.facebook.com/groups/closers.espana'); assert.equal(state.targets[0].label, 'Closers España'); assert.equal(state.targets[0].kind, 'facebook_group');
+  assert.equal((await post('apify-facebook', 'https://www.facebook.com/groups/closers.espana')).status, 409, 'la misma dirección ya normalizada no se duplica');
+  const after = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-facebook');
+  assert.notEqual(after.state, 'necesita_dato', 'con una dirección activa deja de estar bloqueada por falta de dato');
+  const id = state.targets[0].id;
+  assert.equal((await call('/api/admin/source-targets', { method: 'PATCH', body: { id, enabled: false } })).status, 200); assert.equal(state.targets[0].enabled, false);
+  assert.equal((await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-facebook').state, 'necesita_dato', 'pausada = sin direcciones activas');
+  assert.equal((await call('/api/admin/source-targets', { method: 'PATCH', body: { id: '00000000-0000-4000-8000-000000000000', enabled: true } })).status, 404);
+  assert.equal((await call('/api/admin/source-targets', { method: 'PATCH', body: { id: 'no-es-uuid', enabled: true } })).status, 422);
+  assert.equal((await call('/api/admin/source-targets', { method: 'PATCH', body: { id, enabled: 'sí' } })).status, 422);
+  // Un administrador que no es propietario las ve pero no las cambia.
+  const keep = jar; jar = {}; await call('/api/admin/session', { method: 'POST', body: { email: 'adm@test.dev', password: 'Admin-pass-12345' } });
+  assert.equal((await call('/api/admin/source-targets')).status, 200);
+  for (const [method, body] of [['POST', { source: 'apify-telegram', url: '@empleo_closers' }], ['PATCH', { id, enabled: true }], ['DELETE', { id }]]) assert.equal((await call('/api/admin/source-targets', { method, body })).status, 403, method);
+  jar = keep;
+  // Tope por fuente.
+  for (let i = 1; i < 30; i++) assert.equal((await post('apify-telegram', `@canal_empleo_${String(i).padStart(2, '0')}`)).status, 201, `canal ${i}`);
+  const over = await post('apify-telegram', '@canal_empleo_30'); assert.equal(over.status, 422); assert.match(over.json.detail, /Máximo 30/);
+  assert.equal((await call('/api/admin/source-targets')).json.targets.filter(t => t.source === 'apify-telegram').length, 29);
+  // Quitar: una vez; la segunda ya no existe.
+  assert.equal((await call('/api/admin/source-targets', { method: 'DELETE', body: { id } })).status, 200); assert.equal((await call('/api/admin/source-targets', { method: 'DELETE', body: { id } })).status, 404);
+  // Migración sin aplicar: lo dice, no guarda y el Control de fuentes no afirma que falten direcciones.
+  state.targetsMissing = true;
+  const pending = await call('/api/admin/source-targets'); assert.equal(pending.status, 200); assert.equal(pending.json.pending, true); assert.equal(pending.json.targets, null); assert.match(pending.json.error, /migración/);
+  assert.equal((await post('apify-telegram', '@otro_canal_ok')).status, 503);
+  const unread = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-telegram'); assert.match(unread.cause, /no se pudieron leer/i);
+  state.targetsMissing = false; state.targets = [];
+});
 await step('Control de fuentes: exige sesión; cada fuente cae en un estado medido, el titular dice «X de N» y lo que no cualifica sale «a trabajar» con causa y siguiente paso', async () => {
   const savedJar = jar; jar = {};
   assert.equal((await call('/api/admin/source-control')).status, 401);
