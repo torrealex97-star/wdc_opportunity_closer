@@ -102,7 +102,7 @@ step('empresas y Elempleo: el actor con búsqueda por título y descripción com
 
 step('mapItem guarda las claves del item en raw para diagnosticar la extracción desde la base', () => {
   const c = mapItem({ title: 'Closer', url: 'https://x.test/1', foo: 1, bar: 2 });
-  assert.deepEqual(c.raw.item_keys, ['title', 'url', 'foo', 'bar']);
+  assert.equal(c.raw.item_keys, 'title,url,foo,bar', 'texto, no lista: classify solo deja pasar valores simples');
 });
 
 step('direcciones a vigilar: {{start_urls}} y {{target_names}} en plantillas, y el esquema del actor decide la forma (objetos, textos o nombres)', () => {

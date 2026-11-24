@@ -62,4 +62,14 @@ reset('down');
 await assert.rejects(ex.ingest('t-src', 'test', [cand(1)]), /No se pudo guardar/);
 reset('poison'); await ex.saveCandidates('t-src', [{ external_id: 'x', title: 'BAD' }], async () => assert.fail('un 400 no se reintenta')).catch(() => {});
 console.log('PASS  ingesta: caída total lanza error; un 400 no se reintenta');
+// 6) item_keys (claves del item del actor) tiene que LLEGAR a la base: #175 lo guardaba como lista, `classify` solo deja pasar valores simples y se perdía
+{
+  const ok = ex.classify(cand(9, { raw: { site: 'x', item_keys: 'title,url,description,salary' } }));
+  assert.ok('candidate' in ok); assert.equal(ok.candidate.raw.item_keys, 'title,url,description,salary', 'item_keys llega como texto');
+  const long = ex.classify(cand(10, { raw: { item_keys: 'k'.repeat(900) } }));
+  assert.ok('candidate' in long); assert.ok(long.candidate.raw.item_keys.length <= 400, 'acotado');
+  const list = ex.classify(cand(11, { raw: { item_keys: ['title', 'url'] } }));
+  assert.ok('candidate' in list); assert.equal(list.candidate.raw.item_keys, undefined, 'una lista no pasa (por eso se envía como texto)');
+}
+console.log('PASS  ingesta: item_keys llega a la base como texto acotado');
 server.close();

@@ -213,7 +213,7 @@ export function mapItem(item: Record<string, unknown>): Candidate | null {
     location: text(first(item, ['location', 'joblocation', 'city', 'clientcountry'])),
     description: text(first(item, ['description', 'jobdescription', 'descriptiontext', 'snippet'])),
     posted_at: text(first(item, ['dateposted', 'postedat', 'publishedat', 'posteddate', 'published', 'date', 'created', 'listeddate'])),
-    raw: { site: text(first(item, ['site', 'source', 'platform'])) ?? '', job_type: text(first(item, ['jobtype', 'employmenttype'])) ?? '', is_remote: first(item, ['isremote', 'remote']) === true, provider: 'apify', item_keys: Object.keys(item).slice(0, 40),
+    raw: { site: text(first(item, ['site', 'source', 'platform'])) ?? '', job_type: text(first(item, ['jobtype', 'employmenttype'])) ?? '', is_remote: first(item, ['isremote', 'remote']) === true, provider: 'apify', item_keys: Object.keys(item).slice(0, 40).join(','),
       ...(isProject ? { kind: 'freelance_project', budget_text: text(first(item, ['budget', 'budgetrange'])) } : {}) },
   };
 }
