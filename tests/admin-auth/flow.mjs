@@ -1156,6 +1156,11 @@ await step('Muestra por fuente: exige sesión, cuenta lo recogido frente a 1.000
 });
 await step('Direcciones a vigilar: exige sesión, valida por fuente, no duplica, pausa y quita; solo el propietario escribe; el Control de fuentes lo refleja', async () => {
   state.targets = []; state.targetsMissing = false;
+  // El Control de fuentes mide también los portales de Apify (antes los omitía: el catálogo no tiene ningún `apify-*`), sin duplicar ninguno.
+  const control = (await call('/api/admin/source-control')).json; const codes = control.items.map(i => i.source);
+  assert.equal(new Set(codes).size, codes.length, 'ninguna fuente repetida');
+  for (const code of ['apify-company', 'apify-elempleo', 'apify-linkedin', 'apify-tecnoempleo', 'apify-facebook', 'apify-skool', 'apify-telegram']) assert.ok(codes.includes(code), `${code} sale en el Control de fuentes`);
+  assert.ok(control.total >= 90, `el total incluye los portales de Apify (${control.total})`);
   const saved = jar; jar = {}; assert.equal((await call('/api/admin/source-targets')).status, 401); jar = saved;
   const empty = await call('/api/admin/source-targets'); assert.equal(empty.status, 200);
   assert.deepEqual(empty.json.sources.map(s => s.source).sort(), ['apify-facebook', 'apify-skool', 'apify-telegram']); assert.deepEqual(empty.json.targets, []); assert.equal(empty.json.pending, false);

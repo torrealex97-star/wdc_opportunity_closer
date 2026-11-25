@@ -90,6 +90,19 @@ export function classify(input: ControlInput): ControlItem {
   return { ...base, state: 'sin_recoger', owner: 'claude', collected, qualified, cause: health?.state === 'sin_programar' ? health.cause : `Está conectada pero no ha recogido nada en la ventana${input.targets ? ` (tiene ${n(input.targets)} direcciones a vigilar)` : ''}.`, next: health?.state === 'sin_programar' ? health.next : 'Programarla o probarla y revisar su entrada: una fuente conectada que no recoge está mal ajustada.', done: false };
 }
 
+/**
+ * Salud de un portal de Apify a partir de su estado real (`portalViews`). Estos portales no están en el catálogo de fuentes, así que sin esto
+ * el Control de fuentes los omitía (27 portales, justo los de pago). Lo que no se pudo leer es `null` («—»): nunca se dice «conectada» por defecto.
+ */
+export function apifyPortalHealth(input: { source: string; hasKey: boolean; known: boolean; view: { state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; detail: string; daily: boolean } | null }): SourceHealth | null {
+  const { source, hasKey, known, view } = input;
+  if (!hasKey) return { source, state: 'sin_clave', cause: 'Falta la clave de Apify: ninguna búsqueda de pago puede arrancar.', next: 'Guardarla en APIs → Apify.' };
+  if (!known || !view) return null;
+  if (view.state === 'down') return { source, state: 'mal_conectada', cause: `Ningún buscador de este portal funciona: ${view.detail}`, next: 'Revisar sus buscadores en Búsqueda automática o añadir uno nuevo.' };
+  if ((view.state === 'new' || view.state === 'off') && !view.daily) return { source, state: 'sin_programar', cause: 'Tiene la vía lista pero ningún buscador programado a diario y nunca ha recogido.', next: 'Activar su búsqueda diaria en Búsqueda automática.' };
+  return { source, state: 'conectada', cause: 'Tiene buscador y no se ve ningún fallo.', next: 'Nada que hacer: seguir midiendo.' };
+}
+
 const ORDER: ControlState[] = ['rota', 'recoge_sin_cualificar', 'sin_recoger', 'necesita_dato', 'sin_via', 'cualificadas'];
 const empty = (): Record<ControlState, number> => ({ cualificadas: 0, recoge_sin_cualificar: 0, sin_recoger: 0, rota: 0, necesita_dato: 0, sin_via: 0 });
 

@@ -3,7 +3,10 @@ import { pagedRest } from './supabaseAuth';
 import { readSamples } from './sourceSample';
 import { routesForCatalog } from './sourceRoutes';
 import { kindOf, type SourceKind } from './sourceKinds';
-import { summarize, type ControlInput, type ControlSummary } from './sourceControl';
+import { apifyPortalHealth, summarize, type ControlInput, type ControlSummary } from './sourceControl';
+import { PORTALS } from './apifyCatalog';
+import { apifyToken, listActors, listRuns } from './apify';
+import { portalViews } from './apifyAuto';
 import { activeCounts } from './sourceTargetsStore';
 import { TARGET_SOURCES } from './sourceTargets';
 
@@ -45,7 +48,7 @@ export async function reasonsBySource(now = Date.now(), days = WINDOW_DAYS): Pro
 export type SourceControlPayload = ControlSummary & { window_days: number; generated_at: string; recent_note: string | null };
 
 export async function loadSourceControl(): Promise<SourceControlPayload | null> {
-  const [samples, recent, reasons, targets] = await Promise.all([readSamples(), recentBySource(), reasonsBySource(), activeCounts()]);
+  const [samples, recent, reasons, targets, actors, runs, token] = await Promise.all([readSamples(), recentBySource(), reasonsBySource(), activeCounts(), listActors().catch(() => null), listRuns(200).catch(() => null), apifyToken().catch(() => null)]);
   if (!samples) return null;
   const catalog = (await import('./sourceCatalog.json')).default as CatalogEntry[];
   const routes = routesForCatalog(catalog as never);
@@ -58,6 +61,19 @@ export async function loadSourceControl(): Promise<SourceControlPayload | null> 
       reasons: reasons ? reasons.get(row.source) ?? [] : null, drafts7: window ? window.drafts : null,
       targets: TARGET_SOURCES[row.source] ? (targets ? targets.get(row.source) ?? 0 : null) : undefined };
   });
+  // Los portales de Apify no están en el catálogo de fuentes (69 códigos, ningún `apify-*`): antes el control los omitía en silencio, justo
+  // las fuentes de pago que más recogen. Se miden igual que el resto: ofertas vistas y aprobadas en la ventana y salud real del portal.
+  const known = actors !== null && runs !== null;
+  const views = known ? new Map(portalViews(actors!, runs!).map(v => [v.id, v])) : null;
+  for (const portal of PORTALS) {
+    if (byCode.has(portal.source)) continue;
+    const view = views?.get(portal.id) ?? null;
+    const window = recent ? recent.get(portal.source) ?? { seen: 0, approved: 0, drafts: 0 } : null;
+    inputs.push({ source: portal.source, name: portal.name, kind: 'pago', engine: null,
+      health: apifyPortalHealth({ source: portal.source, hasKey: Boolean(token), known, view: view ? { state: view.state, detail: view.detail, daily: view.daily } : null }),
+      seen7: window ? window.seen : null, approved7: window ? window.approved : null, reasons: reasons ? reasons.get(portal.source) ?? [] : null, drafts7: window ? window.drafts : null,
+      targets: TARGET_SOURCES[portal.source] ? (targets ? targets.get(portal.source) ?? 0 : null) : undefined });
+  }
   return {
     ...summarize(inputs), window_days: WINDOW_DAYS, generated_at: new Date().toISOString(),
     recent_note: recent ? null : `No se pudo leer lo que entró en los últimos ${WINDOW_DAYS} días: las fuentes que no son del motor salen sin medir («—»), no en cero.`,

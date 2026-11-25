@@ -1,7 +1,7 @@
 // Control total de fuentes (2026-11-24): cada fuente cae en un estado medido; lo que no cualifica se marca «a trabajar» con causa, siguiente paso y dueño.
 // node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/sourcecontrol.mjs
 import assert from 'node:assert/strict';
-const { classify, summarize, BLOCKED, REASONS } = await import('../../apps/web/lib/sourceControl.ts');
+const { classify, summarize, BLOCKED, REASONS, apifyPortalHealth } = await import('../../apps/web/lib/sourceControl.ts');
 let passed = 0, failed = 0;
 const step = async (name, fn) => { try { await fn(); passed++; console.log(`PASS  ${name}`); } catch (err) { failed++; console.log(`FAIL  ${name}\n      ${err.message}`); } };
 const base = (over = {}) => ({ source: 's', name: 'S', kind: 'pago', health: { source: 's', state: 'conectada', cause: 'ok', next: 'nada' }, seen7: 0, approved7: 0, engine: null, ...over });
@@ -15,6 +15,18 @@ await step('direcciones a vigilar: con ≥1 activa Facebook/Skool/Telegram dejan
     const seen = classify(base({ source: code, targets: 2, seen7: 5, approved7: 0 })); assert.equal(seen.state, 'recoge_sin_cualificar', 'recoge y no cualifica: sigue el camino normal');
   }
   assert.equal(classify(base({ source: 'apify-reddit', targets: 3 })).state, 'sin_via', 'las direcciones no desbloquean fuentes que no las usan');
+});
+
+await step('portales de Apify: su salud sale del estado real (sin clave, sin leer, caído, sin programar, funcionando); lo que no se pudo leer es null, nunca «conectada»', () => {
+  const view = (state, over = {}) => ({ state, detail: 'detalle', daily: true, ...over });
+  const h = (over) => apifyPortalHealth({ source: 'apify-x', hasKey: true, known: true, view: view('ok'), ...over });
+  assert.equal(h({ hasKey: false }).state, 'sin_clave'); assert.match(h({ hasKey: false }).next, /APIs/);
+  assert.equal(h({ known: false }), null, 'actores o ejecuciones sin leer: no se afirma nada'); assert.equal(h({ view: null }), null);
+  const down = h({ view: view('down', { detail: 'HTTP 400 en los tres' }) }); assert.equal(down.state, 'mal_conectada'); assert.match(down.cause, /HTTP 400/);
+  assert.equal(h({ view: view('new', { daily: false }) }).state, 'sin_programar'); assert.equal(h({ view: view('off', { daily: false }) }).state, 'sin_programar');
+  assert.equal(h({ view: view('new', { daily: true }) }).state, 'conectada', 'programada pero aún sin ejecutar no es un fallo');
+  for (const st of ['ok', 'trying', 'running']) assert.equal(h({ view: view(st) }).state, 'conectada', st);
+  assert.ok(h({}).source === 'apify-x' && h({}).cause.length > 5 && h({}).next.length > 5);
 });
 
 await step('con ofertas cualificadas en la ventana, la fuente está hecha', () => {
