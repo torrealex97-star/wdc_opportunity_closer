@@ -161,6 +161,19 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'POST') { state.waterfallRow = { org_id: body.org_id, qualified_per_day: body.qualified_per_day, updated_by: body.updated_by, updated_at: body.updated_at }; return send(res, 201, null); }
       return send(res, 200, state.waterfallRow ? [state.waterfallRow] : []);
     }
+    // Direcciones a vigilar (tabla `source_targets`): alta con 409 por duplicado, pausa y baja por `id=eq.<uuid>`; `targetsMissing` simula la migración sin aplicar.
+    if (url.pathname === '/rest/v1/source_targets') {
+      if (state.targetsMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.source_targets' in the schema cache" });
+      state.targets ??= [];
+      const id = (url.searchParams.get('id') ?? '').replace(/^eq\./, '');
+      if (req.method === 'GET') return send(res, 200, state.targets.filter(t => t.org_id === 'cloud-wdc'));
+      if (req.method === 'POST') {
+        if (state.targets.some(t => t.org_id === body.org_id && t.source === body.source && t.url === body.url)) return send(res, 409, { code: '23505', message: 'duplicate key value' });
+        const row = { id: globalThis.crypto.randomUUID(), enabled: true, created_at: new Date().toISOString(), ...body }; state.targets.push(row); return send(res, 201, [row]);
+      }
+      if (req.method === 'PATCH') { const row = state.targets.find(t => t.id === id); if (!row) return send(res, 200, []); Object.assign(row, body); return send(res, 200, [row]); }
+      if (req.method === 'DELETE') { const i = state.targets.findIndex(t => t.id === id); if (i < 0) return send(res, 200, []); const [row] = state.targets.splice(i, 1); return send(res, 200, [row]); }
+    }
     // Voz: consumo y incidencias de proveedor (tablas `voice_usage` y `voice_provider_events`); vacías, como la base recién migrada.
     if (url.pathname === '/rest/v1/voice_usage') return send(res, 200, req.method === 'GET' ? (state.voiceUsage ?? []) : null);
     if (url.pathname === '/rest/v1/voice_provider_events') return send(res, req.method === 'GET' ? 200 : 201, req.method === 'GET' ? (state.voiceEvents ?? []) : null);

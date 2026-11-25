@@ -16,6 +16,8 @@ export type ControlInput = {
   engine: EngineView | null;
   /** Motivos de descarte de lo revisado en la ventana (`auto_review.why`) y borradores que siguen sin juzgar (`null` = no se pudo leer). */
   reasons?: Array<{ why: string; n: number }> | null; drafts7?: number | null;
+  /** Direcciones a vigilar activas de la fuente (Fuentes → «Direcciones a vigilar»); `null` = no se pudieron leer, `undefined` = la fuente no las usa. */
+  targets?: number | null;
 };
 export type ControlItem = {
   source: string; name: string; kind: SourceKind; state: ControlState; owner: Owner | null;
@@ -28,10 +30,10 @@ export type ControlSummary = {
 };
 
 /** Fuentes que NO pueden dar ofertas por causas conocidas, con su motivo y de quién es el siguiente paso (así dejan de parecer fallos sin dueño). */
-export const BLOCKED: Record<string, { state: 'necesita_dato' | 'sin_via'; owner: Owner; why: string; next: string }> = {
-  'apify-facebook': { state: 'necesita_dato', owner: 'propietario', why: 'El actor exige las direcciones de los grupos de Facebook que hay que mirar.', next: 'Pasar las URLs de los grupos y las añado a su búsqueda.' },
-  'apify-skool': { state: 'necesita_dato', owner: 'propietario', why: 'El actor exige las direcciones de las comunidades de Skool.', next: 'Pasar las URLs de las comunidades.' },
-  'apify-telegram': { state: 'necesita_dato', owner: 'propietario', why: 'El actor exige los canales de Telegram que hay que leer.', next: 'Pasar los canales (nombre o enlace).' },
+export const BLOCKED: Record<string, { state: 'necesita_dato' | 'sin_via'; owner: Owner; why: string; next: string; /** Se desbloquea al añadir direcciones a vigilar. */ needsTargets?: boolean }> = {
+  'apify-facebook': { state: 'necesita_dato', owner: 'propietario', needsTargets: true, why: 'El actor exige las direcciones de los grupos de Facebook que hay que mirar.', next: 'Añade los grupos en Fuentes → «Direcciones a vigilar» (puedes quitarlos o cambiarlos cuando quieras).' },
+  'apify-skool': { state: 'necesita_dato', owner: 'propietario', needsTargets: true, why: 'El actor exige las direcciones de las comunidades de Skool.', next: 'Añade las comunidades en Fuentes → «Direcciones a vigilar». El acceso de miembro, si el actor lo pide, se guarda como clave.' },
+  'apify-telegram': { state: 'necesita_dato', owner: 'propietario', needsTargets: true, why: 'El actor exige los canales de Telegram que hay que leer.', next: 'Añade los canales (nombre o enlace) en Fuentes → «Direcciones a vigilar».' },
   'apify-reddit': { state: 'sin_via', owner: 'claude', why: 'Devuelve publicaciones, no ofertas de empleo.', next: 'Decidir si se retira del catálogo con su motivo o se filtra por subreddit de empleo.' },
 };
 
@@ -60,7 +62,14 @@ export function classify(input: ControlInput): ControlItem {
   const collected = engine ? engine.catalog : input.seen7;
   const qualified = engine ? engine.eligible : input.approved7;
   const blocked = BLOCKED[source];
-  if (blocked && (qualified ?? 0) === 0) return { ...base, state: blocked.state, owner: blocked.owner, collected, qualified, cause: blocked.why, next: blocked.next, done: false };
+  // Con ≥1 dirección a vigilar activa la fuente deja de estar bloqueada por falta de dato y se mide como cualquier otra.
+  const unblocked = Boolean(blocked?.needsTargets) && (input.targets ?? 0) > 0;
+  if (blocked && !unblocked && (qualified ?? 0) === 0) {
+    const unread = Boolean(blocked.needsTargets) && input.targets === null;
+    return { ...base, state: blocked.state, owner: blocked.owner, collected, qualified,
+      cause: unread ? 'No se pudieron leer las direcciones a vigilar: no se sabe si la fuente tiene dónde mirar.' : blocked.why,
+      next: unread ? 'Mirar si la base responde (¿falta aplicar la migración de direcciones?) y reintentar.' : blocked.next, done: false };
+  }
   if (health?.state === 'sin_via') return { ...base, state: 'sin_via', owner: 'claude', collected, qualified, cause: health.cause, next: health.next, done: false };
   if (health?.state === 'sin_clave') return { ...base, state: 'necesita_dato', owner: 'propietario', collected, qualified, cause: health.cause, next: health.next, done: false };
   if (health?.state === 'mal_conectada') return { ...base, state: 'rota', owner: 'claude', collected, qualified, cause: health.cause, next: health.next, done: false };
@@ -78,7 +87,20 @@ export function classify(input: ControlInput): ControlItem {
       : 'Ver qué regla la descarta (rol, mercado, idioma, enlace o puntuación) y corregir su búsqueda, su filtro o su extracción.';
     return { ...base, state: 'recoge_sin_cualificar', owner: 'claude', collected, qualified, cause: `${parts.join('; ')}.`, next, done: false };
   }
-  return { ...base, state: 'sin_recoger', owner: 'claude', collected, qualified, cause: health?.state === 'sin_programar' ? health.cause : 'Está conectada pero no ha recogido nada en la ventana.', next: health?.state === 'sin_programar' ? health.next : 'Programarla o probarla y revisar su entrada: una fuente conectada que no recoge está mal ajustada.', done: false };
+  return { ...base, state: 'sin_recoger', owner: 'claude', collected, qualified, cause: health?.state === 'sin_programar' ? health.cause : `Está conectada pero no ha recogido nada en la ventana${input.targets ? ` (tiene ${n(input.targets)} direcciones a vigilar)` : ''}.`, next: health?.state === 'sin_programar' ? health.next : 'Programarla o probarla y revisar su entrada: una fuente conectada que no recoge está mal ajustada.', done: false };
+}
+
+/**
+ * Salud de un portal de Apify a partir de su estado real (`portalViews`). Estos portales no están en el catálogo de fuentes, así que sin esto
+ * el Control de fuentes los omitía (27 portales, justo los de pago). Lo que no se pudo leer es `null` («—»): nunca se dice «conectada» por defecto.
+ */
+export function apifyPortalHealth(input: { source: string; hasKey: boolean; known: boolean; view: { state: 'off' | 'new' | 'running' | 'ok' | 'trying' | 'down'; detail: string; daily: boolean } | null }): SourceHealth | null {
+  const { source, hasKey, known, view } = input;
+  if (!hasKey) return { source, state: 'sin_clave', cause: 'Falta la clave de Apify: ninguna búsqueda de pago puede arrancar.', next: 'Guardarla en APIs → Apify.' };
+  if (!known || !view) return null;
+  if (view.state === 'down') return { source, state: 'mal_conectada', cause: `Ningún buscador de este portal funciona: ${view.detail}`, next: 'Revisar sus buscadores en Búsqueda automática o añadir uno nuevo.' };
+  if ((view.state === 'new' || view.state === 'off') && !view.daily) return { source, state: 'sin_programar', cause: 'Tiene la vía lista pero ningún buscador programado a diario y nunca ha recogido.', next: 'Activar su búsqueda diaria en Búsqueda automática.' };
+  return { source, state: 'conectada', cause: 'Tiene buscador y no se ve ningún fallo.', next: 'Nada que hacer: seguir midiendo.' };
 }
 
 const ORDER: ControlState[] = ['rota', 'recoge_sin_cualificar', 'sin_recoger', 'necesita_dato', 'sin_via', 'cualificadas'];

@@ -4,6 +4,8 @@ import { ingest, MAX_CANDIDATES, ORG, type Candidate } from './external';
 import { getSecret } from './integrations';
 import { budgetLimitUsd } from './paidBudget';
 import { serviceRest } from './supabaseAuth';
+import { activeUrls } from './sourceTargetsStore';
+import { TARGET_SOURCES, targetName } from './sourceTargets';
 
 // Actores de Apify: el scraping corre en la infraestructura de Apify (con sus proxies), no en la nuestra, y los
 // resultados se recogen por lotes en el catálogo externo. De pago por uso: desactivado por defecto, con límites por
@@ -44,7 +46,7 @@ export async function fetchSchema(actor: string, token: string): Promise<{ prope
   return schema?.properties ? { properties: schema.properties, required: schema.required ?? [] } : null;
 }
 
-type Vars = { query: string; location: string; country: string; max_items: number; hours_old: number; sites: string[] };
+type Vars = { query: string; location: string; country: string; max_items: number; hours_old: number; sites: string[]; /** Direcciones activas de la fuente (Fuentes → «Direcciones a vigilar»). */ start_urls?: string[]; /** Su nombre corto (canal, grupo): lo que piden algunos actores en vez de una URL. */ target_names?: string[] };
 const SYNONYMS: Record<keyof Vars, string[]> = {
   query: ['searchterm', 'searchterms', 'search', 'searchquery', 'query', 'keyword', 'keywords', 'jobtitle', 'jobtitles', 'position'],
   location: ['location', 'locations', 'city', 'where'],
@@ -52,7 +54,13 @@ const SYNONYMS: Record<keyof Vars, string[]> = {
   max_items: ['resultswanted', 'maxitems', 'maxresults', 'maxjobs', 'limit', 'numberofresults', 'resultslimit'],
   hours_old: ['hoursold', 'maxhoursold', 'hoursago'],
   sites: ['sitename', 'sitenames', 'sites', 'jobboards', 'boards', 'platforms'],
+  start_urls: ['starturls', 'starturl', 'urls', 'directurls', 'pageurls', 'groupurls'],
+  target_names: ['profiles', 'channels', 'usernames', 'handles'],
 };
+/** Campos del esquema de un actor que se rellenan con las direcciones a vigilar. */
+const TARGET_FIELDS = new Set([...SYNONYMS.start_urls, ...SYNONYMS.target_names]);
+export const targetFields = (missing: string[]): string[] => missing.filter(k => TARGET_FIELDS.has(norm(k)));
+export const NO_TARGETS_MESSAGE = 'Esta fuente necesita direcciones: añádelas en Fuentes → «Direcciones a vigilar» y vuelve a probar.';
 /** ISO de dos letras → nombre en inglés (los buscadores con lista cerrada de países piden uno u otro). */
 export const COUNTRY_NAMES: Record<string, string> = { ES: 'Spain', MX: 'Mexico', CO: 'Colombia', AR: 'Argentina', CL: 'Chile', PE: 'Peru', US: 'United States', VE: 'Venezuela', EC: 'Ecuador', PA: 'Panama' };
 const NAME_TO_ISO = Object.fromEntries(Object.entries(COUNTRY_NAMES).map(([iso, name]) => [name.toLowerCase(), iso]));
@@ -92,7 +100,15 @@ export function fitText(text: string, max: number): string {
 export function adaptInput(schema: { properties: Record<string, Prop>; required: string[] }, vars: Vars): { input: Record<string, unknown>; missing: string[] } {
   const input: Record<string, unknown> = {}; const byNorm = new Map(Object.keys(schema.properties).map(k => [norm(k), k]));
   for (const [name, synonyms] of Object.entries(SYNONYMS) as Array<[keyof Vars, string[]]>) {
-    const key = synonyms.map(s => byNorm.get(s)).find(Boolean); if (key) { const value = coerce(vars[name], schema.properties[key]); if (value !== undefined) input[key] = value; }
+    const key = synonyms.map(s => byNorm.get(s)).find(Boolean); if (!key) continue;
+    const raw = vars[name]; if (raw === undefined) continue; const prop = schema.properties[key];
+    // Direcciones y nombres a vigilar: la forma la decide el esquema del actor (lista de objetos {url}, de textos o un solo valor).
+    if (name === 'start_urls' || name === 'target_names') {
+      const list = raw as string[]; if (!list.length) continue;
+      input[key] = prop.type === 'array' ? (name === 'start_urls' && prop.items?.type !== 'string' ? list.map(url => ({ url })) : list) : list[0];
+      continue;
+    }
+    const value = coerce(raw, prop); if (value !== undefined) input[key] = value;
   }
   const proxy = byNorm.get('proxyconfiguration'); if (proxy && schema.properties[proxy].type === 'object') input[proxy] = { useApifyProxy: true };
   const missing = schema.required.filter(k => input[k] === undefined && schema.properties[k]?.default === undefined);
@@ -101,6 +117,10 @@ export function adaptInput(schema: { properties: Record<string, Prop>; required:
 
 export function fillTemplate(template: unknown, vars: Vars): unknown {
   if (typeof template === 'string') {
+    // Direcciones a vigilar: lista de objetos {url} (startUrls de Apify), de textos o sus nombres cortos; vacía si no hay.
+    if (template === '{{start_urls}}') return (vars.start_urls ?? []).map(url => ({ url }));
+    if (template === '{{start_urls_text}}') return vars.start_urls ?? [];
+    if (template === '{{target_names}}') return vars.target_names ?? [];
     const derived = (k: string): string | number | string[] | undefined => {
       const iso = isoOf(vars.country ?? 'Spain');
       return k === 'country_slug' ? (COUNTRY_NAMES[iso] ?? String(vars.country)).toLowerCase() : k === 'country_lc' ? iso.toLowerCase() : k === 'country_iso' ? iso : k === 'country_name' ? COUNTRY_NAMES[iso] ?? String(vars.country) : vars[k as keyof Vars];
@@ -145,10 +165,15 @@ export async function startRun(actor: ActorRow, by: string, publicBase: string, 
   if (spent + RESERVE_USD > limit) return { ok: false, error: `Presupuesto mensual agotado (${spent.toFixed(2)} de ${limit} USD). Súbelo en Apify → «Límite de gasto del mes».` };
   if (runs?.some(r => r.actor_id === actor.id && r.status === 'RUNNING' && Date.now() - Date.parse(r.started_at) < 2 * 3600 * 1000)) return { ok: false, error: 'Ya hay una ejecución en curso de este actor.' };
   const vars = varsFor(actor, opts.vars); let input: Record<string, unknown>;
+  // Fuentes que esperan direcciones (Facebook, Skool, Telegram): se leen las activas; sin tabla o sin respuesta, «sin direcciones».
+  const urls = TARGET_SOURCES[actor.source] ? await activeUrls(actor.source) : [];
+  if (urls.length) { vars.start_urls = urls; vars.target_names = urls.map(targetName).filter(Boolean); }
+  if (actor.input_template && /\{\{(start_urls|start_urls_text|target_names)\}\}/.test(JSON.stringify(actor.input_template)) && !urls.length) return { ok: false, error: NO_TARGETS_MESSAGE };
   if (actor.input_template) input = fillTemplate(actor.input_template, vars) as Record<string, unknown>;
   else {
     const schema = await fetchSchema(actor.actor, token); if (!schema) return { ok: false, error: 'No se pudo leer el esquema de entrada del actor. Pega una plantilla de entrada.' };
     const adapted = adaptInput(schema, vars);
+    if (targetFields(adapted.missing).length && !urls.length) return { ok: false, error: NO_TARGETS_MESSAGE };
     if (adapted.missing.length) return { ok: false, error: `El actor exige campos que no sé rellenar (${adapted.missing.join(', ')}). Pega una plantilla de entrada con ellos.` };
     input = adapted.input;
   }

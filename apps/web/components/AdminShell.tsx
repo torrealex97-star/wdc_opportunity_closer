@@ -4,6 +4,7 @@ import { Activity, BriefcaseBusiness, Building2, CloudCog, Globe2, ChevronRight,
 import CloudAdminPanel from './CloudAdminPanel';
 import EngineAlertBanner from './EngineAlertBanner';
 import ApifyTab from './ApifyTab';
+import SourceTargets from './SourceTargets';
 import ApisTab from './ApisTab';
 import VoicePanel from './VoicePanel';
 import CatalogTab from './CatalogTab';
@@ -263,7 +264,7 @@ export default function AdminShell() {
         {tab === 'inbox' && <ExternalTab embedded owner={me.role === 'owner'} onSessionLost={lost} />}
         {tab === 'quick' && <QuickReview onSessionLost={lost} />}
         {tab === 'external' && <ExternalTab owner={me.role === 'owner'} onSessionLost={lost} />}
-        {tab === 'apify' && <ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} />}
+        {tab === 'apify' && <><ApifyTab owner={me.role === 'owner'} onSessionLost={lost} goApis={() => go('apis')} /><SourceTargets owner={me.role === 'owner'} onSessionLost={lost} /></>}
         {tab === 'review' && <CloudAdminPanel onSessionLost={lost} />}
         {tab === 'catalog' && <CatalogTab onSessionLost={lost} />}
         {tab === 'engine' && <SourcesEngine onSessionLost={lost} go={go} />}

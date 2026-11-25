@@ -330,6 +330,23 @@ await step('Búsqueda automática (modo sencillo): portales en lenguaje llano, p
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   state.apifyFailActors = new Set();
 });
+await step('Direcciones a vigilar: tres fuentes sin direcciones lo dicen; se añade, pausa y quita un canal; un error se explica; sin desbordar', async () => {
+  await openTab(page, 'apify'); const box = page.getByTestId('source-targets'); await box.waitFor();
+  const text = await box.innerText();
+  for (const label of ['Facebook · grupos y páginas', 'Skool · comunidades', 'Telegram · canales públicos']) assert.ok(text.includes(label), label);
+  assert.equal((text.match(/Sin direcciones activas/g) ?? []).length, 3, 'las tres lo dicen en vez de mostrar un 0');
+  const tg = page.getByTestId('targets-apify-telegram'); const form = page.getByTestId('target-form-apify-telegram');
+  await form.getByLabel('Dirección').fill('@empleo_closers_es'); await form.getByLabel('Nota (opcional)').fill('Canal de prueba');
+  await form.getByRole('button', { name: 'Añadir' }).click();
+  const row = tg.locator('tbody tr', { hasText: 'https://t.me/empleo_closers_es' }); await row.waitFor();
+  assert.match(await row.innerText(), /Canal de prueba[\s\S]*Activa/); assert.match(await tg.innerText(), /1 activa/);
+  await row.getByRole('button', { name: /^Pausar/ }).click(); await row.getByText('Pausada').waitFor(); assert.match(await tg.innerText(), /Sin direcciones activas/, 'pausada no cuenta como activa');
+  const fb = page.getByTestId('target-form-apify-facebook'); await fb.getByLabel('Dirección').fill('http://facebook.com/groups/x'); await fb.getByRole('button', { name: 'Añadir' }).click();
+  await page.getByTestId('targets-apify-facebook').getByRole('alert').waitFor(); assert.match(await page.getByTestId('targets-apify-facebook').getByRole('alert').innerText(), /https/);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin desbordamiento horizontal');
+  await row.getByRole('button', { name: /^Quitar/ }).click(); await row.waitFor({ state: 'detached' });
+  assert.equal((await box.innerText()).includes('https://t.me/empleo_closers_es'), false, 'quitada de verdad');
+});
 await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su perfil con consentimiento y el enlace de su vídeo', async () => {
   await page.getByRole('button', { name: 'Alumnas' }).click(); await page.getByRole('heading', { name: 'Alumnas con acceso.' }).waitFor();
   await page.getByLabel('Invitar a una alumna').fill('lucia@alumna.dev'); await page.getByRole('button', { name: 'Enviar invitación' }).click();
