@@ -1,3 +1,10 @@
+## Migración `source_targets` aplicada en la base real (2026-11-25)
+
+- **Aplicada** con `apply_migration` tras la prueba `BEGIN…ROLLBACK` (orden expresa del propietario); #181 fusionada (`a89a5d7`).
+- **Comprobado (*verified* contra la base real, 07:44 UTC):** `to_regclass('public.source_targets')` = `source_targets`, RLS activada, 0 políticas, `anon` y `authenticated` sin `SELECT`, 0 filas.
+- **Advisors:** seguridad: solo el INFO `rls_enabled_no_policy` que ya comparten 27 tablas de servicio (intencionado); rendimiento: INFO `unused_index` del índice nuevo (tabla vacía, esperado). Sin hallazgos nuevos de nivel WARN/ERROR.
+- **NO está hecho:** Facebook/Skool/Telegram siguen «necesita dato» hasta que el propietario añada direcciones reales; el Control en producción lista los 27 portales de Apify solo tras el despliegue de `main` (no medido aún). Se retira la ficha `claude-direcciones-vigilar`.
+
 ## Direcciones a vigilar editables y el Control de fuentes que omitía los 27 portales de Apify (2026-11-25)
 
 - **Fallo mío de #174 (descubierto al probar esta rama):** el Control de fuentes («control total») solo medía las 69 fuentes de `sourceCatalog.json`, y ese catálogo **no contiene ningún `apify-*`**. Los **27 portales de Apify** (empresas, LinkedIn, Elempleo, Tecnoempleo, Indeed, Facebook, Skool, Telegram…) **no salían en el control**: justo las fuentes de pago que más recogen (base real, 3 h del 2026-11-24: Tecnoempleo 100, Trabajos 10, Indeed 10, Infoempleo 10, Elempleo 10, Talent 9). El «X de N fuentes» y los estados «necesita dato» de Facebook/Skool/Telegram de #174 **nunca se veían**.
