@@ -7,15 +7,15 @@ begin;
   insert into public.source_targets (org_id, source, kind, url, label) values ('test-org', 'apify-telegram', 'telegram_channel', 'https://t.me/empleo_closers', 'Closers España');
   do $$ begin
     if (select enabled from public.source_targets where org_id = 'test-org') is not true then raise exception 'debía nacer activa'; end if;
-    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-telegram', 'telegram_channel', 'https://t.me/empleo_closers'); raise exception 'duplicado aceptado'
+    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-telegram', 'telegram_channel', 'https://t.me/empleo_closers'); raise exception 'duplicado aceptado';
     exception when unique_violation then null; end;
-    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'facebook_group', 'http://facebook.com/groups/x'); raise exception 'http aceptado'
+    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'facebook_group', 'http://facebook.com/groups/x'); raise exception 'http aceptado';
     exception when check_violation then null; end;
-    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'otra_cosa', 'https://facebook.com/groups/x'); raise exception 'tipo desconocido aceptado'
+    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'otra_cosa', 'https://facebook.com/groups/x'); raise exception 'tipo desconocido aceptado';
     exception when check_violation then null; end;
-    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'Fuente Mala', 'facebook_group', 'https://facebook.com/groups/x'); raise exception 'código de fuente inválido aceptado'
+    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'Fuente Mala', 'facebook_group', 'https://facebook.com/groups/x'); raise exception 'código de fuente inválido aceptado';
     exception when check_violation then null; end;
-    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'facebook_group', 'https://' || repeat('a', 600)); raise exception 'URL de más de 500 caracteres aceptada'
+    begin insert into public.source_targets (org_id, source, kind, url) values ('test-org', 'apify-facebook', 'facebook_group', 'https://' || repeat('a', 600)); raise exception 'URL de más de 500 caracteres aceptada';
     exception when check_violation then null; end;
   end $$;
   -- la misma URL en otra fuente u otra organización sí es válida

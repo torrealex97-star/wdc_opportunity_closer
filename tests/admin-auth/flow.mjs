@@ -1189,9 +1189,9 @@ await step('Direcciones a vigilar: exige sesión, valida por fuente, no duplica,
   for (const [method, body] of [['POST', { source: 'apify-telegram', url: '@empleo_closers' }], ['PATCH', { id, enabled: true }], ['DELETE', { id }]]) assert.equal((await call('/api/admin/source-targets', { method, body })).status, 403, method);
   jar = keep;
   // Tope por fuente.
-  for (let i = 1; i < 30; i++) assert.equal((await post('apify-telegram', `@canal_empleo_${String(i).padStart(2, '0')}`)).status, 201, `canal ${i}`);
-  const over = await post('apify-telegram', '@canal_empleo_30'); assert.equal(over.status, 422); assert.match(over.json.detail, /Máximo 30/);
-  assert.equal((await call('/api/admin/source-targets')).json.targets.filter(t => t.source === 'apify-telegram').length, 29);
+  for (let i = 1; i <= 30; i++) assert.equal((await post('apify-telegram', `@canal_empleo_${String(i).padStart(2, '0')}`)).status, 201, `canal ${i}`);
+  const over = await post('apify-telegram', '@canal_empleo_31'); assert.equal(over.status, 422); assert.match(over.json.detail, /Máximo 30/);
+  assert.equal((await call('/api/admin/source-targets')).json.targets.filter(t => t.source === 'apify-telegram').length, 30, 'el 31.º no se guardó');
   // Quitar: una vez; la segunda ya no existe.
   assert.equal((await call('/api/admin/source-targets', { method: 'DELETE', body: { id } })).status, 200); assert.equal((await call('/api/admin/source-targets', { method: 'DELETE', body: { id } })).status, 404);
   // Migración sin aplicar: lo dice, no guarda y el Control de fuentes no afirma que falten direcciones.
