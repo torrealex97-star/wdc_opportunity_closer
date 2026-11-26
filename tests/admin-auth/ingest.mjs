@@ -72,4 +72,10 @@ console.log('PASS  ingesta: caída total lanza error; un 400 no se reintenta');
   assert.ok('candidate' in list); assert.equal(list.candidate.raw.item_keys, undefined, 'una lista no pasa (por eso se envía como texto)');
 }
 console.log('PASS  ingesta: item_keys llega a la base como texto acotado');
+// 7) Una publicación de red convertida en oferta: `kind` y `author` tienen que LLEGAR (la lista de campos permitidos los dejaba fuera) y el autor se acota
+{
+  const post = ex.classify(cand(12, { raw: { site: '', provider: 'apify', kind: 'social_post', author: 'A'.repeat(300), item_keys: 'text,url' } }));
+  assert.ok('candidate' in post); assert.equal(post.candidate.raw.kind, 'social_post', 'kind llega'); assert.equal(post.candidate.raw.author.length, 120, 'autor acotado');
+}
+console.log('PASS  ingesta: kind y author de una publicación llegan acotados');
 server.close();

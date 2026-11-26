@@ -1,3 +1,4 @@
+import { POST_TEXT_KEYS, JOB_KEYS, headline, offersSalesJob } from './socialPosts';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { ingest, MAX_CANDIDATES, ORG, type Candidate } from './external';
@@ -197,8 +198,22 @@ export async function startRun(actor: ActorRow, by: string, publicBase: string, 
 // ---- elementos del dataset -> candidatos ----
 const text = (v: unknown): string | null => typeof v === 'string' ? v : typeof v === 'number' ? String(v) : v && typeof v === 'object' ? Object.values(v as Record<string, unknown>).filter(x => typeof x === 'string' && x).join(', ') || null : null;
 export function mapItem(item: Record<string, unknown>): Candidate | null {
+  // Publicación de una red (sin campos de oferta de empleo): solo vale si ofrece trabajo de ventas; el texto va tal cual.
+  const body = first(item, POST_TEXT_KEYS), isPost = typeof body === 'string' && !first(item, JOB_KEYS);
+  // En una publicación el enlace del POST (permalink…) va antes que `url`, que en algunos actores es el del grupo; el del grupo es el último recurso.
+  const url = text(first(item, isPost ? ['posturl', 'permalink', 'postlink', 'messageurl', 'contenturl', 'url', 'link', 'facebookurl'] : ['joburldirect', 'jobdirecturl', 'applyurl', 'joburl', 'jobpostingurl', 'url', 'link']));
+  if (isPost) {
+    const given = text(first(item, ['title'])); // `name` suele ser el grupo o el autor, no el puesto
+    const title = given && given.length >= 5 ? given : headline(body as string);
+    if (!title || !url || !offersSalesJob(`${title}\n${body as string}`)) return null;
+    const user = first(item, ['user', 'author']), author = text(first(item, ['authorname', 'username', 'pagename', 'channelname', 'channel'])) ?? (user && typeof user === 'object' ? text((user as Record<string, unknown>).name) : text(user));
+    return {
+      external_id: text(first(item, ['postid', 'messageid', 'legacyid', 'id'])) ?? url, title, url, salary: null, company: null, location: null,
+      description: body as string, posted_at: text(first(item, ['posteddate', 'postedat', 'publishedat', 'createdat', 'time', 'timestamp', 'date', 'created', 'createdutc'])),
+      raw: { site: text(first(item, ['site', 'source', 'platform'])) ?? '', job_type: '', is_remote: false, provider: 'apify', kind: 'social_post', ...(author ? { author } : {}), item_keys: Object.keys(item).slice(0, 40).join(',') },
+    };
+  }
   const title = text(first(item, ['title', 'jobtitle', 'positiontitle', 'positionname', 'position', 'jobname', 'name']));
-  const url = text(first(item, ['joburldirect', 'jobdirecturl', 'applyurl', 'joburl', 'jobpostingurl', 'url', 'link']));
   if (!title || !url) return null;
   // Proyecto de marketplace (Workana, Freelancer…): el importe es un PRESUPUESTO por proyecto, no un
   // sueldo. La spec P04B lo prohíbe («salario/potencial no se infiere de presupuesto»), así que no se
