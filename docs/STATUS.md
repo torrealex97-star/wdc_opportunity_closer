@@ -1,3 +1,11 @@
+## Medición del cron de las 06:00 UTC (2026-11-26, solo lectura)
+
+- **Medido en la base real (*verified*; `external_offers` por `last_seen_at` de las últimas 24 h, `apify_runs`):** Jooble 215 vistas / 68 aprobadas; Apify Indeed 148 / 52 aprobadas (1 ejecución, 148 elementos, 0,89 US$); Bright Data LinkedIn 30 / 6; JSearch 10 / 10; Google Jobs 10 / 6; empresas 9 / 1 (7 sin descripción).
+- **Medido pero SIN concluir:** `apify-company` (greenhouse de Fantastic.jobs), `apify-linkedin`, `apify-infoempleo`, `apify-infojobs`, `apify-jooble` y `apify-upwork` están programados (`schedule_daily`) pero **hoy solo arrancó Indeed**: no hay causa leída (¿la cascada paró al cumplir el objetivo diario, el tope de gasto o un fallo?). Es lo primero que hay que averiguar antes de juzgar la receta nueva de empresas; hasta entonces «—», no 0.
+- **Elempleo, Talent, Tecnoempleo, Facebook, Skool, Telegram:** no están programados (`schedule_daily=false`), solo corrieron a mano; hoy no hay medición nueva.
+- **Hallazgo:** las columnas `apify_actors.last_run_at` y `last_offer_at` están siempre vacías porque ningún código las escribe (búsqueda en `apps/web`); no sirven como señal de salud, la verdad está en `apify_runs`.
+- **NO está hecho:** ninguna fuente de redes tiene una oferta cualificada en 7 días; el Control de fuentes en producción no se ha comprobado tras el despliegue.
+
 ## Migración `source_targets` aplicada en la base real (2026-11-25)
 
 - **Aplicada** con `apply_migration` tras la prueba `BEGIN…ROLLBACK` (orden expresa del propietario); #181 fusionada (`a89a5d7`).
