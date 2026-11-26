@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { LoaderCircle, Pause, Play, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import { FlaskConical, LoaderCircle, Pause, Play, Plus, RefreshCcw, Trash2 } from 'lucide-react';
 
 // «Direcciones a vigilar»: los grupos de Facebook, comunidades de Skool y canales de Telegram que mira cada fuente. Se editan aquí (añadir,
 // pausar, quitar) sin tocar código. Un dato sin leer es «—» con su causa, nunca un 0; con la tabla sin crear se dice qué falta.
@@ -16,6 +16,7 @@ export default function SourceTargets({ owner, onSessionLost }: { owner: boolean
   const [notice, setNotice] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Record<string, { url: string; label: string }>>({});
   const [working, setWorking] = useState('');
+  const [info, setInfo] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     setBusy(true); setError('');
@@ -42,6 +43,21 @@ export default function SourceTargets({ owner, onSessionLost }: { owner: boolean
   async function add(source: string) {
     const d = draft[source] ?? { url: '', label: '' };
     if (await send('POST', { source, url: d.url, label: d.label || undefined }, source, `add-${source}`)) setDraft(x => ({ ...x, [source]: { url: '', label: '' } }));
+  }
+
+  // «Probar con estas direcciones»: la misma prueba pequeña de la pestaña Apify (10 elementos, tope de coste), sin salir de aquí.
+  async function probe(source: string, active: number) {
+    const portal = source.replace(/^apify-/, '');
+    if (!window.confirm(`Prueba pequeña en ${portal}: máximo 10 elementos y un tope de coste, usando ${Math.min(active, data?.max_per_run ?? 20)} dirección(es) activa(s). ¿Lanzarla?`)) return;
+    setWorking(`probe-${source}`); setNotice(n => ({ ...n, [source]: '' })); setInfo(n => ({ ...n, [source]: '' }));
+    try {
+      const r = await fetch('/api/admin/apify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'search_now', portal, test: true }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { onSessionLost(); return; }
+      if (!r.ok) setNotice(n => ({ ...n, [source]: typeof d.detail === 'string' ? d.detail : 'No se pudo lanzar la prueba.' }));
+      else setInfo(n => ({ ...n, [source]: typeof d.message === 'string' ? d.message : 'Prueba lanzada. Los resultados entran solos en 1-5 minutos.' }));
+    } catch { setNotice(n => ({ ...n, [source]: 'No se pudo contactar con el servidor: la prueba no se lanzó.' })); }
+    finally { setWorking(''); }
   }
 
   const rows = data?.targets ?? null;
@@ -80,6 +96,8 @@ export default function SourceTargets({ owner, onSessionLost }: { owner: boolean
           <label style={{ flex: '1 1 160px' }}>Nota (opcional)<input value={d.label} maxLength={120} onChange={e => setDraft(x => ({ ...x, [src.source]: { ...d, label: e.target.value } }))} autoComplete="off" /></label>
           <button type="submit" disabled={working !== '' || !d.url.trim() || full}>{working === `add-${src.source}` ? <LoaderCircle size={14} className="spin" /> : <Plus size={14} />} Añadir</button>
         </form>}
+        {owner && !data.pending && active !== null && active > 0 && <p style={{ marginTop: 8 }}><button type="button" data-testid={`target-probe-${src.source}`} disabled={working !== ''} onClick={() => void probe(src.source, active)}>{working === `probe-${src.source}` ? <LoaderCircle size={14} className="spin" /> : <FlaskConical size={14} />} Probar con estas direcciones</button> <span className="card-meta">Cuesta céntimos y no activa la búsqueda diaria.</span></p>}
+        {info[src.source] && <div className="alert" role="status"><span>{info[src.source]}</span></div>}
         {full && <p className="inline-hint" role="status">Has llegado al máximo de {data.max_per_source} direcciones: quita alguna antes de añadir otra.</p>}
         {notice[src.source] && <div className="alert error" role="alert"><span>{notice[src.source]}</span></div>}
       </section>;
