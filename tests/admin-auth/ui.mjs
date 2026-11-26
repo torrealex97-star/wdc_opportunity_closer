@@ -360,7 +360,7 @@ await step('Formulario de empleadores (público, móvil): un envío vacío expli
   assert.ok(await emp.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil');
   await emp.getByRole('button', { name: /Enviar la oferta/ }).click(); await emp.getByTestId('employer-form').getByRole('alert').first().waitFor();
   const text = await emp.getByTestId('employer-form').innerText(); assert.match(text, /nombre de la empresa/); assert.match(text, /aceptar los términos/);
-  await emp.getByLabel('Empresa', { exact: true }).fill('Academia Delta'); await emp.getByLabel('Web de la empresa (https)').fill('https://delta.example.com');
+  await emp.getByLabel(/^Empresa/).fill('Academia Delta'); // el error del envío vacío queda dentro de la etiqueta (así lo oyen los lectores de pantalla): no vale la coincidencia exacta await emp.getByLabel('Web de la empresa (https)').fill('https://delta.example.com');
   await emp.getByLabel('Tu nombre').fill('Marta Ruiz'); await emp.getByLabel(/Tu email de contacto/).fill('marta@delta.example.com');
   await emp.getByLabel(/^Puesto/).selectOption('closer'); await emp.getByLabel(/^Tipo de contrato/).selectOption('fijo_variable'); await emp.getByLabel(/^Mercado/).selectOption('ES');
   await emp.getByLabel(/Descripción del puesto/).fill('Buscamos closer de ventas para llamadas con leads cualificados de nuestro programa de formación. Trabajo remoto y formación incluida.');
