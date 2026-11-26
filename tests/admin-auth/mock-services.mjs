@@ -282,7 +282,7 @@ export function startMocks({ authPort, enginePort }) {
       if (q.editorial_status?.startsWith('in.(')) rows = rows.filter(r => q.editorial_status.slice(4, -1).split(',').includes(r.editorial_status));
       else if (q.editorial_status) rows = rows.filter(r => `eq.${r.editorial_status}` === q.editorial_status);
       if (q.source) rows = rows.filter(r => `eq.${r.source}` === q.source);
-      if (q.role === 'is.null') rows = rows.filter(r => !r.role); else if (q.role?.startsWith('eq.')) rows = rows.filter(r => r.role === q.role.slice(3));
+      if (q.role === 'is.null') rows = rows.filter(r => !r.role); else if (q.role?.startsWith('eq.')) rows = rows.filter(r => r.role === q.role.slice(3)); else if (q.role?.startsWith('in.(')) rows = rows.filter(r => q.role.slice(4, -1).split(',').includes(r.role));
       if (q.spain === 'is.true') rows = rows.filter(r => r.spain === true);
       if (q.score?.startsWith('gte.')) rows = rows.filter(r => (r.score ?? 0) >= Number(q.score.slice(4)));
       if (q.reviewed_by?.startsWith('eq.')) rows = rows.filter(r => r.reviewed_by === q.reviewed_by.slice(3));
