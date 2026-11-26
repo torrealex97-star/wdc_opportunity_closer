@@ -3,7 +3,6 @@ import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
 import { approvedBySource, ORG } from './external';
 import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
-import { dailyLimit } from './spendPlan';
 import { PORTALS, portalBySource, portalById, queryForDay, countryForDay, type Portal, type Recipe } from './apifyCatalog';
 import { normalizeActor } from './apifyStore';
 import { serviceRest } from './supabaseAuth';
@@ -183,12 +182,7 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
     // Si las aprobadas no se pueden contar, el reparto se queda sin medición (van todos al final, en orden del
     // catálogo) en vez de suponer cero aprobadas y castigar a un portal por un fallo de lectura.
     const approved = since ? await approvedBySource(pending.map(p => p.source), since).catch(() => null) : null;
-    // Ritmo diario: lo que queda del mes se reparte entre los días que quedan, para no gastarlo en los primeros. El gasto de hoy sale del
-    // historial leído (las ejecuciones aún sin cerrar no tienen coste: el ritmo es aproximado y el tope mensual de `startRun` sigue mandando).
-    const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
-    const spentToday = runs.filter(r => Date.parse(r.started_at) >= dayStart).reduce((sum, r) => sum + (Number(r.cost_usd) || 0), 0);
-    const paced = spent === null ? budget.usd : dailyLimit(budget.usd, spent, spentToday, new Date(now));
-    const plan = spendPlan(paced, spent, pending.map(p => {
+    const plan = spendPlan(budget.usd, spent, pending.map(p => {
       const ids = new Set(actors.filter(a => a.source === p.source).map(a => a.id));
       const mine = runs.filter(r => ids.has(r.actor_id));
       return { code: p.id, qualified_per_usd: approvedPerUsd(mine, approved ? approved[p.source] ?? 0 : null) };
@@ -201,7 +195,7 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
     }
     for (const d of plan.deferred) {
       const portal = portalById(d.code); if (!portal) continue;
-      started.push({ actor: portal.recipes[0].actor, ok: false, error: spent !== null && paced < budget.usd ? `Aplazada a mañana: hoy no queda del ritmo diario (${Math.max(0, paced - spent).toFixed(2)} USD de hoy; mes ${spent.toFixed(2)} de ${budget.usd} USD). Súbelo en Apify → «Límite de gasto del mes».` : `Aplazada: ${d.reason}. Súbelo en Apify → «Límite de gasto del mes».` });
+      started.push({ actor: portal.recipes[0].actor, ok: false, error: `Aplazada: ${d.reason}. Súbelo en Apify → «Límite de gasto del mes».` });
     }
   }
   const legacy = await dailyApify(publicBase, { ...opts, skip: a => Boolean(portalBySource(a.source)), after: (run, actor, res) => recoverAfter(run, actor, res, publicBase) });

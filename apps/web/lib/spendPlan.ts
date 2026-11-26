@@ -23,19 +23,6 @@ export function parseMonthlyUsd(value: unknown): number | null {
 export const CORE_ROLES = ['closer', 'setter', 'cold_caller', 'sdr'] as const;
 export const CORE_ROLE_FILTER = `role=in.(${CORE_ROLES.join(',')})`;
 
-/**
- * Límite efectivo de HOY: lo gastado antes de hoy + lo que queda del mes repartido entre los días que quedan (hoy incluido).
- * Así el mes no se gasta en los primeros días. `spentTodayUsd` es lo ya gastado hoy (se descuenta de su parte).
- * Nunca pasa de `limitUsd` ni es menor que lo ya gastado.
- */
-export function dailyLimit(limitUsd: number, spentMonthUsd: number, spentTodayUsd: number, now: Date = new Date()): number {
-  const days = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
-  const left = Math.max(1, days - now.getUTCDate() + 1);
-  const before = Math.max(0, round2(spentMonthUsd - Math.max(0, spentTodayUsd)));
-  const allowance = Math.floor((round2(Math.max(0, limitUsd - before)) / left) * 100 + 1e-9) / 100;
-  return Math.min(limitUsd, Math.max(spentMonthUsd, round2(before + allowance)));
-}
-
 // Cada ruta de pago (un portal, un actor) recibe como mucho su parte del dinero que queda, y las de más
 // **ofertas aprobadas por dólar** van primero: lo que se recoge sin aprobarlo no justifica el gasto. Sin medición
 // no se le supone rendimiento: va al final, declarado.
