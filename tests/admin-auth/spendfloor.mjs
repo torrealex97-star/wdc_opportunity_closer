@@ -1,7 +1,7 @@
 // Mínimo diario por fuente y tope global: que cada fuente conectada corra algo cada día (para acumular muestra) sin pasar del tope.
 // node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spendfloor.mjs
 import assert from 'node:assert/strict';
-const { DEFAULT_GLOBAL_CAP_USD, FLOOR_HOURS, FLOOR_LIMITS, floorDue, globalCapUsd, globalCheck, lastRanByStage, parseStageNote, stageNote } = await import('../../apps/web/lib/spendFloor.ts');
+const { DEFAULT_GLOBAL_CAP_USD, FLOOR_HOURS, FLOOR_LIMITS, floorDue, globalCapUsd, globalCheck, lastRanByStage, parseStageNote, stageNote, apifyStageWhy } = await import('../../apps/web/lib/spendFloor.ts');
 
 let passed = 0, failed = 0;
 const step = async (name, fn) => { try { await fn(); passed++; console.log(`PASS  ${name}`); } catch (err) { failed++; console.log(`FAIL  ${name}\n      ${err.message}`); } };
@@ -52,6 +52,17 @@ await step('sin poder leer el registro no toca el mínimo (sin saber si ya corri
 
 await step('los mínimos son pequeños: 3 dorks, 1 petición de RapidAPI, 1 de Tavily, 1 búsqueda de respaldo', () => {
   assert.deepEqual({ ...FLOOR_LIMITS }, { googleDorks: 3, rapidapiRequests: 1, tavilySearches: 1, feedSearches: 1, fallbackSearches: 1 });
+});
+
+await step('apify: la nota separa las que arrancaron de las aplazadas o fallidas y dice el motivo de cada una (antes contaba 7 «lanzadas» con 1 real)', () => {
+  const started = [{ actor: 'a/indeed', ok: true }, ...Array.from({ length: 6 }, (_, i) => ({ actor: `a/p${i}`, ok: false, error: i === 0 ? 'Aplazada: sin saldo del mes. Súbelo.' : 'Sin tiempo en el presupuesto del cron: se lanzará en la próxima ejecución.' }))];
+  const why = apifyStageWhy(started);
+  assert.match(why, /^1 de 7 arrancó/);
+  assert.doesNotMatch(why, /7 búsqueda\(s\) lanzada/);
+  assert.match(why, /a\/p0: Aplazada: sin saldo del mes/);
+  assert.ok(why.length <= 240, `demasiado largo para la nota: ${why.length}`);
+  assert.equal(apifyStageWhy([]), 'Ningún portal con búsqueda diaria pendiente.');
+  assert.equal(apifyStageWhy([{ actor: 'a/x', ok: true }, { actor: 'a/y', ok: true }]), '2 búsqueda(s) lanzada(s); los resultados llegan después.');
 });
 
 console.log(`\n${passed}/${passed + failed} pasos OK`);

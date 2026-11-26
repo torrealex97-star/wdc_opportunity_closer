@@ -44,6 +44,18 @@ export function globalCheck(parts: Array<number | null>, cap: number, nextUsd = 
 /** Línea que el cron anota por etapa: `etapa=<id> · corrió|saltada · motivo`. */
 export const stageNote = (id: string, ran: boolean, why: string) => `etapa=${id} · ${ran ? 'corrió' : 'saltada'} · ${why}`.slice(0, 300);
 
+/**
+ * Motivo de la etapa de Apify para el registro del cron. `started` mezcla las que arrancaron y las que no (aplazadas por presupuesto,
+ * sin tiempo, fallidas): contarlas todas como «lanzadas» ocultaba por qué un portal no corría (2026-11-26: «7 lanzadas», 1 real).
+ */
+export function apifyStageWhy(started: Array<{ actor: string; ok: boolean; error?: string }>): string {
+  if (!started.length) return 'Ningún portal con búsqueda diaria pendiente.';
+  const ok = started.filter(item => item.ok).length, bad = started.filter(item => !item.ok);
+  if (!bad.length) return `${ok} búsqueda(s) lanzada(s); los resultados llegan después.`;
+  const reasons = bad.slice(0, 3).map(item => `${item.actor}: ${(item.error ?? 'sin motivo').replace(/\s+/g, ' ').slice(0, 55)}`).join(' | ');
+  return `${ok} de ${started.length} arrancó. No arrancaron ${bad.length}: ${reasons}${bad.length > 3 ? ' …' : ''}`.slice(0, 240);
+}
+
 export function parseStageNote(note: string | null | undefined): { id: string; ran: boolean } | null {
   const match = /^etapa=([a-z0-9-]+) · (corrió|saltada)(?: |$)/.exec(note ?? '');
   return match ? { id: match[1], ran: match[2] === 'corrió' } : null;

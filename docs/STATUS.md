@@ -1,3 +1,11 @@
+## Registro del cron: motivo de cada portal de Apify que no arranca + direcciones iniciales cargadas (2026-11-26)
+
+- **Causa leída (*verified* en `external_ingest_runs`, fuente `cron-waterfall`):** el 2026-11-26 06:01 la etapa `apify` anotó «[mínimo diario] **7 búsqueda(s) lanzada(s)**» pero `apify_runs` solo tiene **1** ejecución (Indeed). La nota contaba como «lanzadas» también las **aplazadas o fallidas** (`started` mezcla `ok:true` y `ok:false`); el motivo de cada una se tiraba. El 11-25 pasó igual («3 lanzadas», 2 reales). No es el tope de gasto (3,62 de 10 US$ ese mes).
+- **Arreglo (*tested*, rojo → verde):** `apifyStageWhy` (`lib/spendFloor.ts`) anota «N de M arrancó. No arrancaron K: actor: motivo | …» (≤ 240 caracteres); el cron la usa en vez del contador. `spendfloor.mjs` 9/9 (`exit=0`), `tsc --noEmit` limpio, relevo OK. **No cambia qué se lanza ni el gasto.** La suite completa (`run.sh`) no se ha corrido en local: la corre el CI.
+- **Qué falta para concluir:** el motivo real de las 6 no arrancadas del 11-26 **sigue sin leerse** (no se guardó). Se verá en la nota del cron de mañana 06:01 UTC; hasta entonces es «—».
+- **Direcciones cargadas desde la hoja `WDC_EXECUTION_SYSTEM` (por orden del propietario, *verified* en la base real):** `source_targets` = Facebook 19, Skool 4, Telegram 11 (todas activas; `created_by = importado-hoja-WDC_EXECUTION_SYSTEM`), validadas con `validateTarget`. Skool: se quitaron los parámetros `?c=…&s=…` y `www3` → `www`. **No entraron** 2 grupos de Facebook sin enlace en la hoja («Closer de Ventas de Alto Valor», «SETTERS Y CLOSERS DE VENTA»). Facebook tiene 19 > `MAX_PER_RUN` (20 no se supera, pero cada dirección es una búsqueda de pago). **Las fuentes de redes siguen apagadas por defecto (ADR-011): no se ha gastado nada y ninguna tiene una oferta cualificada.**
+- **Visto en la hoja, sin aplicar:** la pestaña «Pipeline Closers» enlaza ~16 ofertas de la comunidad de Skool `women-digital-closers-1053` (candidata a fuente propia; falta confirmación del propietario); «Portales Trabajo» (JobToday da 410 en el motor; Freelancer no es fuente).
+
 ## Migración `voice_providers` aplicada en la base real (2026-11-26)
 
 - **Aplicada** con `apply_migration` por orden expresa del propietario («haz la última»), tras la prueba `BEGIN…ROLLBACK` del 2026-11-24 (`tests/db/voice_providers.sql`).

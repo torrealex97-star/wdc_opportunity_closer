@@ -20,7 +20,7 @@ import { activateEngine } from '../../../../lib/engineActivate';
 import { loadMetrics } from '../../../../lib/metrics';
 import { skipPaidTier } from '../../../../lib/sourceTiers';
 import { CRON_LOG_SOURCE, ORG, recordSpend, refreshVigencia } from '../../../../lib/external';
-import { FLOOR_LIMITS, floorDue, lastRanByStage, stageNote, type StageRow } from '../../../../lib/spendFloor';
+import { FLOOR_LIMITS, apifyStageWhy, floorDue, lastRanByStage, stageNote, type StageRow } from '../../../../lib/spendFloor';
 import { pagedRest } from '../../../../lib/supabaseAuth';
 import { checkEngine } from '../../../../lib/engineAlert';
 import { createBudget, MIN_STEP_MS, totalFromEnv } from '../../../../lib/cronBudget';
@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
   if (!apifyStart) stages.push({ id: 'apify', ran: false, why: !canSpend() && !apifyFloor ? noSpendWhy() : !globalRoom.ok ? (globalRoom.reason ?? 'Tope global del mes.') : ('reason' in paid && paid.reason ? paid.reason : 'Sin tiempo en el presupuesto del cron.') });
   let apifyError: string | null = null;
   const apify = await dailyApify(publicBaseUrl(request), { start: apifyStart, deadline: budget.deadline(9_000) }).catch(error => { apifyError = String((error as Error)?.message ?? error); return failed('apify', { started: [], harvested: [], truncated: false } as Awaited<ReturnType<typeof dailyApify>>)(error); });
-  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: `${apifyFloor && !canSpend() ? '[mínimo diario] ' : ''}${apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apify.started.length ? `${apify.started.length} búsqueda(s) lanzada(s); los resultados llegan después.` : 'Ningún portal con búsqueda diaria pendiente.'}` });
+  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: `${apifyFloor && !canSpend() ? '[mínimo diario] ' : ''}${apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apifyStageWhy(apify.started)}` });
   if ('truncated' in apify && apify.truncated) budget.cut('apify');
   const vigencia = budget.remaining() >= MIN_STEP_MS ? await refreshVigencia(20, budget.deadline(5_000)).catch(() => ({ checked: 0, withdrawn: 0 })) : (budget.cut('vigencia'), { checked: 0, withdrawn: 0 });
   if ('truncated' in vigencia && vigencia.truncated) budget.cut('vigencia');
