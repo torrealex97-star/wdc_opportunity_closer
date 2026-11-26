@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { dailyApify, listActors, listRuns, monthSpent, RUN_CAP_USD, startRun, TEST_CAP_USD, type ActorRow, type HarvestResult, type RunRow } from './apify';
 import { approvedBySource, ORG } from './external';
-import { approvedPerUsd, measuredCost, readBudget, spendPlan } from './paidBudget';
+import { approvedPerUsd, measuredCost, readBudget } from './paidBudget';
+import { expectedRunCost, paceRoutes } from './spendPlan';
 import { PORTALS, portalBySource, portalById, queryForDay, countryForDay, type Portal, type Recipe } from './apifyCatalog';
 import { normalizeActor } from './apifyStore';
 import { serviceRest } from './supabaseAuth';
@@ -182,11 +183,16 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
     // Si las aprobadas no se pueden contar, el reparto se queda sin medición (van todos al final, en orden del
     // catálogo) en vez de suponer cero aprobadas y castigar a un portal por un fallo de lectura.
     const approved = since ? await approvedBySource(pending.map(p => p.source), since).catch(() => null) : null;
-    const plan = spendPlan(budget.usd, spent, pending.map(p => {
+    // Ritmo diario: lo que queda del mes entre los días que quedan; cada portal (por aprobadas por dólar) se lanza mientras su coste esperado
+    // medido quepa en lo de hoy. El gasto de hoy sale del historial leído (las ejecuciones aún sin cerrar no tienen coste: es aproximado y el
+    // tope mensual de `startRun` sigue mandando).
+    const nowDate = new Date(now), dayStart = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate());
+    const spentToday = runs.filter(r => Date.parse(r.started_at) >= dayStart).reduce((sum, r) => sum + (Number(r.cost_usd) || 0), 0);
+    const plan = paceRoutes({ limitUsd: budget.usd, spentMonthUsd: spent, spentTodayUsd: spentToday, now: nowDate, runCapUsd: RUN_CAP_USD, routes: pending.map(p => {
       const ids = new Set(actors.filter(a => a.source === p.source).map(a => a.id));
       const mine = runs.filter(r => ids.has(r.actor_id));
-      return { code: p.id, qualified_per_usd: approvedPerUsd(mine, approved ? approved[p.source] ?? 0 : null) };
-    }), RUN_CAP_USD);
+      return { code: p.id, qualified_per_usd: approvedPerUsd(mine, approved ? approved[p.source] ?? 0 : null), expected_usd: expectedRunCost(mine) };
+    }) });
     for (const code of plan.order) {
       const portal = pending.find(p => p.id === code); if (!portal) continue;
       if (timeLeft(opts.deadline) < MIN_STEP_MS * 2) { started.push({ actor: portal.recipes[0].actor, ok: false, error: 'Sin tiempo en el presupuesto del cron: se lanzará en la próxima ejecución.' }); continue; }
@@ -195,7 +201,7 @@ export async function dailyAuto(publicBase: string, opts: { start?: boolean; dea
     }
     for (const d of plan.deferred) {
       const portal = portalById(d.code); if (!portal) continue;
-      started.push({ actor: portal.recipes[0].actor, ok: false, error: `Aplazada: ${d.reason}. Súbelo en Apify → «Límite de gasto del mes».` });
+      started.push({ actor: portal.recipes[0].actor, ok: false, error: `Aplazada: ${d.reason}. Si quieres más cada día, súbelo en Apify → «Límite de gasto del mes».` });
     }
   }
   const legacy = await dailyApify(publicBase, { ...opts, skip: a => Boolean(portalBySource(a.source)), after: (run, actor, res) => recoverAfter(run, actor, res, publicBase) });
