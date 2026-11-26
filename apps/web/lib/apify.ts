@@ -200,9 +200,10 @@ const text = (v: unknown): string | null => typeof v === 'string' ? v : typeof v
 export function mapItem(item: Record<string, unknown>): Candidate | null {
   // Publicación de una red (sin campos de oferta de empleo): solo vale si ofrece trabajo de ventas; el texto va tal cual.
   const body = first(item, POST_TEXT_KEYS), isPost = typeof body === 'string' && !first(item, JOB_KEYS);
-  const url = text(first(item, ['joburldirect', 'jobdirecturl', 'applyurl', 'joburl', 'jobpostingurl', 'url', 'link', ...(isPost ? ['contenturl', 'posturl', 'permalink', 'postlink', 'messageurl', 'facebookurl'] : [])]));
+  // En una publicación el enlace del POST (permalink…) va antes que `url`, que en algunos actores es el del grupo; el del grupo es el último recurso.
+  const url = text(first(item, isPost ? ['posturl', 'permalink', 'postlink', 'messageurl', 'contenturl', 'url', 'link', 'facebookurl'] : ['joburldirect', 'jobdirecturl', 'applyurl', 'joburl', 'jobpostingurl', 'url', 'link']));
   if (isPost) {
-    const given = text(first(item, ['title', 'name']));
+    const given = text(first(item, ['title'])); // `name` suele ser el grupo o el autor, no el puesto
     const title = given && given.length >= 5 ? given : headline(body as string);
     if (!title || !url || !offersSalesJob(`${title}\n${body as string}`)) return null;
     const user = first(item, ['user', 'author']), author = text(first(item, ['authorname', 'username', 'pagename', 'channelname', 'channel'])) ?? (user && typeof user === 'object' ? text((user as Record<string, unknown>).name) : text(user));

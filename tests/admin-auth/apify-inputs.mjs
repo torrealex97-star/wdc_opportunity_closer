@@ -150,6 +150,13 @@ step('posts: sin enlace no hay oferta; un texto sin rol de ventas tampoco; ingl�
   const en = mapItem({ message: 'We are hiring remote high ticket closers and setters (commission only, US leads).', permalink: 'https://www.facebook.com/groups/x/posts/5' });
   assert.ok(en, 'inglés'); assert.equal(en.url, 'https://www.facebook.com/groups/x/posts/5');
 });
+step('posts: el título sale del texto, no del nombre del grupo o autor; el enlace del post gana al del grupo', () => {
+  const post = { name: 'Closers y Setters LATAM', id: '7', text: 'Buscamos setter de ventas remoto, comisión por cita agendada. Escribe por privado.', url: 'https://www.facebook.com/groups/g1', postUrl: 'https://www.facebook.com/groups/g1/posts/7' };
+  const c = mapItem(post);
+  assert.ok(c); assert.match(c.title, /^Buscamos setter de ventas remoto/); assert.notEqual(c.title, 'Closers y Setters LATAM');
+  assert.equal(c.url, 'https://www.facebook.com/groups/g1/posts/7', 'el enlace del post, no el del grupo');
+  assert.equal(mapItem({ text: 'Buscamos closer de ventas remoto, comisión alta', facebookUrl: 'https://www.facebook.com/groups/g1' })?.url, 'https://www.facebook.com/groups/g1', 'sin enlace de post cae al del grupo');
+});
 step('posts: una oferta de empleo normal (título, empresa, descripción) no cambia de comportamiento', () => {
   const job = { title: 'Closer de ventas', company: 'Acme', url: 'https://x.test/j/1', description: 'Buscamos closer. Comisión alta.' };
   const c = mapItem(job); assert.equal(c.title, 'Closer de ventas'); assert.equal(c.company, 'Acme'); assert.equal(c.raw.kind, undefined);
