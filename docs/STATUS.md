@@ -1,3 +1,18 @@
+## Migración `voice_providers` aplicada en la base real (2026-11-26)
+
+- **Aplicada** con `apply_migration` por orden expresa del propietario («haz la última»), tras la prueba `BEGIN…ROLLBACK` del 2026-11-24 (`tests/db/voice_providers.sql`).
+- **Comprobado (*verified*, base real):** `voice_provider_events` existe con RLS activada y sin políticas; `anon` y `authenticated` sin `SELECT`; la restricción de `integration_connections.provider` ya admite `elevenlabs` y `deepgram`; las 9 conexiones existentes siguen intactas. Advisors de seguridad: solo el INFO habitual de «RLS sin políticas» de las tablas de servicio.
+- **NO está hecho:** la voz sigue sin proveedor con retención cero firmada, sin clave y sin servicio en tiempo real (te tocan a ti); nada de voz está *verified* con un proveedor real.
+
+## Medición del cron de las 06:00 UTC (2026-11-26, solo lectura)
+
+- **Medido en la base real (*verified*; `external_offers` por `last_seen_at` de las últimas 24 h, `apify_runs`):** Jooble 215 vistas / 68 aprobadas; Apify Indeed 148 / 52 aprobadas (1 ejecución, 148 elementos, 0,89 US$); Bright Data LinkedIn 30 / 6; JSearch 10 / 10; Google Jobs 10 / 6; empresas 9 / 1 (7 sin descripción).
+- **Medido pero SIN concluir:** `apify-company` (greenhouse de Fantastic.jobs), `apify-linkedin`, `apify-infoempleo`, `apify-infojobs`, `apify-jooble` y `apify-upwork` están programados (`schedule_daily`) pero **hoy solo arrancó Indeed**: no hay causa leída (¿la cascada paró al cumplir el objetivo diario, el tope de gasto o un fallo?). Es lo primero que hay que averiguar antes de juzgar la receta nueva de empresas; hasta entonces «—», no 0.
+- **Lo que sí explica el historial (`apify_runs`, *inspected*):** el 2026-11-25 se saltaron empresas, Indeed, Infoempleo, InfoJobs y Jooble porque la regla de 20 h (`dailyAuto`) contó mis pruebas a mano del 11-24 (22:19–22:23 UTC) como «ya buscado hoy»; ese día corrieron LinkedIn y Upwork. **El 11-26 no tiene explicación leída:** gasto del mes 3,62 US$ de un límite de 10 US$ (no es el tope), las últimas ejecuciones de esos portales datan de hace más de 20 h, y la decisión «aplazada/sin tiempo» solo vive en la respuesta del cron, **que no se guarda** (el Resumen no puede enseñar por qué un portal no arrancó). Siguiente arreglo: guardar el motivo de cada portal en cada pasada y mostrarlo en el Control de fuentes.
+- **Elempleo, Talent, Tecnoempleo, Facebook, Skool, Telegram:** no están programados (`schedule_daily=false`), solo corrieron a mano; hoy no hay medición nueva.
+- **Hallazgo:** las columnas `apify_actors.last_run_at` y `last_offer_at` están siempre vacías porque ningún código las escribe (búsqueda en `apps/web`); no sirven como señal de salud, la verdad está en `apify_runs`.
+- **NO está hecho:** ninguna fuente de redes tiene una oferta cualificada en 7 días; el Control de fuentes en producción no se ha comprobado tras el despliegue.
+
 ## Migración `source_targets` aplicada en la base real (2026-11-25)
 
 - **Aplicada** con `apply_migration` tras la prueba `BEGIN…ROLLBACK` (orden expresa del propietario); #181 fusionada (`a89a5d7`).
