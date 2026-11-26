@@ -1,3 +1,9 @@
+## Migración `voice_providers` aplicada en la base real (2026-11-26)
+
+- **Aplicada** con `apply_migration` por orden expresa del propietario («haz la última»), tras la prueba `BEGIN…ROLLBACK` del 2026-11-24 (`tests/db/voice_providers.sql`).
+- **Comprobado (*verified*, base real):** `voice_provider_events` existe con RLS activada y sin políticas; `anon` y `authenticated` sin `SELECT`; la restricción de `integration_connections.provider` ya admite `elevenlabs` y `deepgram`; las 9 conexiones existentes siguen intactas. Advisors de seguridad: solo el INFO habitual de «RLS sin políticas» de las tablas de servicio.
+- **NO está hecho:** la voz sigue sin proveedor con retención cero firmada, sin clave y sin servicio en tiempo real (te tocan a ti); nada de voz está *verified* con un proveedor real.
+
 ## Medición del cron de las 06:00 UTC (2026-11-26, solo lectura)
 
 - **Medido en la base real (*verified*; `external_offers` por `last_seen_at` de las últimas 24 h, `apify_runs`):** Jooble 215 vistas / 68 aprobadas; Apify Indeed 148 / 52 aprobadas (1 ejecución, 148 elementos, 0,89 US$); Bright Data LinkedIn 30 / 6; JSearch 10 / 10; Google Jobs 10 / 6; empresas 9 / 1 (7 sin descripción).
