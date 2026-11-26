@@ -87,3 +87,54 @@ export function measuredYield(runs: Array<{ cost_usd: number | null; harvested: 
   return round2(runs.filter(r => r.status === 'SUCCEEDED' && r.finished_at && Number(r.cost_usd) > 0)
     .reduce((sum, r) => sum + r.harvested, 0) / cost);
 }
+
+// ---- Ritmo diario ----
+/** Coste que se supone a una búsqueda de un portal sin ejecuciones cerradas con coste: se declara, no se presenta como medida. */
+export const DEFAULT_EXPECTED_RUN_USD = 0.25;
+export type PaceRoute = { code: string; qualified_per_usd: number | null; expected_usd: number | null };
+export type PacePlan = {
+  order: string[]; caps: Record<string, number>; deferred: Array<{ code: string; reason: string }>;
+  /** Portales a los que se les supuso el coste por defecto (sin ejecuciones cerradas con coste). */
+  assumed: string[]; allowance_usd: number; remaining_today_usd: number;
+};
+
+/** Coste medio de las ejecuciones cerradas con coste; `null` si ninguna (no se inventa uno). */
+export function expectedRunCost(runs: Array<{ cost_usd: number | null; status: string; finished_at: string | null }>): number | null {
+  const costs = runs.filter(r => r.status === 'SUCCEEDED' && r.finished_at && Number(r.cost_usd) > 0).map(r => Number(r.cost_usd));
+  return costs.length ? round2(costs.reduce((sum, c) => sum + c, 0) / costs.length) : null;
+}
+
+/**
+ * Reparto del mes POR DÍAS. Permiso de hoy = (límite − gastado antes de hoy) / días que quedan (hoy incluido), sin pasar nunca de lo que
+ * queda del mes. Las rutas se recorren por aprobadas por dólar (las de más rendimiento primero; sin medida, al final y en su orden) y cada
+ * una se lanza mientras su coste ESPERADO quepa en lo que queda de hoy; lo que no cabe se aplaza a mañana con su motivo. El reparto en
+ * partes iguales anterior daba ~0,08 USD a cada uno de ~15 portales y los aplazaba a todos.
+ * `spentMonthUsd` null = no se pudo leer: no se lanza nada (un hueco no es un cero).
+ */
+export function paceRoutes(args: {
+  limitUsd: number; spentMonthUsd: number | null; spentTodayUsd: number; now: Date; runCapUsd: number; routes: PaceRoute[];
+}): PacePlan {
+  const { limitUsd, spentMonthUsd, spentTodayUsd, now, runCapUsd, routes } = args;
+  if (spentMonthUsd === null) {
+    return { order: [], caps: {}, assumed: [], allowance_usd: 0, remaining_today_usd: 0, deferred: routes.map(r => ({ code: r.code, reason: 'no se pudo leer lo gastado este mes; por seguridad no se lanza gasto nuevo' })) };
+  }
+  const days = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const left = Math.max(1, days - now.getUTCDate() + 1);
+  const today = Math.max(0, spentTodayUsd);
+  const before = Math.max(0, round2(spentMonthUsd - today));
+  const allowance = Math.floor((round2(Math.max(0, limitUsd - before)) / left) * 100 + 1e-9) / 100;
+  let remaining = Math.max(0, round2(Math.min(allowance - today, limitUsd - spentMonthUsd)));
+  const ranked = routes.map((r, i) => ({ ...r, i })).sort((a, b) => (b.qualified_per_usd ?? -1) - (a.qualified_per_usd ?? -1) || a.i - b.i);
+  const order: string[] = [], caps: Record<string, number> = {}, deferred: Array<{ code: string; reason: string }> = [], assumed: string[] = [];
+  for (const route of ranked) {
+    const expected = route.expected_usd ?? DEFAULT_EXPECTED_RUN_USD;
+    if (route.expected_usd === null) assumed.push(route.code);
+    if (expected > remaining + 1e-9) {
+      deferred.push({ code: route.code, reason: `hoy quedan ${remaining.toFixed(2)} USD del ritmo diario (${allowance.toFixed(2)} USD al día; mes ${spentMonthUsd.toFixed(2)} de ${limitUsd} USD) y esta búsqueda cuesta ~${expected.toFixed(2)} USD: se retoma mañana` });
+      continue;
+    }
+    caps[route.code] = Math.min(runCapUsd, Math.max(MIN_RUN_USD, remaining)); order.push(route.code);
+    remaining = round2(remaining - expected);
+  }
+  return { order, caps, deferred, assumed: assumed.filter(code => order.includes(code)), allowance_usd: allowance, remaining_today_usd: Math.max(0, round2(Math.min(allowance - today, limitUsd - spentMonthUsd))) };
+}
