@@ -366,7 +366,10 @@ await step('Formulario de empleadores (público, móvil): un envío vacío expli
   await emp.getByLabel(/Descripción del puesto/).fill('Buscamos closer de ventas para llamadas con leads cualificados de nuestro programa de formación. Trabajo remoto y formación incluida.');
   await emp.getByLabel(/Enlace de la oferta/).fill('https://delta.example.com/empleo/closer');
   await emp.getByRole('checkbox', { name: /Acepto estos términos/ }).check(); await emp.getByRole('button', { name: /Enviar la oferta/ }).click();
-  await emp.getByTestId('employer-done').waitFor(); assert.match(await emp.getByTestId('employer-done').innerText(), /revisa/);
+  // Si el servidor rechaza el envío, el error dice por qué (no un tiempo de espera agotado sin pista).
+  const outcome = await Promise.race([emp.getByTestId('employer-done').waitFor().then(() => 'done'), emp.getByTestId('employer-form').getByRole('alert').filter({ hasText: /\S/ }).last().waitFor().then(() => 'alert')]).catch(e => `timeout: ${e.message.split('\n')[0]}`);
+  assert.equal(outcome, 'done', `el envío no se confirmó: ${outcome} · ${(await emp.getByTestId('employer-form').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(-400)}`);
+  assert.match(await emp.getByTestId('employer-done').innerText(), /revisa/);
   assert.deepEqual(problems, [], `errores en la página: ${problems.join(' | ')}`); await ctx.close();
 });
 await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su perfil con consentimiento y el enlace de su vídeo', async () => {
