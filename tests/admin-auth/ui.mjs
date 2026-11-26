@@ -343,7 +343,7 @@ await step('Direcciones a vigilar: tres fuentes sin direcciones lo dicen; se añ
   // «Probar con estas direcciones»: aparece solo con direcciones activas y da una respuesta visible (aviso o error explicado), nunca silencio.
   const probe = page.getByTestId('target-probe-apify-telegram'); await probe.waitFor();
   assert.equal(await page.getByTestId('target-probe-apify-facebook').count(), 0, 'sin direcciones activas no hay botón de prueba');
-  page.once('dialog', d => d.accept()); await probe.click();
+  await probe.click(); // el manejador global de diálogos (línea 13) acepta la confirmación del coste
   await tg.locator('[role=status], [role=alert]').first().waitFor({ timeout: 8000 });
   assert.ok((await tg.locator('[role=status], [role=alert]').first().innerText()).trim().length > 10, 'la prueba responde con un mensaje');
   await row.getByRole('button', { name: /^Pausar/ }).click(); await row.getByText('Pausada').waitFor(); assert.match(await tg.innerText(), /Sin direcciones activas/, 'pausada no cuenta como activa');
