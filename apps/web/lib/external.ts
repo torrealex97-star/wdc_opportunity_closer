@@ -38,7 +38,7 @@ export const scrub = (text: string) => text
   .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[correo omitido]')
   .replace(/(?<![\w/])(?:\+?\d[\d\s().-]{7,}\d)(?![\w/])/g, '[teléfono omitido]')
   .replace(/\s+/g, ' ').trim();
-const RAW_KEYS = ['site', 'job_type', 'is_remote', 'job_level', 'listing_type', 'provider', 'category', 'item_keys'];
+const RAW_KEYS = ['site', 'job_type', 'is_remote', 'job_level', 'listing_type', 'provider', 'category', 'item_keys', 'kind', 'author'];
 
 // URL canónica: sin fragmento ni parámetros de seguimiento (utm_*, fbclid, gclid...), para no duplicar el mismo anuncio.
 const TRACKING = /^(utm_.*|fbclid|gclid|msclkid|mc_[a-z]+|trk|trackingid|refid|ref|source)$/i;
@@ -108,7 +108,7 @@ export function classify(input: unknown): { candidate: Candidate } | { reason: R
   if (typeof c.posted_at === 'string' && c.posted_at) { const t = Date.parse(c.posted_at); if (Number.isFinite(t)) posted_at = new Date(t).toISOString(); }
   const description = typeof c.description === 'string' ? scrub(c.description).slice(0, 6000) || null : null;
   const rawIn = c.raw && typeof c.raw === 'object' ? c.raw as Record<string, unknown> : {};
-  const raw = Object.fromEntries(Object.entries(rawIn).filter(([k, v]) => RAW_KEYS.includes(k) && ['string', 'number', 'boolean'].includes(typeof v)).map(([k, v]) => [k, k === 'item_keys' && typeof v === 'string' ? v.slice(0, 400) : v]));
+  const raw = Object.fromEntries(Object.entries(rawIn).filter(([k, v]) => RAW_KEYS.includes(k) && ['string', 'number', 'boolean'].includes(typeof v)).map(([k, v]) => [k, k === 'item_keys' && typeof v === 'string' ? v.slice(0, 400) : k === 'author' && typeof v === 'string' ? v.slice(0, 120) : v]));
   // Sin salario estructurado, se rescata la frase literal del texto (solo con importe en € y periodo o bruto/neto).
   const salary = clip(c.salary, 200) ?? (typeof c.description === 'string' ? salaryFromText(c.description) : null);
   // Enlace de candidatura propio (SerpApi lo da en apply_options; otros portales, en su campo).

@@ -122,6 +122,40 @@ step('direcciones a vigilar: {{start_urls}} y {{target_names}} en plantillas, y 
   assert.match(NO_TARGETS_MESSAGE, /Direcciones a vigilar/);
 });
 
+// Publicaciones de redes (grupos de Facebook, canales de Telegram, Reddit): no traen «título» de oferta, traen texto. Solo se aceptan las que
+// OFRECEN trabajo; las de quien lo busca, las de venta de cursos y las charlas se descartan. Campos de Reddit: los reales de la prueba del 11-24.
+step('posts: Reddit con título y contentUrl pero sin intención de contratar no se guarda', () => {
+  const chat = { id: 'a1', title: '¿Alguien ha trabajado de closer en infoproductos?', body: 'Estoy pensando en dedicarme a ello, ¿qué os parece?', contentUrl: 'https://www.reddit.com/r/emprendedores/comments/a1/x/', authorName: 'pepe', communityName: 'emprendedores', postType: 'text' };
+  assert.equal(mapItem(chat), null);
+});
+step('posts: una publicación que busca closer se convierte en oferta con su enlace y su texto completo, sin inventar empresa ni sueldo', () => {
+  const post = { postId: '99', text: 'Buscamos closer de ventas remoto para infoproducto de alto valor. Comisión del 10% por cierre, leads cualificados. Escribe por privado.\nMás info abajo', url: 'https://www.facebook.com/groups/empleocloserdeventas/posts/99', user: { name: 'Agencia Delta' }, time: '2026-11-25T10:00:00.000Z' };
+  const c = mapItem(post);
+  assert.ok(c, 'se guarda');
+  assert.equal(c.url, post.url); assert.equal(c.external_id, '99');
+  assert.match(c.title, /^Buscamos closer de ventas remoto/); assert.ok(c.title.length <= 120);
+  assert.match(c.description, /Comisión del 10%/);
+  assert.equal(c.salary, null, 'un porcentaje del texto no se convierte en sueldo');
+  assert.equal(c.raw.kind, 'social_post');
+  assert.equal(c.posted_at, '2026-11-25T10:00:00.000Z');
+});
+step('posts: quien busca trabajo o vende un curso no es una oferta', () => {
+  const seeker = { text: 'Soy closer con 3 años de experiencia, busco trabajo remoto. Escríbeme por privado.', url: 'https://t.me/c/1/2' };
+  const course = { text: 'Aprende a ser closer en 30 días. Curso con garantía, plazas limitadas, únete al grupo ya.', url: 'https://t.me/c/1/3' };
+  assert.equal(mapItem(seeker), null); assert.equal(mapItem(course), null);
+});
+step('posts: sin enlace no hay oferta; un texto sin rol de ventas tampoco; inglés incluido', () => {
+  assert.equal(mapItem({ text: 'Buscamos closer de ventas remoto, comisión alta' }), null, 'sin enlace');
+  assert.equal(mapItem({ text: 'Buscamos diseñador gráfico freelance para logos', url: 'https://t.me/c/9/9' }), null, 'rol ajeno');
+  const en = mapItem({ message: 'We are hiring remote high ticket closers and setters (commission only, US leads).', permalink: 'https://www.facebook.com/groups/x/posts/5' });
+  assert.ok(en, 'inglés'); assert.equal(en.url, 'https://www.facebook.com/groups/x/posts/5');
+});
+step('posts: una oferta de empleo normal (título, empresa, descripción) no cambia de comportamiento', () => {
+  const job = { title: 'Closer de ventas', company: 'Acme', url: 'https://x.test/j/1', description: 'Buscamos closer. Comisión alta.' };
+  const c = mapItem(job); assert.equal(c.title, 'Closer de ventas'); assert.equal(c.company, 'Acme'); assert.equal(c.raw.kind, undefined);
+  assert.equal(mapItem({ title: 'Peluquero', company: 'Salón', url: 'https://x.test/j/2', description: 'Buscamos peluquero' }).title, 'Peluquero', 'una oferta con empresa no se filtra por rol aquí');
+});
+
 for (const [status, name, message] of results) console.log(`${status}  ${name}${message ? '\n      ' + message : ''}`);
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} pasos OK`);
