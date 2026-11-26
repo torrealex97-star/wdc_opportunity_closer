@@ -340,6 +340,12 @@ await step('Direcciones a vigilar: tres fuentes sin direcciones lo dicen; se añ
   await form.getByRole('button', { name: 'Añadir' }).click();
   const row = tg.locator('tbody tr', { hasText: 'https://t.me/empleo_closers_es' }); await row.waitFor();
   assert.match(await row.innerText(), /Canal de prueba[\s\S]*Activa/); assert.match(await tg.innerText(), /1 activa/);
+  // «Probar con estas direcciones»: aparece solo con direcciones activas y da una respuesta visible (aviso o error explicado), nunca silencio.
+  const probe = page.getByTestId('target-probe-apify-telegram'); await probe.waitFor();
+  assert.equal(await page.getByTestId('target-probe-apify-facebook').count(), 0, 'sin direcciones activas no hay botón de prueba');
+  page.once('dialog', d => d.accept()); await probe.click();
+  await tg.locator('[role=status], [role=alert]').first().waitFor({ timeout: 8000 });
+  assert.ok((await tg.locator('[role=status], [role=alert]').first().innerText()).trim().length > 10, 'la prueba responde con un mensaje');
   await row.getByRole('button', { name: /^Pausar/ }).click(); await row.getByText('Pausada').waitFor(); assert.match(await tg.innerText(), /Sin direcciones activas/, 'pausada no cuenta como activa');
   const fb = page.getByTestId('target-form-apify-facebook'); await fb.getByLabel('Dirección').fill('http://facebook.com/groups/x'); await fb.getByRole('button', { name: 'Añadir' }).click();
   await page.getByTestId('targets-apify-facebook').getByRole('alert').waitFor(); assert.match(await page.getByTestId('targets-apify-facebook').getByRole('alert').innerText(), /https/);
