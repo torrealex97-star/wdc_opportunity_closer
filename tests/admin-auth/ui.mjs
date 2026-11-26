@@ -355,7 +355,8 @@ await step('Direcciones a vigilar: tres fuentes sin direcciones lo dicen; se añ
 });
 await step('Formulario de empleadores (público, móvil): un envío vacío explica cada campo y uno completo se confirma; sin errores de consola ni desbordes', async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const emp = await ctx.newPage(); const problems = [];
-  emp.on('console', m => { if (m.type() === 'error') problems.push(m.text()); }); emp.on('pageerror', e => problems.push(String(e)));
+  // El envío vacío provoca A PROPÓSITO un 422 y Chromium lo anota como error de consola: es esperado; cualquier otro error cuenta.
+  emp.on('console', m => { if (m.type() === 'error' && !/status of 422/.test(m.text())) problems.push(m.text()); }); emp.on('pageerror', e => problems.push(String(e)));
   await emp.goto(BASE + '/empleadores'); await emp.getByRole('heading', { name: /Publica tu oferta/ }).waitFor();
   assert.ok(await emp.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil');
   await emp.getByRole('button', { name: /Enviar la oferta/ }).click(); await emp.getByTestId('employer-form').getByRole('alert').first().waitFor();
