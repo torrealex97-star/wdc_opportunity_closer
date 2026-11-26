@@ -1,5 +1,6 @@
 import { countExact, ORG } from './external';
 import { serviceRest } from './supabaseAuth';
+import { CORE_ROLE_FILTER } from './spendPlan';
 import { parseTarget, stateOf, targetFromRow, weekStart, windowStart, type DayCounts, type WaterfallState, type WaterfallTarget } from './waterfall';
 
 // Lectura y escritura del objetivo del waterfall y los recuentos del día. La lógica (hueco, plan) vive en
@@ -37,10 +38,10 @@ const since = (iso: string, column = 'first_seen_at') => `${column}=gte.${encode
 export async function dayCounts(now = new Date()): Promise<DayCounts> {
   const day = windowStart(now), week = weekStart(now), org = `org_id=eq.${ORG}`;
   const [qualified, pending, weekTotal, weekQualified] = await Promise.all([
-    countExact([org, since(day, 'reviewed_at'), QUALIFIED]),
+    countExact([org, since(day, 'reviewed_at'), QUALIFIED, CORE_ROLE_FILTER]),
     countExact([org, since(day), PENDING]),
     countExact([org, since(week)]),
-    countExact([org, since(week), QUALIFIED]),
+    countExact([org, since(week), QUALIFIED, CORE_ROLE_FILTER]),
   ]);
   return { qualified, pending, week_total: weekTotal, week_qualified: weekQualified };
 }

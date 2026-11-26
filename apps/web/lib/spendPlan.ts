@@ -14,6 +14,15 @@ export function parseMonthlyUsd(value: unknown): number | null {
   return usd >= MIN_MONTHLY_USD && usd <= MAX_MONTHLY_USD ? usd : null;
 }
 
+/**
+ * Roles que cuentan para el objetivo diario y para repartir el gasto: lo que la academia busca (closer, setter, cold caller, SDR).
+ * El «ejecutivo comercial» genérico y los mandos se siguen aprobando y enseñando a las alumnas, pero NO cuentan aquí: medido el
+ * 2026-11-26, 708 de ~1.800 ofertas de la semana eran «ejecutivo comercial» y llenaban el objetivo, así que el cron dejaba de buscar
+ * closers. Las dos fuentes de verdad (objetivo y reparto) usan este mismo filtro.
+ */
+export const CORE_ROLES = ['closer', 'setter', 'cold_caller', 'sdr'] as const;
+export const CORE_ROLE_FILTER = `role=in.(${CORE_ROLES.join(',')})`;
+
 // Cada ruta de pago (un portal, un actor) recibe como mucho su parte del dinero que queda, y las de más
 // **ofertas aprobadas por dólar** van primero: lo que se recoge sin aprobarlo no justifica el gasto. Sin medición
 // no se le supone rendimiento: va al final, declarado.

@@ -1,3 +1,4 @@
+import { CORE_ROLE_FILTER } from './spendPlan';
 import { enrich } from './offerScore';
 import { callTimeout, timeLeft } from './cronBudget';
 import { salaryFromText } from './salary';
@@ -320,7 +321,7 @@ export async function statsBySource(): Promise<SourceStat[] | null> {
 export async function approvedBySource(sources: string[], since: string): Promise<Record<string, number> | null> {
   const counts = await Promise.all(sources.map(async source => {
     const n = await countExact([`org_id=eq.${ORG}`, `source=eq.${encodeURIComponent(source)}`,
-      `first_seen_at=gte.${encodeURIComponent(since)}`, 'editorial_status=in.(approved,published)']);
+      `first_seen_at=gte.${encodeURIComponent(since)}`, 'editorial_status=in.(approved,published)', CORE_ROLE_FILTER]);
     return [source, n] as const;
   }));
   // Un solo recuento fallido invalida el conjunto: una suma incompleta se leería como rendimiento real.
