@@ -174,6 +174,20 @@ export function startMocks({ authPort, enginePort }) {
       if (req.method === 'PATCH') { const row = state.targets.find(t => t.id === id); if (!row) return send(res, 200, []); Object.assign(row, body); return send(res, 200, [row]); }
       if (req.method === 'DELETE') { const i = state.targets.findIndex(t => t.id === id); if (i < 0) return send(res, 200, []); const [row] = state.targets.splice(i, 1); return send(res, 200, [row]); }
     }
+    // Envíos del formulario de empleadores (tabla `employer_submissions`): filtros `eq.`/`gte.` como PostgREST, 409 por oferta repetida y baja por huella.
+    if (url.pathname === '/rest/v1/employer_submissions') {
+      if (state.employerMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.employer_submissions' in the schema cache" });
+      state.employerSubmissions ??= [];
+      const q = Object.fromEntries(url.searchParams); const eq = k => (q[k] ?? '').replace(/^eq\./, '');
+      const match = r => (!q.org_id || r.org_id === eq('org_id')) && (!q.ip_hash || r.ip_hash === eq('ip_hash')) && (!q.contact_email || r.contact_email === decodeURIComponent(eq('contact_email')))
+        && (!q.offer_external_id || r.offer_external_id === eq('offer_external_id')) && (!q.created_at || r.created_at >= decodeURIComponent(q.created_at.replace(/^gte\./, '')));
+      if (req.method === 'GET') return send(res, 200, state.employerSubmissions.filter(match).map(r => ({ id: r.id })));
+      if (req.method === 'POST') {
+        if (state.employerSubmissions.some(r => r.org_id === body.org_id && r.offer_external_id === body.offer_external_id)) return send(res, 409, { code: '23505', message: 'duplicate key value' });
+        state.employerSubmissions.push({ id: globalThis.crypto.randomUUID(), created_at: new Date().toISOString(), ...body }); return send(res, 201, null);
+      }
+      if (req.method === 'DELETE') { state.employerSubmissions = state.employerSubmissions.filter(r => !match(r)); return send(res, 200, []); }
+    }
     // Voz: consumo y incidencias de proveedor (tablas `voice_usage` y `voice_provider_events`); vacías, como la base recién migrada.
     if (url.pathname === '/rest/v1/voice_usage') return send(res, 200, req.method === 'GET' ? (state.voiceUsage ?? []) : null);
     if (url.pathname === '/rest/v1/voice_provider_events') return send(res, req.method === 'GET' ? 200 : 201, req.method === 'GET' ? (state.voiceEvents ?? []) : null);

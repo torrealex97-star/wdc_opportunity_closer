@@ -79,6 +79,7 @@ node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spendfloor.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/closerpriority.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/spendpace.mjs
+node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/employer.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/commandcenter.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/runoutcome.mjs
 node --experimental-strip-types --import ./tests/admin-auth/ts-resolve.mjs tests/admin-auth/freelance.mjs

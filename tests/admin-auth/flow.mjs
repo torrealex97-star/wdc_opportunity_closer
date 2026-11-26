@@ -1201,6 +1201,41 @@ await step('Direcciones a vigilar: exige sesión, valida por fuente, no duplica,
   const unread = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-telegram'); assert.match(unread.cause, /no se pudieron leer/i);
   state.targetsMissing = false; state.targets = [];
 });
+await step('Formulario de empleadores: entra como borrador con el contacto aparte; valida, frena duplicados, abusos y bots; sin tabla no acepta nada', async () => {
+  state.employerSubmissions = []; state.employerMissing = false;
+  const ok = (over = {}) => ({ company: 'Academia Delta', website: 'https://delta.example.com', contact_name: 'Marta Ruiz', contact_email: 'marta@delta.example.com', role: 'closer', contract: 'fijo_variable', market: 'ES', pay: '1.200 € fijos + 8 % por cierre',
+    description: 'Buscamos closer de ventas para llamadas con leads cualificados de nuestro programa de formación. Trabajo remoto y formación incluida.', offer_url: 'https://delta.example.com/empleo/closer', accepted_terms: true, ...over });
+  const send = (body, ip = '203.0.113.7', headers = {}) => call('/api/employers/offer', { method: 'POST', body, cookies: false, headers: { 'x-real-ip': ip, ...headers } });
+  const rows = () => [...state.external.values()].filter(x => x.source === 'empleadores');
+  const page = await fetch(BASE + '/empleadores'); assert.equal(page.status, 200); const html = await page.text(); assert.match(html, /Publica tu oferta/); assert.match(html, /borrador pendiente de revisión legal/);
+  // 1) una oferta válida: borrador con su procedencia; el contacto está en su tabla y NO en la oferta; la IP no se guarda
+  let r = await send(ok()); assert.equal(r.status, 200, JSON.stringify(r.json)); assert.match(r.json.message, /revisa/);
+  assert.equal(rows().length, 1); assert.equal(rows()[0].editorial_status, 'draft', 'nunca se publica sola'); assert.equal(rows()[0].title, 'Closer de ventas · Academia Delta');
+  assert.equal(JSON.stringify(rows()[0]).includes('marta@delta'), false, 'el email de la empresa no va en la oferta que verá la alumna');
+  assert.equal(state.employerSubmissions.length, 1); assert.equal(state.employerSubmissions[0].contact_email, 'marta@delta.example.com'); assert.equal(JSON.stringify(state.employerSubmissions[0]).includes('203.0.113.7'), false, 'la IP no se guarda, solo una huella');
+  // 2) la misma oferta otra vez: 409 y no se duplica
+  r = await send(ok()); assert.equal(r.status, 409); assert.equal(rows().length, 1); assert.equal(state.employerSubmissions.length, 1);
+  // 3) datos mal: 422 con el campo que corregir; nada guardado
+  r = await send(ok({ company: '', offer_url: 'http://x.example.com', description: 'corta', accepted_terms: false }), '203.0.113.8'); assert.equal(r.status, 422);
+  for (const f of ['company', 'offer_url', 'description', 'accepted_terms']) assert.ok(r.json.fields[f], `error de ${f}`);
+  r = await send(ok({ offer_url: 'https://bit.ly/abc' }), '203.0.113.8'); assert.equal(r.status, 422); assert.ok(r.json.fields.offer_url);
+  assert.equal(rows().length, 1, 'lo inválido no entra');
+  // 4) bot: el campo trampa relleno responde como un éxito pero no guarda nada
+  r = await send({ ...ok({ offer_url: 'https://delta.example.com/empleo/otra' }), hp: 'https://spam.example.com' }, '203.0.113.9'); assert.equal(r.status, 200); assert.equal(rows().length, 1); assert.equal(state.employerSubmissions.length, 1);
+  // 5) otro sitio web no puede enviar el formulario
+  r = await send(ok({ offer_url: 'https://delta.example.com/empleo/x' }), '203.0.113.10', { origin: 'https://sitio-malo.example.com' }); assert.equal(r.status, 403); assert.equal(rows().length, 1);
+  // 6) límite por origen: 5 al día; la sexta, 429
+  for (let i = 0; i < 5; i++) { r = await send(ok({ contact_email: `ip${i}@delta.example.com`, offer_url: `https://delta.example.com/empleo/ip${i}` }), '203.0.113.50'); assert.equal(r.status, 200, `envío ${i + 1}: ${JSON.stringify(r.json)}`); }
+  r = await send(ok({ contact_email: 'ip9@delta.example.com', offer_url: 'https://delta.example.com/empleo/ip9' }), '203.0.113.50'); assert.equal(r.status, 429); assert.match(r.json.detail, /varias ofertas/);
+  // 7) límite por email: 5 al día aunque cambie el origen
+  for (let i = 0; i < 5; i++) { r = await send(ok({ contact_email: 'mismo@delta.example.com', offer_url: `https://delta.example.com/empleo/em${i}` }), `198.51.100.${20 + i}`); assert.equal(r.status, 200, `envío ${i + 1}`); }
+  r = await send(ok({ contact_email: 'mismo@delta.example.com', offer_url: 'https://delta.example.com/empleo/em9' }), '198.51.100.99'); assert.equal(r.status, 429);
+  // 8) sin la tabla (migración sin aplicar) no se acepta nada: un hueco no es un cero
+  const stored = rows().length; state.employerMissing = true;
+  r = await send(ok({ contact_email: 'nueva@delta.example.com', offer_url: 'https://delta.example.com/empleo/nueva' }), '198.51.100.200'); assert.equal(r.status, 503); assert.equal(rows().length, stored, 'nada entra sin poder contar los envíos'); state.employerMissing = false;
+  // 9) el Control de fuentes la mide como una fuente más
+  const item = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'empleadores'); assert.ok(item, 'empleadores sale en el Control de fuentes'); assert.equal(item.name, 'Formulario de empleadores');
+});
 await step('Control de fuentes: exige sesión; cada fuente cae en un estado medido, el titular dice «X de N» y lo que no cualifica sale «a trabajar» con causa y siguiente paso', async () => {
   const savedJar = jar; jar = {};
   assert.equal((await call('/api/admin/source-control')).status, 401);

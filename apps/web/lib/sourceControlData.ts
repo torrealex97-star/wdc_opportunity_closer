@@ -74,6 +74,12 @@ export async function loadSourceControl(): Promise<SourceControlPayload | null> 
       seen7: window ? window.seen : null, approved7: window ? window.approved : null, reasons: reasons ? reasons.get(portal.source) ?? [] : null, drafts7: window ? window.drafts : null,
       targets: TARGET_SOURCES[portal.source] ? (targets ? targets.get(portal.source) ?? 0 : null) : undefined });
   }
+  // Formulario público de empleadores (`/empleadores`): fuente propia que no está en el catálogo ni es de Apify. Siempre abierta si la app
+  // responde; lo que da se mide igual que el resto (vistas y aprobadas en la ventana) y sin ofertas aparece como «sin recoger», no como cero fingido.
+  const form = recent ? recent.get('empleadores') ?? { seen: 0, approved: 0, drafts: 0 } : null;
+  inputs.push({ source: 'empleadores', name: 'Formulario de empleadores', kind: 'gratuitas', engine: null,
+    health: { source: 'empleadores', state: 'conectada', cause: 'Formulario público abierto en /empleadores: las empresas envían su oferta y entra como borrador.', next: 'Difundir el enlace entre empresas, agencias e infoproductores.' },
+    seen7: form ? form.seen : null, approved7: form ? form.approved : null, reasons: reasons ? reasons.get('empleadores') ?? [] : null, drafts7: form ? form.drafts : null });
   return {
     ...summarize(inputs), window_days: WINDOW_DAYS, generated_at: new Date().toISOString(),
     recent_note: recent ? null : `No se pudo leer lo que entró en los últimos ${WINDOW_DAYS} días: las fuentes que no son del motor salen sin medir («—»), no en cero.`,

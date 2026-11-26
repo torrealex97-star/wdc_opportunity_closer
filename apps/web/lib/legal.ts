@@ -20,3 +20,12 @@ export const VOICE_CONSENT_TEXT = [
   'No hablaré de datos personales de terceros ni de información confidencial de mi empleo actual.',
 ] as const;
 export const COOKIES_VERSION = 'v1-borrador', COOKIES_DATE = '2026-11-24';
+
+// Términos del formulario público de empleadores (/empleadores). BORRADOR: lo revisa un profesional antes de difundir el enlace.
+export const EMPLOYER_TERMS_VERSION = 'v1-borrador', EMPLOYER_TERMS_DATE = '2026-11-26';
+export const EMPLOYER_TERMS_TEXT = [
+  'Confirmo que la oferta es real, que tengo autoridad para publicarla en nombre de la empresa y que cumple la ley: sin discriminación, sin cobrar a la candidata por acceder al puesto y sin prometer ingresos que no pueda cumplir.',
+  'Women Digital Closers revisa la oferta antes de mostrarla a sus alumnas y puede rechazarla, editarla o retirarla sin que esté obligada a publicarla. Publicarla no crea ninguna relación laboral ni de intermediación con la academia.',
+  'El pago y las condiciones que escribo son los míos: la academia no los completa ni los infiere. Las candidatas se ponen en contacto con la empresa por el enlace que indico.',
+  'Mi nombre y mi email se guardan solo para poder contactarme sobre esta oferta y no se muestran a las alumnas. No se guarda mi dirección IP, solo una huella diaria para frenar abusos.',
+] as const;

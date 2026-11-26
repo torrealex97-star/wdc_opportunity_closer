@@ -353,6 +353,27 @@ await step('Direcciones a vigilar: tres fuentes sin direcciones lo dicen; se añ
   await row.getByRole('button', { name: /^Quitar/ }).click(); await row.waitFor({ state: 'detached' });
   assert.equal((await box.innerText()).includes('https://t.me/empleo_closers_es'), false, 'quitada de verdad');
 });
+await step('Formulario de empleadores (público, móvil): un envío vacío explica cada campo y uno completo se confirma; sin errores de consola ni desbordes', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const emp = await ctx.newPage(); const problems = [];
+  // El envío vacío provoca A PROPÓSITO un 422 y Chromium lo anota como error de consola: es esperado; cualquier otro error cuenta.
+  emp.on('console', m => { if (m.type() === 'error' && !/status of 422/.test(m.text())) problems.push(m.text()); }); emp.on('pageerror', e => problems.push(String(e)));
+  await emp.goto(BASE + '/empleadores'); await emp.getByRole('heading', { name: /Publica tu oferta/ }).waitFor();
+  assert.ok(await emp.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil');
+  await emp.getByRole('button', { name: /Enviar la oferta/ }).click(); await emp.getByTestId('employer-form').getByRole('alert').first().waitFor();
+  const text = await emp.getByTestId('employer-form').innerText(); assert.match(text, /nombre de la empresa/); assert.match(text, /aceptar los términos/);
+  // El error del envío vacío queda dentro de la etiqueta (así lo oyen los lectores de pantalla): no vale la coincidencia exacta.
+  await emp.getByLabel(/^Empresa/).fill('Academia Delta'); await emp.getByLabel('Web de la empresa (https)').fill('https://delta.example.com');
+  await emp.getByLabel('Tu nombre').fill('Marta Ruiz'); await emp.getByLabel(/Tu email de contacto/).fill('marta@delta.example.com');
+  await emp.getByLabel(/^Puesto/).selectOption('closer'); await emp.getByLabel(/^Tipo de contrato/).selectOption('fijo_variable'); await emp.getByLabel(/^Mercado/).selectOption('ES');
+  await emp.getByLabel(/Descripción del puesto/).fill('Buscamos closer de ventas para llamadas con leads cualificados de nuestro programa de formación. Trabajo remoto y formación incluida.');
+  await emp.getByLabel(/Enlace de la oferta/).fill('https://delta.example.com/empleo/closer');
+  await emp.getByRole('checkbox', { name: /Acepto estos términos/ }).check();
+  // Se mira la respuesta REAL del envío (estado y campos): si el servidor lo rechaza, el error dice por qué.
+  const [resp] = await Promise.all([emp.waitForResponse(r => r.url().includes('/api/employers/offer')), emp.getByRole('button', { name: /Enviar la oferta/ }).click()]);
+  const out = await resp.json().catch(() => ({})); assert.equal(resp.status(), 200, `el servidor respondió ${resp.status()}: ${JSON.stringify(out)}`);
+  await emp.getByTestId('employer-done').waitFor(); assert.match(await emp.getByTestId('employer-done').innerText(), /revisa/);
+  assert.deepEqual(problems, [], `errores en la página: ${problems.join(' | ')}`); await ctx.close();
+});
 await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su perfil con consentimiento y el enlace de su vídeo', async () => {
   await page.getByRole('button', { name: 'Alumnas' }).click(); await page.getByRole('heading', { name: 'Alumnas con acceso.' }).waitFor();
   await page.getByLabel('Invitar a una alumna').fill('lucia@alumna.dev'); await page.getByRole('button', { name: 'Enviar invitación' }).click();
