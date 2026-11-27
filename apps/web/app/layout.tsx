@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import RecoveryRedirect from '../components/RecoveryRedirect';
 export const metadata: Metadata = {
-  title: 'Closer IA OPs',
-  description: 'Encuentra y selecciona oportunidades profesionales para tus alumnas.',
+  title: 'Women Digital Closer',
+  description: 'Selección de oportunidades, formación y práctica para las alumnas de Women Digital Closers.',
   robots: { index: false, follow: false },
 };
 export default function Layout({ children }: { children: React.ReactNode }) {

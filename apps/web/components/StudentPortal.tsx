@@ -18,7 +18,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw Object.assign(new Error(typeof (data as { detail?: string }).detail === 'string' ? (data as { detail: string }).detail : 'La operación falló.'), { status: response.status });
   return data as T;
 }
-const Brand = () => <a className="brand" href="/alumna" aria-label="Women Digital Closer"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>;
+const Brand = () => <a className="brand" href="/alumna" aria-label="Women Digital Closer · Acceso"><img className="brand-logo" src="/brand/wdc-logo.png" alt="" width={367} height={158} /></a>;
 
 function Login({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<'login' | 'forgot'>('login');

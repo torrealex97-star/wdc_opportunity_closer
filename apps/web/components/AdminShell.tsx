@@ -30,7 +30,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-const Brand = () => <a className="brand" href="/admin" aria-label="Closer IA OPs · panel"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>;
+const Brand = () => <a className="brand" href="/admin" aria-label="Women Digital Closer · Panel"><img className="brand-logo" src="/brand/wdc-logo.png" alt="" width={367} height={158} /></a>;
 
 function Login({ onLogin }: { onLogin: (me: Me) => void }) {
   const [mode, setMode] = useState<'login' | 'forgot'>('login');

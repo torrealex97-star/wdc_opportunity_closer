@@ -141,7 +141,7 @@ export default function Workspace() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <a className="brand" href="/" aria-label="WDC · Inicio"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>
+      <a className="brand" href="/" aria-label="Women Digital Closer · Inicio"><img className="brand-logo" src="/brand/wdc-logo.png" alt="" width={367} height={158} /></a>
       <div className="workspace-label">ESPACIO DEL EQUIPO</div>
       <nav aria-label="Navegación principal">
         <button className={tab === 'search' ? 'nav active' : 'nav'} onClick={() => setTab('search')}><Compass size={18} /> Oportunidades <span className="nav-dot" /></button>

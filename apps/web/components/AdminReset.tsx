@@ -34,7 +34,7 @@ export default function AdminReset({ scope = 'admin' }: { scope?: 'admin' | 'stu
     finally { setBusy(false); }
   }
   return <div className="auth-wrap"><div className="auth-card">
-    <a className="brand" href={home} aria-label="Closer IA OPs"><span className="brand-mark">w.</span><span>Women Digital<br /><strong>Closer</strong></span></a>
+    <a className="brand" href={home} aria-label="Women Digital Closer · Panel"><img className="brand-logo" src="/brand/wdc-logo.png" alt="" width={367} height={158} /></a>
     {done ? <><div><span className="eyebrow">LISTO</span><h1>Contraseña guardada</h1><p>Ya puedes entrar {who} con tu email y la contraseña nueva.</p></div><a className="primary" href={home}>Ir {who}</a></>
       : problem ? <><div><span className="eyebrow">ENLACE NO VÁLIDO</span><h1>Pide un enlace nuevo</h1><p>{problem}</p></div><a className="primary" href={home}>Volver al acceso</a></>
       : !token ? <p className="muted"><LoaderCircle className="spin" size={18} /> Comprobando enlace…</p>
