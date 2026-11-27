@@ -1,4 +1,5 @@
 import { POST_TEXT_KEYS, JOB_KEYS, headline, offersSalesJob } from './socialPosts';
+import { apifyRejection } from './apifyErrors';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { timeLeft, MIN_STEP_MS } from './cronBudget';
 import { ingest, MAX_CANDIDATES, ORG, type Candidate } from './external';
@@ -182,7 +183,7 @@ export async function startRun(actor: ActorRow, by: string, publicBase: string, 
   const hook = webhookToken() ? Buffer.from(JSON.stringify([{ eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT', 'ACTOR.RUN.ABORTED'], requestUrl: `${publicBase}/api/apify/webhook?t=${webhookToken()}` }])).toString('base64') : '';
   if (hook) params.set('webhooks', hook);
   const response = await api(`/v2/acts/${actorPath(actor.actor)}/runs?${params}`, token, { method: 'POST', body: JSON.stringify(input) });
-  if (!response.ok) return { ok: false, error: response.status === 401 || response.status === 403 ? 'Apify rechazó la clave.' : `Apify respondió HTTP ${response.status}.` };
+  if (!response.ok) return { ok: false, error: apifyRejection(response.status, await response.json().catch(() => null)) };
   const run = (await response.json().catch(() => ({}))).data as { id?: string; defaultDatasetId?: string } | undefined;
   if (!run?.id) return { ok: false, error: 'Apify no devolvió el identificador de la ejecución.' };
   // La ejecución ya está lanzada (y se paga): si no se puede registrar, se reintenta y, si sigue fallando, se DECLARA con su id

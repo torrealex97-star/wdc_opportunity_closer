@@ -1,3 +1,11 @@
+## El cron de hoy no arrancó ningún portal de Apify: se registra el motivo real (2026-11-27)
+
+- **Medido hoy (*verified*, base real, lectura):** el cron de las 06:01 UTC anotó `etapa=apify · 0 de 14 arrancó` con «Apify rechazó la clave» en los portales listados; una segunda pasada a las 06:43 anotó «Sin tiempo en el presupuesto del cron». Las ejecuciones de Apify con coste son del 2026-11-26 (6 ejecuciones, 2,51 USD; de las 5 de las 15:17–15:20, las 5 con 0 elementos conservados) y ninguna del 2026-11-27. Aprobadas de roles de la academia en 24 h: Jooble 5, JSearch 11, Google Jobs 7; el resto de fuentes de pago, 0.
+- **Lo que NO se sabe:** la causa del rechazo. La clave guardada sigue figurando «válida» pero su última prueba es del **2026-10-16**, y la app contaba **cualquier 401 o 403 como «clave rechazada»**, aunque un 403 también es el límite de uso mensual, el saldo o un permiso. No hay conclusión sin leer la respuesta de Apify; este cambio hace que esa respuesta quede registrada.
+- **Arreglo (*tested*, rojo → verde):** `apifyRejection` (`lib/apifyErrors.ts`, pura) incluye el tipo y el mensaje que devuelve Apify (una línea, acotado, sin HTML ni claves); un 403 ya no se presenta como clave mala; sin cuerpo legible dice «sin detalle». La nota del cron dice la causa común **una sola vez** («No arrancaron N por la misma causa: …») en lugar de cortarla por portal. `apifyerror.mjs` 5/5 (el paso de la causa común falla sin el cambio), `spendfloor.mjs` 9/9, paso nuevo de `flow.mjs` con un 403 simulado.
+- **Siguiente paso:** tras el próximo cron (06:01 UTC) leer la nota `etapa=apify`; si dice límite de uso o saldo, es una decisión del propietario (límite en la consola de Apify; no se sube nada sin su orden). Si dice clave, volver a guardarla en APIs y probarla.
+- **Límite:** nada de esto cambia gasto, límites ni qué portales corren.
+
 ## Colector de tableros fusionado (#193); falta la primera ejecución real (2026-11-27)
 
 - **Fusionado** (`34c0155`): CI `verify` y `web-admin` en verde en la cabeza. Se retira la ficha del colector.
