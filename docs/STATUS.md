@@ -6,6 +6,11 @@
 - **Control de fuentes:** cinco entradas nuevas «Tableros de empresas · <ATS>». Sin ofertas recibidas en 7 días salen **sin programar** con su causa (no «conectada»): hasta que el flujo envíe algo no se da por conectada.
 - **NO verificado (límite importante):** los hosts de los ATS están **bloqueados desde el entorno de desarrollo** (HTTP 000), así que los contratos son los **documentados por cada ATS y nunca se han leído en vivo**; las respuestas de muestra de las pruebas siguen esa documentación, **no son capturas reales**. Ninguna oferta real recogida todavía. **Siguiente paso:** lanzar el flujo «Boards collect» con `dry_run=1` (valor por defecto al lanzarlo a mano), leer el resumen —tableros ok y con error, y las ofertas de rol— y corregir cada contrato que no cuadre antes de dejarlo diario. Sin los secretos `INGEST_URL` e `INGEST_TOKEN` en el repositorio, el envío real no funcionará.
 - **Fuera de este incremento (T3):** Lever, Personio, BambooHR y detectar el ATS desde la web de una empresa.
+## Migración de avisos aplicada y comprobada (2026-11-27)
+
+- **Aplicada (*verified*, base real):** `20261127_student_alerts.sql` tras fusionar #191 (`4a3be57`). Comprobado después: existen `student_alerts` y `student_alert_prefs`, RLS activada en ambas, 0 políticas, `anon` y `authenticated` sin ningún privilegio, 0 filas. Corrige la nota de la entrada anterior («sin aplicar todavía»).
+- **Advisors (*verified*):** seguridad — solo el aviso informativo «RLS sin políticas» que ya tienen las demás tablas del proyecto (la clave de servicio es la única vía), más el de contraseñas filtradas en Auth que ya existía. Rendimiento — los dos índices de `student_alerts` salen como «sin usar» por tener 0 filas (esperable, no se tocan); sin claves foráneas sin índice nuevas.
+- **Sigue apagado:** `STUDENT_ALERTS_ENABLED` no está en «1», no hay `ALERTS_SECRET` ni clave de Resend confirmadas, y ninguna alumna ha dado su consentimiento: **no ha salido ningún correo real** y la entregabilidad no está medida. Activarlo es del propietario, después de la revisión legal del texto.
 
 ## Avisos rápidos de ofertas por email (2026-11-27)
 
