@@ -1,3 +1,9 @@
+## Test de InfoJobs roto por el calendario, no por el código (2026-11-27)
+
+- **Medido (*verified*):** `infojobs.mjs` falló en CI (`web-admin`) en una PR solo de documentación y **falla en local desde las 09:00 UTC** (3 de 3 ejecuciones) sobre `main` sin tocar. Causa: el fixture usaba fechas absolutas y la puntuación premia lo reciente; la oferta de setter, publicada el 2026-11-17 09:00 UTC, cumplió 10 días y dejó de puntuar para pedir su ficha («fichas pedidas: ij-closer-1 ×7», sin la de setter). Antes pasaba (CI y suite local de hace una hora).
+- **Arreglo (*tested*):** fechas relativas al reloj (2, 3 y 1 días, las mismas edades de cuando se escribió). Rojo 3/3 → verde 2/2 en local. No cambia código de producción.
+- **Riesgo conocido, sin medir:** otros tests (`api-shapes`, `challenges`, `nextpractice`, `source-routes`, `waterfall`) también contienen fechas absolutas de noviembre; hoy pasan, pero pueden caducar igual. Se revisan por separado.
+
 ## El cron de hoy no arrancó ningún portal de Apify: se registra el motivo real (2026-11-27)
 
 - **Medido hoy (*verified*, base real, lectura):** el cron de las 06:01 UTC anotó `etapa=apify · 0 de 14 arrancó` con «Apify rechazó la clave» en los portales listados; una segunda pasada a las 06:43 anotó «Sin tiempo en el presupuesto del cron». Las ejecuciones de Apify con coste son del 2026-11-26 (6 ejecuciones, 2,51 USD; de las 5 de las 15:17–15:20, las 5 con 0 elementos conservados) y ninguna del 2026-11-27. Aprobadas de roles de la academia en 24 h: Jooble 5, JSearch 11, Google Jobs 7; el resto de fuentes de pago, 0.
