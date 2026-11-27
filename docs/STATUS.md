@@ -1,3 +1,9 @@
+## Colector de tableros fusionado (#193); falta la primera ejecución real (2026-11-27)
+
+- **Fusionado** (`34c0155`): CI `verify` y `web-admin` en verde en la cabeza. Se retira la ficha del colector.
+- **Estado honesto:** el código y sus cinco fuentes del Control de fuentes están en `main`, pero **el colector no ha leído ni un tablero real**: los hosts de los ATS están bloqueados desde el entorno de desarrollo y los contratos son los documentados. Hasta que corra en GitHub Actions con `dry_run=1` y se lea su resumen (tableros ok y con error, ofertas de rol), las cinco fuentes siguen **sin programar** y no cuentan como conectadas ni como «hechas».
+- **Siguiente paso (propietario):** Actions → «Boards collect» → *Run workflow* con `dry_run=1`; pegar el resumen aquí para corregir cada contrato que no cuadre. Necesita los secretos `INGEST_URL` e `INGEST_TOKEN` (solo para el envío real).
+
 ## Colector directo de tableros de empresas (T1) (2026-11-27)
 
 - **Qué hace:** `scripts/boards_collect.py` + flujo `.github/workflows/boards-collect.yml` (a diario 05:17 UTC y a mano) leen los tableros públicos de **Greenhouse, Ashby, SmartRecruiters, Recruitee y Teamtailor (RSS)** de una lista propia (`scripts/boards_seed.json`, 110 tableros), se quedan con closer/setter/cold caller/SDR (vocabulario canónico) en mercados ES/LatAm o en español, y envían borradores por `/api/ingest`: **una fuente por ATS** (`ats-greenhouse`, `ats-ashby`, …) para medirlas por separado. Sin descripción o salario publicados el campo va vacío (nada se inventa); se limpian correos y teléfonos.
