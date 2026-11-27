@@ -405,6 +405,7 @@ export function startMocks({ authPort, enginePort }) {
         return send(res, 200, { data: { inputSchema: JSON.stringify({ properties: strict ? { mandatoryField: { type: 'string' }, search_term: { type: 'string' } } : { search_term: { type: 'string' }, location: { type: 'string' }, results_wanted: { type: 'integer' }, hours_old: { type: 'integer' }, country_indeed: { type: 'string' }, site_name: { type: 'array', items: { type: 'string' } }, proxyConfiguration: { type: 'object' } }, required: strict ? ['mandatoryField'] : ['search_term'] }) } });
       }
       if (apifyMatch[3] === 'runs' && req.method === 'POST') {
+        if (state.apifyRunReject) return send(res, 403, { error: { type: 'platform-feature-disabled', message: 'Monthly usage hard limit exceeded. Raise the limit in Settings.' } }); // Apify rechaza arrancar (límite de uso), con la clave bien
         const n = state.apifyCalls.length + 1; state.apifyCalls.push({ actor: apifyMatch[2], query: Object.fromEntries(url.searchParams), input: body, auth: bearer });
         return send(res, 201, { data: { id: 'RUN' + n + 'abcdef', defaultDatasetId: 'DS' + n, status: 'RUNNING' } });
       }

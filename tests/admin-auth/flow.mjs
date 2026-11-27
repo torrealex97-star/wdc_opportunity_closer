@@ -682,6 +682,16 @@ await step('Apify: lanzar adapta la entrada al esquema, aplica límites, webhook
   const over = await start({ id: tpl.id }); assert.equal(over.status, 409); assert.match(over.json.detail, /Presupuesto mensual agotado/); assert.equal(state.apifyCalls.length, calls);
   state.apifyRuns = state.apifyRuns.filter(x => x.run_id !== 'OLD1');
 });
+await step('Apify: si rechaza arrancar (403 por límite de uso) el motivo real de Apify llega al panel y no se culpa a la clave', async () => {
+  const [jobspy] = (await call('/api/admin/apify')).json.actors;
+  for (const r of state.apifyRuns) if (r.status === 'RUNNING') r.status = 'SUCCEEDED';
+  state.apifyRunReject = true;
+  const r = await call('/api/admin/apify', { method: 'POST', body: { action: 'start', id: jobspy.id } });
+  state.apifyRunReject = false;
+  assert.ok(r.status >= 400, `debe fallar: ${r.status}`);
+  assert.match(String(r.json.detail ?? r.json.error), /HTTP 403/); assert.match(String(r.json.detail ?? r.json.error), /platform-feature-disabled/); assert.match(String(r.json.detail ?? r.json.error), /Monthly usage hard limit exceeded/);
+  assert.doesNotMatch(String(r.json.detail ?? r.json.error), /rechazó la clave/, 'un 403 no se presenta como clave mala');
+});
 await step('Apify: una ejecución lanzada que no se puede registrar se DECLARA con su id (no es un éxito falso)', async () => {
   const [jobspy] = (await call('/api/admin/apify')).json.actors;
   const keep = state.apifyRuns; state.apifyRuns = []; state.failRunPost = true;

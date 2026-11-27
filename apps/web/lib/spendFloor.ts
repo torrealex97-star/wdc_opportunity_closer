@@ -52,7 +52,12 @@ export function apifyStageWhy(started: Array<{ actor: string; ok: boolean; error
   if (!started.length) return 'Ningún portal con búsqueda diaria pendiente.';
   const ok = started.filter(item => item.ok).length, bad = started.filter(item => !item.ok);
   if (!bad.length) return `${ok} búsqueda(s) lanzada(s); los resultados llegan después.`;
-  const reasons = bad.slice(0, 3).map(item => `${item.actor}: ${(item.error ?? 'sin motivo').replace(/\s+/g, ' ').slice(0, 55)}`).join(' | ');
+  const clean = (item: { error?: string }) => (item.error ?? 'sin motivo').replace(/\s+/g, ' ').trim();
+  // Misma causa en todos (p. ej. Apify rechaza arrancar): se dice UNA vez con su texto; repetirla por portal la cortaba y no dejaba ver cuál era.
+  if (bad.length > 1 && new Set(bad.map(clean)).size === 1) {
+    return `${ok} de ${started.length} arrancó. No arrancaron ${bad.length} por la misma causa: ${clean(bad[0]).slice(0, 150)} (${bad.slice(0, 3).map(item => item.actor).join(', ')}${bad.length > 3 ? ', …' : ''})`.slice(0, 240);
+  }
+  const reasons = bad.slice(0, 3).map(item => `${item.actor}: ${clean(item).slice(0, 55)}`).join(' | ');
   return `${ok} de ${started.length} arrancó. No arrancaron ${bad.length}: ${reasons}${bad.length > 3 ? ' …' : ''}`.slice(0, 240);
 }
 
