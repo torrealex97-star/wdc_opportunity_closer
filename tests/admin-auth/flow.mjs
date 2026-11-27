@@ -1302,6 +1302,9 @@ await step('Formulario de empleadores: entra como borrador con el contacto apart
   r = await send(ok({ contact_email: 'nueva@delta.example.com', offer_url: 'https://delta.example.com/empleo/nueva' }), '198.51.100.200'); assert.equal(r.status, 503); assert.equal(rows().length, stored, 'nada entra sin poder contar los envíos'); state.employerMissing = false;
   // 9) el Control de fuentes la mide como una fuente más
   const item = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'empleadores'); assert.ok(item, 'empleadores sale en el Control de fuentes'); assert.equal(item.name, 'Formulario de empleadores');
+  const boardsCtl = (await call('/api/admin/source-control')).json.items.filter(i => /^ats-(greenhouse|ashby|smartrecruiters|recruitee|teamtailor)$/.test(i.source));
+  assert.equal(boardsCtl.length, 5, 'una fuente por ATS del colector de tableros'); assert.ok(boardsCtl.every(i => /Tableros de empresas/.test(i.name) && /GitHub Actions/.test(i.cause) && /dry_run=1|Revisar/.test(i.next)), 'sin ofertas recibidas no se da por conectada y dice qué hacer');
+  assert.ok(boardsCtl.every(i => i.collected === 0), 'cero real medido (la ventana se leyó), no hueco');
 });
 await step('Control de fuentes: exige sesión; cada fuente cae en un estado medido, el titular dice «X de N» y lo que no cualifica sale «a trabajar» con causa y siguiente paso', async () => {
   const savedJar = jar; jar = {};

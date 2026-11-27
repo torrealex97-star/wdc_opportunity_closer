@@ -70,7 +70,7 @@ Preferencia: **conexión directa** (endpoint público del propio ATS o portal, s
 Dueño `C` = lo hace Claude; `P` = lo decide o aporta el propietario. Marcado `[x]` solo con evidencia.
 
 - [x] **T0** Leer las herramientas y escribir este documento (2026-11-24).
-- [ ] **T1** Colector directo en Actions sobre los tableros de empleadores (semilla de T2), con Greenhouse, Ashby, SmartRecruiters, Recruitee y Teamtailor primero; filtra por el vocabulario closer/setter/cold calling/SDR y por mercado, y envía borradores con su descripción (C).
+- [~] **T1** (código en `scripts/boards_collect.py`, 2026-11-27; contratos sin verificar en vivo, falta la primera ejecución con `dry_run=1`) Colector directo en Actions sobre los tableros de empleadores (semilla de T2), con Greenhouse, Ashby, SmartRecruiters, Recruitee y Teamtailor primero; filtra por el vocabulario closer/setter/cold calling/SDR y por mercado, y envía borradores con su descripción (C).
 - [ ] **T1b** Respaldo: colector del dataset de ats-scrapers para los ATS sin conector (Workday, iCIMS…) y Get on Board/Pandapé, filtrando con DuckDB. Antes, comprobar la licencia del dato y leer su esquema real en Actions (C; bloqueo: red de este entorno).
 - [ ] **T2** Semillas de empresas: semilla de job-radar (MIT; licencia de la semilla por comprobar), `portals.yml` de career-ops (MIT) y el directorio de Remote In Tech (ISC). Se descartan las listas CC BY-NC (C).
 - [ ] **T3** Conectores directos nuevos en el motor y el colector: **Lever**, Personio, BambooHR y la detección del ATS desde la web de una empresa (patrón de career-site-jobs-scraper y job-search-pipeline). Verificar cada endpoint contra el servicio real antes de darlo por bueno (C).
