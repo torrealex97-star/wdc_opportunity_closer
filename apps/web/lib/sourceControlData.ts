@@ -11,6 +11,8 @@ import { activeCounts } from './sourceTargetsStore';
 import { TARGET_SOURCES } from './sourceTargets';
 
 // Datos del control total: la muestra por fuente (con el informe del motor) más lo que entró y se aprobó en la ventana de 7 días.
+// ATS que lee el colector de tableros (`scripts/boards_collect.py`); el código de fuente es `ats-<id>`.
+const BOARD_ATS = [{ id: 'greenhouse', name: 'Greenhouse' }, { id: 'ashby', name: 'Ashby' }, { id: 'smartrecruiters', name: 'SmartRecruiters' }, { id: 'recruitee', name: 'Recruitee' }, { id: 'teamtailor', name: 'Teamtailor' }] as const;
 export const WINDOW_DAYS = 7;
 type Recent = { source: string; editorial_status: string };
 const QUALIFIED = new Set(['approved', 'published']);
@@ -80,6 +82,17 @@ export async function loadSourceControl(): Promise<SourceControlPayload | null> 
   inputs.push({ source: 'empleadores', name: 'Formulario de empleadores', kind: 'gratuitas', engine: null,
     health: { source: 'empleadores', state: 'conectada', cause: 'Formulario público abierto en /empleadores: las empresas envían su oferta y entra como borrador.', next: 'Difundir el enlace entre empresas, agencias e infoproductores.' },
     seen7: form ? form.seen : null, approved7: form ? form.approved : null, reasons: reasons ? reasons.get('empleadores') ?? [] : null, drafts7: form ? form.drafts : null });
+  // Colector directo de tableros de empresas (`scripts/boards_collect.py`, flujo `boards-collect.yml` en GitHub Actions): una fuente por ATS para medir
+  // cada una por separado. Sin ofertas recibidas en la ventana NO se da por conectada: sale «sin programar» con su causa (la primera ejecución real
+  // aún no consta) y se mide igual que el resto en cuanto envía algo.
+  for (const ats of BOARD_ATS) {
+    const code = `ats-${ats.id}`, window = recent ? recent.get(code) ?? { seen: 0, approved: 0, drafts: 0 } : null;
+    inputs.push({ source: code, name: `Tableros de empresas · ${ats.name}`, kind: 'gratuitas', engine: null,
+      health: window && window.seen > 0
+        ? { source: code, state: 'conectada', cause: `Colector de tableros (${ats.name}) en GitHub Actions: llegaron ofertas en los últimos ${WINDOW_DAYS} días.`, next: 'Revisar cuántas cualifican en la tabla.' }
+        : { source: code, state: 'sin_programar', cause: `El colector de tableros (${ats.name}) corre en GitHub Actions y no ha enviado ofertas en los últimos ${WINDOW_DAYS} días; su contrato con ${ats.name} aún no está verificado contra el servicio real.`, next: 'Lanzar el flujo «Boards collect» con dry_run=1, leer su resumen y, si cuadra, dejarlo correr a diario.' },
+      seen7: window ? window.seen : null, approved7: window ? window.approved : null, reasons: reasons ? reasons.get(code) ?? [] : null, drafts7: window ? window.drafts : null });
+  }
   return {
     ...summarize(inputs), window_days: WINDOW_DAYS, generated_at: new Date().toISOString(),
     recent_note: recent ? null : `No se pudo leer lo que entró en los últimos ${WINDOW_DAYS} días: las fuentes que no son del motor salen sin medir («—»), no en cero.`,
