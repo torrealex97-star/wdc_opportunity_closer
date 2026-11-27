@@ -1,3 +1,7 @@
+## Motivo real del rechazo de Apify fusionado (#195) (2026-11-27)
+
+- **Fusionado** (`2e7de62`), CI en verde. El registro del cron ya guarda el tipo y el mensaje que devuelve Apify cuando rechaza arrancar, y la causa común se dice una vez. Se retira la ficha.
+- **Sigue sin saberse por qué el cron de las 06:01 UTC no arrancó ningún portal.** Hasta leer la nota `etapa=apify` del próximo cron (06:01 UTC de mañana, ya con el motivo real) no hay causa ni arreglo; no se cambia ningún límite ni gasto sin orden del propietario.
 ## Test de InfoJobs roto por el calendario, no por el código (2026-11-27)
 
 - **Medido (*verified*):** `infojobs.mjs` falló en CI (`web-admin`) en una PR solo de documentación y **falla en local desde las 09:00 UTC** (3 de 3 ejecuciones) sobre `main` sin tocar. Causa: el fixture usaba fechas absolutas y la puntuación premia lo reciente; la oferta de setter, publicada el 2026-11-17 09:00 UTC, cumplió 10 días y dejó de puntuar para pedir su ficha («fichas pedidas: ij-closer-1 ×7», sin la de setter). Antes pasaba (CI y suite local de hace una hora).
