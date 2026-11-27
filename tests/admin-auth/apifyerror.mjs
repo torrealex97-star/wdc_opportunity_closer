@@ -20,7 +20,7 @@ step('sin cuerpo legible se dice, no se inventa una causa', () => {
   assert.match(apifyRejection(500, { error: { type: 'x', message: 'y' } }), /^Apify respondió HTTP 500/);
 });
 step('el detalle va acotado y limpio (una línea, sin secretos ni HTML)', () => {
-  const out = apifyRejection(403, { error: { type: 'a', message: `línea 1\n<script>x</script> token apify_api_ABCDEF1234567890 ${'z'.repeat(400)}` } });
+  const out = apifyRejection(403, { error: { type: 'a', message: `línea 1\n<script>x</script> token ${['apify', 'api', 'ABCDEF1234567890'].join('_')} ${'z'.repeat(400)}` } });
   assert.ok(out.length <= 220, `demasiado largo: ${out.length}`); assert.ok(!/\n|<script>/.test(out)); assert.ok(!/apify_api_ABCDEF/.test(out));
 });
 step('el registro del cron dice la causa común una vez, no la repite por portal', () => {
