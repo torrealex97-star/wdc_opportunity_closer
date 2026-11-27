@@ -15,6 +15,7 @@ const PERIODS = [7, 30, 90] as const;
 const when = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' });
 const LABEL = { invited: 'Invitada', active: 'Activa', paused: 'Pausada' } as const;
 
+import AlertsPanel from './AlertsPanel';
 export default function StudentsTab({ owner, onSessionLost }: { owner: boolean; onSessionLost: () => void }) {
   const [rows, setRows] = useState<Row[]>([]); const [email, setEmail] = useState('');
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30); const [overview, setOverview] = useState<Overview | null>(null); const seq = useRef(0);
@@ -45,6 +46,7 @@ export default function StudentsTab({ owner, onSessionLost }: { owner: boolean; 
     try { await api(`students?id=${r.id}`, { method: 'DELETE' }); setNotice(`Baja de ${r.email}.`); load(); } catch (err) { fail(err as Error); }
   }
   return <section aria-label="Alumnas">
+    <AlertsPanel onSessionLost={onSessionLost} />
     {error && <div className="alert error" role="alert"><span>{error}</span></div>}
     {notice && <div className="auth-note" role="status" style={{ marginBottom: 20 }}>{notice}</div>}
     <form className="search-panel admin-toolbar" onSubmit={invite} style={{ marginBottom: 28 }}>

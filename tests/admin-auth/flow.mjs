@@ -1201,6 +1201,73 @@ await step('Direcciones a vigilar: exige sesión, valida por fuente, no duplica,
   const unread = (await call('/api/admin/source-control')).json.items.find(i => i.source === 'apify-telegram'); assert.match(unread.cause, /no se pudieron leer/i);
   state.targetsMissing = false; state.targets = [];
 });
+await step('Avisos rápidos: consentimiento aparte, un correo con ofertas de su perfil, sin repetir, baja firmada y sin enviar a quien no lo activó', async () => {
+  state.alertsMissing = false; state.alertPrefs = []; state.alertRows = []; state.emails.length = 0;
+  const uid = n => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+  const seedStudent = (n, email, withProfile = true) => {
+    state.users.set(email, { id: uid(n), password: 'x'.repeat(12) });
+    state.students ??= []; state.students.push({ id: globalThis.crypto.randomUUID(), org_id: 'cloud-wdc', email, user_id: uid(n), status: 'active', created_at: new Date().toISOString() });
+    if (withProfile) { state.profiles ??= new Map(); state.profiles.set(uid(n), { user_id: uid(n), org_id: 'cloud-wdc', full_name: 'Alumna ' + n, city: 'Sevilla', target_roles: ['closer'], languages: ['es'], availability: null, video_url: null, consent_at: new Date().toISOString(), consent_version: 'v1' }); }
+    return { cookies: false, headers: { cookie: `wdc_student_at=${state.issue(email).access_token}` } };
+  };
+  const bea = seedStudent(1, 'bea@alumna.dev'), cris = seedStudent(2, 'cris@alumna.dev');
+  const DESC = ['Buscamos closer de ventas para llamadas con clientes de alto valor en España, trabajo remoto y comisiones sobre cierre.', 'Cierre de ventas por videollamada para programas de formación en español, equipo comercial pequeño en Sevilla.', 'Empresa de servicios busca persona closer para cerrar reuniones con directivos de pymes españolas, jornada completa.'];
+  const mkOffer = (id, title, status = 'approved') => state.external.set(`al|${id}`, { id: `00000000-0000-4000-8000-0000000001${id}`, source: 'al', external_id: id, title, company: 'Acme', location: 'Sevilla, España', url: `https://jobs.example.com/al-${id}`, salary: '30.000 €/año', description: DESC[Number(id) - 1] ?? DESC[0], posted_at: new Date().toISOString(), expires_at: new Date(Date.now() + 5 * 864e5).toISOString(), first_seen_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), editorial_status: status, role: 'closer', spain: true, score: 80, raw: {}, also_seen: [] });
+  const stash = [...state.external]; state.external.clear(); // las ofertas de otros pasos no cuentan aquí (se devuelven al final)
+  mkOffer('1', 'Closer de ventas remoto'); mkOffer('2', 'Closer high ticket formación'); mkOffer('3', 'Closer borrador interno', 'draft');
+  // Sin sesión no hay acceso; el consentimiento es un booleano explícito (nada de opt-in por omisión)
+  assert.equal((await call('/api/student/alerts', { cookies: false })).status, 401);
+  assert.equal((await call('/api/student/alerts', { cookies: false, method: 'PUT', body: { opt_in: true } })).status, 401);
+  assert.equal((await call('/api/student/alerts', { ...bea, method: 'PUT', body: { opt_in: 'si' } })).status, 422);
+  assert.equal((await call('/api/student/alerts', { ...bea, method: 'PUT', body: { opt_in: true }, headers: { ...bea.headers, origin: 'https://evil.test' } })).status, 403);
+  let g = await call('/api/student/alerts', bea); assert.equal(g.status, 200); assert.equal(g.json.opted_in, false); assert.ok(g.json.consent_text.length >= 3); assert.equal(g.json.cap_per_day, 3);
+  // Apagada la clave de Resend o con envío posible, sin consentimiento nadie recibe nada
+  assert.equal((await call('/api/admin/connections', { method: 'PUT', body: { provider: 'resend', secret: 're_alertas-0123456789' } })).status, 200);
+  assert.equal((await call('/api/cron/alerts', { cookies: false })).status, 401);
+  let run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.status, 200); assert.equal(run.json.opted_in, 0); assert.equal(state.emails.length, 0, 'sin consentimiento no sale ningún correo');
+  // Bea lo activa (Cris no)
+  const on = await call('/api/student/alerts', { ...bea, method: 'PUT', body: { opt_in: true } }); assert.equal(on.status, 200); assert.equal(on.json.opted_in, true);
+  assert.equal(state.alertPrefs.length, 1); assert.equal(state.alertPrefs[0].user_id, uid(1), 'el user_id sale de la sesión');
+  assert.equal((await call('/api/student/alerts', bea)).json.opted_in, true);
+  // Un envío: solo a Bea, con sus dos ofertas aprobadas (nunca el borrador), el enlace de la empresa y la baja
+  run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.status, 200, JSON.stringify(run.json)); assert.equal(run.json.sent, 1); assert.equal(run.json.offers, 2); assert.equal(run.json.failed, 0); assert.equal(run.json.truncated, false);
+  assert.equal(state.emails.length, 1); assert.deepEqual(state.emails[0].to, ['bea@alumna.dev']);
+  const mail = state.emails[0]; assert.match(mail.subject, /2 ofertas/); assert.match(mail.text, /al-1/); assert.match(mail.text, /al-2/); assert.doesNotMatch(mail.text, /al-3|borrador/);
+  assert.match(mail.text, /Retribución: 30\.000 €\/año/, 'la retribución es la de la oferta, tal cual');
+  assert.deepEqual(state.alertRows.map(r => r.status), ['sent', 'sent']); assert.ok(state.alertRows.every(r => r.sent_at && r.user_id === uid(1)));
+  // Una oferta se avisa una sola vez: la segunda pasada no repite
+  run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.json.sent, 0); assert.equal(state.emails.length, 1);
+  // Tope diario: con 3 avisadas hoy no sale una cuarta aunque haya oferta nueva
+  mkOffer('3', 'Closer de cuentas clave', 'approved'); state.alertRows.push({ id: globalThis.crypto.randomUUID(), org_id: 'cloud-wdc', user_id: uid(1), offer_id: 'otra-vieja', status: 'sent', reason: null, sent_at: new Date().toISOString(), created_at: new Date().toISOString() });
+  run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.json.sent, 0, 'tope de 3 al día'); assert.equal(state.emails.length, 1);
+  // Panel: recuentos reales, sin inventar
+  const ov = await call('/api/admin/student-alerts'); assert.equal(ov.status, 200); assert.equal(ov.json.enabled, true); assert.equal(ov.json.secret_set, true); assert.equal(ov.json.key_saved, true);
+  assert.equal(ov.json.opted_in, 1); assert.equal(ov.json.week.sent, 3); assert.equal(ov.json.cap_per_day, 3);
+  assert.equal((await call('/api/admin/student-alerts', { cookies: false })).status, 401);
+  // Baja: la página NO cambia nada (los escáneres abren el enlace); el botón sí; un token ajeno no sirve
+  const link = mail.text.match(/https?:\/\/[^\s]+\/api\/alerts\/unsubscribe\?u=([0-9a-f-]+)&t=([0-9a-f]+)/); assert.ok(link, 'el correo lleva el enlace de baja');
+  const path = `/api/alerts/unsubscribe?u=${link[1]}&t=${link[2]}`;
+  const view = await fetch(BASE + path); assert.equal(view.status, 200); assert.match(await view.text(), /Darme de baja/); assert.equal(state.alertPrefs[0].opted_in_at !== null, true, 'abrir el enlace no da de baja');
+  assert.equal((await fetch(BASE + `/api/alerts/unsubscribe?u=${link[1]}&t=${'0'.repeat(40)}`)).status, 400);
+  assert.equal((await fetch(BASE + `/api/alerts/unsubscribe?u=${uid(2)}&t=${link[2]}`, { method: 'POST' })).status, 400, 'el token de otra alumna no vale');
+  const bye = await fetch(BASE + path, { method: 'POST' }); assert.equal(bye.status, 200); assert.match(await bye.text(), /Baja confirmada/);
+  assert.equal(state.alertPrefs[0].opted_in_at, null); assert.equal((await call('/api/student/alerts', bea)).json.opted_in, false);
+  state.alertRows = state.alertRows.filter(r => r.offer_id === 'otra-vieja'); mkOffer('2', 'Closer high ticket formación');
+  run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.json.opted_in, 0); assert.equal(state.emails.length, 1, 'tras la baja no sale nada más');
+  // Sin tabla (migración sin aplicar): no se activa en falso ni se envía; se dice
+  state.alertsMissing = true;
+  assert.equal((await call('/api/student/alerts', { ...bea, method: 'PUT', body: { opt_in: true } })).status, 503);
+  const gm = await call('/api/student/alerts', bea); assert.equal(gm.status, 200); assert.equal(gm.json.opted_in, null); assert.ok(gm.json.error);
+  run = await call('/api/cron/alerts', { cookies: false, headers: { authorization: 'Bearer cron-secret-0123456789' } });
+  assert.equal(run.status, 200); assert.equal(state.emails.length, 1); assert.match(run.json.reason ?? '', /leer/i);
+  const ovm = await call('/api/admin/student-alerts'); assert.equal(ovm.json.opted_in, null); assert.equal(ovm.json.week, null, 'un recuento ilegible es null, no 0');
+  state.alertsMissing = false; state.external.clear(); stash.forEach(([k, v]) => state.external.set(k, v));
+});
 await step('Formulario de empleadores: entra como borrador con el contacto aparte; valida, frena duplicados, abusos y bots; sin tabla no acepta nada', async () => {
   state.employerSubmissions = []; state.employerMissing = false;
   const ok = (over = {}) => ({ company: 'Academia Delta', website: 'https://delta.example.com', contact_name: 'Marta Ruiz', contact_email: 'marta@delta.example.com', role: 'closer', contract: 'fijo_variable', market: 'ES', pay: '1.200 € fijos + 8 % por cierre',

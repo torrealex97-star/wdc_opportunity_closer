@@ -4,6 +4,7 @@ import { KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Trash2 } from 'lucid
 import { ROLE_LABELS } from '../lib/vocabulary';
 import { ApplicationForm } from './StudentApplications';
 import StudentPipeline from './StudentPipeline';
+import StudentAlerts from './StudentAlerts';
 import { clearStudentLocalData } from '../lib/studentLocalData';
 
 // Portal de alumnas: acceso por invitación (email + contraseña de Supabase Auth) y perfil propio. Los vídeos NO se suben
@@ -99,6 +100,7 @@ function ProfileForm({ email, onLogout, onLost }: { email: string; onLogout: () 
       {notice && <div className="auth-note" role="status">{notice}</div>}
       <button className="primary" disabled={busy || (!p.consent_at && !consent)}>{busy ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} Guardar perfil</button>
     </form>
+    <StudentAlerts onLost={onLost} />
     <ApplicationForm onLost={onLost} onSaved={() => setApps(n => n + 1)} />
     <Matches refreshKey={saves} onPrepared={() => setApps(n => n + 1)} onLost={onLost} />
     <StudentPipeline refreshKey={apps} onLost={onLost} />

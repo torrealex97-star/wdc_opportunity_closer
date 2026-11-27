@@ -188,6 +188,27 @@ export function startMocks({ authPort, enginePort }) {
       }
       if (req.method === 'DELETE') { state.employerSubmissions = state.employerSubmissions.filter(r => !match(r)); return send(res, 200, []); }
     }
+    // Avisos rápidos: consentimiento (`student_alert_prefs`, upsert por org+alumna) y cola (`student_alerts`, único org+alumna+oferta, reclamo por PATCH con filtro de estado).
+    if (url.pathname === '/rest/v1/student_alert_prefs') {
+      if (state.alertsMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.student_alert_prefs' in the schema cache" });
+      state.alertPrefs ??= []; const q = Object.fromEntries(url.searchParams);
+      if (req.method === 'POST') { const i = state.alertPrefs.findIndex(r => r.org_id === body.org_id && r.user_id === body.user_id); if (i >= 0) Object.assign(state.alertPrefs[i], body); else state.alertPrefs.push({ ...body }); return send(res, 201, [state.alertPrefs.find(r => r.org_id === body.org_id && r.user_id === body.user_id)]); }
+      let rows = state.alertPrefs.filter(r => (!q.user_id?.startsWith('eq.') || r.user_id === q.user_id.slice(3)) && (q.opted_in_at !== 'not.is.null' || r.opted_in_at));
+      const offset = Number(q.offset) || 0, limit = Number(q.limit) || 1000; return send(res, 200, rows.slice(offset, offset + limit));
+    }
+    if (url.pathname === '/rest/v1/student_alerts') {
+      if (state.alertsMissing) return send(res, 404, { code: 'PGRST205', message: "Could not find the table 'public.student_alerts' in the schema cache" });
+      state.alertRows ??= []; const q = Object.fromEntries(url.searchParams); const eq = k => q[k]?.startsWith('eq.') ? decodeURIComponent(q[k].slice(3)) : null;
+      const ids = q.id?.startsWith('in.(') ? q.id.slice(4, -1).split(',') : q.id?.startsWith('eq.') ? [q.id.slice(3)] : null;
+      const since = q.created_at?.startsWith('gte.') ? decodeURIComponent(q.created_at.slice(4)) : null;
+      if (req.method === 'POST') {
+        const out = []; for (const r of body) { if (state.alertRows.some(x => x.org_id === r.org_id && x.user_id === r.user_id && x.offer_id === r.offer_id)) continue; const row = { id: globalThis.crypto.randomUUID(), status: 'pending', reason: null, sent_at: null, created_at: new Date().toISOString(), ...r }; state.alertRows.push(row); out.push({ id: row.id, offer_id: row.offer_id }); }
+        return send(res, 201, out);
+      }
+      const hit = state.alertRows.filter(r => (!eq('user_id') || r.user_id === eq('user_id')) && (!ids || ids.includes(r.id)) && (!eq('status') || r.status === eq('status')) && (!since || r.created_at >= since));
+      if (req.method === 'PATCH') { hit.forEach(r => Object.assign(r, body)); return send(res, 200, hit.map(r => ({ id: r.id }))); }
+      const offset = Number(q.offset) || 0, limit = Number(q.limit) || 1000; return send(res, 200, hit.slice(offset, offset + limit));
+    }
     // Voz: consumo y incidencias de proveedor (tablas `voice_usage` y `voice_provider_events`); vacías, como la base recién migrada.
     if (url.pathname === '/rest/v1/voice_usage') return send(res, 200, req.method === 'GET' ? (state.voiceUsage ?? []) : null);
     if (url.pathname === '/rest/v1/voice_provider_events') return send(res, req.method === 'GET' ? 200 : 201, req.method === 'GET' ? (state.voiceEvents ?? []) : null);
@@ -218,7 +239,7 @@ export function startMocks({ authPort, enginePort }) {
     }
     if (url.pathname === '/rest/v1/students') {
       state.students ??= []; const q = Object.fromEntries(url.searchParams); const eqv = k => q[k]?.startsWith('eq.') ? decodeURIComponent(q[k].slice(3)) : null;
-      let rows = state.students.filter(r => (!eqv('email') || r.email === eqv('email')) && (!eqv('id') || r.id === eqv('id')) && (q.status !== 'neq.paused' || r.status !== 'paused'));
+      let rows = state.students.filter(r => (!eqv('email') || r.email === eqv('email')) && (!eqv('id') || r.id === eqv('id')) && (q.status !== 'neq.paused' || r.status !== 'paused') && (!eqv('status') || r.status === eqv('status')) && (!q.user_id?.startsWith('in.(') || q.user_id.slice(4, -1).split(',').includes(r.user_id)));
       if (req.method === 'POST') { if (state.students.some(r => r.email === body.email)) return send(res, 409, {}); state.students.unshift({ id: crypto.randomUUID(), user_id: null, status: 'invited', created_at: new Date().toISOString(), ...body }); return send(res, 201, {}); }
       if (req.method === 'PATCH') { rows.forEach(r => Object.assign(r, body)); return send(res, 200, rows); }
       if (req.method === 'DELETE') { state.students = state.students.filter(r => !rows.includes(r)); return send(res, 204, {}); }
@@ -393,7 +414,7 @@ export function startMocks({ authPort, enginePort }) {
     // Resend simulando: solo una clave que empiece por `re_` puede enviar; el envío se registra con su destinatario.
     if (url.pathname === '/emails' && req.method === 'POST') {
       if (!bearer.startsWith('re_')) return send(res, 401, { message: 'API key is invalid' });
-      state.emails.push({ from: body.from, to: body.to, subject: body.subject, text: body.text });
+      state.emails.push({ from: body.from, to: body.to, subject: body.subject, text: body.text, html: body.html });
       return send(res, 200, { id: 'email-' + state.emails.length });
     }
     // Proveedores externos simulados: solo la clave «good-key» es válida.
