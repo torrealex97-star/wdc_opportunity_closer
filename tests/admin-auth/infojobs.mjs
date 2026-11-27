@@ -22,24 +22,27 @@ const rest = http.createServer((req, res) => {
 const listCalls = [], detailCalls = [];
 let failDetails = false;
 const unauthorized = res => { res.writeHead(401, { 'content-type': 'application/json' }); res.end('{}'); };
+// Las fechas son RELATIVAS al reloj: la puntuación premia lo reciente, y con fechas absolutas el test se rompió solo el 2026-11-27 a las 09:00 UTC
+// (la oferta de setter, publicada el 2026-11-17 09:00, cumplió 10 días y dejó de puntuar para pedir su ficha). Mismas edades que cuando se escribió: 2, 3 y 1 días.
+const ago = days => new Date(Date.now() - days * 864e5).toISOString();
 const closer = {
   id: 'ij-closer-1', title: 'Closer de ventas high ticket', city: 'Madrid', province: { id: 33, key: 'madrid', value: 'Madrid' },
   link: 'https://www.infojobs.net/madrid/closer-de-ventas/of-iij-closer-1', category: { id: 152, key: 'comercial-ventas', value: 'Comercial y ventas' },
   salaryMin: { id: 1, value: '30.000 €' }, salaryMax: { id: 2, value: '36.000 €' }, salaryPeriod: { id: 1, value: 'Bruto/año' },
-  teleworking: { id: 2, key: 'solo-teletrabajo', value: 'Solo teletrabajo' }, published: '2026-11-16T08:00:00.000Z', updated: '2026-11-16T08:00:00.000Z',
+  teleworking: { id: 2, key: 'solo-teletrabajo', value: 'Solo teletrabajo' }, published: ago(2), updated: ago(2),
   author: { name: 'Acme' },
 };
 const camarero = {
   id: '258eae420249ffa67cf64681a2ef80', title: 'Camareros/as y 2º de Sala Zona Penedès', city: 'Vilafranca del Penedès', province: { id: 9, key: 'barcelona', value: 'Barcelona' },
   link: 'https://www.infojobs.net/vilafranca-del-penedes/camareros-2-sala/of-i258eae420249ffa67cf64681a2ef80', category: { id: 160, key: 'turismo-restauracion', value: 'Turismo y restauración' },
   salaryMin: { id: 10, value: '12 €' }, salaryMax: { id: 10, value: '12 €' }, salaryPeriod: { id: 1, value: 'Bruto/hora' },
-  teleworking: { id: 1, key: 'trabajo-solo-presencial', value: 'Presencial' }, published: '2026-11-15T10:15:00.000Z',
+  teleworking: { id: 1, key: 'trabajo-solo-presencial', value: 'Presencial' }, published: ago(3),
   author: { name: 'Restauración Example' },
 };
 const setter = {
   id: 'ij-setter-1', title: 'Setter de ventas', city: 'Barcelona', province: { id: 9, key: 'barcelona', value: 'Barcelona' },
   link: 'https://www.infojobs.net/barcelona/setter-de-ventas/of-iij-setter-1', category: { id: 152, key: 'comercial-ventas', value: 'Comercial y ventas' },
-  teleworking: { id: 3, key: 'teletrabajo-posible', value: 'Teletrabajo posible' }, published: '2026-11-17T09:00:00.000Z', author: { name: 'Beta' },
+  teleworking: { id: 3, key: 'teletrabajo-posible', value: 'Teletrabajo posible' }, published: ago(1), author: { name: 'Beta' },
 };
 const infojobs = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
