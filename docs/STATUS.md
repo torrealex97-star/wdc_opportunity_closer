@@ -1,3 +1,8 @@
+## Motivo real del rechazo de Apify fusionado (#195) (2026-11-27)
+
+- **Fusionado** (`2e7de62`), CI en verde. El registro del cron ya guarda el tipo y el mensaje que devuelve Apify cuando rechaza arrancar, y la causa común se dice una vez. Se retira la ficha.
+- **Sigue sin saberse por qué el cron de las 06:01 UTC no arrancó ningún portal.** Hasta leer la nota `etapa=apify` del próximo cron (06:01 UTC de mañana, ya con el motivo real) no hay causa ni arreglo; no se cambia ningún límite ni gasto sin orden del propietario.
+
 ## El cron de hoy no arrancó ningún portal de Apify: se registra el motivo real (2026-11-27)
 
 - **Medido hoy (*verified*, base real, lectura):** el cron de las 06:01 UTC anotó `etapa=apify · 0 de 14 arrancó` con «Apify rechazó la clave» en los portales listados; una segunda pasada a las 06:43 anotó «Sin tiempo en el presupuesto del cron». Las ejecuciones de Apify con coste son del 2026-11-26 (6 ejecuciones, 2,51 USD; de las 5 de las 15:17–15:20, las 5 con 0 elementos conservados) y ninguna del 2026-11-27. Aprobadas de roles de la academia en 24 h: Jooble 5, JSearch 11, Google Jobs 7; el resto de fuentes de pago, 0.
