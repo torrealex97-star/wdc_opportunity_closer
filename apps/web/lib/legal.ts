@@ -19,6 +19,14 @@ export const VOICE_CONSENT_TEXT = [
   'Puedo retirar este consentimiento cuando quiera desde mi perfil y seguir practicando por escrito, sin ninguna penalización.',
   'No hablaré de datos personales de terceros ni de información confidencial de mi empleo actual.',
 ] as const;
+// Consentimiento de los avisos rápidos por email (casilla propia en el perfil de la alumna, revocable). BORRADOR: lo revisa un profesional
+// antes de activar STUDENT_ALERTS_ENABLED; la versión guardada en student_alert_prefs es ALERTS_CONSENT_VERSION (lib/studentAlerts.ts).
+export const ALERTS_CONSENT_TEXT = [
+  'Quiero recibir por email, en mi dirección de acceso, avisos con ofertas nuevas que coincidan con los perfiles que he elegido.',
+  'Recibiré como máximo 3 ofertas al día, en un solo correo. Cada oferta la ha revisado el equipo; aun así debo comprobarla en el enlace de la empresa antes de aplicar.',
+  'El emparejamiento es automático y usa solo mi perfil dentro de la plataforma; mis datos no se envían a ningún modelo de inteligencia artificial. Solo se usa mi email para enviarme el aviso.',
+  'Puedo darme de baja cuando quiera desde mi perfil o desde el enlace de cada correo, sin ninguna penalización.',
+] as const;
 export const COOKIES_VERSION = 'v1-borrador', COOKIES_DATE = '2026-11-24';
 
 // Términos del formulario público de empleadores (/empleadores). BORRADOR: lo revisa un profesional antes de difundir el enlace.

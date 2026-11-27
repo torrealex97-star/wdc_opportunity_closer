@@ -376,6 +376,7 @@ await step('Formulario de empleadores (público, móvil): un envío vacío expli
 });
 await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su perfil con consentimiento y el enlace de su vídeo', async () => {
   await page.getByRole('button', { name: 'Alumnas' }).click(); await page.getByRole('heading', { name: 'Alumnas con acceso.' }).waitFor();
+  await page.getByTestId('alerts-panel').waitFor(); assert.match(await page.getByTestId('alerts-panel').innerText(), /alumnas con consentimiento/); assert.match(await page.getByTestId('alerts-state').innerText(), /Falta la clave de Resend|Activos/);
   await page.getByLabel('Invitar a una alumna').fill('lucia@alumna.dev'); await page.getByRole('button', { name: 'Enviar invitación' }).click();
   await page.getByText('Invitación enviada a lucia@alumna.dev.').waitFor(); await page.getByText('lucia@alumna.dev').first().waitFor();
   const alumnaCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['clipboard-read', 'clipboard-write'] }); // otro navegador: sin la sesión del panel
@@ -402,6 +403,17 @@ await step('Alumnas: el panel invita; ella crea contraseña, entra, guarda su pe
   await alumna.reload(); await alumna.getByText('TU PERFIL', { exact: true }).waitFor(); await alumna.waitForFunction(() => document.querySelector('#sp-name')?.value === 'Lucía', null, { timeout: 8000 });
   assert.equal(await alumna.getByLabel(/Enlace a tu vídeo/).inputValue(), 'https://drive.google.com/file/d/abc/view');
   assert.equal(await alumna.getByLabel('Nombre', { exact: true }).inputValue(), 'Lucía');
+  // Avisos por email: casilla PROPIA (no la del perfil), sin marcar por omisión; lo que se enseña es lo guardado, y se puede retirar.
+  const alerts = alumna.getByTestId('student-alerts'); await alerts.waitFor();
+  assert.match(await alerts.innerText(), /desactivados/); assert.match(await alerts.innerText(), /3 ofertas al día/); assert.match(await alerts.innerText(), /pendiente de revisión legal/);
+  assert.equal(await alerts.getByRole('button', { name: 'Guardar avisos' }).isDisabled(), true, 'sin cambiar la casilla no hay nada que guardar');
+  await alerts.getByLabel('Quiero recibir estos avisos en mi email de acceso.').check(); await alerts.getByRole('button', { name: 'Guardar avisos' }).click(); await alerts.getByText('Avisos activados.').waitFor();
+  assert.equal(state.alertPrefs.filter(r => r.opted_in_at).length, 1, 'el consentimiento quedó guardado');
+  await alumna.reload(); await alumna.getByTestId('student-alerts').getByText('activados', { exact: false }).first().waitFor();
+  assert.equal(await alumna.getByTestId('student-alerts').getByLabel('Quiero recibir estos avisos en mi email de acceso.').isChecked(), true);
+  await alumna.getByTestId('student-alerts').getByLabel('Quiero recibir estos avisos en mi email de acceso.').uncheck(); await alumna.getByTestId('student-alerts').getByRole('button', { name: 'Guardar avisos' }).click(); await alumna.getByText('Avisos desactivados.').waitFor();
+  assert.equal(state.alertPrefs.filter(r => r.opted_in_at).length, 0, 'retirar el permiso se guarda');
+  assert.ok(await alumna.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'sin scroll horizontal en móvil');
   // Candidatura ASISTIDA: formulario base → preparar → revisar y copiar → abrir → «ya la he enviado». La app no envía nada.
   await alumna.getByTestId('app-form').locator('summary').click();
   await alumna.getByLabel('Email de contacto').fill('lucia@ejemplo.com'); await alumna.getByLabel('Teléfono').fill('600 11 22 33'); await alumna.getByLabel('Tu CV (enlace a tu Drive)').fill('https://drive.google.com/file/d/cv/view');
