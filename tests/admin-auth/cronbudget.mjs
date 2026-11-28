@@ -47,6 +47,26 @@ assert.equal(B.totalFromEnv({}), 40_000); assert.equal(B.totalFromEnv({ CRON_BUD
 assert.equal(B.totalFromEnv({ CRON_BUDGET_MS: 'x' }), 40_000);
 console.log('PASS  reloj: fin por paso y global, recortes, cortes sin duplicar y límites de la variable');
 
+// 1b) Reserva para Apify (2026-11-28): el cron anotaba «0 de 15 arrancó · sin tiempo en el presupuesto» porque las etapas anteriores, con techos que
+// suman más de 40 s, se comían el reloj antes de llegar a Apify. Mientras hay reserva, lo que ven las etapas anteriores descuenta lo reservado.
+{
+  let now = 5_000_000; const c2 = () => now;
+  const r = B.createBudget(40_000, c2);
+  assert.equal(r.reserved(), 0, 'sin reserva todo igual que antes'); assert.equal(r.remaining(), 40_000); assert.equal(r.deadline(18_000), 5_018_000);
+  r.reserve(11_000);
+  assert.equal(r.reserved(), 11_000); assert.equal(r.remaining(), 29_000, 'las etapas previas ven el reloj menos la reserva');
+  assert.equal(r.deadline(35_000), 5_029_000, 'y su fin nunca invade la reserva');
+  now += 29_000; assert.equal(r.remaining(), 0, 'agotado lo no reservado, las previas no empiezan');
+  assert.equal(r.expired(), true, 'para las etapas previas el reloj se acabó');
+  assert.equal(r.end - now, 11_000, 'pero la reserva sigue entera para Apify');
+  r.release();
+  assert.equal(r.reserved(), 0); assert.equal(r.remaining(), 11_000, 'liberada, Apify recibe todo lo reservado'); assert.equal(r.deadline(9_000), now + 9_000);
+  assert.equal(r.expired(), false);
+  r.reserve(-5); assert.equal(r.reserved(), 0, 'una reserva negativa no existe'); r.reserve(999_000); assert.equal(r.reserved(), 40_000, 'ni puede pasar del total');
+  const z = B.createBudget(40_000, c2); z.reserve(11_000); z.release(); z.release(); assert.equal(z.remaining(), 40_000, 'liberar dos veces es inocuo');
+}
+console.log('PASS  reserva: las etapas previas no se comen el tiempo de Apify, y liberada se recupera entera');
+
 // 2) APIs oficiales: con poco tiempo se corta, se guarda lo recogido y se declara; sin tiempo ni empieza
 upserts.length = 0; jooCalls = 0;
 const cut = await C.collectProvider('jooble', 'test', Date.now() + 1500); // ≈ 7 consultas × 400 ms = 2800 ms > 1500 − 3000 de margen
