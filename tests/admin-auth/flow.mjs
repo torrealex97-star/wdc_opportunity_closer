@@ -1078,6 +1078,8 @@ await step('Waterfall: el cron para al cumplir el objetivo y lo declara; con hue
   assert.ok(paidStages.every(s => s.ran === false || /\[mínimo diario\]/.test(s.why)), 'lo que corre con el objetivo cumplido es solo el mínimo diario y lo dice');
   assert.ok(paidStages.every(s => /\[mínimo diario\]/.test(s.why)), `cada etapa de pago declara que fue por el mínimo y qué pasó (sin clave, desactivada, sin resultado…): ${JSON.stringify(paidStages)}`);
   assert.ok((stopped.json.waterfall.stages.find(s => s.id === 'unlocker')?.cost_usd ?? 0) === 0, 'las páginas de empresa no cobran sin objetivo pendiente');
+  // Reserva de tiempo (2026-11-28): si Apify puede lanzar —aquí por su mínimo diario— el cron le guarda su parte del reloj para que las etapas anteriores no se la coman, y lo anota.
+  assert.match(stopped.json.waterfall.stages.find(s => s.id === 'apify').why, /^\[reserva 11 s\] /, 'la etapa de Apify declara el tiempo que se le reservó');
   const googleStage = stopped.json.waterfall.stages.find(s => s.id === 'google-jobs');
   if (googleStage?.ran) assert.ok((googleStage.cost_usd ?? 0) <= 3 * 0.025 + 1e-9, 'el mínimo de Google Jobs son 3 dorks como mucho');
   const afterFloor = spendRows(), apifyAfterFloor = state.apifyCalls.length;

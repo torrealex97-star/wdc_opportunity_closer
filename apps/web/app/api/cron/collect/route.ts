@@ -29,6 +29,10 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+// Tiempo del cron que se guarda para Apify cuando va a poder lanzar: sus 9 s de techo más margen. Sin esto las etapas anteriores (techos que suman más que el
+// total) se lo comían y Apify anotaba «0 de N arrancó · sin tiempo en el presupuesto» cada día (2026-11-27 y 2026-11-28).
+const APIFY_RESERVE_MS = 11_000;
+
 // Un paso que falla no tumba el cron, pero deja rastro en los logs de Vercel (antes parecía «truncado» o «sin motor»).
 const failed = <T,>(step: string, fallback: T) => (error: unknown): T => {
   console.error(JSON.stringify({ event: 'cron_step_failed', step, error: String((error as Error)?.message ?? error) }));
@@ -71,6 +75,9 @@ export async function GET(request: NextRequest) {
     ? await pagedRest<StageRow>(`external_ingest_runs?org_id=eq.${ORG}&source=eq.${CRON_LOG_SOURCE}&created_at=gte.${encodeURIComponent(new Date(Date.now() - 24 * 3600_000).toISOString())}&select=note,created_at`, 'created_at.desc', 500).then(page => (page && !page.truncated ? lastRanByStage(page.rows) : null)).catch(() => null)
     : null;
   const floorOf = (id: string) => !canSpend() && floorDue(id, stageHistory);
+  // Solo se reserva si Apify puede lanzar de verdad (hay hueco de objetivo o le toca su mínimo diario): si no, las demás etapas conservan todo el reloj.
+  if (canSpend() || floorOf('apify')) budget.reserve(APIFY_RESERVE_MS);
+  const apifyReserved = budget.reserved();
   // Tras cada etapa se RECUENTA lo cualificado y pendiente (no se estima con `accepted`, que incluye ofertas ya vistas
   // que solo se actualizaron). Sin tiempo para recontar se mantiene el hueco; si el recuento falla, es desconocido y no se gasta.
   const recount = async (current: number | null): Promise<number | null> => {
@@ -183,6 +190,7 @@ export async function GET(request: NextRequest) {
   // Nivel de pago opt-in: con APIFY_SKIP_IF_GOOD_PER_DAY, si las fuentes gratuitas ya cubren el objetivo no se lanza gasto nuevo
   // (lo ya lanzado sí se recoge). Sin esa variable, comportamiento de siempre. El waterfall añade su propio freno:
   // sin hueco de objetivo no se lanza ningún actor nuevo.
+  budget.release(); // lo reservado vuelve a estar disponible: ahora le toca a Apify
   const paid = budget.remaining() >= MIN_STEP_MS ? skipPaidTier(await loadMetrics().catch(() => null)) : { skip: true as const };
   const apifyFloor = floorOf('apify');
   // Apify gasta por ejecución y no pasa por el medidor: antes de lanzar se comprueba el tope global del mes con una ejecución de reserva (1 US$).
@@ -191,7 +199,7 @@ export async function GET(request: NextRequest) {
   if (!apifyStart) stages.push({ id: 'apify', ran: false, why: !canSpend() && !apifyFloor ? noSpendWhy() : !globalRoom.ok ? (globalRoom.reason ?? 'Tope global del mes.') : ('reason' in paid && paid.reason ? paid.reason : 'Sin tiempo en el presupuesto del cron.') });
   let apifyError: string | null = null;
   const apify = await dailyApify(publicBaseUrl(request), { start: apifyStart, deadline: budget.deadline(9_000) }).catch(error => { apifyError = String((error as Error)?.message ?? error); return failed('apify', { started: [], harvested: [], truncated: false } as Awaited<ReturnType<typeof dailyApify>>)(error); });
-  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: `${apifyFloor && !canSpend() ? '[mínimo diario] ' : ''}${apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apifyStageWhy(apify.started)}` });
+  if (apifyStart) stages.push({ id: 'apify', ran: apifyError === null, why: `${apifyReserved ? `[reserva ${apifyReserved / 1000} s] ` : ''}${apifyFloor && !canSpend() ? '[mínimo diario] ' : ''}${apifyError !== null ? `Fallo al lanzar Apify: ${apifyError}` : apifyStageWhy(apify.started)}` });
   if ('truncated' in apify && apify.truncated) budget.cut('apify');
   const vigencia = budget.remaining() >= MIN_STEP_MS ? await refreshVigencia(20, budget.deadline(5_000)).catch(() => ({ checked: 0, withdrawn: 0 })) : (budget.cut('vigencia'), { checked: 0, withdrawn: 0 });
   if ('truncated' in vigencia && vigencia.truncated) budget.cut('vigencia');

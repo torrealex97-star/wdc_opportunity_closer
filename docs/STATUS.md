@@ -1,3 +1,11 @@
+## Apify no arrancaba por falta de reloj, no por la clave: se le reserva su tiempo (2026-11-28)
+
+- **Medido (*verified*, base real, 2026-11-28 10:11 UTC):** el cron de las 06:01 UTC anotó `etapa=apify · 0 de 15 arrancó` con «Sin tiempo en el presupuesto del cron» en todos los portales; ayer a las 06:43, 0 de 14 igual. Lo de «rechazó la clave» era de la pasada anterior. Las últimas ejecuciones de Apify con coste son del 2026-11-26 (lanzadas a mano).
+- **Causa (*inspected*, no cronometrada):** presupuesto total 40 s; los techos de las etapas anteriores (APIs 10 + Bright Data 6 + Google Jobs 18 + RapidAPI 8 + Tavily 8 + feed 8 + páginas 8 + respaldo 5) suman ~71 s y cada una solo comprueba que queden 3 s, así que Apify (techo propio 9 s) llegaba con < 3 s. No se puede añadir un tercer cron: Vercel Hobby admite 2 y el segundo ya es `/api/cron/alerts`.
+- **Cambio (*tested*, rojo → verde):** `budget.reserve/release` (`lib/cronBudget.ts`): mientras hay reserva las etapas anteriores ven el reloj menos lo reservado y Apify recibe sus 11 s al liberarla. El cron reserva solo si Apify puede lanzar (hueco de objetivo o su mínimo diario); si no, las demás conservan todo el reloj. La nota `etapa=apify` lleva `[reserva 11 s]`. `cronbudget.mjs` (paso nuevo de reserva), `flow.mjs` (la etapa declara la reserva).
+- **No verificado:** que los 9 s de Apify alcancen para los 15 portales (si no, se arrancan en la pasada siguiente, ya declarado en la nota) ni que el efecto sea el esperado en producción. **Medición pendiente: cron de mañana 06:01 UTC**; esperado «N de M arrancó» con N ≥ 1 y filas nuevas en `apify_runs`. Hasta leerlo no está resuelto.
+- **Fuera de alcance:** subir `CRON_BUDGET_MS` (tope 50 000) o `maxDuration` es del propietario y no se verificó que Hobby lo admita; arrancar portales en paralelo, solo si mañana 9 s no bastan. No cambia gasto ni límites.
+
 ## Logo un 30 % más pequeño — 2026-11-27
 
 - **Petición del propietario**: reducir el logo real aproximadamente un 30 %.

@@ -232,10 +232,15 @@ await step('Fuentes externas: filtra closers de España, verifica y aprueba; el 
   await page.locator('#ex-status').selectOption('draft'); // el resto del paso trabaja sobre borradores
   await page.getByTestId('metrics').waitFor(); assert.match(await page.getByTestId('metrics').innerText(), /Últimos 14 días: \d+ ofertas buenas/);
   // Contraste: el texto pequeño gris usa --secondary (≥ 4,5:1), no --muted (3,4:1)
-  assert.equal(await page.locator('.data-table th').first().evaluate(el => getComputedStyle(el).color), 'rgb(116, 107, 107)', 'cabeceras de tabla con --secondary');
+  // El valor sale del token (`--secondary`) y no de un número fijo: el branding del 2026-11-27 cambió la paleta (#746b6b → #6d5f5b) y dejó `main` en rojo
+  // por comparar con el valor antiguo. Lo que se comprueba es que la cabecera USA el token, sea cual sea su valor.
+  const secondary = await page.evaluate(() => { const probe = document.createElement('span'); probe.style.color = 'var(--secondary)'; document.body.appendChild(probe); const c = getComputedStyle(probe).color; probe.remove(); return c; });
+  assert.match(secondary, /^rgb\(\d+, \d+, \d+\)$/, 'el token --secondary existe y resuelve a un color');
+  assert.equal(await page.locator('.data-table th').first().evaluate(el => getComputedStyle(el).color), secondary, 'cabeceras de tabla con --secondary');
   // Gráfico accesible: resumen en aria-label, color por token (computado = accent), eje en 0 y tabla alternativa con los 14 días
   const chart = page.getByTestId('metrics').getByRole('img'); assert.match(await chart.getAttribute('aria-label'), /Ofertas buenas por día del .* al .*: \d+ en total/);
-  assert.equal(await page.getByTestId('metrics').locator('svg rect').first().evaluate(el => getComputedStyle(el).fill), 'rgb(141, 70, 61)', 'barras con el token --accent');
+  const accent = await page.evaluate(() => { const probe = document.createElement('span'); probe.style.color = 'var(--accent)'; document.body.appendChild(probe); const c = getComputedStyle(probe).color; probe.remove(); return c; });
+  assert.equal(await page.getByTestId('metrics').locator('svg rect').first().evaluate(el => getComputedStyle(el).fill), accent, 'barras con el token --accent (su valor sale del token, no de un número fijo)');
   await page.getByTestId('ai-agreement').waitFor(); await page.getByTestId('ai-agreement').locator('summary').click(); assert.match(await page.getByTestId('agreement-verdict').innerText(), /Aún no hay base: 0 de 30 pares/);
   await page.getByTestId('ai-mode').waitFor(); assert.match(await page.getByTestId('ai-mode').innerText(), /Revisor IA: (SHADOW — solo anota|LIVE — aprueba y retira sola)/); assert.ok(await page.getByTestId('ai-mode-toggle').isVisible(), 'el propietario ve el interruptor del modo de la IA');
   assert.equal(await page.getByTestId('agreement-table').locator('tbody tr').count(), 5);
