@@ -1,3 +1,8 @@
+## Reserva de tiempo del cron para Apify fusionada (#198); falta medirla (2026-11-28)
+
+- **Fusionado** (`a97f4d7`), CI `verify` y `web-admin` en verde. Incluye el arreglo de `ui.mjs` (colores leídos del token) que dejaba `main` en rojo desde el branding del 2026-11-27. Se retira la ficha.
+- **Pendiente de medir:** cron de mañana 06:01 UTC. Esperado: la nota `etapa=apify` dice `[reserva 11 s]` y «N de M arrancó» con N ≥ 1, y `apify_runs` gana filas nuevas. **Hasta leerlo no está resuelto**; si arranca menos de lo esperado, el siguiente paso es lanzar los portales en paralelo dentro de los 9 s (o que el propietario suba `CRON_BUDGET_MS`, tope 50 000).
+
 ## Apify no arrancaba por falta de reloj, no por la clave: se le reserva su tiempo (2026-11-28)
 
 - **Medido (*verified*, base real, 2026-11-28 10:11 UTC):** el cron de las 06:01 UTC anotó `etapa=apify · 0 de 15 arrancó` con «Sin tiempo en el presupuesto del cron» en todos los portales; ayer a las 06:43, 0 de 14 igual. Lo de «rechazó la clave» era de la pasada anterior. Las últimas ejecuciones de Apify con coste son del 2026-11-26 (lanzadas a mano).
